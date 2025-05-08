@@ -1,0 +1,43 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e5d009be265dca3459e7ac2c1c05aea2, type: 3}
+  m_Name: Tree 1
+  m_EditorClassIdentifier: 
+  axiom: X
+  rules:
+  - symbol: 88
+    replacements:
+    - replacement: 'F[L+X]F[L-X]F[+X]LF[L+X]'
+      probability: 1
+  - symbol: 70
+    replacements:
+    - replacement: FF
+      probability: 0.252
+  - symbol: 88
+    replacements:
+    - replacement: F[L+X]F
+      probability: 0.252
+  iterations: 3
+  angle: 45
+  segmentLength: 0.8
+  drawDelay: 0.03
+  segmentPrefab: {fileID: 2460255969446230441, guid: e311ad0b22f1cc64dbb990140d1d7b7d, type: 3}
+  petalPrefabs:
+  - prefab: {fileID: 2460255969446230441, guid: 84fe972a425b15b4088017ce83681ec1, type: 3}
+    probability: 0.127
+  - prefab: {fileID: 2460255969446230441, guid: 11faef1faf5f0fd4b94eb4faf482ae8e, type: 3}
+    probability: 0.06
+  leafPrefabs:
+  - prefab: {fileID: 2460255969446230441, guid: 11faef1faf5f0fd4b94eb4faf482ae8e, type: 3}
+    probability: 0.595
+  - prefab: {fileID: 2460255969446230441, guid: 15585f2370928ad41951b2ec7d729d77, type: 3}
+    probability: 0.23

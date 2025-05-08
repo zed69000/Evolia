@@ -1,0 +1,27 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e5d009be265dca3459e7ac2c1c05aea2, type: 3}
+  m_Name: Tree 2
+  m_EditorClassIdentifier: 
+  axiom: FF
+  rules:
+  - symbol: 70
+    replacements:
+    - replacement: F+F
+      probability: 1
+  iterations: 2
+  angle: 2
+  segmentLength: 0.05
+  drawDelay: 0.001
+  segmentPrefab: {fileID: 2460255969446230441, guid: 2f5599694468f684d8d8b02a9d1a7f97, type: 3}
+  petalPrefabs: []
+  leafPrefabs: []

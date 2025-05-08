@@ -1,0 +1,31 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e5d009be265dca3459e7ac2c1c05aea2, type: 3}
+  m_Name: Grass
+  m_EditorClassIdentifier: 
+  axiom: G
+  rules:
+  - symbol: 71
+    replacements:
+    - replacement: '[F+G][F-G]'
+      probability: 0.503
+  - symbol: 70
+    replacements:
+    - replacement: FF
+      probability: 0.424
+  iterations: 3
+  angle: 10
+  segmentLength: 0.14
+  drawDelay: 0.01
+  segmentPrefab: {fileID: 2460255969446230441, guid: 2f5599694468f684d8d8b02a9d1a7f97, type: 3}
+  petalPrefab: {fileID: 0}
+  leafPrefab: {fileID: 0}
