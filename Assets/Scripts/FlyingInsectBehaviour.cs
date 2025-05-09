@@ -32,7 +32,7 @@ public class FlyingInsectBehaviour : MonoBehaviour
 		while (true)
 		{
 			// 1) Choisit une fleur mûre
-			Plant target = PickRandomMaturePlant();
+			LSystem target = PickRandomMaturePlant();
 			if (target == null)
 			{
 				yield return new WaitForSeconds(0.5f);
@@ -94,9 +94,9 @@ public class FlyingInsectBehaviour : MonoBehaviour
 		}
 	}
 
-	private Plant PickRandomMaturePlant()
+	private LSystem PickRandomMaturePlant()
 	{
-		IList<Plant> list = plantManager.GetMaturePlants();
+		IList<LSystem> list = plantManager.GetMaturePlants();
 		if (list.Count == 0) return null;
 		return list[_rng.Next(list.Count)];
 	}

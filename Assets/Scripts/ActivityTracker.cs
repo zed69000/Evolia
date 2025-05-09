@@ -7,7 +7,7 @@ public class ActivityTracker : MonoBehaviour
 	public static ActivityTracker Instance;
 
 	[Tooltip("Parent vide pour les plantes")] public Transform plantsParent;
-	[Tooltip("Liste des plantes actives")] public List<Plant> activePlants = new();
+	[Tooltip("Liste des plantes actives")] public List<LSystem> activePlants = new();
 
 	[Header("Debug – effort cumulé")] public float totalEffort;
 
@@ -48,7 +48,7 @@ public class ActivityTracker : MonoBehaviour
 		totalEffort += amount;
 
 		// 2) Trouve une plante en cours pour cette activité
-		Plant plant = activePlants.Find(p => p != null
+		LSystem plant = activePlants.Find(p => p != null
 										   && p.activityType == activity
 										   && p.growth < 1f);
 
@@ -68,7 +68,7 @@ public class ActivityTracker : MonoBehaviour
 										spawnPos,
 										Quaternion.identity,
 										plantsParent);
-			plant = go.GetComponent<Plant>();
+			plant = go.GetComponent<LSystem>();
 			plant.activityType = activity;
 			plant.growth = 0f;
 			activePlants.Add(plant);

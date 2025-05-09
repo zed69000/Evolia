@@ -40,7 +40,7 @@ public class PlantManager : MonoBehaviour
 	// ---------------- INTERNE ----------------
 	float radiusX, radiusY, softZone1, softZone2;
 	static readonly Collider2D[] _overlap = new Collider2D[1];
-	readonly List<Plant> _matureBuffer = new();
+	readonly List<LSystem> _matureBuffer = new();
 
 	// ─────────────── UNITY ───────────────
 	void Awake()
@@ -72,19 +72,19 @@ public class PlantManager : MonoBehaviour
 		softZone2 = radiusX * soft2Factor;
 
 		debugRadiusX = radiusX;
-		//debugRadiusY = minRadius.y;
+		debugRadiusY = minRadius.y;
 		debugSoftZone1 = softZone1;
 		debugSoftZone2 = softZone2;
 		debugProgress = interp;
 	}
 
 	// ─────────────── API PUBLIQUE ───────────────
-	public void TryPlantNearby(Plant mature)
+	public void TryPlantNearby(LSystem mature)
 	{
 		if (mature == null) return;
 		Vector3 pos = GetFreePlantPositionNear(mature.transform.position);
 		if (!IsFinite(pos)) return;
-		Plant p = Instantiate(mature.activityType.plantPrefab, pos, Quaternion.identity).GetComponent<Plant>();
+		LSystem p = Instantiate(mature.activityType.plantPrefab, pos, Quaternion.identity).GetComponent<LSystem>();
 		p.activityType = mature.activityType;
 	}
 
@@ -117,15 +117,16 @@ public Vector3 GetFreePlantPositionNear(Vector3 origin)
 
     // — Fallback aléatoire au lieu du centre
     Vector3 fallbackRandom = RandomInsideEllipse(main, borderBuffer);
-    Debug.LogWarning($"PlantManager: fallback aléatoire après {maxTries} essais → {fallbackRandom}");
+   // Debug.LogWarning($"PlantManager: fallback aléatoire après {maxTries} essais → {fallbackRandom}");
     return fallbackRandom;
 }
 
 
-	public IList<Plant> GetMaturePlants()
+	public IList<LSystem> GetMaturePlants()
 	{
 		_matureBuffer.Clear();
-		foreach (Plant p in FindObjectsOfType<Plant>()) if (p.IsMature) _matureBuffer.Add(p);
+		LSystem[] allPlants = Object.FindObjectsByType<LSystem>(FindObjectsSortMode.None);
+		foreach (LSystem p in allPlants) if (p.IsMature) _matureBuffer.Add(p);
 		return _matureBuffer;
 	}
 
@@ -152,7 +153,14 @@ public Vector3 GetFreePlantPositionNear(Vector3 origin)
 	}
 
 	bool IsOccupied(Vector3 pos)
-		=> Physics2D.OverlapCircleNonAlloc(pos, detectionRadius, _overlap, plantLayer) > 0;
+	{
+		var filter = new ContactFilter2D();
+		filter.SetLayerMask(plantLayer);
+		filter.useTriggers = true; // ou false selon ton usage
+
+		return Physics2D.OverlapCircle(pos, detectionRadius, filter, _overlap) > 0;
+	}
+
 
 	static bool IsFinite(Vector3 v)
 		=> !(float.IsNaN(v.x) || float.IsNaN(v.y) || float.IsNaN(v.z) || float.IsInfinity(v.x) || float.IsInfinity(v.y) || float.IsInfinity(v.z));
