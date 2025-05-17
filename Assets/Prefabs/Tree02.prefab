@@ -48,15 +48,22 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   activityType: {fileID: 11400000, guid: 8e3fbf50c91fc0440b1867f5ba4952df, type: 2}
   growth: 0
-  config: {fileID: 11400000, guid: 6757f88f12458964093a8e4fa83a3a4e, type: 2}
+  config: {fileID: 11400000, guid: b8225f96b29ac8c4abb859091a37efb4, type: 2}
   useLSystem: 1
   globalScaleRange: {x: 0.8, y: 1.2}
   petalScaleRange: {x: 0.5, y: 1.5}
   leafScaleRange: {x: 0.4, y: 1.2}
   leafSideOffsetRange: {x: 0.1, y: 0.3}
-  flipSymmetryProbability: 0.5
+  flipSymmetryProbability: 0
   segmentLengthVariation: {x: 0.8, y: 1.2}
   angleVariation: {x: -10, y: 10}
+  minAngleDeadZone: 0.5
+  baseWidth: 0.5
+  widthFalloff: 0.8
+  minWidth: 0.05
+  minVertexDistance: 0.1
+  vertexDistanceFactor: 0.2
+  overlapDistance: 0.1
 --- !u!61 &603000791918145195
 BoxCollider2D:
   m_ObjectHideFlags: 0

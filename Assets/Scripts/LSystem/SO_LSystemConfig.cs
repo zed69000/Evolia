@@ -39,10 +39,10 @@ public class SO_LSystemConfig : ScriptableObject
 	public GameObject segmentPrefab;
 
 	[Tooltip("Prefabs utilisés pour symboliser des fleurs ou fruits ‘X’")]
-	public PrefabWeight[] petalPrefabs;
+	public PrefabWeight[] petal;
 
 	[Tooltip("Prefabs utilisés pour symboliser les feuilles ‘L’")]
-	public PrefabWeight[] leafPrefabs;
+	public PrefabWeight[] leaf;
 }
 
 /// <summary>
@@ -52,6 +52,7 @@ public class SO_LSystemConfig : ScriptableObject
 public struct PrefabWeight
 {
 	public GameObject prefab;
+	public Sprite[] sprite;
 
 	[Range(0f, 1f)]
 	[Tooltip("Probabilité d’apparition de ce prefab")]

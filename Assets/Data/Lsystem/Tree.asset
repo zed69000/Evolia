@@ -16,19 +16,32 @@ MonoBehaviour:
   rules:
   - symbol: 88
     replacements:
-    - replacement: 'F[+F[-L]X]F[-F[+L]X]'
+    - replacement: 'F[[+X]+XL]F-[LX]'
       probability: 1
   - symbol: 70
     replacements:
-    - replacement: FF
+    - replacement: Frrr
       probability: 1
-  iterations: 5
-  angle: 60
-  segmentLength: 1
-  drawDelay: 0.03
+  savedRules: []
+  iterations: 4
+  angle: 22
+  segmentLength: 0.5
+  drawDelay: 0.02
   segmentPrefab: {fileID: 2460255969446230441, guid: e311ad0b22f1cc64dbb990140d1d7b7d, type: 3}
-  petalPrefabs:
-  - {fileID: 2460255969446230441, guid: 957c043b450a1fd468eca937eae3b888, type: 3}
-  - {fileID: 2460255969446230441, guid: 15585f2370928ad41951b2ec7d729d77, type: 3}
-  leafPrefabs:
-  - {fileID: 2460255969446230441, guid: 11faef1faf5f0fd4b94eb4faf482ae8e, type: 3}
+  petal:
+  - prefab: {fileID: 2460255969446230441, guid: 957c043b450a1fd468eca937eae3b888, type: 3}
+    sprite: {fileID: 0}
+    probability: 0.616
+  - prefab: {fileID: 2460255969446230441, guid: 15585f2370928ad41951b2ec7d729d77, type: 3}
+    sprite: {fileID: 0}
+    probability: 0.616
+  leaf:
+  - prefab: {fileID: 2460255969446230441, guid: 11faef1faf5f0fd4b94eb4faf482ae8e, type: 3}
+    sprite: {fileID: 0}
+    probability: 0.237
+  - prefab: {fileID: 2460255969446230441, guid: 2a2781fadea8fa942ba3096d91749a83, type: 3}
+    sprite: {fileID: 0}
+    probability: 0.179
+  - prefab: {fileID: 2460255969446230441, guid: ecbc5719f7d92a54ebf5e6edfb446d04, type: 3}
+    sprite: {fileID: 0}
+    probability: 0.191

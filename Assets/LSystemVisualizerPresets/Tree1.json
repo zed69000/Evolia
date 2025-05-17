@@ -5,7 +5,7 @@
             "symbol": 88,
             "replacements": [
                 {
-                    "replacement": "F[+FX]F[-FX]FX",
+                    "replacement": "F-[[X]+X]+F[+FX]-X",
                     "probability": 1.0
                 }
             ]
@@ -15,7 +15,7 @@
             "replacements": [
                 {
                     "replacement": "FF",
-                    "probability": 0.25200000405311587
+                    "probability": 1.0
                 }
             ]
         }
@@ -23,27 +23,27 @@
     "savedRules": [],
     "iterations": 5,
     "angle": 22.5,
-    "segmentLength": 0.10000000149011612,
-    "drawDelay": 0.029999999329447748,
+    "segmentLength": 1.0,
+    "drawDelay": 0.02,
     "segmentPrefabPath": "Assets/Prefabs/Assets/TrailHead.prefab",
     "petalPrefabs": [
         {
             "prefab": {
                 "instanceID": 42780
             },
-            "probability": 0.10700000077486038
+            "probability": 0.107
         },
         {
             "prefab": {
                 "instanceID": 46762
             },
-            "probability": 0.04500000178813934
+            "probability": 0.045
         },
         {
             "prefab": {
                 "instanceID": 46784
             },
-            "probability": 0.03400000184774399
+            "probability": 0.034
         }
     ],
     "leafPrefabs": [
@@ -51,7 +51,7 @@
             "prefab": {
                 "instanceID": 42782
             },
-            "probability": 0.05400000140070915
+            "probability": 0.054
         }
     ]
 }

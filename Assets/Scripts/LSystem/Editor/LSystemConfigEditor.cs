@@ -27,8 +27,8 @@ public class LSystemConfigEditor : Editor
 					segmentLength = config.segmentLength,
 					drawDelay = config.drawDelay,
 					segmentPrefabPath = AssetDatabase.GetAssetPath(config.segmentPrefab),
-					petalPrefabs = config.petalPrefabs,
-					leafPrefabs = config.leafPrefabs
+					petalPrefabs = config.petal,
+					leafPrefabs = config.leaf
 				};
 
 				File.WriteAllText(path, JsonUtility.ToJson(data, true));
@@ -53,8 +53,8 @@ public class LSystemConfigEditor : Editor
 				config.drawDelay = data.drawDelay;
 
 				config.segmentPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(data.segmentPrefabPath);
-				config.petalPrefabs = data.petalPrefabs;
-				config.leafPrefabs = data.leafPrefabs;
+				config.petal = data.petalPrefabs;
+				config.leaf = data.leafPrefabs;
 
 				EditorUtility.SetDirty(config);
 				Debug.Log($"✅ Importé depuis : {path}");

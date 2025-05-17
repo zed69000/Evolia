@@ -6,6 +6,10 @@ public class ActivityTracker : MonoBehaviour
 {
 	public static ActivityTracker Instance;
 
+	[Header("Mode de plantation")]
+	[Tooltip("Si true, on n’instancie jamais plus d’une seule plante.")]
+	public bool onlyOnePlant = false;
+
 	[Tooltip("Parent vide pour les plantes")] public Transform plantsParent;
 	[Tooltip("Liste des plantes actives")] public List<LSystem> activePlants = new();
 
@@ -31,7 +35,6 @@ public class ActivityTracker : MonoBehaviour
 		activePlants.Clear();
 		totalEffort = 0f;
 
-		if (PlantManager.Instance) PlantManager.Instance.UpdateDynamicRadii();
 		Debug.Log("🗑 Reset des plantes & de l’effort.");
 	}
 
@@ -47,10 +50,20 @@ public class ActivityTracker : MonoBehaviour
 		// 1) Effort cumulé
 		totalEffort += amount;
 
-		// 2) Trouve une plante en cours pour cette activité
-		LSystem plant = activePlants.Find(p => p != null
-										   && p.activityType == activity
-										   && p.growth < 1f);
+		LSystem plant = null;
+		if (onlyOnePlant)
+		{
+			// si on a déjà une plante, on l’utilise
+			if (activePlants.Count > 0)
+				plant = activePlants[0];
+		}
+		else
+		{
+			// sinon on trouve la plante en cours pour cette activité
+			plant = activePlants.Find(p => p != null
+									   && p.activityType == activity
+									   && p.growth < 1f);
+		}
 
 		// 3) Sinon, instancie une nouvelle graine
 		if (plant == null)
@@ -79,8 +92,6 @@ public class ActivityTracker : MonoBehaviour
 		float adjustedAmount = amount * GlobalGrowthMultiplier;
 		plant.AddGrowth(adjustedAmount);
 
-		// 5) Mise à jour de l’ellipse
-		PlantManager.Instance?.UpdateDynamicRadii();
 	}
 
 

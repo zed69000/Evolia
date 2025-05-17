@@ -16,27 +16,21 @@ MonoBehaviour:
   rules:
   - symbol: 88
     replacements:
-    - replacement: 'rr[+FLX]rr[-FLX]F[-FL]F[+rX]'
+    - replacement: F-[[X]+X]+F[+FX]-X
       probability: 1
   - symbol: 70
     replacements:
     - replacement: FF
-      probability: 0.583
+      probability: 1
   savedRules: []
-  iterations: 4
+  iterations: 3
   angle: 22.5
-  segmentLength: 0.2
-  drawDelay: 0.05
+  segmentLength: 1
+  drawDelay: 0.02
   segmentPrefab: {fileID: 2460255969446230441, guid: e311ad0b22f1cc64dbb990140d1d7b7d, type: 3}
-  petalPrefabs:
-  - prefab: {fileID: 2460255969446230441, guid: 957c043b450a1fd468eca937eae3b888, type: 3}
-    probability: 0.034
-  - prefab: {fileID: 0}
-    probability: 0.869
+  petalPrefabs: []
   leafPrefabs:
-  - prefab: {fileID: 2460255969446230441, guid: 11faef1faf5f0fd4b94eb4faf482ae8e, type: 3}
-    probability: 0.7
-  - prefab: {fileID: 2460255969446230441, guid: 2a2781fadea8fa942ba3096d91749a83, type: 3}
-    probability: 0.45
-  - prefab: {fileID: 2460255969446230441, guid: ecbc5719f7d92a54ebf5e6edfb446d04, type: 3}
-    probability: 0.5
+  - prefab: {fileID: 2460255969446230441, guid: 12684fb4e963b8b4b93d78953dc4bcdc, type: 3}
+    probability: 0.575
+  - prefab: {fileID: 2460255969446230441, guid: 67e3f33232d343145b48a0218422fc64, type: 3}
+    probability: 0.876

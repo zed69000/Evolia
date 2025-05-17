@@ -8,7 +8,7 @@ Material:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_Name: m_Leaf
-  m_Shader: {fileID: -6465566751694194690, guid: 8a7584765b56d9f4fb92493ee3e72b8e, type: 3}
+  m_Shader: {fileID: -6465566751694194690, guid: fb99f1449955e6a47a77bd0fe0a2e01a, type: 3}
   m_Parent: {fileID: 0}
   m_ModifiedSerializedProperties: 0
   m_ValidKeywords: []
@@ -58,14 +58,43 @@ Material:
         m_Offset: {x: 0, y: 0}
     m_Ints: []
     m_Floats:
+    - _Add: -0.12
+    - _Add_1: 0.2
+    - _Add_GNB: 1
+    - _Add_Gradient_D: 1.42
+    - _AlphaClip: 1
+    - _AlphaToMask: 1
+    - _Blend: 0
+    - _CastShadows: 0
+    - _Cull: 2
+    - _DstBlend: 0
     - _EnableExternalAlpha: 0
+    - _Float: -16.33
+    - _HeightGradient: 1.29
+    - _HeightGradient_1: 5.21
+    - _Height_D: 2.73
+    - _Height_GNB: 1
+    - _Intensity_Noise_D: 1
+    - _Noise_Intensity: 0.1
     - _QueueControl: 0
     - _QueueOffset: 0
-    - _ZWrite: 0
+    - _Speed: 0.1
+    - _SrcBlend: 1
+    - _Surface: 0
+    - _ZTest: 4
+    - _ZWrite: 1
+    - _ZWriteControl: 0
+    - _scaleNoise: 7.81
+    - _scale_Noise_D: 1
     m_Colors:
+    - _BaseColor: {r: 1, g: 1, b: 1, a: 0}
     - _Color: {r: 1, g: 1, b: 1, a: 1}
-    - _Offset: {r: 0.22, g: 0.27, b: 0, a: 0}
+    - _Color_root: {r: 0, g: 0, b: 0, a: 0}
+    - _Offset: {r: 0, g: 0, b: 0, a: 0}
     - _RendererColor: {r: 1, g: 1, b: 1, a: 1}
+    - _color: {r: 0, g: 0, b: 0, a: 0}
+    - _rootPosition: {r: 0, g: 0, b: 0, a: 0}
+    - _rootTransform: {r: 0, g: 0, b: 0, a: 0}
   m_BuildTextureStacks: []
   m_AllowLocking: 1
 --- !u!114 &371629388362078084

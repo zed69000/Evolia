@@ -17,4 +17,4 @@ MonoBehaviour:
   effortMultiplier: 2
   baseSpeedKmh: 8
   isIndoor: 0
-  activityType: {fileID: 11400000, guid: 8e3fbf50c91fc0440b1867f5ba4952df, type: 2}
+  activityType: {fileID: 11400000, guid: 4de33ed55558149488d5ed60e0d8fde6, type: 2}

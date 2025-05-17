@@ -16,16 +16,20 @@ MonoBehaviour:
   rules:
   - symbol: 88
     replacements:
-    - replacement: F-X
+    - replacement: 'F+[X]'
       probability: 0.341
-  iterations: 3
+  savedRules: []
+  iterations: 2
   angle: 25
   segmentLength: 0.1
   drawDelay: 0.05
-  segmentPrefab: {fileID: 2460255969446230441, guid: 2b51092328ee851438e5a23d0384bb57, type: 3}
-  petalPrefabs:
-  - prefab: {fileID: 2460255969446230441, guid: 957c043b450a1fd468eca937eae3b888, type: 3}
-    probability: 1
+  segmentPrefab: {fileID: 0}
+  petal:
   - prefab: {fileID: 0}
-    probability: 0.156
-  leafPrefabs: []
+    sprite:
+    - {fileID: 1265226327, guid: 0c94436f069375840985b3b0fc7b8fce, type: 3}
+    - {fileID: -1192613607, guid: 0c94436f069375840985b3b0fc7b8fce, type: 3}
+    - {fileID: 444649958, guid: 0c94436f069375840985b3b0fc7b8fce, type: 3}
+    - {fileID: -361762685, guid: 0c94436f069375840985b3b0fc7b8fce, type: 3}
+    probability: 0.417
+  leaf: []

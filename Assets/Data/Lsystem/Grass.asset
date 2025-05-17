@@ -16,17 +16,78 @@ MonoBehaviour:
   rules:
   - symbol: 70
     replacements:
-    - replacement: 'F+[L]
+    - replacement: 'F+[X]
 
 '
       probability: 0.503
   savedRules: []
   iterations: 1
-  angle: 0.8
+  angle: 0
   segmentLength: 0.14
   drawDelay: 0.01
-  segmentPrefab: {fileID: 2460255969446230441, guid: e311ad0b22f1cc64dbb990140d1d7b7d, type: 3}
-  petalPrefabs: []
-  leafPrefabs:
-  - prefab: {fileID: 2460255969446230441, guid: 84fe972a425b15b4088017ce83681ec1, type: 3}
-    probability: 1
+  segmentPrefab: {fileID: 0}
+  petal:
+  - prefab: {fileID: 0}
+    sprite:
+    - {fileID: 184989342, guid: 4e03f2a3f482e6740be0128e0236d37a, type: 3}
+    probability: 0.217
+  - prefab: {fileID: 0}
+    sprite:
+    - {fileID: -1255166822, guid: 4e03f2a3f482e6740be0128e0236d37a, type: 3}
+    probability: 0.233
+  - prefab: {fileID: 0}
+    sprite:
+    - {fileID: 57896242, guid: 4e03f2a3f482e6740be0128e0236d37a, type: 3}
+    probability: 0.222
+  - prefab: {fileID: 0}
+    sprite:
+    - {fileID: -1953779741, guid: 4e03f2a3f482e6740be0128e0236d37a, type: 3}
+    probability: 0.245
+  - prefab: {fileID: 0}
+    sprite:
+    - {fileID: 1624427625, guid: 4e03f2a3f482e6740be0128e0236d37a, type: 3}
+    probability: 0.225
+  - prefab: {fileID: 0}
+    sprite: []
+    probability: 0.225
+  - prefab: {fileID: 0}
+    sprite:
+    - {fileID: 1303244923, guid: 4e03f2a3f482e6740be0128e0236d37a, type: 3}
+    probability: 0.2
+  - prefab: {fileID: 0}
+    sprite:
+    - {fileID: -2035152478, guid: 4e03f2a3f482e6740be0128e0236d37a, type: 3}
+    probability: 0.242
+  - prefab: {fileID: 0}
+    sprite:
+    - {fileID: 1531737435, guid: 4e03f2a3f482e6740be0128e0236d37a, type: 3}
+    probability: 0.217
+  - prefab: {fileID: 0}
+    sprite:
+    - {fileID: 1856351419, guid: 4e03f2a3f482e6740be0128e0236d37a, type: 3}
+    probability: 0.206
+  - prefab: {fileID: 0}
+    sprite:
+    - {fileID: 1019024254, guid: 4e03f2a3f482e6740be0128e0236d37a, type: 3}
+    probability: 0.197
+  - prefab: {fileID: 0}
+    sprite:
+    - {fileID: -2023758054, guid: 4e03f2a3f482e6740be0128e0236d37a, type: 3}
+    probability: 0.214
+  - prefab: {fileID: 0}
+    sprite:
+    - {fileID: 2056628028, guid: 4e03f2a3f482e6740be0128e0236d37a, type: 3}
+    probability: 0.253
+  - prefab: {fileID: 0}
+    sprite:
+    - {fileID: -1005992102, guid: 4e03f2a3f482e6740be0128e0236d37a, type: 3}
+    probability: 0.225
+  - prefab: {fileID: 0}
+    sprite:
+    - {fileID: 845091101, guid: 4e03f2a3f482e6740be0128e0236d37a, type: 3}
+    probability: 0.217
+  - prefab: {fileID: 0}
+    sprite:
+    - {fileID: -453905373, guid: 4e03f2a3f482e6740be0128e0236d37a, type: 3}
+    probability: 0.211
+  leaf: []

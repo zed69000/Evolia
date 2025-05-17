@@ -1,53 +1,50 @@
-using UnityEngine;
+ï»¿using UnityEngine;
+using UnityEngine.Rendering.Universal; // Namespace pour Light2D
 
 /// <summary>
-/// Met à jour chaque frame le paramètre global _TimeOfDay pour vos shaders URP et
-/// initialise une rampe de couleurs (_TimeOfDayRamp) via un Gradient limité à 8 clés.
-/// Permet d'overrider l'heure via l'Inspector. Utilise Shader.SetGlobalFloat et SetGlobalTexture
-/// pour respecter SRP et GPU Instancing.
+/// Met Ã  jour chaque frame la couleur du Global Light 2D selon l'heure du jour,
+/// Ã  l'aide d'un Gradient de 8 clÃ©s. Permet d'overrider l'heure via l'Inspector
+/// et de l'appliquer en mode Ã‰diteur ou PlayMode.
 /// </summary>
+[ExecuteAlways] // Pour que Update() tourne mÃªme hors PlayMode si besoin
 public class TimeOfDayController : MonoBehaviour
 {
-	[Header("Mode Éditeur")]
-	[Tooltip("Active la mise à jour hors PlayMode si true")]
+	[Header("Mode Ã‰diteur")]
+	[Tooltip("Active la mise Ã  jour hors PlayMode si true")]
 	public bool updateInEditor = false;
+
 	[Range(0, 24)]
-	[Tooltip("Heure fixe en mode Éditeur")]
+	[Tooltip("Heure fixe en mode Ã‰diteur")]
 	public float fixedHour = 12f;
 
 	[Header("Override Heure")]
-	[Tooltip("Override de l'heure système via Inspector")]
+	[Tooltip("Override de l'heure systÃ¨me via Inspector")]
 	public bool overrideTime = false;
+
 	[Range(0, 24)]
+	[Tooltip("Heure manuelle si overrideTime est true")]
 	public float manualHour = 12f;
 
-	[Header("Gradient Temps (8 clés max)")]
-	[Tooltip("Dégradé jour->nuit à créer automatiquement ou assigné manuellement")]
+	[Header("Gradient Temps (8 clÃ©s max)")]
+	[Tooltip("CrÃ©er automatiquement le gradient par dÃ©faut si true")]
 	public bool useDefaultGradient = true;
+
+	[Tooltip("Gradient personnalisÃ© jourâ†’nuit (8 clÃ©s max)")]
 	public Gradient timeGradient;
 
-	// Identifiants shader
-	private int _timeOfDayID;
-	private int _timeRampID;
-	private Texture2D _rampTexture;
+	[Header("RÃ©fÃ©rence Global Light 2D")]
+	[Tooltip("Assigner ici votre Light2D global (Shadow Caster 2D)")]
+	public Light2D globalLight2D;
 
-	// Initialisation des IDs et de la rampe
 	private void Awake()
 	{
-		InitShaderIDs();
-		InitGradientIfNeeded();
-		UpdateRampTexture();
-		PushTexture();
+		ApplyLightColor();
 	}
 
 #if UNITY_EDITOR
-	// Met à jour immédiatement en Editor lors de la modif. de l'Inspector
 	private void OnValidate()
 	{
-		InitShaderIDs();
-		InitGradientIfNeeded();
-		UpdateRampTexture();
-		PushTexture();
+		ApplyLightColor();
 	}
 #endif
 
@@ -56,86 +53,36 @@ public class TimeOfDayController : MonoBehaviour
 #if UNITY_EDITOR
 		if (!updateInEditor && !Application.isPlaying) return;
 #endif
-		float h = overrideTime
+		ApplyLightColor();
+	}
+
+
+	/// <summary>
+	/// Calcule la fraction de la journÃ©e selon l'heure (0â†’24h), Ã©value le Gradient
+	/// et l'applique Ã  la couleur de la Light2D.
+	/// </summary>
+	private void ApplyLightColor()
+	{
+		float hour = overrideTime
 			? manualHour
-			: (Application.isPlaying ? System.DateTime.Now.Hour + System.DateTime.Now.Minute / 60f : fixedHour);
+			: (Application.isPlaying
+				? System.DateTime.Now.Hour + System.DateTime.Now.Minute / 60f
+				: fixedHour);
 
-		Shader.SetGlobalFloat(_timeOfDayID, Mathf.Clamp01(h / 24f));
-		// Réapplique la rampe à chaque frame pour garantir l'instancing
-		PushTexture();
-	}
+		// On convertit en fraction normalisÃ©e [0,1]
+		float t = Mathf.Clamp01(hour / 24f);
 
-	// Initialise les IDs shader
-	private void InitShaderIDs()
-	{
-		_timeOfDayID = Shader.PropertyToID("_TimeOfDay");
-		_timeRampID = Shader.PropertyToID("_TimeOfDayRamp");
-	}
+		// Evaluation du Gradient pour obtenir la couleur correspondante
+		Color evaluatedColor = timeGradient.Evaluate(t);
 
-	// Crée ou conserve le gradient
-	private void InitGradientIfNeeded()
-	{
-		if (useDefaultGradient || timeGradient == null)
-			timeGradient = CreateDefaultGradient8();
-	}
-
-	// Met à jour la texture rampe 256×1 à partir du Gradient
-	private void UpdateRampTexture()
-	{
-		if (_rampTexture == null || _rampTexture.width != 256)
+		if (globalLight2D != null)
 		{
-			_rampTexture = new Texture2D(256, 1, TextureFormat.RGBA32, false, true);
-			_rampTexture.wrapMode = TextureWrapMode.Clamp;
-			_rampTexture.filterMode = FilterMode.Bilinear;
-		}
-		for (int x = 0; x < 256; x++)
-		{
-			float t = x / 255f;
-			Color c = timeGradient.Evaluate(t);
-			_rampTexture.SetPixel(x, 0, c);
-		}
-		_rampTexture.Apply();
-	}
-
-	// Envoie la texture au shader
-	private void PushTexture()
-	{
-		if (_rampTexture != null)
-		{
-			Shader.SetGlobalTexture(_timeRampID, _rampTexture);
+			// Application de la couleur au Global Light 2D
+			globalLight2D.color = evaluatedColor;
 		}
 		else
 		{
-			Debug.Log("rampTexture est null");
+			Debug.LogWarning("TimeOfDayController2D : globalLight2D non assignÃ© !");
 		}
-	}
-
-	/// <summary>
-	/// Crée un Gradient à 8 clés pour le spectre horaire :
-	/// 0h, 4h, 8h, 12h, 16h, 18h, 20h, 24h
-	/// </summary>
-	private Gradient CreateDefaultGradient8()
-	{
-		Gradient g = new Gradient();
-		g.mode = GradientMode.Blend;
-		GradientColorKey[] keys = new GradientColorKey[8]
-		{
-			new GradientColorKey(new Color(0.043f,0.047f,0.063f), 0f),   // 0h
-            new GradientColorKey(new Color(0.243f,0.290f,0.380f), 4f/24f),// 4h
-            new GradientColorKey(new Color(0.631f,0.776f,0.918f), 8f/24f),// 8h
-            new GradientColorKey(new Color(1.000f,0.957f,0.698f), 12f/24f),// 12h
-            new GradientColorKey(new Color(1.000f,0.702f,0.278f), 16f/24f),// 16h
-            new GradientColorKey(new Color(1.000f,0.498f,0.314f), 18f/24f),// 18h
-            new GradientColorKey(new Color(0.420f,0.310f,0.310f), 20f/24f),// 20h
-            new GradientColorKey(new Color(0.043f,0.047f,0.063f), 1f)    // 24h
-        };
-		GradientAlphaKey[] alpha = new GradientAlphaKey[2]
-		{
-			new GradientAlphaKey(1f, 0f),
-			new GradientAlphaKey(1f, 1f)
-		};
-		g.colorKeys = keys;
-		g.alphaKeys = alpha;
-		return g;
 	}
 }

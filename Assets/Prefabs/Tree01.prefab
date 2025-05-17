@@ -48,21 +48,22 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   activityType: {fileID: 11400000, guid: 8e3fbf50c91fc0440b1867f5ba4952df, type: 2}
   growth: 0
-  config: {fileID: 11400000, guid: b8225f96b29ac8c4abb859091a37efb4, type: 2}
+  config: {fileID: 11400000, guid: adbce3e7310e20d499f8ae8f989c76f6, type: 2}
   useLSystem: 1
-  globalScaleRange: {x: 1, y: 1.5}
-  petalScaleRange: {x: 0.35, y: 0.8}
-  leafScaleRange: {x: 0.35, y: 1.2}
-  leafSideOffsetRange: {x: 0, y: 0}
-  flipSymmetryProbability: 0.893
-  segmentLengthVariation: {x: 0.75, y: 1.2}
-  angleVariation: {x: 1.2, y: 1.8}
-  baseWidth: 0.25
-  widthFalloff: 0.788
-  minWidth: 0.1
-  minVertexDistance: 0.01
-  vertexDistanceFactor: 0.037
-  overlapDistance: 0.01
+  globalScaleRange: {x: 1, y: 1}
+  petalScaleRange: {x: 1, y: 1}
+  leafScaleRange: {x: 1, y: 1.5}
+  leafSideOffsetRange: {x: 0.1, y: 0.25}
+  flipSymmetryProbability: 0
+  segmentLengthVariation: {x: 0.5, y: 2}
+  angleVariation: {x: -15, y: 15}
+  minAngleDeadZone: 0.963
+  baseWidth: 0.6
+  widthFalloff: 0.786
+  minWidth: 0.01
+  minVertexDistance: 0.015
+  vertexDistanceFactor: 0.2
+  overlapDistance: 0.1
 --- !u!61 &603000791918145195
 BoxCollider2D:
   m_ObjectHideFlags: 0

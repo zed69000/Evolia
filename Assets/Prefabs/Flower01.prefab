@@ -54,9 +54,18 @@ MonoBehaviour:
   petalScaleRange: {x: 0.5, y: 0.6}
   leafScaleRange: {x: 0.4, y: 1.2}
   leafSideOffsetRange: {x: 0.1, y: 0.3}
+  leafRotationRange: {x: 0, y: 360}
   flipSymmetryProbability: 0.5
   segmentLengthVariation: {x: 0.8, y: 1.2}
   angleVariation: {x: -1, y: 1}
+  minAngleDeadZone: 0.5
+  baseWidth: 0.5
+  widthFalloff: 0.8
+  minWidth: 0.05
+  minVertexDistance: 0.1
+  vertexDistanceFactor: 0.2
+  overlapDistance: 0.1
+  spriteMaterial: {fileID: 2100000, guid: bd96ebd6a1754bd4a959bea961f40fb3, type: 2}
 --- !u!61 &1715183915561640488
 BoxCollider2D:
   m_ObjectHideFlags: 0

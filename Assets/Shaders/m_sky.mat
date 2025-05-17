@@ -38,11 +38,11 @@ Material:
         m_Offset: {x: 0, y: 0}
     m_Ints: []
     m_Floats:
-    - _NoiseScale: 6.86
-    - _OffsetY: -0.19
+    - _NoiseScale: 1
+    - _OffsetY: -0.1
     - _QueueControl: 0
     - _QueueOffset: 0
-    - _gradientStrech: 30.42
+    - _gradientStrech: 11.78
     m_Colors: []
   m_BuildTextureStacks: []
   m_AllowLocking: 1
