@@ -200,7 +200,7 @@ Camera:
   m_Enabled: 1
   serializedVersion: 2
   m_ClearFlags: 2
-  m_BackGroundColor: {r: 0.25525087, g: 0.25525087, b: 0.25525087, a: 0}
+  m_BackGroundColor: {r: 0.10145956, g: 0.099707775, b: 0.099707775, a: 0}
   m_projectionMatrixMode: 1
   m_GateFitMode: 2
   m_FOVAxisMode: 0
@@ -287,52 +287,79 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   allPlants:
   - name: Grass
+    category: 1
     effortCost: 80
     baseWeight: 80
     unlocked: 1
-    iconChar: "\U0001F33F"
+    isRare: 0
+    iconChar: "\U0001F33FG "
     color: {r: 0.56969434, g: 0.9131363, b: 0.6284025, a: 0}
   - name: Paquerette
+    category: 0
     effortCost: 200
     baseWeight: 50
     unlocked: 1
-    iconChar: "\U0001F3F5"
+    isRare: 0
+    iconChar: "\U0001F3F5P "
     color: {r: 0.86417335, g: 0.488402, b: 0.92168033, a: 0}
   - name: Rose
+    category: 0
     effortCost: 500
     baseWeight: 25
     unlocked: 1
-    iconChar: "\U0001F339"
+    isRare: 0
+    iconChar: "\U0001F339R "
     color: {r: 0.9558562, g: 0.23700741, b: 0.23700741, a: 0}
-  - name: Trefle
-    effortCost: 1000
-    baseWeight: 11.9
+  - name: Trefle 3
+    category: 0
+    effortCost: 90
+    baseWeight: 80
     unlocked: 1
+    isRare: 1
+    iconChar: "\u2618\uFE0F"
+    color: {r: 0.334991, g: 0.75080097, b: 0.122015245, a: 0}
+  - name: Trefle 4
+    category: 0
+    effortCost: 1000
+    baseWeight: 5.9
+    unlocked: 1
+    isRare: 1
     iconChar: "\U0001F340"
     color: {r: 0.18758261, g: 0.5115699, b: 0.021945296, a: 0}
-  baseEffortPerDay: 300
-  daysToSimulate: 25
+  baseEffortPerDay: 1000
+  daysToSimulate: 35
+  effortSource: {fileID: 2075394563}
+  effortActivity: Course
   insectConfigs:
   - name: Abeilles
-    baseThreshold: 3
+    affectedCategories: 00000000
+    baseThreshold: 6
     bonusType: 0
-    bonusMultiplier: 2
-    bonusFlat: 1
+    bonusMultiplier: 0.05
+    bonusFlat: 0
   - name: Sauterelles
-    baseThreshold: 18
+    affectedCategories: 01000000
+    baseThreshold: 25
     bonusType: 2
     bonusMultiplier: 0
-    bonusFlat: 5
+    bonusFlat: 50
   - name: Papillons
+    affectedCategories: 00000000
     baseThreshold: 21
     bonusType: 1
-    bonusMultiplier: 0.1
+    bonusMultiplier: 0.2
+    bonusFlat: 0
+  - name: Luciole
+    affectedCategories: 0100000000000000
+    baseThreshold: 50
+    bonusType: 3
+    bonusMultiplier: 0
     bonusFlat: 0
   headerFontSize: 17
-  cellFontSize: 19
-  headerTextColor: {r: 1, g: 1, b: 1, a: 1}
-  cellTextColor: {r: 1, g: 1, b: 1, a: 1}
-  columnWidths: 4f000000610000001301000092000000640000008b0000004d00000051000000a90000007e000000890000007f000000
+  cellFontSize: 18
+  headerTextColor: {r: 0.4135731, g: 0.8960484, b: 0.60607797, a: 1}
+  cellTextColor: {r: 0.7935208, g: 0.7935208, b: 0.7935208, a: 1}
+  columnWidths: 370000003a000000c701000093000000a2000000920000007c0000006e0000007600000067000000730000006d00000076000000
 --- !u!4 &1954836623
 Transform:
   m_ObjectHideFlags: 0
@@ -348,9 +375,765 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &2075394562
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 2075394564}
+  - component: {fileID: 2075394563}
+  m_Layer: 0
+  m_Name: 'ActivityEffortGraphUI '
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &2075394563
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2075394562}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 997bb21bf4e33c3489647fc9f9b4a1ef, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  allActivitiesData:
+  - {fileID: 11400000, guid: 0385316f1dc21c24892c6a391f87ec3b, type: 2}
+  - {fileID: 11400000, guid: 695377757b0f9c240ba3b63b51ee11e9, type: 2}
+  - {fileID: 11400000, guid: 74cfe10c271d8ae4aaa0f7651e88a4fe, type: 2}
+  - {fileID: 11400000, guid: 306d06faa9eaba145b56f10bcfb15a7d, type: 2}
+  - {fileID: 11400000, guid: 60803baddcf2d394596c917a13be4572, type: 2}
+  - {fileID: 11400000, guid: a5e2f6522b6bb1d47a9aa45d208ec5b3, type: 2}
+  - {fileID: 11400000, guid: 29100136d2be356449b7019ddcc5e729, type: 2}
+  - {fileID: 11400000, guid: bc4f3a77574556d4c9071147a6b6db1b, type: 2}
+  - {fileID: 11400000, guid: db08c31548c053445a40b890a6423238, type: 2}
+  dailyActivities:
+  - dayName: 1
+    entries:
+    - activityData: {fileID: 11400000, guid: 0385316f1dc21c24892c6a391f87ec3b, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 695377757b0f9c240ba3b63b51ee11e9, type: 2}
+      distanceKm: 4
+    - activityData: {fileID: 11400000, guid: 74cfe10c271d8ae4aaa0f7651e88a4fe, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 306d06faa9eaba145b56f10bcfb15a7d, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 60803baddcf2d394596c917a13be4572, type: 2}
+      distanceKm: 4
+    - activityData: {fileID: 11400000, guid: a5e2f6522b6bb1d47a9aa45d208ec5b3, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 29100136d2be356449b7019ddcc5e729, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: bc4f3a77574556d4c9071147a6b6db1b, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: db08c31548c053445a40b890a6423238, type: 2}
+      distanceKm: 0
+  - dayName: 2
+    entries:
+    - activityData: {fileID: 11400000, guid: 0385316f1dc21c24892c6a391f87ec3b, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 695377757b0f9c240ba3b63b51ee11e9, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 74cfe10c271d8ae4aaa0f7651e88a4fe, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 306d06faa9eaba145b56f10bcfb15a7d, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 60803baddcf2d394596c917a13be4572, type: 2}
+      distanceKm: 4
+    - activityData: {fileID: 11400000, guid: a5e2f6522b6bb1d47a9aa45d208ec5b3, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 29100136d2be356449b7019ddcc5e729, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: bc4f3a77574556d4c9071147a6b6db1b, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: db08c31548c053445a40b890a6423238, type: 2}
+      distanceKm: 0
+  - dayName: 1
+    entries:
+    - activityData: {fileID: 11400000, guid: 0385316f1dc21c24892c6a391f87ec3b, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 695377757b0f9c240ba3b63b51ee11e9, type: 2}
+      distanceKm: 4
+    - activityData: {fileID: 11400000, guid: 74cfe10c271d8ae4aaa0f7651e88a4fe, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 306d06faa9eaba145b56f10bcfb15a7d, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 60803baddcf2d394596c917a13be4572, type: 2}
+      distanceKm: 2
+    - activityData: {fileID: 11400000, guid: a5e2f6522b6bb1d47a9aa45d208ec5b3, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 29100136d2be356449b7019ddcc5e729, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: bc4f3a77574556d4c9071147a6b6db1b, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: db08c31548c053445a40b890a6423238, type: 2}
+      distanceKm: 0
+  - dayName: 1
+    entries:
+    - activityData: {fileID: 11400000, guid: 0385316f1dc21c24892c6a391f87ec3b, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 695377757b0f9c240ba3b63b51ee11e9, type: 2}
+      distanceKm: 4
+    - activityData: {fileID: 11400000, guid: 74cfe10c271d8ae4aaa0f7651e88a4fe, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 306d06faa9eaba145b56f10bcfb15a7d, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 60803baddcf2d394596c917a13be4572, type: 2}
+      distanceKm: 2
+    - activityData: {fileID: 11400000, guid: a5e2f6522b6bb1d47a9aa45d208ec5b3, type: 2}
+      distanceKm: 4
+    - activityData: {fileID: 11400000, guid: 29100136d2be356449b7019ddcc5e729, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: bc4f3a77574556d4c9071147a6b6db1b, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: db08c31548c053445a40b890a6423238, type: 2}
+      distanceKm: 0
+  - dayName: 1
+    entries:
+    - activityData: {fileID: 11400000, guid: 0385316f1dc21c24892c6a391f87ec3b, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 695377757b0f9c240ba3b63b51ee11e9, type: 2}
+      distanceKm: 4
+    - activityData: {fileID: 11400000, guid: 74cfe10c271d8ae4aaa0f7651e88a4fe, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 306d06faa9eaba145b56f10bcfb15a7d, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 60803baddcf2d394596c917a13be4572, type: 2}
+      distanceKm: 2
+    - activityData: {fileID: 11400000, guid: a5e2f6522b6bb1d47a9aa45d208ec5b3, type: 2}
+      distanceKm: 4
+    - activityData: {fileID: 11400000, guid: 29100136d2be356449b7019ddcc5e729, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: bc4f3a77574556d4c9071147a6b6db1b, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: db08c31548c053445a40b890a6423238, type: 2}
+      distanceKm: 0
+  - dayName: 1
+    entries:
+    - activityData: {fileID: 11400000, guid: 0385316f1dc21c24892c6a391f87ec3b, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 695377757b0f9c240ba3b63b51ee11e9, type: 2}
+      distanceKm: 4
+    - activityData: {fileID: 11400000, guid: 74cfe10c271d8ae4aaa0f7651e88a4fe, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 306d06faa9eaba145b56f10bcfb15a7d, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 60803baddcf2d394596c917a13be4572, type: 2}
+      distanceKm: 2
+    - activityData: {fileID: 11400000, guid: a5e2f6522b6bb1d47a9aa45d208ec5b3, type: 2}
+      distanceKm: 4
+    - activityData: {fileID: 11400000, guid: 29100136d2be356449b7019ddcc5e729, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: bc4f3a77574556d4c9071147a6b6db1b, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: db08c31548c053445a40b890a6423238, type: 2}
+      distanceKm: 0
+  - dayName: 1
+    entries:
+    - activityData: {fileID: 11400000, guid: 0385316f1dc21c24892c6a391f87ec3b, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 695377757b0f9c240ba3b63b51ee11e9, type: 2}
+      distanceKm: 4
+    - activityData: {fileID: 11400000, guid: 74cfe10c271d8ae4aaa0f7651e88a4fe, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 306d06faa9eaba145b56f10bcfb15a7d, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 60803baddcf2d394596c917a13be4572, type: 2}
+      distanceKm: 2
+    - activityData: {fileID: 11400000, guid: a5e2f6522b6bb1d47a9aa45d208ec5b3, type: 2}
+      distanceKm: 4
+    - activityData: {fileID: 11400000, guid: 29100136d2be356449b7019ddcc5e729, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: bc4f3a77574556d4c9071147a6b6db1b, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: db08c31548c053445a40b890a6423238, type: 2}
+      distanceKm: 0
+  - dayName: 1
+    entries:
+    - activityData: {fileID: 11400000, guid: 0385316f1dc21c24892c6a391f87ec3b, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 695377757b0f9c240ba3b63b51ee11e9, type: 2}
+      distanceKm: 4
+    - activityData: {fileID: 11400000, guid: 74cfe10c271d8ae4aaa0f7651e88a4fe, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 306d06faa9eaba145b56f10bcfb15a7d, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 60803baddcf2d394596c917a13be4572, type: 2}
+      distanceKm: 2
+    - activityData: {fileID: 11400000, guid: a5e2f6522b6bb1d47a9aa45d208ec5b3, type: 2}
+      distanceKm: 4
+    - activityData: {fileID: 11400000, guid: 29100136d2be356449b7019ddcc5e729, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: bc4f3a77574556d4c9071147a6b6db1b, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: db08c31548c053445a40b890a6423238, type: 2}
+      distanceKm: 0
+  - dayName: 1
+    entries:
+    - activityData: {fileID: 11400000, guid: 0385316f1dc21c24892c6a391f87ec3b, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 695377757b0f9c240ba3b63b51ee11e9, type: 2}
+      distanceKm: 4
+    - activityData: {fileID: 11400000, guid: 74cfe10c271d8ae4aaa0f7651e88a4fe, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 306d06faa9eaba145b56f10bcfb15a7d, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 60803baddcf2d394596c917a13be4572, type: 2}
+      distanceKm: 2
+    - activityData: {fileID: 11400000, guid: a5e2f6522b6bb1d47a9aa45d208ec5b3, type: 2}
+      distanceKm: 4
+    - activityData: {fileID: 11400000, guid: 29100136d2be356449b7019ddcc5e729, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: bc4f3a77574556d4c9071147a6b6db1b, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: db08c31548c053445a40b890a6423238, type: 2}
+      distanceKm: 0
+  - dayName: 1
+    entries:
+    - activityData: {fileID: 11400000, guid: 0385316f1dc21c24892c6a391f87ec3b, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 695377757b0f9c240ba3b63b51ee11e9, type: 2}
+      distanceKm: 4
+    - activityData: {fileID: 11400000, guid: 74cfe10c271d8ae4aaa0f7651e88a4fe, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 306d06faa9eaba145b56f10bcfb15a7d, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 60803baddcf2d394596c917a13be4572, type: 2}
+      distanceKm: 2
+    - activityData: {fileID: 11400000, guid: a5e2f6522b6bb1d47a9aa45d208ec5b3, type: 2}
+      distanceKm: 4
+    - activityData: {fileID: 11400000, guid: 29100136d2be356449b7019ddcc5e729, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: bc4f3a77574556d4c9071147a6b6db1b, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: db08c31548c053445a40b890a6423238, type: 2}
+      distanceKm: 0
+  - dayName: 1
+    entries:
+    - activityData: {fileID: 11400000, guid: 0385316f1dc21c24892c6a391f87ec3b, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 695377757b0f9c240ba3b63b51ee11e9, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 74cfe10c271d8ae4aaa0f7651e88a4fe, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 306d06faa9eaba145b56f10bcfb15a7d, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 60803baddcf2d394596c917a13be4572, type: 2}
+      distanceKm: 2
+    - activityData: {fileID: 11400000, guid: a5e2f6522b6bb1d47a9aa45d208ec5b3, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 29100136d2be356449b7019ddcc5e729, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: bc4f3a77574556d4c9071147a6b6db1b, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: db08c31548c053445a40b890a6423238, type: 2}
+      distanceKm: 0
+  - dayName: 1
+    entries:
+    - activityData: {fileID: 11400000, guid: 0385316f1dc21c24892c6a391f87ec3b, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 695377757b0f9c240ba3b63b51ee11e9, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 74cfe10c271d8ae4aaa0f7651e88a4fe, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 306d06faa9eaba145b56f10bcfb15a7d, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 60803baddcf2d394596c917a13be4572, type: 2}
+      distanceKm: 2
+    - activityData: {fileID: 11400000, guid: a5e2f6522b6bb1d47a9aa45d208ec5b3, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 29100136d2be356449b7019ddcc5e729, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: bc4f3a77574556d4c9071147a6b6db1b, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: db08c31548c053445a40b890a6423238, type: 2}
+      distanceKm: 0
+  - dayName: 1
+    entries:
+    - activityData: {fileID: 11400000, guid: 0385316f1dc21c24892c6a391f87ec3b, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 695377757b0f9c240ba3b63b51ee11e9, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 74cfe10c271d8ae4aaa0f7651e88a4fe, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 306d06faa9eaba145b56f10bcfb15a7d, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 60803baddcf2d394596c917a13be4572, type: 2}
+      distanceKm: 2
+    - activityData: {fileID: 11400000, guid: a5e2f6522b6bb1d47a9aa45d208ec5b3, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 29100136d2be356449b7019ddcc5e729, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: bc4f3a77574556d4c9071147a6b6db1b, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: db08c31548c053445a40b890a6423238, type: 2}
+      distanceKm: 0
+  - dayName: 1
+    entries:
+    - activityData: {fileID: 11400000, guid: 0385316f1dc21c24892c6a391f87ec3b, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 695377757b0f9c240ba3b63b51ee11e9, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 74cfe10c271d8ae4aaa0f7651e88a4fe, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 306d06faa9eaba145b56f10bcfb15a7d, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 60803baddcf2d394596c917a13be4572, type: 2}
+      distanceKm: 2
+    - activityData: {fileID: 11400000, guid: a5e2f6522b6bb1d47a9aa45d208ec5b3, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 29100136d2be356449b7019ddcc5e729, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: bc4f3a77574556d4c9071147a6b6db1b, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: db08c31548c053445a40b890a6423238, type: 2}
+      distanceKm: 0
+  - dayName: 1
+    entries:
+    - activityData: {fileID: 11400000, guid: 0385316f1dc21c24892c6a391f87ec3b, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 695377757b0f9c240ba3b63b51ee11e9, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 74cfe10c271d8ae4aaa0f7651e88a4fe, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 306d06faa9eaba145b56f10bcfb15a7d, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 60803baddcf2d394596c917a13be4572, type: 2}
+      distanceKm: 2
+    - activityData: {fileID: 11400000, guid: a5e2f6522b6bb1d47a9aa45d208ec5b3, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 29100136d2be356449b7019ddcc5e729, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: bc4f3a77574556d4c9071147a6b6db1b, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: db08c31548c053445a40b890a6423238, type: 2}
+      distanceKm: 0
+  - dayName: 1
+    entries:
+    - activityData: {fileID: 11400000, guid: 0385316f1dc21c24892c6a391f87ec3b, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 695377757b0f9c240ba3b63b51ee11e9, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 74cfe10c271d8ae4aaa0f7651e88a4fe, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 306d06faa9eaba145b56f10bcfb15a7d, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 60803baddcf2d394596c917a13be4572, type: 2}
+      distanceKm: 2
+    - activityData: {fileID: 11400000, guid: a5e2f6522b6bb1d47a9aa45d208ec5b3, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 29100136d2be356449b7019ddcc5e729, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: bc4f3a77574556d4c9071147a6b6db1b, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: db08c31548c053445a40b890a6423238, type: 2}
+      distanceKm: 0
+  - dayName: 1
+    entries:
+    - activityData: {fileID: 11400000, guid: 0385316f1dc21c24892c6a391f87ec3b, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 695377757b0f9c240ba3b63b51ee11e9, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 74cfe10c271d8ae4aaa0f7651e88a4fe, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 306d06faa9eaba145b56f10bcfb15a7d, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 60803baddcf2d394596c917a13be4572, type: 2}
+      distanceKm: 2
+    - activityData: {fileID: 11400000, guid: a5e2f6522b6bb1d47a9aa45d208ec5b3, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 29100136d2be356449b7019ddcc5e729, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: bc4f3a77574556d4c9071147a6b6db1b, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: db08c31548c053445a40b890a6423238, type: 2}
+      distanceKm: 0
+  - dayName: 1
+    entries:
+    - activityData: {fileID: 11400000, guid: 0385316f1dc21c24892c6a391f87ec3b, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 695377757b0f9c240ba3b63b51ee11e9, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 74cfe10c271d8ae4aaa0f7651e88a4fe, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 306d06faa9eaba145b56f10bcfb15a7d, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 60803baddcf2d394596c917a13be4572, type: 2}
+      distanceKm: 2
+    - activityData: {fileID: 11400000, guid: a5e2f6522b6bb1d47a9aa45d208ec5b3, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 29100136d2be356449b7019ddcc5e729, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: bc4f3a77574556d4c9071147a6b6db1b, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: db08c31548c053445a40b890a6423238, type: 2}
+      distanceKm: 0
+  - dayName: 1
+    entries:
+    - activityData: {fileID: 11400000, guid: 0385316f1dc21c24892c6a391f87ec3b, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 695377757b0f9c240ba3b63b51ee11e9, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 74cfe10c271d8ae4aaa0f7651e88a4fe, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 306d06faa9eaba145b56f10bcfb15a7d, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 60803baddcf2d394596c917a13be4572, type: 2}
+      distanceKm: 2
+    - activityData: {fileID: 11400000, guid: a5e2f6522b6bb1d47a9aa45d208ec5b3, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 29100136d2be356449b7019ddcc5e729, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: bc4f3a77574556d4c9071147a6b6db1b, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: db08c31548c053445a40b890a6423238, type: 2}
+      distanceKm: 0
+  - dayName: 1
+    entries:
+    - activityData: {fileID: 11400000, guid: 0385316f1dc21c24892c6a391f87ec3b, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 695377757b0f9c240ba3b63b51ee11e9, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 74cfe10c271d8ae4aaa0f7651e88a4fe, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 306d06faa9eaba145b56f10bcfb15a7d, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 60803baddcf2d394596c917a13be4572, type: 2}
+      distanceKm: 2
+    - activityData: {fileID: 11400000, guid: a5e2f6522b6bb1d47a9aa45d208ec5b3, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 29100136d2be356449b7019ddcc5e729, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: bc4f3a77574556d4c9071147a6b6db1b, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: db08c31548c053445a40b890a6423238, type: 2}
+      distanceKm: 0
+  - dayName: 1
+    entries:
+    - activityData: {fileID: 11400000, guid: 0385316f1dc21c24892c6a391f87ec3b, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 695377757b0f9c240ba3b63b51ee11e9, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 74cfe10c271d8ae4aaa0f7651e88a4fe, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 306d06faa9eaba145b56f10bcfb15a7d, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 60803baddcf2d394596c917a13be4572, type: 2}
+      distanceKm: 2
+    - activityData: {fileID: 11400000, guid: a5e2f6522b6bb1d47a9aa45d208ec5b3, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 29100136d2be356449b7019ddcc5e729, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: bc4f3a77574556d4c9071147a6b6db1b, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: db08c31548c053445a40b890a6423238, type: 2}
+      distanceKm: 0
+  - dayName: 1
+    entries:
+    - activityData: {fileID: 11400000, guid: 0385316f1dc21c24892c6a391f87ec3b, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 695377757b0f9c240ba3b63b51ee11e9, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 74cfe10c271d8ae4aaa0f7651e88a4fe, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 306d06faa9eaba145b56f10bcfb15a7d, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 60803baddcf2d394596c917a13be4572, type: 2}
+      distanceKm: 2
+    - activityData: {fileID: 11400000, guid: a5e2f6522b6bb1d47a9aa45d208ec5b3, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 29100136d2be356449b7019ddcc5e729, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: bc4f3a77574556d4c9071147a6b6db1b, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: db08c31548c053445a40b890a6423238, type: 2}
+      distanceKm: 0
+  - dayName: 1
+    entries:
+    - activityData: {fileID: 11400000, guid: 0385316f1dc21c24892c6a391f87ec3b, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 695377757b0f9c240ba3b63b51ee11e9, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 74cfe10c271d8ae4aaa0f7651e88a4fe, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 306d06faa9eaba145b56f10bcfb15a7d, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 60803baddcf2d394596c917a13be4572, type: 2}
+      distanceKm: 2
+    - activityData: {fileID: 11400000, guid: a5e2f6522b6bb1d47a9aa45d208ec5b3, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 29100136d2be356449b7019ddcc5e729, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: bc4f3a77574556d4c9071147a6b6db1b, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: db08c31548c053445a40b890a6423238, type: 2}
+      distanceKm: 0
+  - dayName: 1
+    entries:
+    - activityData: {fileID: 11400000, guid: 0385316f1dc21c24892c6a391f87ec3b, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 695377757b0f9c240ba3b63b51ee11e9, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 74cfe10c271d8ae4aaa0f7651e88a4fe, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 306d06faa9eaba145b56f10bcfb15a7d, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 60803baddcf2d394596c917a13be4572, type: 2}
+      distanceKm: 2
+    - activityData: {fileID: 11400000, guid: a5e2f6522b6bb1d47a9aa45d208ec5b3, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 29100136d2be356449b7019ddcc5e729, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: bc4f3a77574556d4c9071147a6b6db1b, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: db08c31548c053445a40b890a6423238, type: 2}
+      distanceKm: 0
+  - dayName: 1
+    entries:
+    - activityData: {fileID: 11400000, guid: 0385316f1dc21c24892c6a391f87ec3b, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 695377757b0f9c240ba3b63b51ee11e9, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 74cfe10c271d8ae4aaa0f7651e88a4fe, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 306d06faa9eaba145b56f10bcfb15a7d, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 60803baddcf2d394596c917a13be4572, type: 2}
+      distanceKm: 2
+    - activityData: {fileID: 11400000, guid: a5e2f6522b6bb1d47a9aa45d208ec5b3, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 29100136d2be356449b7019ddcc5e729, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: bc4f3a77574556d4c9071147a6b6db1b, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: db08c31548c053445a40b890a6423238, type: 2}
+      distanceKm: 10
+  - dayName: 1
+    entries:
+    - activityData: {fileID: 11400000, guid: 0385316f1dc21c24892c6a391f87ec3b, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 695377757b0f9c240ba3b63b51ee11e9, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 74cfe10c271d8ae4aaa0f7651e88a4fe, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 306d06faa9eaba145b56f10bcfb15a7d, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 60803baddcf2d394596c917a13be4572, type: 2}
+      distanceKm: 2
+    - activityData: {fileID: 11400000, guid: a5e2f6522b6bb1d47a9aa45d208ec5b3, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 29100136d2be356449b7019ddcc5e729, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: bc4f3a77574556d4c9071147a6b6db1b, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: db08c31548c053445a40b890a6423238, type: 2}
+      distanceKm: 0
+  - dayName: 1
+    entries:
+    - activityData: {fileID: 11400000, guid: 0385316f1dc21c24892c6a391f87ec3b, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 695377757b0f9c240ba3b63b51ee11e9, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 74cfe10c271d8ae4aaa0f7651e88a4fe, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 306d06faa9eaba145b56f10bcfb15a7d, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 60803baddcf2d394596c917a13be4572, type: 2}
+      distanceKm: 2
+    - activityData: {fileID: 11400000, guid: a5e2f6522b6bb1d47a9aa45d208ec5b3, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 29100136d2be356449b7019ddcc5e729, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: bc4f3a77574556d4c9071147a6b6db1b, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: db08c31548c053445a40b890a6423238, type: 2}
+      distanceKm: 0
+  - dayName: 1
+    entries:
+    - activityData: {fileID: 11400000, guid: 0385316f1dc21c24892c6a391f87ec3b, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 695377757b0f9c240ba3b63b51ee11e9, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 74cfe10c271d8ae4aaa0f7651e88a4fe, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 306d06faa9eaba145b56f10bcfb15a7d, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 60803baddcf2d394596c917a13be4572, type: 2}
+      distanceKm: 2
+    - activityData: {fileID: 11400000, guid: a5e2f6522b6bb1d47a9aa45d208ec5b3, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 29100136d2be356449b7019ddcc5e729, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: bc4f3a77574556d4c9071147a6b6db1b, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: db08c31548c053445a40b890a6423238, type: 2}
+      distanceKm: 0
+  - dayName: 1
+    entries:
+    - activityData: {fileID: 11400000, guid: 0385316f1dc21c24892c6a391f87ec3b, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 695377757b0f9c240ba3b63b51ee11e9, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 74cfe10c271d8ae4aaa0f7651e88a4fe, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 306d06faa9eaba145b56f10bcfb15a7d, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 60803baddcf2d394596c917a13be4572, type: 2}
+      distanceKm: 2
+    - activityData: {fileID: 11400000, guid: a5e2f6522b6bb1d47a9aa45d208ec5b3, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 29100136d2be356449b7019ddcc5e729, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: bc4f3a77574556d4c9071147a6b6db1b, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: db08c31548c053445a40b890a6423238, type: 2}
+      distanceKm: 0
+  - dayName: 1
+    entries:
+    - activityData: {fileID: 11400000, guid: 0385316f1dc21c24892c6a391f87ec3b, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 695377757b0f9c240ba3b63b51ee11e9, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 74cfe10c271d8ae4aaa0f7651e88a4fe, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 306d06faa9eaba145b56f10bcfb15a7d, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 60803baddcf2d394596c917a13be4572, type: 2}
+      distanceKm: 2
+    - activityData: {fileID: 11400000, guid: a5e2f6522b6bb1d47a9aa45d208ec5b3, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 29100136d2be356449b7019ddcc5e729, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: bc4f3a77574556d4c9071147a6b6db1b, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: db08c31548c053445a40b890a6423238, type: 2}
+      distanceKm: 0
+  - dayName: 1
+    entries:
+    - activityData: {fileID: 11400000, guid: 0385316f1dc21c24892c6a391f87ec3b, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 695377757b0f9c240ba3b63b51ee11e9, type: 2}
+      distanceKm: 5.04
+    - activityData: {fileID: 11400000, guid: 74cfe10c271d8ae4aaa0f7651e88a4fe, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 306d06faa9eaba145b56f10bcfb15a7d, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 60803baddcf2d394596c917a13be4572, type: 2}
+      distanceKm: 2
+    - activityData: {fileID: 11400000, guid: a5e2f6522b6bb1d47a9aa45d208ec5b3, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 29100136d2be356449b7019ddcc5e729, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: bc4f3a77574556d4c9071147a6b6db1b, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: db08c31548c053445a40b890a6423238, type: 2}
+      distanceKm: 0
+  - dayName: 1
+    entries:
+    - activityData: {fileID: 11400000, guid: 0385316f1dc21c24892c6a391f87ec3b, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 695377757b0f9c240ba3b63b51ee11e9, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 74cfe10c271d8ae4aaa0f7651e88a4fe, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 306d06faa9eaba145b56f10bcfb15a7d, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 60803baddcf2d394596c917a13be4572, type: 2}
+      distanceKm: 2
+    - activityData: {fileID: 11400000, guid: a5e2f6522b6bb1d47a9aa45d208ec5b3, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 29100136d2be356449b7019ddcc5e729, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: bc4f3a77574556d4c9071147a6b6db1b, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: db08c31548c053445a40b890a6423238, type: 2}
+      distanceKm: 0
+  - dayName: 1
+    entries:
+    - activityData: {fileID: 11400000, guid: 0385316f1dc21c24892c6a391f87ec3b, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 695377757b0f9c240ba3b63b51ee11e9, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 74cfe10c271d8ae4aaa0f7651e88a4fe, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 306d06faa9eaba145b56f10bcfb15a7d, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 60803baddcf2d394596c917a13be4572, type: 2}
+      distanceKm: 2
+    - activityData: {fileID: 11400000, guid: a5e2f6522b6bb1d47a9aa45d208ec5b3, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 29100136d2be356449b7019ddcc5e729, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: bc4f3a77574556d4c9071147a6b6db1b, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: db08c31548c053445a40b890a6423238, type: 2}
+      distanceKm: 0
+  - dayName: 1
+    entries:
+    - activityData: {fileID: 11400000, guid: 0385316f1dc21c24892c6a391f87ec3b, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 695377757b0f9c240ba3b63b51ee11e9, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 74cfe10c271d8ae4aaa0f7651e88a4fe, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 306d06faa9eaba145b56f10bcfb15a7d, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 60803baddcf2d394596c917a13be4572, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: a5e2f6522b6bb1d47a9aa45d208ec5b3, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 29100136d2be356449b7019ddcc5e729, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: bc4f3a77574556d4c9071147a6b6db1b, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: db08c31548c053445a40b890a6423238, type: 2}
+      distanceKm: 0
+  - dayName: 1
+    entries:
+    - activityData: {fileID: 11400000, guid: 0385316f1dc21c24892c6a391f87ec3b, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 695377757b0f9c240ba3b63b51ee11e9, type: 2}
+      distanceKm: 6
+    - activityData: {fileID: 11400000, guid: 74cfe10c271d8ae4aaa0f7651e88a4fe, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 306d06faa9eaba145b56f10bcfb15a7d, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 60803baddcf2d394596c917a13be4572, type: 2}
+      distanceKm: 4
+    - activityData: {fileID: 11400000, guid: a5e2f6522b6bb1d47a9aa45d208ec5b3, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 29100136d2be356449b7019ddcc5e729, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: bc4f3a77574556d4c9071147a6b6db1b, type: 2}
+      distanceKm: 1
+    - activityData: {fileID: 11400000, guid: db08c31548c053445a40b890a6423238, type: 2}
+      distanceKm: 0
+--- !u!4 &2075394564
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2075394562}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: -0.110416085, y: -0.9710917, z: -0.32645616}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0
   m_Roots:
   - {fileID: 1954836623}
   - {fileID: 1812622424}
+  - {fileID: 2075394564}
