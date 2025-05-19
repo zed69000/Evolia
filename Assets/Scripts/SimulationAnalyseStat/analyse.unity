@@ -322,12 +322,12 @@ MonoBehaviour:
     category: 0
     effortCost: 1000
     baseWeight: 5.9
-    unlocked: 0
+    unlocked: 1
     isRare: 1
     iconChar: "\U0001F340"
     color: {r: 0.18758261, g: 0.5115699, b: 0.021945296, a: 0}
   baseEffortPerDay: 1000
-  daysToSimulate: 15
+  daysToSimulate: 31
   effortSource: {fileID: 2075394563}
   effortActivity: Course
   insectConfigs:
@@ -411,9 +411,9 @@ MonoBehaviour:
   - dayName: Jour 1
     entries:
     - activityData: {fileID: 11400000, guid: 74cfe10c271d8ae4aaa0f7651e88a4fe, type: 2}
-      distanceKm: 4
+      distanceKm: 0
     - activityData: {fileID: 11400000, guid: 60803baddcf2d394596c917a13be4572, type: 2}
-      distanceKm: 2
+      distanceKm: 4
   - dayName: Jour 2
     entries:
     - activityData: {fileID: 11400000, guid: 74cfe10c271d8ae4aaa0f7651e88a4fe, type: 2}
@@ -483,21 +483,117 @@ MonoBehaviour:
   - dayName: Jour 13
     entries:
     - activityData: {fileID: 11400000, guid: 74cfe10c271d8ae4aaa0f7651e88a4fe, type: 2}
-      distanceKm: 3
+      distanceKm: 2
     - activityData: {fileID: 11400000, guid: 60803baddcf2d394596c917a13be4572, type: 2}
-      distanceKm: 1
+      distanceKm: 2
   - dayName: Jour 14
     entries:
     - activityData: {fileID: 11400000, guid: 74cfe10c271d8ae4aaa0f7651e88a4fe, type: 2}
       distanceKm: 3
     - activityData: {fileID: 11400000, guid: 60803baddcf2d394596c917a13be4572, type: 2}
-      distanceKm: 1
+      distanceKm: 2
   - dayName: Jour 15
     entries:
     - activityData: {fileID: 11400000, guid: 74cfe10c271d8ae4aaa0f7651e88a4fe, type: 2}
       distanceKm: 0
     - activityData: {fileID: 11400000, guid: 60803baddcf2d394596c917a13be4572, type: 2}
       distanceKm: 1
+  - dayName: Jour 16
+    entries:
+    - activityData: {fileID: 11400000, guid: 74cfe10c271d8ae4aaa0f7651e88a4fe, type: 2}
+      distanceKm: 10
+    - activityData: {fileID: 11400000, guid: 60803baddcf2d394596c917a13be4572, type: 2}
+      distanceKm: 1
+  - dayName: Jour 17
+    entries:
+    - activityData: {fileID: 11400000, guid: 74cfe10c271d8ae4aaa0f7651e88a4fe, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 60803baddcf2d394596c917a13be4572, type: 2}
+      distanceKm: 4
+  - dayName: Jour 18
+    entries:
+    - activityData: {fileID: 11400000, guid: 74cfe10c271d8ae4aaa0f7651e88a4fe, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 60803baddcf2d394596c917a13be4572, type: 2}
+      distanceKm: 4
+  - dayName: Jour 19
+    entries:
+    - activityData: {fileID: 11400000, guid: 74cfe10c271d8ae4aaa0f7651e88a4fe, type: 2}
+      distanceKm: 4
+    - activityData: {fileID: 11400000, guid: 60803baddcf2d394596c917a13be4572, type: 2}
+      distanceKm: 2
+  - dayName: Jour 20
+    entries:
+    - activityData: {fileID: 11400000, guid: 74cfe10c271d8ae4aaa0f7651e88a4fe, type: 2}
+      distanceKm: 4
+    - activityData: {fileID: 11400000, guid: 60803baddcf2d394596c917a13be4572, type: 2}
+      distanceKm: 4
+  - dayName: Jour 21
+    entries:
+    - activityData: {fileID: 11400000, guid: 74cfe10c271d8ae4aaa0f7651e88a4fe, type: 2}
+      distanceKm: 8
+    - activityData: {fileID: 11400000, guid: 60803baddcf2d394596c917a13be4572, type: 2}
+      distanceKm: 4
+  - dayName: Jour 22
+    entries:
+    - activityData: {fileID: 11400000, guid: 74cfe10c271d8ae4aaa0f7651e88a4fe, type: 2}
+      distanceKm: 10
+    - activityData: {fileID: 11400000, guid: 60803baddcf2d394596c917a13be4572, type: 2}
+      distanceKm: 4
+  - dayName: Jour 23
+    entries:
+    - activityData: {fileID: 11400000, guid: 74cfe10c271d8ae4aaa0f7651e88a4fe, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 60803baddcf2d394596c917a13be4572, type: 2}
+      distanceKm: 4
+  - dayName: Jour 24
+    entries:
+    - activityData: {fileID: 11400000, guid: 74cfe10c271d8ae4aaa0f7651e88a4fe, type: 2}
+      distanceKm: 4
+    - activityData: {fileID: 11400000, guid: 60803baddcf2d394596c917a13be4572, type: 2}
+      distanceKm: 4
+  - dayName: Jour 25
+    entries:
+    - activityData: {fileID: 11400000, guid: 74cfe10c271d8ae4aaa0f7651e88a4fe, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 60803baddcf2d394596c917a13be4572, type: 2}
+      distanceKm: 2
+  - dayName: Jour 26
+    entries:
+    - activityData: {fileID: 11400000, guid: 74cfe10c271d8ae4aaa0f7651e88a4fe, type: 2}
+      distanceKm: 4
+    - activityData: {fileID: 11400000, guid: 60803baddcf2d394596c917a13be4572, type: 2}
+      distanceKm: 2
+  - dayName: Jour 27
+    entries:
+    - activityData: {fileID: 11400000, guid: 74cfe10c271d8ae4aaa0f7651e88a4fe, type: 2}
+      distanceKm: 2
+    - activityData: {fileID: 11400000, guid: 60803baddcf2d394596c917a13be4572, type: 2}
+      distanceKm: 4
+  - dayName: Jour 28
+    entries:
+    - activityData: {fileID: 11400000, guid: 74cfe10c271d8ae4aaa0f7651e88a4fe, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 60803baddcf2d394596c917a13be4572, type: 2}
+      distanceKm: 4
+  - dayName: Jour 29
+    entries:
+    - activityData: {fileID: 11400000, guid: 74cfe10c271d8ae4aaa0f7651e88a4fe, type: 2}
+      distanceKm: 4
+    - activityData: {fileID: 11400000, guid: 60803baddcf2d394596c917a13be4572, type: 2}
+      distanceKm: 4
+  - dayName: Jour 30
+    entries:
+    - activityData: {fileID: 11400000, guid: 74cfe10c271d8ae4aaa0f7651e88a4fe, type: 2}
+      distanceKm: 4
+    - activityData: {fileID: 11400000, guid: 60803baddcf2d394596c917a13be4572, type: 2}
+      distanceKm: 4
+  - dayName: Jour 31
+    entries:
+    - activityData: {fileID: 11400000, guid: 74cfe10c271d8ae4aaa0f7651e88a4fe, type: 2}
+      distanceKm: 0
+    - activityData: {fileID: 11400000, guid: 60803baddcf2d394596c917a13be4572, type: 2}
+      distanceKm: 4
 --- !u!4 &2075394564
 Transform:
   m_ObjectHideFlags: 0

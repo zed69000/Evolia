@@ -92,6 +92,7 @@ public class PrairieSimulator : MonoBehaviour
 	private SimulationContext context = new SimulationContext();
 	private Vector2 scrollPos;
 	private List<float> externalEfforts;
+	private List<float> prevEfforts = new List<float>();
 
 	// GUI layout
 	private string[] headers;
@@ -106,24 +107,38 @@ public class PrairieSimulator : MonoBehaviour
 	{
 		GenerateExternalEffort();
 		Simulate();
-		if(effortSource != null)
-		prevGetEffortOverDaysCout = effortSource.GetEffortOverDays().Count;
+		prevEfforts = new List<float>(externalEfforts ?? new List<float>());
 	}
 
 	private void OnValidate()
 	{
 		GenerateExternalEffort();
 		Simulate();
+		prevEfforts = new List<float>(externalEfforts ?? new List<float>());
 	}
 
 	private int prevGetEffortOverDaysCout;
 	private void Update()
 	{
-		if(effortSource.GetEffortOverDays().Count > prevGetEffortOverDaysCout || effortSource.GetEffortOverDays().Count < prevGetEffortOverDaysCout)
+		// 1) Récupère la liste courante (ou une liste vide)
+		var currentEfforts = effortSource != null
+			? effortSource.GetEffortOverDays()
+			: new List<float>();
+
+		// 2) Si la longueur ou un élément diffère, on résimule
+		bool changed = currentEfforts.Count != prevEfforts.Count
+					   || !currentEfforts.SequenceEqual(prevEfforts);
+
+		if (changed)
 		{
+			// Re-simulation
 			Simulate();
+
+			// On met à jour le cache pour le prochain comparatif
+			prevEfforts = new List<float>(currentEfforts);
 		}
-	}
+}
+
 
 	[ContextMenu("Résimuler")]
 	public void Simulate()

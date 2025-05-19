@@ -46,6 +46,16 @@ public class ActivityEffortGraphUI : MonoBehaviour
 	// ---------------------------------------------
 	private List<DataPoint> totalEffortData = new List<DataPoint>();
 	private Rect windowRect = new Rect(20, 20, 420, 200);
+	private bool isResizing = false;
+	private Vector2 resizeStartMouse;
+	private Rect resizeStartRect;
+	private const float minWindowSize = 100f;
+	private const float resizeHandleSize = 16f;
+
+#if UNITY_EDITOR
+	// Style pour les labels ; initialisation différée pour éviter NullReference
+	private static GUIStyle labelStyle;
+#endif
 
 	// ---------------------------------------------
 	// CYCLE DE VIE
@@ -79,7 +89,6 @@ public class ActivityEffortGraphUI : MonoBehaviour
 		{
 			dailyActivities[i].dayName = $"Jour {i + 1}";
 		}
-
 
 		foreach (var day in dailyActivities)
 		{
@@ -173,10 +182,34 @@ public class ActivityEffortGraphUI : MonoBehaviour
 	}
 
 	// ---------------------------------------------
-	// AFFICHAGE DU GRAPHIQUE
+	// AFFICHAGE DU GRAPHIQUE AVEC RESIZE ET LABELS
 	// ---------------------------------------------
 	private void DrawWindow(int id)
 	{
+		// Zone de resize en bas à droite
+		Rect resizeRect = new Rect(windowRect.width - resizeHandleSize, windowRect.height - resizeHandleSize,
+								   resizeHandleSize, resizeHandleSize);
+#if UNITY_EDITOR
+		EditorGUIUtility.AddCursorRect(resizeRect, MouseCursor.ResizeUpLeft);
+#endif
+		Event e = Event.current;
+		if (e.type == EventType.MouseDown && resizeRect.Contains(e.mousePosition))
+		{
+			isResizing = true;
+			resizeStartMouse = GUIUtility.GUIToScreenPoint(e.mousePosition);
+			resizeStartRect = windowRect;
+			e.Use();
+		}
+		if (isResizing)
+		{
+			Vector2 currentMouse = GUIUtility.GUIToScreenPoint(e.mousePosition);
+			Vector2 diff = currentMouse - resizeStartMouse;
+			windowRect.width = Mathf.Max(minWindowSize, resizeStartRect.width + diff.x);
+			windowRect.height = Mathf.Max(minWindowSize, resizeStartRect.height + diff.y);
+			if (e.rawType == EventType.MouseUp) isResizing = false;
+			e.Use();
+		}
+
 		if (totalEffortData == null || totalEffortData.Count < 2)
 		{
 			GUILayout.Label("Pas assez de données pour afficher le graphique.");
@@ -192,6 +225,16 @@ public class ActivityEffortGraphUI : MonoBehaviour
 	{
 		Rect rect = GUILayoutUtility.GetRect(windowRect.width - 20, windowRect.height - 40);
 #if UNITY_EDITOR
+		// Initialisation différée du style pour éviter NullReferenceException
+		if (labelStyle == null)
+		{
+			labelStyle = new GUIStyle(EditorStyles.label)
+			{
+				wordWrap = false,
+				clipping = TextClipping.Overflow
+			};
+		}
+
 		Handles.BeginGUI();
 		Handles.color = Color.green;
 
@@ -208,6 +251,8 @@ public class ActivityEffortGraphUI : MonoBehaviour
 			if (i > 0) Handles.DrawLine(prev, p);
 			prev = p;
 			Handles.DrawSolidDisc(p, Vector3.forward, 3f);
+			// Label at each point with no wrapping/truncation
+			Handles.Label(p + Vector2.up * 6f, data[i].activityName, labelStyle);
 		}
 
 		Handles.EndGUI();
