@@ -72,7 +72,6 @@ public class PrairieSimulator : MonoBehaviour
 
 	[Header("Effort depuis activité externe (facultatif)")]
 	public ActivityEffortGraphUI effortSource;
-	public string effortActivity = "Course";
 
 	[Header("Insect Configurations")]
 	public List<InsectConfig> insectConfigs = new List<InsectConfig>();
@@ -290,6 +289,11 @@ public class PrairieSimulator : MonoBehaviour
 		}
 		else
 			externalEfforts = null;
+	}
+
+	public List<int> GetPlantsTotalPlantsByDay()
+	{
+		return context.dayResults.Select(dr => dr.totalPlants).ToList();
 	}
 
 	private void BuildLayout()
