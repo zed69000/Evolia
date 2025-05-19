@@ -25,7 +25,7 @@ public class ActivityEffortGraphUI : MonoBehaviour
 	public class DailyActivities
 	{
 		[Tooltip("Nom du jour, affiché dans l'inspecteur.")]
-		public string dayName = "Jour 1";
+		public string dayName;
 		[Tooltip("Liste des activités et distances pour ce jour.")]
 		public List<ActivityEntry> entries = new List<ActivityEntry>();
 	}
@@ -73,6 +73,13 @@ public class ActivityEffortGraphUI : MonoBehaviour
 	private void SyncEntriesWithActivities()
 	{
 		if (allActivitiesData == null || dailyActivities == null) return;
+
+		// 1) Mise à jour automatique des noms des jours ("Jour 1", "Jour 2", ...)
+		for (int i = 0; i < dailyActivities.Count; i++)
+		{
+			dailyActivities[i].dayName = $"Jour {i + 1}";
+		}
+
 
 		foreach (var day in dailyActivities)
 		{
