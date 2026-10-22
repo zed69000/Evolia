@@ -39,30 +39,45 @@ export function dayKey(d = new Date()) {
 	return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
+export const newPlace = () => ({ plants: [], worldH: 1000, unlocked: {}, km: 0, arrived: Date.now() });
+
 function fresh() {
 	return {
-		v: 1,
+		v: 2,
 		createdAt: Date.now(),
-		worldH: 1000,
 		goalKm: 3,
-		plants: [],
+		place: 'prairie',
+		places: { prairie: newPlace() },
 		walks: [],
 		days: {},
 		totals: { distance: 0, effort: 0, walks: 0, steps: 0 },
-		unlocked: {},
 		species: {},
 		lastHarvest: Date.now(),
 		harvestSource: null,
 	};
 }
 
+/** Avant les lieux (v1), il n'y avait qu'un jardin : il devient la prairie. */
+function migrate(s) {
+	if (s.v >= 2) return s;
+	const { mushrooms, ...unlocked } = s.unlocked ?? {};
+	s.places = { prairie: { plants: s.plants ?? [], worldH: s.worldH ?? 1000, unlocked, km: (s.totals?.distance ?? 0) / 1000, arrived: s.createdAt } };
+	s.place = 'prairie';
+	delete s.plants; delete s.worldH; delete s.unlocked;
+	s.v = 2;
+	return s;
+}
+
 export function load() {
 	try {
 		const raw = localStorage.getItem(KEY);
-		if (raw) return { ...fresh(), ...JSON.parse(raw) };
+		if (raw) return migrate({ ...fresh(), v: 1, ...JSON.parse(raw) });
 	} catch (e) { /* stockage indisponible : on repart d'un jardin neuf */ }
 	return fresh();
 }
+
+/** Tous les spécimens, tous lieux confondus. */
+export const allPlants = s => Object.values(s.places).flatMap(p => p.plants);
 
 export function save(state) {
 	try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) { /* idem */ }

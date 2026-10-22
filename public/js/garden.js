@@ -1,29 +1,35 @@
-// Le jardin : fond peint, plantes, insectes, vent, heure du jour et caméra.
+// Le jardin d'un lieu : fond peint, plantes, animaux, vent, ciel (heure, soleil, météo) et caméra.
 // Le monde fait WORLD_W unités de large ; il s'allonge vers le bas quand il n'y a plus de place.
 
-import { rng, wash, leaf, rgba, mix, paperTexture, lerp, clamp01 } from './watercolor.js';
+import { rng, wash, leaf, rgba, mix, paperTexture, lerp, ribbon, curve } from './watercolor.js';
 import { PLANT_TYPES, DECOR, DECOR_PAINTERS, paintPlant, newVariant } from './plants.js';
-import { drawCritter } from './critters.js';
-
-const POND_PADS = [[40, -10], [58, 10], [-60, 14]];
-// Hauteur de vol : l'ombre au sol est décalée d'autant.
-const FLIGHT = { bee: 24, butterfly: 24, dragonfly: 24, frog: 6, hedgehog: 9 };
-const CRITTER_SIZE = { hedgehog: 1.6, frog: 1.4, tit: 1.4, ladybug: 1.2 };
+import { drawCritter, CRITTER_SIZE, FLIGHT } from './critters.js';
+import { SPECIES } from './species.js';
 
 export const WORLD_W = 420;
 const STAGES = 30;
 const SWAY = { herbe: 0.09, fleur: 0.07, buisson: 0.02, arbre: 0.012 };
 const MIN_Y = { herbe: 60, fleur: 100, buisson: 100, arbre: 220 };
+const POND_PADS = [[40, -10], [58, 10], [-60, 14], [-20, 24], [10, -26]];
+const FLYERS = new Set(['bee', 'butterfly', 'dragonfly']);
 
-// Couleur multipliée sur la scène selon l'heure : [heure, couleur, opacité].
-const AMBIENT = [
-	[0, '#1E2B4D', 0.55], [4.5, '#1E2B4D', 0.55], [6, '#F2B880', 0.25], [8, '#FFFFFF', 0],
-	[17, '#FFFFFF', 0], [19, '#F4A85E', 0.25], [20.5, '#6E5A8E', 0.4], [21.5, '#1E2B4D', 0.55], [24, '#1E2B4D', 0.55],
-];
+// Sol de chaque lieu : couleur de fond, grandes nappes, bords, petites pousses.
+const GROUND = {
+	prairie: { base: '#B5C565', washes: ['#9AB450', '#A3BD57', '#CDC88D', '#B9C668', '#7FAA48', '#B9C668'], edge: ['#5F933E', '#488641'], sprigs: ['#5F933E', '#7FAA48', '#488641'], stones: '#C9B48A' },
+	marais: { base: '#A6C27A', washes: ['#8FB98A', '#9AC08A', '#B9CC8A', '#7FAA6A', '#C8D0A0'], edge: ['#4E7A5A', '#5F8A62'], sprigs: ['#4E7A4A', '#6E9A5A'], stones: '#A8B898' },
+	foret: { base: '#7E9A55', washes: ['#6E8A4A', '#5F7F45', '#8AA060', '#9A9A60', '#7A7A48'], edge: ['#3E5A32', '#2E4A2A'], sprigs: ['#3E6A35', '#4E7A3E'], stones: '#9A8A6A', leaves: ['#A8783A', '#C8903A', '#8A5A2A', '#B8A050'], sun: '#E8E0A0' },
+	montagne: { base: '#B9C98E', washes: ['#A8BC80', '#C8D3A0', '#9FB878', '#D0D8B0'], edge: ['#7A9A6A', '#8AA07A'], sprigs: ['#6E8F6A', '#7FA08A'], stones: '#A8A8A0', rocks: true },
+	littoral: { base: '#E9DAB4', washes: ['#DCCB9E', '#F0E4C4', '#E4D2A8', '#D2C090'], edge: ['#C8B88A', '#D8C8A0'], sprigs: ['#9DB08A', '#A8B488'], stones: '#C8C0B0', sea: true },
+};
 
-function ambientAt(h) {
-	for (let i = 0; i < AMBIENT.length - 1; i++) {
-		const [h0, c0, a0] = AMBIENT[i], [h1, c1, a1] = AMBIENT[i + 1];
+/** Lever et coucher du soleil (heures décimales) par défaut, pour la France. */
+const DEFAULT_SUN = { rise: 7.5, set: 19 };
+
+function ambientAt(h, sun) {
+	const N = ['#1E2B4D', 0.55], DAWN = ['#F2B880', 0.25], DAY = ['#FFFFFF', 0], GOLD = ['#F4A85E', 0.25], DUSK = ['#6E5A8E', 0.4];
+	const keys = [[0, N], [sun.rise - 1, N], [sun.rise, DAWN], [sun.rise + 1.5, DAY], [sun.set - 1.5, DAY], [sun.set - 0.2, GOLD], [sun.set + 0.5, DUSK], [sun.set + 1.25, N], [24, N]];
+	for (let i = 0; i < keys.length - 1; i++) {
+		const [h0, [c0, a0]] = keys[i], [h1, [c1, a1]] = keys[i + 1];
 		if (h >= h0 && h <= h1) {
 			const k = (h - h0) / (h1 - h0 || 1);
 			return { color: mix(c0, c1, k), a: lerp(a0, a1, k) };
@@ -32,10 +38,10 @@ function ambientAt(h) {
 	return { color: '#FFFFFF', a: 0 };
 }
 
-function nightAt(h) {
-	if (h >= 21.5 || h < 4.5) return 1;
-	if (h > 20.5) return h - 20.5;
-	if (h < 6) return (6 - h) / 1.5;
+export function nightAt(h, sun = DEFAULT_SUN) {
+	if (h >= sun.set + 1.25 || h < sun.rise - 1) return 1;
+	if (h > sun.set) return (h - sun.set) / 1.25;
+	if (h < sun.rise) return (sun.rise - h);
 	return 0;
 }
 
@@ -51,28 +57,44 @@ export class Garden {
 		this.decorSprites = new Map();
 		this.camY = 0;
 		this.vel = 0;
-		this.follow = null;
 		this.followPausedUntil = 0;
 		this.insects = [];
 		this.particles = [];
+		this.drops = [];
 		this.fireflies = Array.from({ length: 26 }, () => ({ x: Math.random() * WORLD_W, y: Math.random(), ph: Math.random() * 6.28, a: Math.random() * 6.28 }));
 		this.paper = paperTexture(256);
 		this.hourOverride = null;
+		this.sun = DEFAULT_SUN;
+		this.weather = { kind: 'clear', wind: 10, temp: 15 };
 		this.padTop = 0;
 		this.padBottom = 0;
 		this.t = 0;
+		this.flash = 0;
 		this.popAt = {};
 		this.nextPopulate = 0;
-		this.bgDirty = true;
 		this.onTap = null;
 
-		if (!state.plants.length) this.seedStarterGarden();
+		this.setPlace(state.place);
 		this.resize();
 		new ResizeObserver(() => this.resize()).observe(canvas);
 		this.bindInput();
 		this.last = performance.now();
-		this.camY = Math.max(this.camMin(), (this.state.worldH - this.viewH()) * 0.35);
 		requestAnimationFrame(this.frame);
+	}
+
+	/** Change de lieu : chaque lieu a son propre jardin. */
+	setPlace(id) {
+		this.placeId = id;
+		this.place = this.state.places[id];
+		this.sprites.clear();
+		this.insects = [];
+		this.particles = [];
+		this.current = null;
+		this.bgDirty = true;
+		if (!this.place.plants.length) this.seedStarterGarden();
+		this.camY = Math.max(this.camMin(), (this.place.worldH - this.viewH()) * 0.35);
+		this.camTarget = null;
+		this.nextPopulate = 0;
 	}
 
 	// ─── Mise en page ──────────────────────────────────────────────
@@ -106,7 +128,7 @@ export class Garden {
 
 	viewH() { return this.canvas.clientHeight / (this.cs || 1); }
 	camMin() { return -this.padTop; }
-	camMax() { return Math.max(this.camMin(), this.state.worldH - this.viewH() + this.padBottom); }
+	camMax() { return Math.max(this.camMin(), this.place.worldH - this.viewH() + this.padBottom); }
 
 	makeVignette() {
 		const c = document.createElement('canvas');
@@ -150,33 +172,43 @@ export class Garden {
 	}
 
 	paintBg() {
-		const S = this.S, H = this.state.worldH;
+		const S = this.S, H = this.place.worldH, G = GROUND[this.placeId];
 		const c = document.createElement('canvas');
 		c.width = Math.ceil(WORLD_W * S);
 		c.height = Math.ceil(H * S);
 		const g = c.getContext('2d');
 		g.scale(S, S);
 		const r = rng(99);
-		g.fillStyle = '#B5C565';
+		g.fillStyle = G.base;
 		g.fillRect(0, 0, WORLD_W, H);
 		const n = Math.round((H / 1000) * 50);
 		for (let i = 0; i < n; i++) {
-			wash(g, r.range(-50, WORLD_W + 50), r.range(-50, H + 50), r.range(70, 200), r.range(50, 150),
-				r.pick(['#9AB450', '#A3BD57', '#CDC88D', '#B9C668', '#7FAA48', '#B9C668']), r, { layers: 8, alpha: 0.06, edge: 0, variance: 0.25 });
+			wash(g, r.range(-50, WORLD_W + 50), r.range(-50, H + 50), r.range(70, 200), r.range(50, 150), r.pick(G.washes), r, { layers: 8, alpha: 0.06, edge: 0, variance: 0.25 });
 		}
 		for (let y = 0; y < H; y += 120) {
-			for (const x of [-30, WORLD_W + 30]) wash(g, x, y + r.gauss() * 40, r.range(60, 110), r.range(70, 120), r.pick(['#5F933E', '#488641']), r, { layers: 8, alpha: 0.06, edge: 0 });
+			for (const x of [-30, WORLD_W + 30]) wash(g, x, y + r.gauss() * 40, r.range(60, 110), r.range(70, 120), r.pick(G.edge), r, { layers: 8, alpha: 0.06, edge: 0 });
 		}
-		const sprigs = Math.round((H / 1000) * 260);
+		if (G.sun) for (let i = 0; i < Math.round(H / 140); i++) wash(g, r.range(20, WORLD_W - 20), r.range(20, H), r.range(30, 60), r.range(18, 34), G.sun, r, { layers: 5, alpha: 0.035, edge: 0 });
+		if (G.rocks) for (let i = 0; i < Math.round(H / 90); i++) { const s = r.range(6, 16); wash(g, r.range(10, WORLD_W - 10), r.range(20, H), s, s * 0.6, r.pick(['#A8A498', '#BCB8AC', '#9A968A']), r, { layers: 7, alpha: 0.16, edge: 0.4 }); }
+		const sprigs = Math.round((H / 1000) * (G.sea ? 90 : 260));
 		for (let i = 0; i < sprigs; i++) {
-			const x = r.range(10, WORLD_W - 10), y = r.range(10, H - 10), s = r.range(0.6, 1.25);
-			const col = r.pick(['#5F933E', '#7FAA48', '#488641']);
+			const x = r.range(10, WORLD_W - 10), y = r.range(G.sea ? 260 : 10, H - 10), s = r.range(0.6, 1.25);
+			const col = r.pick(G.sprigs);
 			leaf(g, x, y, 6 * s, 2.4 * s, -Math.PI / 2 - 0.6, col, r, 0.55);
 			leaf(g, x, y, 6 * s, 2.4 * s, -Math.PI / 2 + 0.6, col, r, 0.55);
 			if (r() < 0.3) leaf(g, x, y, 7 * s, 2 * s, -Math.PI / 2, col, r, 0.55);
 		}
+		if (G.leaves) for (let i = 0; i < Math.round(H / 6); i++) leaf(g, r.range(5, WORLD_W - 5), r.range(5, H), r.range(4, 7), r.range(1.6, 2.6), r() * 6.28, r.pick(G.leaves), r, 0.5);
 		for (let i = 0; i < Math.round((H / 1000) * 18); i++) {
-			wash(g, r.range(20, WORLD_W - 20), r.range(20, H - 20), r.range(3, 6), r.range(2, 4), '#C9B48A', r, { layers: 5, alpha: 0.25, edge: 0.3 });
+			wash(g, r.range(20, WORLD_W - 20), r.range(20, H - 20), r.range(3, 6), r.range(2, 4), G.stones, r, { layers: 5, alpha: 0.25, edge: 0.3 });
+		}
+		if (G.sea) {
+			// La mer en haut du monde, puis le sable mouillé et l'écume.
+			for (let i = 0; i < 14; i++) wash(g, r.range(-40, WORLD_W + 40), r.range(-30, 110), r.range(90, 160), r.range(40, 70), r.pick(['#6FAEC0', '#8FC4CC', '#5FA0B8']), r, { layers: 8, alpha: 0.1, edge: 0 });
+			g.fillStyle = 'rgba(111,174,192,0.55)';
+			g.fillRect(0, -10, WORLD_W, 120);
+			for (let i = 0; i < 10; i++) wash(g, r.range(0, WORLD_W), r.range(150, 190), r.range(60, 110), r.range(10, 18), '#CFC09A', r, { layers: 6, alpha: 0.1, edge: 0 });
+			for (const y of [120, 138, 156]) ribbon(g, curve(-10, y + r.gauss() * 4, r.gauss() * 0.04, WORLD_W + 20, r.gauss() * 0.08, 20), 2.4, 1.6, '#FDFBF3', r, 0.6);
 		}
 		this.bg = c;
 		this.bgDirty = false;
@@ -184,26 +216,32 @@ export class Garden {
 
 	// ─── Plantes ───────────────────────────────────────────────────
 
-	/** Un premier jardin composé à la main, pour ne pas arriver sur une prairie vide. */
+	/** Un premier jardin composé à la main pour chaque lieu, pour ne pas arriver sur un terrain vide. */
 	seedStarterGarden() {
-		const herbes = [[70, 470], [115, 520], [300, 420], [345, 560], [210, 640], [80, 690], [265, 740], [190, 500]];
-		for (const [x, y] of herbes) this.spawn('herbe', 1, { x, y });
-		this.spawn('fleur', 1, { x: 140, y: 440 });
-		this.spawn('fleur', 1, { x: 172, y: 470 });
-		this.spawn('fleur', 0.3, { x: 120, y: 480 });
-		this.spawn('arbre', 0.08, { x: 310, y: 330 });
+		const starters = {
+			prairie: { herbe: [[70, 470], [115, 520], [300, 420], [345, 560], [210, 640], [80, 690], [265, 740], [190, 500]], fleur: [[140, 440, 1], [172, 470, 1], [120, 480, 0.3]], arbre: [[310, 330, 0.08]] },
+			marais: { herbe: [[50, 330], [370, 340], [40, 770], [380, 700], [300, 820], [140, 820]], fleur: [[330, 370, 1], [80, 740, 1], [360, 760, 0.3]] },
+			foret: { herbe: [[70, 420], [340, 460], [200, 620], [90, 700], [330, 700]], fleur: [[120, 470, 1], [150, 500, 1], [300, 520, 0.3]], arbre: [[260, 300, 0.08]] },
+			montagne: { herbe: [[80, 480], [140, 540], [300, 470], [360, 600], [220, 660]], fleur: [[200, 520, 1], [230, 545, 1]], arbre: [[90, 330, 0.08]] },
+			littoral: { herbe: [[60, 420], [120, 470], [300, 450], [360, 520], [200, 560], [80, 640]], fleur: [[240, 480, 1], [150, 600, 0.3]], arbre: [[330, 760, 0.08]] },
+		}[this.placeId];
+		for (const [type, list] of Object.entries(starters)) for (const [x, y, g = 1] of list) this.spawn(type, g, { x, y });
 	}
 
-	place(type) {
+	minY(type) {
+		return MIN_Y[type] + (this.placeId === 'littoral' ? 240 : 0);
+	}
+
+	place_(type) {
 		const sp = PLANT_TYPES[type].spacing;
 		const obstacles = [
-			...this.state.plants.map(p => ({ x: p.x, y: p.y, rad: PLANT_TYPES[p.type].spacing })),
-			...Object.values(DECOR).map(d => ({ x: d.x, y: d.y, rad: d.rad })),
+			...this.place.plants.map(p => ({ x: p.x, y: p.y, rad: PLANT_TYPES[p.type].spacing })),
+			...Object.values(DECOR).filter(d => d.place === this.placeId && d.rad).map(d => ({ x: d.x, y: d.y, rad: d.rad })),
 		];
-		const same = this.state.plants.filter(p => p.type === type);
+		const same = this.place.plants.filter(p => p.type === type);
 		let best = null;
 		for (let attempt = 0; attempt < 6; attempt++) {
-			const H = this.state.worldH;
+			const H = this.place.worldH, y0 = this.minY(type);
 			let bestScore = -Infinity;
 			for (let i = 0; i < 60; i++) {
 				let x, y, near = false;
@@ -215,9 +253,9 @@ export class Garden {
 					near = true;
 				} else {
 					x = 40 + Math.random() * (WORLD_W - 80);
-					y = MIN_Y[type] + Math.random() * (H - MIN_Y[type] - 40);
+					y = y0 + Math.random() * (H - y0 - 40);
 				}
-				if (x < 30 || x > WORLD_W - 30 || y < MIN_Y[type] || y > H - 30) continue;
+				if (x < 30 || x > WORLD_W - 30 || y < y0 || y > H - 30) continue;
 				let gap = Infinity;
 				for (const o of obstacles) gap = Math.min(gap, Math.hypot(o.x - x, (o.y - y) * 1.25) - o.rad - sp);
 				// Les petites plantes se regroupent en touffes ; les arbres cherchent de l'espace.
@@ -226,18 +264,18 @@ export class Garden {
 			}
 			if (bestScore >= 1000) return best;
 			// Plus de place : le jardin s'agrandit vers le bas.
-			this.state.worldH += 300;
+			this.place.worldH += 300;
 			this.bgDirty = true;
 		}
 		return best;
 	}
 
-	spawn(type, growth = 0, pos = this.place(type)) {
+	spawn(type, growth = 0, pos = this.place_(type)) {
 		const p = {
 			id: uid(), type, x: Math.round(pos.x), y: Math.round(pos.y), growth,
-			seed: Math.floor(Math.random() * 2147483647), variant: newVariant(type, this.state.species), born: Date.now(),
+			seed: Math.floor(Math.random() * 2147483647), variant: newVariant(type, this.placeId, this.state.species), born: Date.now(),
 		};
-		this.state.plants.push(p);
+		this.place.plants.push(p);
 		return p;
 	}
 
@@ -245,7 +283,7 @@ export class Garden {
 	addEffort(type, amount) {
 		const events = [];
 		const cost = PLANT_TYPES[type].cost;
-		let p = this.state.plants.find(q => q.type === type && q.growth < 1);
+		let p = this.place.plants.find(q => q.type === type && q.growth < 1);
 		while (amount > 1e-6) {
 			if (!p) { p = this.spawn(type); events.push({ kind: 'seed', plant: p }); }
 			const used = Math.min((1 - p.growth) * cost, amount);
@@ -271,7 +309,7 @@ export class Garden {
 			const grew = s && s.stage < stage;
 			s = { stage, canvas: c, top: meta.top, pop: grew ? this.t : (s?.pop ?? -9) };
 			this.sprites.set(p.id, s);
-			if (grew) this.burst(p.x, p.y + meta.top, stage === STAGES ? 18 : 5, p.variant.color);
+			if (grew) this.burst(p.x, p.y + meta.top, stage === STAGES ? 18 : 5);
 		}
 		return s;
 	}
@@ -285,11 +323,16 @@ export class Garden {
 			c.height = Math.ceil(box.h * this.S);
 			const g = c.getContext('2d');
 			g.setTransform(this.S, 0, 0, this.S, box.ax * this.S, box.ay * this.S);
-			DECOR_PAINTERS[key](g);
-			s = { canvas: c };
+			const meta = DECOR_PAINTERS[key](g);
+			s = { canvas: c, top: meta.top };
 			this.decorSprites.set(key, s);
 		}
 		return s;
+	}
+
+	decorVisible(key) {
+		const d = DECOR[key];
+		return d.place === this.placeId && (d.always || !!this.place.unlocked[key]);
 	}
 
 	/** Montre un décor qui vient d'apparaître. */
@@ -325,10 +368,24 @@ export class Garden {
 		return s ? [p.x, p.y + s.top] : [p.x, p.y - 20];
 	}
 
+	/** Point d'eau du lieu (mare, grande mare, mer), s'il y en a un. */
+	water() {
+		if (this.placeId === 'littoral') return { x: WORLD_W / 2, y: 70, rx: 200, ry: 50, scale: 3 };
+		for (const [k, d] of Object.entries(DECOR)) if (d.water && this.decorVisible(k)) return { x: d.x, y: d.y, rx: 95 * (d.scale ?? 1), ry: 48 * (d.scale ?? 1), scale: d.scale ?? 1 };
+		return null;
+	}
+
 	hour() {
 		if (this.hourOverride != null) return this.hourOverride;
 		const d = new Date();
 		return d.getHours() + d.getMinutes() / 60;
+	}
+
+	night() { return nightAt(this.hour(), this.sun); }
+
+	precip() {
+		const k = this.weather.kind;
+		return k === 'rain' ? 1 : k === 'storm' ? 1.5 : k === 'drizzle' ? 0.45 : k === 'snow' ? 1 : 0;
 	}
 
 	// ─── Entrées (glisser pour parcourir, toucher une plante) ───────
@@ -377,7 +434,7 @@ export class Garden {
 		const rect = this.canvas.getBoundingClientRect();
 		const wx = (e.clientX - rect.left) / this.cs;
 		const wy = (e.clientY - rect.top) / this.cs + this.camY;
-		const sorted = [...this.state.plants].sort((a, b) => b.y - a.y);
+		const sorted = [...this.place.plants].sort((a, b) => b.y - a.y);
 		for (const p of sorted) {
 			const box = PLANT_TYPES[p.type].box;
 			const s = this.sprites.get(p.id);
@@ -435,58 +492,77 @@ export class Garden {
 			if (f.x < 0 || f.x > WORLD_W) f.a = Math.PI - f.a;
 			if (f.y < 0 || f.y > 1) f.y = Math.random();
 		}
+		this.updateWeather(dt);
 	}
 
+	/** Animaux présents : ceux du lieu déjà découverts, chacun à son heure et selon la météo. */
 	populate() {
-		const n = nightAt(this.hour());
+		const n = this.night();
 		if (n > 0.5) this.state.seenNight = true;
 		const night = n > 0.5, dusk = n > 0.2;
-		const sp = this.state.species;
-		const mature = this.state.plants.filter(p => p.growth >= 1);
+		const wet = this.precip() > 0;
+		const mature = this.place.plants.filter(p => p.growth >= 1);
 		this.flowers = mature.filter(p => p.type === 'fleur');
 		this.bushes = mature.filter(p => p.type === 'buisson');
 		this.trees = mature.filter(p => p.type === 'arbre');
 		this.perches = [...this.bushes, ...this.trees];
-		// Le jour les pollinisateurs, la nuit le hérisson : chacun à son heure.
-		const want = {
-			bee: night ? 0 : this.flowers.length ? Math.min(8, 1 + Math.floor(this.flowers.length / 3)) : 0,
-			butterfly: night ? 0 : Math.min(5, Math.floor(this.perches.length / 2) + (this.flowers.length >= 6 ? 1 : 0)),
-			dragonfly: !night && this.state.unlocked.pond ? 1 : 0,
-			ladybug: sp.coccinelle && !night ? Math.min(3, this.bushes.length) : 0,
-			frog: sp.grenouille && this.state.unlocked.pond ? 1 : 0,
-			hedgehog: sp.herisson && dusk ? 1 : 0,
-			tit: sp.mesange && !night && this.trees.length ? Math.min(2, this.trees.length - 1 || 1) : 0,
-		};
-		for (const kind of Object.keys(want)) {
-			const active = this.insects.filter(i => i.kind === kind && !i.leaving);
-			for (let k = active.length; k < want[kind]; k++) {
-				const c = this.newInsect(kind);
-				if (c) this.insects.push(c);
+		const ok = when => when === 'always' || (when === 'day' && !night) || (when === 'night' && night) || (when === 'dusk' && dusk);
+		for (const sp of SPECIES) {
+			if (sp.kind !== 'animal' || sp.place !== this.placeId || !sp.critter.behavior) continue;
+			const c = sp.critter;
+			let want = this.state.species[sp.id] && ok(c.when) ? c.count(this.state) : 0;
+			// Sous la pluie ou la neige, les insectes volants se mettent à l'abri.
+			if (wet && FLYERS.has(c.kind)) want = 0;
+			const active = this.insects.filter(i => i.sp === sp.id && !i.leaving);
+			for (let k = active.length; k < want; k++) {
+				const b = this.newCritter(sp);
+				if (b) this.insects.push(b);
 			}
-			for (let k = active.length; k > want[kind]; k--) active[k - 1].leaving = true;
+			for (let k = active.length; k > want; k--) active[k - 1].leaving = true;
 		}
 	}
 
-	newInsect(kind) {
+	newCritter(sp) {
+		const c = sp.critter;
 		const side = Math.random() < 0.5 ? -30 : WORLD_W + 30;
 		const y = this.camY + this.viewH() * (0.2 + Math.random() * 0.6);
-		const base = { kind, t: Math.random() * 10, dir: 1, timer: 2 + Math.random() * 4 };
-		const pond = DECOR.pond, log = DECOR.log;
-		if (kind === 'dragonfly') return { ...base, x: pond.x, y: pond.y - 40, mode: 'hover', timer: 1 };
-		if (kind === 'ladybug') {
-			const target = pick(this.bushes);
-			return target && { ...base, target, ox: (Math.random() - 0.5) * 50, oy: 14 + Math.random() * 30, x: target.x, y: target.y, mode: 'perch' };
+		const base = { sp: sp.id, kind: c.kind, p: c, behavior: c.behavior, t: Math.random() * 10, dir: 1, timer: 2 + Math.random() * 4 };
+		const w = this.water();
+		switch (c.behavior) {
+			case 'water':
+				return w && { ...base, x: w.x, y: w.y - 40, mode: 'hover', timer: 1 };
+			case 'pond': {
+				if (!w) return null;
+				if (c.kind === 'heron') return { ...base, x: w.x - w.rx * 0.8, y: w.y + w.ry * 0.2, mode: 'perch', timer: 8 };
+				const [px, py] = pick(POND_PADS);
+				return { ...base, x: w.x + px * w.scale, y: w.y + py * w.scale - 3, mode: 'perch', timer: 6 + Math.random() * 6 };
+			}
+			case 'pinned': {
+				if (c.on === 'buisson') {
+					const target = pick(this.bushes ?? []);
+					return target && { ...base, target, ox: (Math.random() - 0.5) * 50, oy: 14 + Math.random() * 30, x: target.x, y: target.y, mode: 'perch' };
+				}
+				const d = DECOR[c.on];
+				return this.decorVisible(c.on) && { ...base, decor: c.on, x: d.x + (Math.random() - 0.5) * 20, y: d.y + this.decorSprite(c.on).top * 0.8, mode: 'perch' };
+			}
+			case 'perch': {
+				const target = pick(this.trees ?? []);
+				return target && { ...base, x: side, y: y - 100, target, ox: c.trunk ? 6 : (Math.random() - 0.5) * 60, oy: c.trunk ? 0 : 4, mode: 'seek' };
+			}
+			case 'walk': {
+				let home;
+				if (c.home === 'tree') { const t = pick(this.trees ?? []); home = t && { x: t.x, y: t.y }; }
+				else if (this.decorVisible(c.home)) home = DECOR[c.home];
+				if (!home) return null;
+				return { ...base, x: home.x + (Math.random() - 0.5) * 60, y: home.y + 10, mode: 'walk', ang: Math.random() * 6.28, home: { x: home.x, y: home.y } };
+			}
+			case 'soar':
+				return { ...base, x: WORLD_W / 2, y, mode: 'soar', ang: Math.random() * 6.28, r: 90 + Math.random() * 60 };
+			case 'flower':
+			case 'flutter':
+			default:
+				return { ...base, x: side, y, mode: c.behavior === 'flutter' ? 'wander' : 'seek', target: null, ang: Math.random() * 6.28 };
 		}
-		if (kind === 'frog') {
-			const [px, py] = pick(POND_PADS);
-			return { ...base, x: pond.x + px, y: pond.y + py - 3, mode: 'perch', timer: 6 + Math.random() * 6 };
-		}
-		if (kind === 'hedgehog') return { ...base, x: log.x - 60, y: log.y + 10, mode: 'walk', ang: Math.PI, home: log };
-		if (kind === 'tit') {
-			const target = pick(this.trees);
-			return target && { ...base, x: side, y: y - 100, target, ox: (Math.random() - 0.5) * 60, oy: 4, mode: 'seek' };
-		}
-		return { ...base, x: side, y, mode: 'seek', target: null, ang: Math.random() * 6.28 };
 	}
 
 	updateInsect(b, dt) {
@@ -499,139 +575,236 @@ export class Garden {
 			if (Math.abs(dx) > 1) b.dir = Math.sign(dx);
 			return dist;
 		};
+		const flyAway = () => {
+			if (b.exitX == null) b.exitX = b.x < WORLD_W / 2 ? -60 : WORLD_W + 60;
+			if (flyTo(b.exitX, b.y - 80, 90, 10) < 5) b.gone = true;
+		};
+		const has = p => this.place.plants.includes(p);
 
-		if (b.kind === 'ladybug') {
-			if (b.leaving || !this.state.plants.includes(b.target)) { b.gone = true; return; }
-			const [hx, hy] = this.headOf(b.target);
-			b.ox += Math.cos(b.t * 0.7) * 2 * dt;
-			b.oy += Math.sin(b.t * 0.5) * 1.5 * dt;
-			b.x = hx + b.ox;
-			b.y = hy + b.oy;
-			b.dir = Math.cos(b.t * 0.7) >= 0 ? 1 : -1;
-			return;
-		}
-
-		if (b.kind === 'frog') {
-			if (b.leaving) { b.gone = true; return; }
-			if (b.mode === 'hop') {
-				b.k = Math.min(1, b.k + dt * 2.2);
-				b.x = lerp(b.fx, b.tx, b.k);
-				b.y = lerp(b.fy, b.ty, b.k) - Math.sin(b.k * Math.PI) * 16;
-				if (b.k >= 1) { b.mode = 'perch'; b.timer = 6 + Math.random() * 8; }
+		switch (b.behavior) {
+			case 'flower': {
+				if (b.leaving) return flyAway();
+				if (b.mode === 'hover' && b.target && has(b.target)) {
+					b.timer -= dt;
+					const [hx, hy] = this.headOf(b.target);
+					b.x = hx + Math.cos(b.t * 3) * 5;
+					b.y = hy - 4 + Math.sin(b.t * 5) * 2;
+					if (b.timer <= 0) { b.mode = 'seek'; b.target = null; }
+					return;
+				}
+				if (!b.target || !has(b.target)) b.target = this.flowers?.length ? pick(this.flowers) : null;
+				if (!b.target) { b.leaving = true; return; }
+				const [hx, hy] = this.headOf(b.target);
+				if (flyTo(hx, hy - 4, 70, 25) < 4) { b.mode = 'hover'; b.timer = 1.5 + Math.random() * 2; }
 				return;
 			}
-			b.timer -= dt;
-			if (b.timer <= 0) {
-				const pond = DECOR.pond, [px, py] = pick(POND_PADS);
-				Object.assign(b, { mode: 'hop', k: 0, fx: b.x, fy: b.y, tx: pond.x + px, ty: pond.y + py - 3 });
-				b.dir = b.tx >= b.x ? 1 : -1;
-			}
-			return;
-		}
-
-		if (b.kind === 'hedgehog') {
-			const home = b.home;
-			if (b.leaving) {
-				if (flyTo(home.x - 50, home.y - 12, 16, 0) < 3) b.gone = true;
+			case 'flutter': {
+				if (b.leaving) return flyAway();
+				if (b.mode === 'perch' && b.target && has(b.target)) {
+					b.timer -= dt;
+					const [hx, hy] = this.headOf(b.target);
+					b.x = hx + b.ox; b.y = hy + b.oy;
+					if (b.timer <= 0) { b.mode = 'wander'; b.target = null; b.timer = 3 + Math.random() * 4; }
+					return;
+				}
+				if (b.mode === 'seek' && b.target && has(b.target)) {
+					const [hx, hy] = this.headOf(b.target);
+					if (flyTo(hx + b.ox, hy + b.oy, 40, 30) < 3) { b.mode = 'perch'; b.timer = 2 + Math.random() * 3; }
+					return;
+				}
+				b.timer -= dt;
+				const spots = [...(this.perches ?? []), ...(this.flowers ?? [])];
+				if (b.timer <= 0 && spots.length) {
+					b.target = pick(spots);
+					b.ox = (Math.random() - 0.5) * (b.target.type === 'fleur' ? 4 : 30);
+					b.oy = b.target.type === 'fleur' ? -2 : 6 + Math.random() * 14;
+					b.mode = 'seek';
+					return;
+				}
+				const top = this.camY + 40, bottom = this.camY + this.viewH() - 60;
+				if (b.y < top || b.y > bottom || b.x < 20 || b.x > WORLD_W - 20) {
+					const back = Math.atan2(this.camY + this.viewH() / 2 - b.y, WORLD_W / 2 - b.x);
+					b.ang += Math.sign(Math.sin(back - b.ang)) * dt * 2;
+				}
+				b.ang += (Math.random() - 0.5) * dt * 4;
+				b.x += Math.cos(b.ang) * 35 * dt;
+				b.y += Math.sin(b.ang) * 35 * dt + Math.sin(b.t * 5) * 8 * dt;
+				b.dir = Math.cos(b.ang) >= 0 ? 1 : -1;
 				return;
 			}
-			b.ang += (Math.random() - 0.5) * dt * 1.5;
-			if (Math.hypot(b.x - home.x, b.y - home.y) > 150) b.ang = Math.atan2(home.y - b.y, home.x - b.x);
-			b.timer -= dt;
-			if (b.timer < 0) { b.timer = b.timer < -2 ? 3 + Math.random() * 5 : b.timer; return; } // il s'arrête renifler
-			b.x += Math.cos(b.ang) * 14 * dt;
-			b.y += Math.sin(b.ang) * 9 * dt;
-			b.dir = Math.cos(b.ang) >= 0 ? 1 : -1;
-			return;
-		}
-
-		if (b.kind === 'tit') {
-			if (b.leaving) b.target = null;
-			if (!b.target || !this.state.plants.includes(b.target)) {
-				if (flyTo(b.x < WORLD_W / 2 ? -60 : WORLD_W + 60, b.y - 60, 120, 0) < 5) b.gone = true;
+			case 'water': {
+				if (b.leaving) return flyAway();
+				const w = this.water();
+				if (!w) { b.leaving = true; return; }
+				if (b.mode === 'hover') {
+					b.timer -= dt;
+					b.x += Math.sin(b.t * 13) * 3 * dt;
+					b.y += Math.cos(b.t * 11) * 3 * dt;
+					if (b.timer <= 0) { b.mode = 'dart'; b.tx = w.x + (Math.random() - 0.5) * w.rx * 2.6; b.ty = w.y - 30 + (Math.random() - 0.5) * w.ry * 2.4; }
+					return;
+				}
+				if (flyTo(b.tx, b.ty, 220, 0) < 3) { b.mode = 'hover'; b.timer = 0.6 + Math.random(); }
 				return;
 			}
-			const [hx, hy] = this.headOf(b.target);
-			if (b.mode === 'perch') {
-				b.x = hx + b.ox;
-				b.y = hy + b.oy;
+			case 'pond': {
+				if (b.leaving) { b.gone = true; return; }
+				const w = this.water();
+				if (!w) { b.gone = true; return; }
+				if (b.kind === 'heron') {
+					b.timer -= dt;
+					if (b.timer <= 0) { b.timer = 10 + Math.random() * 10; b.tx = w.x + (Math.random() < 0.5 ? -1 : 1) * w.rx * 0.85; b.ty = w.y + (Math.random() - 0.3) * w.ry; }
+					if (b.tx != null && flyTo(b.tx, b.ty, 8, 0) < 2) b.tx = null;
+					return;
+				}
+				if (b.p.swim) {
+					b.ang = (b.ang ?? Math.random() * 6) + (Math.random() - 0.5) * dt;
+					b.x += Math.cos(b.ang) * 6 * dt;
+					b.y += Math.sin(b.ang) * 3 * dt;
+					if (Math.hypot((b.x - w.x) / w.rx, (b.y - w.y) / w.ry) > 0.7) b.ang = Math.atan2(w.y - b.y, w.x - b.x);
+					b.dir = Math.cos(b.ang) >= 0 ? 1 : -1;
+					return;
+				}
+				if (b.mode === 'hop') {
+					b.k = Math.min(1, b.k + dt * 2.2);
+					b.x = lerp(b.fx, b.tx, b.k);
+					b.y = lerp(b.fy, b.ty, b.k) - Math.sin(b.k * Math.PI) * 16;
+					if (b.k >= 1) { b.mode = 'perch'; b.timer = 6 + Math.random() * 8; }
+					return;
+				}
 				b.timer -= dt;
 				if (b.timer <= 0) {
-					b.mode = 'seek';
-					b.target = pick(this.trees) ?? b.target;
-					b.ox = (Math.random() - 0.5) * 60;
+					const [px, py] = pick(POND_PADS);
+					Object.assign(b, { mode: 'hop', k: 0, fx: b.x, fy: b.y, tx: w.x + px * w.scale, ty: w.y + py * w.scale - 3 });
+					b.dir = b.tx >= b.x ? 1 : -1;
 				}
 				return;
 			}
-			if (flyTo(hx + b.ox, hy + b.oy, 110, 15) < 3) { b.mode = 'perch'; b.timer = 4 + Math.random() * 6; }
-			return;
-		}
-
-		if (b.leaving) {
-			if (b.exitX == null) b.exitX = b.x < WORLD_W / 2 ? -60 : WORLD_W + 60;
-			if (flyTo(b.exitX, b.y - 80, 90, 10) < 5) b.gone = true;
-			return;
-		}
-
-		if (b.kind === 'bee') {
-			if (b.mode === 'hover' && b.target && this.state.plants.includes(b.target)) {
-				b.timer -= dt;
+			case 'pinned': {
+				if (b.leaving) { b.gone = true; return; }
+				if (b.target) {
+					if (!has(b.target)) { b.gone = true; return; }
+					const [hx, hy] = this.headOf(b.target);
+					b.ox += Math.cos(b.t * 0.7) * 2 * dt;
+					b.oy += Math.sin(b.t * 0.5) * 1.5 * dt;
+					b.x = hx + b.ox;
+					b.y = hy + b.oy;
+				} else {
+					b.x += Math.cos(b.t * 0.4) * 1.5 * dt;
+				}
+				b.dir = Math.cos(b.t * 0.7) >= 0 ? 1 : -1;
+				return;
+			}
+			case 'perch': {
+				if (b.leaving) b.target = null;
+				if (!b.target || !has(b.target)) {
+					if (flyTo(b.x < WORLD_W / 2 ? -60 : WORLD_W + 60, b.y - 60, 120, 0) < 5) b.gone = true;
+					return;
+				}
 				const [hx, hy] = this.headOf(b.target);
-				b.x = hx + Math.cos(b.t * 3) * 5;
-				b.y = hy - 4 + Math.sin(b.t * 5) * 2;
-				if (b.timer <= 0) { b.mode = 'seek'; b.target = null; }
+				// Le pic se pose sur le tronc, les autres oiseaux dans le feuillage.
+				const ty = b.p.trunk ? b.target.y - 45 : hy + b.oy;
+				if (b.mode === 'perch') {
+					b.x = hx + b.ox;
+					b.y = ty + (b.p.trunk ? Math.sin(b.t * 0.6) * 6 : 0);
+					b.timer -= dt;
+					if (b.timer <= 0) {
+						b.mode = 'seek';
+						b.target = pick(this.trees) ?? b.target;
+						b.ox = b.p.trunk ? 6 : (Math.random() - 0.5) * 60;
+					}
+					return;
+				}
+				if (flyTo(hx + b.ox, ty, 110, 15) < 3) { b.mode = 'perch'; b.timer = 4 + Math.random() * 6; b.dir = b.p.trunk ? -1 : b.dir; }
 				return;
 			}
-			if (!b.target || !this.state.plants.includes(b.target)) b.target = this.flowers?.length ? pick(this.flowers) : null;
-			if (!b.target) { b.leaving = true; return; }
-			const [hx, hy] = this.headOf(b.target);
-			if (flyTo(hx, hy - 4, 70, 25) < 4) { b.mode = 'hover'; b.timer = 1.5 + Math.random() * 2; }
-			return;
-		}
-
-		if (b.kind === 'butterfly') {
-			if (b.mode === 'perch' && b.target) {
+			case 'walk': {
+				const home = b.home;
+				if (b.leaving) {
+					if (flyTo(home.x - 30, home.y - 10, (b.p.speed ?? 14) * 1.3, 0) < 3) b.gone = true;
+					return;
+				}
+				b.ang += (Math.random() - 0.5) * dt * 1.5;
+				if (Math.hypot(b.x - home.x, b.y - home.y) > 150) b.ang = Math.atan2(home.y - b.y, home.x - b.x);
 				b.timer -= dt;
-				const [hx, hy] = this.headOf(b.target);
-				b.x = hx + b.ox; b.y = hy + b.oy;
-				if (b.timer <= 0) { b.mode = 'wander'; b.target = null; b.timer = 3 + Math.random() * 4; }
+				if (b.timer < 0) {
+					b.mode = 'perch';
+					if (b.timer < -2) { b.timer = 3 + Math.random() * 5; b.mode = 'walk'; }
+					return;
+				}
+				const sp = b.p.speed ?? 14;
+				b.x += Math.cos(b.ang) * sp * dt;
+				b.y += Math.sin(b.ang) * sp * 0.65 * dt;
+				b.x = Math.max(10, Math.min(WORLD_W - 10, b.x));
+				b.dir = Math.cos(b.ang) >= 0 ? 1 : -1;
 				return;
 			}
-			if (b.mode === 'seek' && b.target) {
-				const [hx, hy] = this.headOf(b.target);
-				if (flyTo(hx + b.ox, hy + b.oy, 40, 30) < 3) { b.mode = 'perch'; b.timer = 2 + Math.random() * 3; }
-				return;
+			case 'soar': {
+				if (b.leaving) return flyAway();
+				b.ang += dt * 0.25;
+				const cx = WORLD_W / 2, cy = this.camY + this.viewH() * 0.4;
+				b.x = cx + Math.cos(b.ang) * b.r * 1.3;
+				b.y = cy + Math.sin(b.ang) * b.r * 0.7;
+				b.dir = Math.sin(b.ang) > 0 ? -1 : 1;
 			}
-			b.timer = (b.timer ?? 3) - dt;
-			if (b.timer <= 0 && this.perches?.length) {
-				b.target = pick(this.perches);
-				b.ox = (Math.random() - 0.5) * 30;
-				b.oy = 6 + Math.random() * 14;
-				b.mode = 'seek';
-				return;
-			}
-			const top = this.camY + 40, bottom = this.camY + this.viewH() - 60;
-			if (b.y < top || b.y > bottom || b.x < 20 || b.x > WORLD_W - 20) {
-				const back = Math.atan2(this.camY + this.viewH() / 2 - b.y, WORLD_W / 2 - b.x);
-				b.ang += Math.sign(Math.sin(back - b.ang)) * dt * 2;
-			}
-			b.ang += (Math.random() - 0.5) * dt * 4;
-			b.x += Math.cos(b.ang) * 35 * dt;
-			b.y += Math.sin(b.ang) * 35 * dt + Math.sin(b.t * 5) * 8 * dt;
-			b.dir = Math.cos(b.ang) >= 0 ? 1 : -1;
-			return;
 		}
+	}
 
-		if (b.kind === 'dragonfly') {
-			const d = DECOR.pond;
-			if (b.mode === 'hover') {
-				b.timer -= dt;
-				b.x += Math.sin(b.t * 13) * 3 * dt;
-				b.y += Math.cos(b.t * 11) * 3 * dt;
-				if (b.timer <= 0) { b.mode = 'dart'; b.tx = d.x + (Math.random() - 0.5) * 260; b.ty = d.y - 60 + (Math.random() - 0.5) * 120; }
-				return;
+	// ─── Météo ─────────────────────────────────────────────────────
+
+	updateWeather(dt) {
+		const k = this.weather.kind;
+		const vh = this.viewH();
+		const amount = this.precip();
+		if (amount > 0) {
+			const snow = k === 'snow';
+			const rate = (snow ? 40 : 160) * amount;
+			for (let i = 0; i < rate * dt; i++) {
+				this.drops.push({ x: Math.random() * (WORLD_W + 80) - 40, y: this.camY - 20 - Math.random() * 40, z: 0.6 + Math.random() * 0.6, snow, ground: this.camY + Math.random() * vh, ph: Math.random() * 6.28 });
 			}
-			if (flyTo(b.tx, b.ty, 220, 0) < 3) { b.mode = 'hover'; b.timer = 0.6 + Math.random(); }
+		}
+		const wind = Math.min(40, this.weather.wind ?? 10);
+		for (const d of this.drops) {
+			if (d.splash != null) { d.splash += dt * 3; continue; }
+			if (d.snow) { d.y += 40 * d.z * dt; d.x += (Math.sin(this.t * 1.5 + d.ph) * 12 + wind * 0.6) * dt; }
+			else { d.y += 520 * d.z * dt; d.x += wind * 3 * dt; }
+			if (d.y >= d.ground) { if (d.snow) d.gone = true; else d.splash = 0; }
+		}
+		this.drops = this.drops.filter(d => !d.gone && !(d.splash > 1) && d.y < this.camY + vh + 40);
+		if (k === 'storm' && Math.random() < dt * 0.12) this.flash = 1;
+		this.flash = Math.max(0, this.flash - dt * 3);
+	}
+
+	drawWeather(ctx, S) {
+		const k = this.weather.kind;
+		if (!this.drops.length) return;
+		ctx.setTransform(S, 0, 0, S, 0, -this.camY * S);
+		const wind = Math.min(40, this.weather.wind ?? 10);
+		ctx.lineCap = 'round';
+		for (const d of this.drops) {
+			if (d.snow) {
+				ctx.fillStyle = 'rgba(253,253,250,0.9)';
+				ctx.beginPath();
+				ctx.arc(d.x, d.y, 1.2 * d.z, 0, Math.PI * 2);
+				ctx.fill();
+			} else if (d.splash != null) {
+				ctx.strokeStyle = `rgba(230,240,245,${0.5 * (1 - d.splash)})`;
+				ctx.lineWidth = 0.5;
+				ctx.beginPath();
+				ctx.ellipse(d.x, d.ground, 1 + d.splash * 3, 0.4 + d.splash, 0, 0, Math.PI * 2);
+				ctx.stroke();
+			} else {
+				ctx.strokeStyle = 'rgba(220,232,240,0.45)';
+				ctx.lineWidth = 0.6 * d.z;
+				ctx.beginPath();
+				ctx.moveTo(d.x, d.y);
+				ctx.lineTo(d.x - wind * 0.08, d.y - 9 * d.z);
+				ctx.stroke();
+			}
+		}
+		if (k === 'storm' && this.flash > 0) {
+			ctx.setTransform(1, 0, 0, 1, 0, 0);
+			ctx.fillStyle = `rgba(255,255,250,${this.flash * 0.35})`;
+			ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
 		}
 	}
 
@@ -639,53 +812,66 @@ export class Garden {
 
 	wind(x) {
 		const t = this.t;
+		const strength = 0.6 + Math.min(2.4, (this.weather.wind ?? 10) / 18);
 		const gust = 0.6 * Math.pow(Math.max(0, Math.sin(t * 0.21 - x * 0.004)), 4);
-		return 0.45 * Math.sin(t * 0.9 + x * 0.012) + 0.25 * Math.sin(t * 2.3 + x * 0.03) + gust;
+		return strength * (0.45 * Math.sin(t * 0.9 + x * 0.012) + 0.25 * Math.sin(t * 2.3 + x * 0.03) + gust);
 	}
 
 	render() {
 		const ctx = this.ctx, S = this.S, cw = this.canvas.width, ch = this.canvas.height;
-		const hour = this.hour(), night = nightAt(hour), day = 1 - night;
+		const hour = this.hour(), night = nightAt(hour, this.sun), day = 1 - night;
+		const wk = this.weather.kind;
 		if (this.bgDirty) this.paintBg();
 
 		ctx.setTransform(1, 0, 0, 1, 0, 0);
 		ctx.globalCompositeOperation = 'source-over';
 		ctx.globalAlpha = 1;
-		ctx.fillStyle = '#C9CC8A';
+		ctx.fillStyle = GROUND[this.placeId].base;
 		ctx.fillRect(0, 0, cw, ch);
 		ctx.drawImage(this.bg, 0, Math.round(-this.camY * S));
 
+		// Ombres de nuages : plus nombreuses et plus sombres par temps couvert.
+		const cloudy = { clouds: 1.5, overcast: 2.2, rain: 2, drizzle: 2, storm: 2.6, snow: 1.6, fog: 0.4 }[wk] ?? 1;
 		if (day > 0) {
 			ctx.globalCompositeOperation = 'multiply';
-			ctx.globalAlpha = 0.32 * day;
+			ctx.globalAlpha = Math.min(0.85, 0.32 * day * cloudy);
 			for (const cl of this.clouds) {
 				const span = WORLD_W + cl.w * 2;
-				const x = ((cl.x + this.t * cl.speed) % span + span) % span - cl.w;
-				const y = (cl.y % Math.max(600, this.state.worldH)) - this.camY;
+				const x = ((cl.x + this.t * cl.speed * (0.5 + (this.weather.wind ?? 10) / 20)) % span + span) % span - cl.w;
+				const y = (cl.y % Math.max(600, this.place.worldH)) - this.camY;
 				ctx.drawImage(cl.canvas, x * S, y * S);
 			}
 			ctx.globalCompositeOperation = 'source-over';
 			ctx.globalAlpha = 1;
 		}
 
-		// Ombres des insectes au sol
+		// Ombres des animaux au sol
 		ctx.setTransform(S, 0, 0, S, 0, -this.camY * S);
 		ctx.fillStyle = 'rgba(30,50,20,0.13)';
 		for (const b of this.insects) {
 			const h = FLIGHT[b.kind] ?? (b.mode === 'perch' ? null : 24);
-			if (h == null) continue;
-			const big = b.kind === 'hedgehog' ? 2.6 : b.kind === 'frog' ? 1.8 : 1;
+			if (h == null || b.p.swim) continue;
+			const big = { hedgehog: 2.6, frog: 1.8, marmot: 2.6, squirrel: 2, heron: 2.4, eagle: 5, gull: 3, crab: 1.8 }[b.kind] ?? 1;
 			ctx.beginPath();
 			ctx.ellipse(b.x + h * 0.25, b.y + h, 4 * big, 1.8 * big, 0, 0, Math.PI * 2);
 			ctx.fill();
 		}
 
+		// Animaux dans l'eau, sous la surface
+		for (const b of this.insects) if (b.p.swim) this.drawInsect(ctx, b);
+
 		// Décor et plantes, triés par profondeur
 		const entities = [];
-		for (const key of Object.keys(DECOR)) if (this.state.unlocked[key]) entities.push({ decor: key, y: DECOR[key].y });
-		for (const p of this.state.plants) entities.push({ plant: p, y: p.y });
+		for (const key of Object.keys(DECOR)) if (this.decorVisible(key)) entities.push({ decor: key, y: DECOR[key].y });
+		for (const p of this.place.plants) entities.push({ plant: p, y: p.y });
+		for (const b of this.insects) if (b.behavior === 'walk' || b.kind === 'heron' || b.kind === 'frog') entities.push({ critter: b, y: b.y + 2 });
 		entities.sort((a, b) => a.y - b.y);
 		for (const e of entities) {
+			if (e.critter) {
+				ctx.setTransform(S, 0, 0, S, 0, -this.camY * S);
+				this.drawInsect(ctx, e.critter);
+				continue;
+			}
 			if (e.decor) {
 				const d = DECOR[e.decor], box = d.box;
 				const sx = d.x * S, sy = (d.y - this.camY) * S;
@@ -709,9 +895,9 @@ export class Garden {
 			ctx.drawImage(s.canvas, -box.ax * S, -box.ay * S);
 		}
 
-		// Insectes et particules
+		// Animaux en l'air et particules
 		ctx.setTransform(S, 0, 0, S, 0, -this.camY * S);
-		for (const b of this.insects) this.drawInsect(ctx, b);
+		for (const b of this.insects) if (!(b.behavior === 'walk' || b.kind === 'heron' || b.kind === 'frog' || b.p.swim)) this.drawInsect(ctx, b);
 		for (const p of this.particles) {
 			ctx.globalAlpha = Math.max(0, p.life);
 			ctx.fillStyle = p.color;
@@ -721,17 +907,34 @@ export class Garden {
 		}
 		ctx.globalAlpha = 1;
 
-		// Lumière de l'heure
-		const amb = ambientAt(hour);
+		// Lumière de l'heure et du temps
+		const amb = ambientAt(hour, this.sun);
 		ctx.setTransform(1, 0, 0, 1, 0, 0);
 		if (amb.a > 0.001) {
 			ctx.globalCompositeOperation = 'multiply';
 			ctx.fillStyle = rgba(amb.color, amb.a);
 			ctx.fillRect(0, 0, cw, ch);
-			ctx.globalCompositeOperation = 'source-over';
+		}
+		const grey = { overcast: 0.22, rain: 0.28, drizzle: 0.18, storm: 0.38, snow: 0.12, clouds: 0.08 }[wk] ?? 0;
+		if (grey) {
+			ctx.globalCompositeOperation = 'multiply';
+			ctx.fillStyle = `rgba(130,140,152,${grey})`;
+			ctx.fillRect(0, 0, cw, ch);
+		}
+		ctx.globalCompositeOperation = 'source-over';
+		if (wk === 'snow') {
+			ctx.fillStyle = 'rgba(250,252,255,0.22)';
+			ctx.fillRect(0, 0, cw, ch);
+		}
+		if (wk === 'fog') {
+			const g = ctx.createLinearGradient(0, 0, 0, ch);
+			g.addColorStop(0, 'rgba(236,238,236,0.55)');
+			g.addColorStop(1, 'rgba(236,238,236,0.3)');
+			ctx.fillStyle = g;
+			ctx.fillRect(0, 0, cw, ch);
 		}
 
-		if (night > 0) {
+		if (night > 0 && this.state.species['ver-luisant'] && !this.precip()) {
 			ctx.globalCompositeOperation = 'lighter';
 			const n = this.glow.width, vh = this.viewH();
 			for (const f of this.fireflies) {
@@ -743,7 +946,10 @@ export class Garden {
 			ctx.globalCompositeOperation = 'source-over';
 		}
 
+		this.drawWeather(ctx, S);
+
 		// Grain de papier (attaché au monde) et vignette
+		ctx.setTransform(1, 0, 0, 1, 0, 0);
 		this.paperPattern.setTransform(new DOMMatrix().translateSelf(0, Math.round(-this.camY * S)));
 		ctx.fillStyle = this.paperPattern;
 		ctx.fillRect(0, 0, cw, ch);
@@ -755,7 +961,7 @@ export class Garden {
 		ctx.translate(b.x, b.y);
 		const k = CRITTER_SIZE[b.kind] ?? 1;
 		ctx.scale((b.dir || 1) * k, k);
-		drawCritter(ctx, b.kind, b.t, b.mode);
+		drawCritter(ctx, b.kind, b.t, b.mode, b.p);
 		ctx.restore();
 	}
 }

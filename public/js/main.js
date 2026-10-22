@@ -1,12 +1,14 @@
-// Interface : bandeau, marche en cours, récolte des pas, récap, carnet, biodiversité.
+// Interface : bandeau, marche en cours, récolte des pas, récap, carnet, lieux, biodiversité.
 
-import { load, save, reset, ACTIVITIES, ACTIVITY_BY_ID, MAX_SPEED_KMH, activityFor, effortFor, dayKey, dayNumber, todayMeters, addDistance, STEP_LENGTH_M } from './state.js';
+import { load, save, reset, newPlace, allPlants, ACTIVITIES, ACTIVITY_BY_ID, MAX_SPEED_KMH, activityFor, effortFor, dayKey, dayNumber, todayMeters, addDistance, STEP_LENGTH_M } from './state.js';
 import { Garden } from './garden.js';
 import { PLANT_TYPES, DECOR, plantName } from './plants.js';
 import { GpsTracker, MotionTracker, SimTracker } from './tracker.js';
 import { SOURCES, bestSource, harvest, classifyCadence } from './harvest.js';
-import { SPECIES_BY_ID, checkSpecies, speciesOf } from './species.js';
+import { PLACES, PLACE_BY_ID, checkSpecies, placeOpen, speciesOf } from './species.js';
 import { Encyclopedia } from './encyclopedia.js';
+import { PlacesMap } from './map.js';
+import { Sky, WEATHER_LABEL } from './weather.js';
 import { paperTexture } from './watercolor.js';
 import { VERSION } from './version.js';
 
@@ -18,14 +20,19 @@ document.documentElement.style.setProperty('--paper', `url(${paperTexture(200, 1
 
 const state = load();
 state.totals.steps ??= 0;
+state.placesOpen ??= { prairie: true };
 const garden = new Garden($('#garden'), state);
 if (params.has('h')) garden.hourOverride = parseFloat(params.get('h'));
-if (DEV) window.evolia = { garden, state };
+const sky = new Sky(state, garden, () => renderHud());
+if (params.has('weather')) { sky.override = params.get('weather'); sky.apply(false); }
+if (DEV) window.evolia = { garden, state, sky };
 
 const DECOR_MSG = {
-	pond: 'Une mare est apparue dans ton jardin',
-	mushrooms: 'Des champignons ont poussé',
-	log: 'Un vieux tronc est apparu',
+	pond: 'Une mare est apparue dans ta prairie', murger: 'Un muret de pierres est apparu', log: 'Un vieux tronc est apparu',
+	nenuphars: 'Des nénuphars fleurissent sur la mare', roseliere: 'Une roselière a poussé',
+	mushrooms: 'Des amanites sont sorties de terre', litiere: 'Un tapis de feuilles couvre le sol', souche: 'Une vieille souche est apparue',
+	eboulis: 'Un éboulis est apparu', neve: 'Un névé persiste au soleil',
+	laisse: 'La mer a déposé sa laisse', ganivelles: 'Des ganivelles protègent la dune',
 };
 const TYPE_COLOR = { herbe: '#A3BD57', fleur: '#EE8FA4', buisson: '#5F933E', arbre: '#1F6B47' };
 
@@ -37,8 +44,10 @@ const fmtTime = s => {
 	return h ? `${h}:${String(m).padStart(2, '0')}:${String(r).padStart(2, '0')}` : `${m}:${String(r).padStart(2, '0')}`;
 };
 const fmtMin = m => (m >= 60 ? `${Math.floor(m / 60)} h ${String(Math.round(m % 60)).padStart(2, '0')}` : `${Math.round(m)} min`);
+const fmtHour = h => `${Math.floor(h)} h ${String(Math.round((h % 1) * 60)).padStart(2, '0')}`;
 const plural = (n, type) => (n > 1 ? PLANT_TYPES[type].plural : PLANT_TYPES[type].name.toLowerCase());
 const sleep = ms => new Promise(r => setTimeout(r, ms));
+const here = () => state.places[state.place];
 
 let saveTimer = 0;
 function persist(now = false) {
@@ -48,6 +57,7 @@ function persist(now = false) {
 }
 
 const species = new Encyclopedia($('#species'), state, () => { persist(); updateSpeciesDot(); });
+const places = new PlacesMap($('#map'), state, travel);
 
 // ─── Mise en page ─────────────────────────────────────────────
 
@@ -63,9 +73,9 @@ new ResizeObserver(() => updatePads()).observe($('#app'));
 
 function renderHud() {
 	const km = todayMeters(state) / 1000;
-	$('#hud-day').textContent = `Jour ${dayNumber(state)}`;
+	$('#hud-day').textContent = PLACE_BY_ID[state.place].name;
 	$('#hud-km').textContent = `${fmt(km, km < 10 ? 2 : 1)} / ${state.goalKm} km`;
-	$('#hud-steps').textContent = `≈ ${fmtInt((km * 1000) / STEP_LENGTH_M)} pas`;
+	$('#hud-steps').textContent = `${sky.label()} · jour ${dayNumber(state)}`;
 	const k = Math.min(1, km / state.goalKm);
 	$('#ring-fg').style.strokeDashoffset = String(113.1 * (1 - k));
 }
@@ -90,22 +100,41 @@ function showModal(html) {
 }
 function closeModal() { $('#modal').hidden = true; }
 
-// ─── Espèces ──────────────────────────────────────────────────
+// ─── Espèces et lieux ─────────────────────────────────────────
 
 function updateSpeciesDot() {
 	$('#species-dot').hidden = !Object.keys(state.species).some(id => !state.speciesSeen?.[id]);
 }
 
-/** Annonce les espèces qui viennent d'apparaître. `quiet` : au tout premier lancement, sans bruit. */
+/** Annonce les espèces et les lieux qui viennent de s'ouvrir. `quiet` : au tout premier lancement, sans bruit. */
 function announceSpecies(quiet = false) {
 	const found = checkSpecies(state);
-	if (!found.length) return;
+	const opened = PLACES.filter(p => !state.placesOpen[p.id] && placeOpen(state, p));
+	for (const p of opened) state.placesOpen[p.id] = true;
+	if (!found.length && !opened.length) return;
 	persist();
 	updateSpeciesDot();
 	if (quiet) return;
-	for (const sp of found) toast(`Nouvelle espèce : ${sp.name}`, '#F08A3C', () => species.open(sp.id));
+	for (const sp of found) toast(`${sp.kind === 'milieu' ? 'Nouveau milieu' : 'Nouvelle espèce'} : ${sp.name}`, '#F08A3C', () => species.open(sp.id));
+	for (const p of opened) toast(`Nouveau lieu ouvert : ${p.name}`, p.color, () => places.open());
 }
 setInterval(() => { if (!walk) announceSpecies(); }, 4000);
+
+function travel(id) {
+	if (id === state.place || !placeOpen(state, id)) return;
+	if (walk) { toast('Termine ta marche avant de changer de lieu'); return; }
+	const first = !state.places[id];
+	state.places[id] ??= newPlace();
+	state.place = id;
+	garden.setPlace(id);
+	renderHud();
+	persist(true);
+	const p = PLACE_BY_ID[id];
+	if (first) {
+		showModal(`<h2>${p.name}</h2><p>${p.intro}</p><p>Ici poussent d'autres espèces. Tes pas d'aujourd'hui feront pousser ce jardin-là.</p>
+			<button class="btn primary" data-close>Explorer</button>`);
+	} else toast(`Tu es dans ${p.name.toLowerCase()}`, p.color);
+}
 
 // ─── Toucher une plante ───────────────────────────────────────
 
@@ -129,6 +158,24 @@ garden.onTap = hit => {
 	card.hidden = false;
 	cardTimer = setTimeout(() => { card.hidden = true; }, 4500);
 };
+
+// ─── Distance et décor ────────────────────────────────────────
+
+function addMeters(m) {
+	addDistance(state, m);
+	here().km += m / 1000;
+}
+
+function checkUnlocks(events) {
+	const pl = here();
+	for (const [key, d] of Object.entries(DECOR)) {
+		if (d.place !== state.place || d.always || pl.unlocked[key] || pl.km < d.km) continue;
+		pl.unlocked[key] = true;
+		garden.reveal(key);
+		toast(DECOR_MSG[key], '#5BB5B0');
+		events?.push({ kind: 'decor', key });
+	}
+}
 
 // ─── Marche en direct ─────────────────────────────────────────
 
@@ -189,7 +236,7 @@ function handleStatus(st) {
 	}
 }
 
-// Walk-time: en mode test le temps peut être accéléré, la durée suit alors le temps simulé.
+// En mode test le temps peut être accéléré : la durée suit alors le temps simulé.
 const walkSeconds = w => (w.sim ? w.simTime : (Date.now() - w.start) / 1000);
 
 function handleSample(s) {
@@ -210,33 +257,21 @@ function handleSample(s) {
 	walk.act = act;
 	if (act && s.dist > 0) {
 		walk.distance += s.dist;
-		addDistance(state, s.dist);
+		addMeters(s.dist);
 		const effort = effortFor(s.dist, s.speedKmh, act);
 		walk.effort += effort;
 		state.totals.effort += effort;
 		for (const ev of garden.addEffort(act.plant, effort)) {
 			walk.events.push(ev);
 			if (ev.kind === 'mature' && ev.plant.type !== 'herbe') toast(`${plantName(ev.plant)} a fini de pousser`, TYPE_COLOR[ev.plant.type]);
-			if (ev.kind === 'seed' && ev.plant.type === 'arbre') toast(`Une graine de ${plantName(ev.plant).split(' ')[1] ?? 'arbre'} est plantée`, TYPE_COLOR.arbre);
 		}
 		if (garden.current) walk.touched.add(garden.current);
-		checkUnlocks();
+		checkUnlocks(walk.events);
 		announceSpecies();
 		renderHud();
 		persist();
 	}
 	renderWalk();
-}
-
-function checkUnlocks() {
-	const km = state.totals.distance / 1000;
-	for (const [key, d] of Object.entries(DECOR)) {
-		if (state.unlocked[key] || km < d.km) continue;
-		state.unlocked[key] = true;
-		garden.reveal(key);
-		toast(DECOR_MSG[key], '#5BB5B0');
-		walk?.events.push({ kind: 'decor', key });
-	}
 }
 
 function renderWalk() {
@@ -265,6 +300,8 @@ function endWalk() {
 	clearInterval(walk.tick);
 	walk.lock?.release?.();
 	garden.setFollow(false);
+	const last = walk.tracker.last?.coords;
+	if (last) sky.setCoords(last.latitude, last.longitude);
 	const w = walk;
 	walk = null;
 	$('#walk').classList.add('off');
@@ -276,7 +313,7 @@ function endWalk() {
 	for (const ev of w.events) if (ev.kind === 'mature') matured[ev.plant.type] = (matured[ev.plant.type] ?? 0) + 1;
 	if (w.distance > 10) {
 		// `end` sert à ne pas recompter ces pas lors de la prochaine récolte.
-		state.walks.unshift({ start: w.start, end: w.sim ? undefined : Date.now(), duration, distance: w.distance, effort: w.effort, matured });
+		state.walks.unshift({ start: w.start, end: w.sim ? undefined : Date.now(), duration, distance: w.distance, effort: w.effort, matured, place: state.place });
 		state.walks.length = Math.min(state.walks.length, 100);
 		state.totals.walks += 1;
 		state.totals.steps += w.steps;
@@ -336,12 +373,13 @@ async function maybeHarvest(source = SOURCES[state.harvestSource], since = state
 async function playHarvest(res, source) {
 	for (const [k, m] of Object.entries(res.days)) state.days[k] = (state.days[k] ?? 0) + m;
 	state.totals.distance += res.distance;
+	here().km += res.distance / 1000;
 	state.totals.steps += res.steps;
 	renderHud();
 	closeModal();
 	toast(`${fmtInt(res.steps)} pas récoltés pendant ton absence`, '#A3BD57');
 	garden.setFollow(true);
-	const rows = [];
+	const rows = [], events = [];
 	for (const g of res.groups.sort((a, b) => b.effort - a.effort)) {
 		const matured = {}, touched = new Set();
 		const chunks = 8;
@@ -354,12 +392,13 @@ async function playHarvest(res, source) {
 		rows.push(`<li><b>${g.act.name}</b> · ${fmtMin(g.minutes)} · ${fmtInt(g.steps)} pas<br>${growthChips(matured, touched).join('')}</li>`);
 	}
 	garden.setFollow(false);
-	checkUnlocks();
+	checkUnlocks(events);
 	persist(true);
+	const decor = events.map(ev => `<span class="chip gold">${DECOR[ev.key].name}</span>`).join('');
 	showModal(`
 		<h2>Pendant ton absence</h2>
 		<p>${fmtInt(res.steps)} pas · ${fmt(res.distance / 1000)} km, comptés par ${source.label}. Même le ménage fait pousser ton jardin.</p>
-		<ul class="harvest-rows">${rows.join('')}</ul>
+		<ul class="harvest-rows">${rows.join('')}</ul>${decor ? `<div class="chips">${decor}</div>` : ''}
 		<button class="btn primary" data-close>Voir mon jardin</button>`);
 	announceSpecies();
 }
@@ -379,7 +418,7 @@ async function offerHarvest() {
 		closeModal();
 		let ok = false;
 		try { ok = await source.authorize(); } catch (e) { console.warn(e); }
-		if (!ok) { toast("Sans autorisation, seules les marches suivies en direct comptent", '#C0442F'); return; }
+		if (!ok) { toast('Sans autorisation, seules les marches suivies en direct comptent', '#C0442F'); return; }
 		state.harvestSource = source.id;
 		const midnight = new Date(); midnight.setHours(0, 0, 0, 0);
 		state.lastHarvest = midnight.getTime(); // premier cadeau : les pas d'aujourd'hui
@@ -392,13 +431,15 @@ document.addEventListener('visibilitychange', () => {
 	if (document.hidden) { persist(true); return; }
 	if (walk) keepAwake();
 	else if (Date.now() - state.lastHarvest > 5 * 60000) maybeHarvest();
+	sky.refresh();
 });
 
 // ─── Carnet ───────────────────────────────────────────────────
 
 function renderJournal() {
 	const km = state.totals.distance / 1000;
-	const mature = t => state.plants.filter(p => p.type === t && p.growth >= 1).length;
+	const plants = allPlants(state);
+	const mature = t => plants.filter(p => p.type === t && p.growth >= 1).length;
 	const days = [];
 	for (let i = 6; i >= 0; i--) {
 		const d = new Date(); d.setDate(d.getDate() - i);
@@ -411,12 +452,13 @@ function renderJournal() {
 		return `<li><span>${date}</span><span><b>${fmt(w.distance / 1000)} km</b> · ${fmtTime(w.duration)}</span></li>`;
 	}).join('');
 	const src = SOURCES[state.harvestSource];
+	const pl = here();
 	$('#journal').innerHTML = `
 		<div class="panel-head"><h2>Carnet</h2><button class="close" data-close-journal aria-label="Fermer">×</button></div>
 		<div class="tiles">
 			<div class="tile"><b>${fmt(km, 1)}</b><span>km au total</span></div>
 			<div class="tile"><b>${fmtInt(state.totals.steps)}</b><span>pas récoltés</span></div>
-			<div class="tile"><b>${state.plants.filter(p => p.growth >= 1).length}</b><span>plantes</span></div>
+			<div class="tile"><b>${plants.filter(p => p.growth >= 1).length}</b><span>plantes</span></div>
 		</div>
 		<h3>Ces 7 derniers jours</h3>
 		<div class="week">
@@ -425,18 +467,27 @@ function renderJournal() {
 		</div>
 		<h3>Objectif du jour</h3>
 		<div class="seg" id="goal-seg">${[2, 3, 5, 8].map(g => `<button data-goal="${g}" class="${g === state.goalKm ? 'on' : ''}">${g} km</button>`).join('')}</div>
+		<h3>Le ciel</h3>
+		<p class="empty">${sky.label()} · lever ${fmtHour(garden.sun.rise)}, coucher ${fmtHour(garden.sun.set)}.
+			${state.coords ? 'Météo réelle de ton coin (position arrondie à 10 km, envoyée à Open-Meteo).' : 'Active ta position approximative pour voir la vraie météo et le vrai coucher du soleil.'}</p>
+		${state.coords ? '' : '<button class="btn ghost wide" id="btn-sky">Utiliser ma position approximative</button>'}
 		<h3>Pas comptés appli fermée</h3>
 		<p class="empty">${src ? `Activé avec ${src.label}. Dernière récolte : ${new Date(state.lastHarvest).toLocaleString('fr-FR', { weekday: 'short', hour: '2-digit', minute: '2-digit' })}.` : "Disponible dans l'appli mobile : tes pas seront relus à chaque ouverture."}</p>
-		<h3>Ton jardin</h3>
+		<h3>Tous tes jardins</h3>
 		<ul class="rows">
 			${Object.entries(PLANT_TYPES).map(([t, d]) => `<li><span>${d.plural[0].toUpperCase() + d.plural.slice(1)} <small>· ${ACTIVITIES.filter(a => a.plant === t).map(a => a.name.toLowerCase()).join(', ')}</small></span><b>${mature(t)}</b></li>`).join('')}
-			${Object.entries(DECOR).map(([k, d]) => `<li><span>${d.name}</span><b>${state.unlocked[k] ? '✓' : `à ${d.km} km`}</b></li>`).join('')}
+		</ul>
+		<h3>${PLACE_BY_ID[state.place].name} · ${fmt(pl.km, 1)} km ici</h3>
+		<ul class="rows">
+			${Object.entries(DECOR).filter(([, d]) => d.place === state.place && !d.always).map(([k, d]) => `<li><span>${d.name}</span><b>${pl.unlocked[k] ? '✓' : `à ${d.km} km`}</b></li>`).join('')}
 		</ul>
 		<h3>Dernières marches</h3>
 		${walks ? `<ul class="rows">${walks}</ul>` : '<p class="empty">Ta première marche apparaîtra ici.</p>'}
 		${DEV ? `<div class="dev">Mode test · heure du jardin <b id="dev-h">${garden.hourOverride ?? 'réelle'}</b>
 			<input type="range" id="dev-hour" min="0" max="24" step="0.25" value="${garden.hourOverride ?? new Date().getHours()}">
+			<div class="seg" id="dev-weather">${['réelle', ...Object.keys(WEATHER_LABEL)].map(k => `<button data-w="${k}" class="${(sky.override ?? 'réelle') === k ? 'on' : ''}">${WEATHER_LABEL[k] ?? 'Réelle'}</button>`).join('')}</div>
 			<button id="dev-harvest">Simuler une journée d'activité</button>
+			<button id="dev-km">+10 km (ouvrir des lieux)</button>
 			<button id="dev-reset">Effacer le jardin</button></div>` : ''}
 		<p class="ver">Evolia v${VERSION}</p>`;
 }
@@ -451,11 +502,15 @@ function closeJournal() {
 	$('#journal').setAttribute('aria-hidden', 'true');
 }
 
-$('#journal').addEventListener('click', e => {
+$('#journal').addEventListener('click', async e => {
 	if (e.target.closest('[data-close-journal]')) closeJournal();
 	const g = e.target.closest('[data-goal]');
 	if (g) { state.goalKm = Number(g.dataset.goal); persist(true); renderHud(); renderJournal(); }
+	const w = e.target.closest('[data-w]');
+	if (w) { sky.override = w.dataset.w === 'réelle' ? null : w.dataset.w; sky.apply(); renderJournal(); }
+	if (e.target.id === 'btn-sky') { await sky.locate(true); persist(true); renderJournal(); }
 	if (e.target.id === 'dev-harvest') { closeJournal(); maybeHarvest(SOURCES.mock, Date.now() - 16 * 3600000); }
+	if (e.target.id === 'dev-km') { addMeters(10000); checkUnlocks(); announceSpecies(); renderHud(); persist(true); renderJournal(); }
 	if (e.target.id === 'dev-reset' && confirm('Effacer tout le jardin ?')) { reset(); location.reload(); }
 });
 $('#journal').addEventListener('input', e => {
@@ -471,6 +526,7 @@ $('#btn-walk').addEventListener('click', () => startWalk());
 $('#btn-stop').addEventListener('click', endWalk);
 $('#btn-journal').addEventListener('click', openJournal);
 $('#btn-species').addEventListener('click', () => species.open());
+$('#hud').addEventListener('click', () => places.open());
 $('#btn-sim').addEventListener('click', () => { walk.sim = true; startTracker(); });
 $('#modal').addEventListener('click', e => { if (e.target.closest('[data-close]') || e.target.id === 'modal') closeModal(); });
 $('#sim-speed').addEventListener('input', e => {
@@ -492,16 +548,18 @@ const firstRun = !state.seenIntro;
 announceSpecies(firstRun);
 updateSpeciesDot();
 persist(true);
+if (!sky.override) sky.start();
 if (firstRun) {
 	showModal(`
 		<h2>Bienvenue</h2>
 		<p>Ce jardin pousse quand tu bouges. Chaque façon de te déplacer fait naître une plante différente, et chaque plante attire de nouvelles espèces.</p>
 		<ul class="legend">
-			<li><i class="dot" style="background:${TYPE_COLOR.herbe}"></i><span><b>Ménage, marche lente</b> · herbes folles</span></li>
+			<li><i class="dot" style="background:${TYPE_COLOR.herbe}"></i><span><b>Ménage, marche lente</b> · herbes</span></li>
 			<li><i class="dot" style="background:${TYPE_COLOR.fleur}"></i><span><b>Marche</b> · fleurs sauvages</span></li>
-			<li><i class="dot" style="background:${TYPE_COLOR.buisson}"></i><span><b>Marche rapide, jogging</b> · arbustes à baies</span></li>
-			<li><i class="dot" style="background:${TYPE_COLOR.arbre}"></i><span><b>Course</b> · grands arbres</span></li>
+			<li><i class="dot" style="background:${TYPE_COLOR.buisson}"></i><span><b>Marche rapide, jogging</b> · arbustes</span></li>
+			<li><i class="dot" style="background:${TYPE_COLOR.arbre}"></i><span><b>Course</b> · arbres</span></li>
 		</ul>
+		<p>Plus tu avances, plus de nouveaux lieux s'ouvrent : marais, forêt, montagne, littoral.</p>
 		<button class="btn primary" data-close id="btn-start">C'est parti</button>`);
 	$('#btn-start').addEventListener('click', () => setTimeout(offerHarvest, 400));
 	state.seenIntro = true;

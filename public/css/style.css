@@ -347,6 +347,31 @@ html, body {
 .harvest-rows .chip { margin: 4px 4px 0 0; }
 .btn.ghost.wide { margin: 8px 0 0; }
 
+#hud { cursor: pointer; }
+.hud-title::after { content: ' ›'; color: var(--elan); }
+.seg.scroll { overflow-x: auto; scrollbar-width: none; }
+.seg.scroll button { flex: 0 0 auto; padding: 6px 12px; }
+.btn.small { flex: none; padding: 9px 18px; font-size: 14px; box-shadow: 0 3px 0 var(--elan-ombre); }
+
+/* ─── Lieux ─── */
+.pl-list { display: flex; flex-direction: column; align-items: stretch; }
+.pl-card { display: flex; gap: 12px; align-items: center; padding: 12px; border-radius: 20px; background: var(--papier-2); border: 2px solid transparent; }
+.pl-card.here { border-color: var(--pc); background: #F6F1DF; }
+.pl-card.locked { opacity: .85; }
+.pl-art { display: flex; align-items: flex-end; justify-content: center; width: 112px; height: 72px; flex: none; border-radius: 16px; background: var(--pc); overflow: hidden; }
+.pl-art canvas { margin: 0 -8px; }
+.pl-card.locked .pl-art { background: #E2DAC2; }
+.pl-body { flex: 1; min-width: 0; }
+.pl-body h3 { margin: 0; font-family: Courgette, cursive; font-weight: 400; font-size: 20px; color: var(--foret); }
+.pl-body p { margin: 2px 0 8px; font-size: 13px; color: var(--doux); }
+.pl-need { display: flex; flex-direction: column; gap: 6px; font-size: 12px; color: var(--doux); }
+.pl-need .bar { height: 6px; margin-top: 2px; }
+.pl-need .bar i { background: var(--elan); }
+.pl-path { width: 0; height: 22px; margin: 0 auto 0 66px; border-left: 3px dashed #CFC6AA; }
+
+.dev .seg { flex-wrap: wrap; margin: 8px 0; }
+.dev .seg button { flex: 0 0 auto; border-color: var(--trait); color: var(--doux); margin: 0; }
+.dev .seg button.on { border-color: var(--foret); color: var(--foret); }
 .dev { margin-top: 18px; padding: 12px; border: 1.5px dashed var(--trait); border-radius: 14px; font-size: 13px; color: var(--doux); }
 .dev input { width: 100%; accent-color: var(--elan); }
 .dev button { font: 700 13px Nunito, sans-serif; padding: 8px 12px; border-radius: 10px; border: 1.5px solid #C0442F; color: #C0442F; background: none; cursor: pointer; margin-top: 8px; }

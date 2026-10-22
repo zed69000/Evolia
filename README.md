@@ -15,8 +15,19 @@ Puis ouvrir http://localhost:8642/?dev=1
 
 ## Paramètres d'URL
 
-- `?dev=1` : mode test (marche simulée avec vitesse et accélérateur de temps, réglage de l'heure et remise à zéro dans le carnet).
+- `?dev=1` : mode test (marche simulée, et dans le carnet : heure, météo, journée simulée, +10 km, remise à zéro).
 - `?h=22` : force l'heure du jardin (ici 22 h, pour voir la nuit et les lucioles).
+- `?weather=rain` : force la météo (`clear`, `clouds`, `overcast`, `fog`, `drizzle`, `rain`, `snow`, `storm`).
+
+## Lieux
+
+Prairie (départ), marais (8 km et 10 espèces), forêt (20 km, 24), montagne (40 km, 40), littoral (60 km, 55).
+Chaque lieu a son jardin, son sol, ses décors et ses espèces (113 en tout, dans `js/species.js`).
+
+## Ciel
+
+Lever et coucher du soleil calculés sur l'appareil ; météo du moment via Open-Meteo, avec une position
+arrondie à 0,1° (environ 10 km), seulement si la personne a autorisé sa position.
 
 ## Fichiers
 
@@ -28,9 +39,11 @@ Puis ouvrir http://localhost:8642/?dev=1
 - `js/main.js` : interface (bandeau, marche, récap, carnet).
 
 - `js/harvest.js` : récolte des pas comptés appli fermée (Santé / Health Connect, podomètre), allure déduite de la cadence.
-- `js/species.js` : les 29 espèces, leur rôle, comment les aider, et ce qui les débloque.
-- `js/critters.js` : abeille, papillon, libellule, coccinelle, grenouille, hérisson, mésange…
-- `js/encyclopedia.js` : l'écran Biodiversité.
+- `js/species.js` : les lieux et leurs espèces, leur rôle, comment les aider, et ce qui les débloque.
+- `js/critters.js` : abeilles, papillons, libellules, oiseaux, héron, chouette, aigle, écureuil, marmotte, lézards…
+- `js/encyclopedia.js` : l'écran Biodiversité, lieu par lieu.
+- `js/map.js` : la carte des lieux.
+- `js/weather.js` : soleil et météo réels.
 
 ## Sur téléphone (Capacitor, à venir)
 
