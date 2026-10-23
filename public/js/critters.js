@@ -227,13 +227,39 @@ const DRAW = {
 		ell(ctx, 1, 2, 3.6, 1.8);
 		ctx.fillStyle = p.body;
 		ell(ctx, -1.5, -0.8 - flap * 3, 4, 2.2 + flap * 1.5, -0.2);
+		if (p.patch) { ctx.fillStyle = p.patch; ell(ctx, 0.5, -1 - flap * 3, 1.8, 0.9, -0.2); }
+		if (p.dots) { ctx.fillStyle = p.dots; for (const [x, y] of [[-1, 1.5], [1.5, 2.2], [3, 0.8], [-3, 0.4], [0.5, -0.2]]) ell(ctx, x, y, 0.55, 0.55); }
+		ctx.fillStyle = p.body;
 		ell(ctx, 4.5, -2.6, 2.8, 2.6);
 		ctx.fillStyle = p.cap;
 		ell(ctx, 4.2, -4.2, 2.4, 1.2);
 		if (p.collar) { ctx.fillStyle = '#2A2420'; ell(ctx, 3, -0.4, 0.8, 1.6); }
 		ctx.fillStyle = '#1A1210';
 		ell(ctx, 5.4, -2.8, 0.6, 0.6);
+		ctx.fillStyle = p.beakColor ?? '#1A1210';
 		ctx.beginPath(); ctx.moveTo(7, -2.8); ctx.lineTo(7 + (p.beak ?? 2), -2.3); ctx.lineTo(7, -1.8); ctx.fill();
+	},
+
+	duck(ctx, t) {
+		const bob = Math.sin(t * 2) * 0.4;
+		ctx.fillStyle = 'rgba(253,253,250,0.35)';
+		ell(ctx, 0, 3.5, 9, 1.6);
+		ctx.fillStyle = '#9A8A78';
+		ell(ctx, -1, bob, 8, 4);
+		ctx.fillStyle = '#6E6458';
+		ell(ctx, -2, bob - 0.8, 5, 2.4);
+		ctx.fillStyle = '#3E6FB0';
+		ell(ctx, -1.6, bob - 0.4, 1.6, 0.8);
+		ctx.fillStyle = '#4A3A2E';
+		ell(ctx, -9, bob - 1.5, 2, 1.2, 0.5);
+		ctx.fillStyle = '#F4F0E8';
+		ell(ctx, 5.5, bob - 2.4, 1.6, 0.8);
+		ctx.fillStyle = '#2E6E4A';
+		ell(ctx, 6.5, bob - 4.6, 2.8, 2.6);
+		ctx.fillStyle = '#E8C43E';
+		ell(ctx, 9.6, bob - 4.2, 1.8, 0.8);
+		ctx.fillStyle = '#1A1210';
+		ell(ctx, 7.2, bob - 5.2, 0.5, 0.5);
 	},
 
 	heron(ctx, t) {
@@ -340,5 +366,5 @@ export function drawCritter(ctx, kind, t = 0, mode, params = {}) {
 }
 
 /** Taille d'affichage dans le jardin, et hauteur de vol (pour placer l'ombre au sol). */
-export const CRITTER_SIZE = { hedgehog: 1.6, frog: 1.4, tit: 1.4, bird: 1.4, ladybug: 1.2, squirrel: 1.5, marmot: 1.6, lizard: 1.2, heron: 1.8, owl: 1.5, eagle: 1.6, gull: 1.3, crab: 1.3, beetle: 1.2 };
+export const CRITTER_SIZE = { duck: 1.5, hedgehog: 1.6, frog: 1.4, tit: 1.4, bird: 1.4, ladybug: 1.2, squirrel: 1.5, marmot: 1.6, lizard: 1.2, heron: 1.8, owl: 1.5, eagle: 1.6, gull: 1.3, crab: 1.3, beetle: 1.2 };
 export const FLIGHT = { bee: 24, butterfly: 24, dragonfly: 24, frog: 6, hedgehog: 9, squirrel: 8, marmot: 7, lizard: 3, heron: 18, crab: 4, eagle: 160, gull: 110 };

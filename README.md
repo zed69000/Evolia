@@ -43,6 +43,7 @@ arrondie à 0,1° (environ 10 km), seulement si la personne a autorisé sa posit
 - `js/critters.js` : abeilles, papillons, libellules, oiseaux, héron, chouette, aigle, écureuil, marmotte, lézards…
 - `js/encyclopedia.js` : l'écran Biodiversité, lieu par lieu.
 - `js/map.js` : la carte des lieux.
+- `js/idle.js` : l'écosystème qui travaille seul (guildes, nectar, aménagements, vitalité, élan sportif).
 - `js/weather.js` : soleil et météo réels.
 
 ## Sur téléphone (Capacitor, à venir)

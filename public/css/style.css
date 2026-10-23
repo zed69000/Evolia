@@ -369,6 +369,32 @@ html, body {
 .pl-need .bar i { background: var(--elan); }
 .pl-path { width: 0; height: 22px; margin: 0 auto 0 66px; border-left: 3px dashed #CFC6AA; }
 
+/* ─── Écosystème ─── */
+#home { gap: 8px; }
+#home .btn.round { width: 52px; }
+#home .btn.primary { font-size: 16px; padding: 15px 8px; }
+.nectar { color: #B07A1A; font-weight: 800; white-space: nowrap; }
+.nectar::before { content: ''; display: inline-block; width: 9px; height: 10px; margin-right: 4px; background: var(--soleil); clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%); vertical-align: -1px; }
+.nectar.boost::after { content: ' ×3'; color: var(--elan); }
+.eco-vit { display: flex; flex-direction: column; gap: 4px; margin: 12px 0; font-size: 13px; color: var(--doux); }
+.eco-vit .bar i { background: var(--soleil); }
+.eco-boost { background: var(--papier-2); border-radius: 14px; padding: 10px 12px; font-size: 14px; color: var(--doux); margin-bottom: 14px; line-height: 1.4; }
+.eco-boost.on { background: #FCE6D2; color: #8A4A14; }
+.eco-boost b { color: var(--elan); }
+.eco-card { background: var(--papier-2); border-radius: 18px; padding: 12px; margin-bottom: 10px; }
+.eco-card.locked { opacity: .8; }
+.eco-head { display: flex; gap: 10px; align-items: center; }
+.eco-thumb { flex: none; width: 52px; height: 52px; border-radius: 50%; background: var(--papier); display: grid; place-items: center; overflow: hidden; }
+.eco-head h3 { margin: 0; font-size: 16px; color: var(--foret); }
+.eco-head h3 small { font-weight: 600; color: var(--doux); font-size: 12px; }
+.eco-head p { margin: 2px 0 0; font-size: 12.5px; color: var(--doux); line-height: 1.35; }
+.eco-effect { font-size: 13px; color: var(--foret); margin: 8px 0; font-weight: 700; }
+.eco-up { display: flex; gap: 10px; align-items: center; border-top: 1px solid var(--trait); padding-top: 8px; font-size: 13px; color: var(--foret); }
+.eco-up > div { flex: 1; }
+.eco-up span { color: var(--doux); font-size: 12px; }
+.eco-up .btn:disabled { background: #D8D0B8; box-shadow: 0 3px 0 #BDB49A; color: #fff; cursor: default; }
+.eco-gain { background: #FCE6D2; border-radius: 14px; padding: 10px 12px; color: #8A4A14 !important; font-size: 14px; text-align: left; }
+
 .dev .seg { flex-wrap: wrap; margin: 8px 0; }
 .dev .seg button { flex: 0 0 auto; border-color: var(--trait); color: var(--doux); margin: 0; }
 .dev .seg button.on { border-color: var(--foret); color: var(--foret); }

@@ -295,6 +295,16 @@ export class Garden {
 		return events;
 	}
 
+	/** Fait pousser un lieu, affiché ou non, sans toucher à la plante suivie à l'écran. */
+	growIn(placeId, type, amount) {
+		const keep = { place: this.place, placeId: this.placeId, current: this.current, bgDirty: this.bgDirty };
+		this.place = this.state.places[placeId];
+		this.placeId = placeId;
+		const events = this.addEffort(type, amount);
+		Object.assign(this, keep, { bgDirty: keep.bgDirty || (placeId === keep.placeId && this.bgDirty) });
+		return events;
+	}
+
 	spriteFor(p) {
 		const stage = p.growth >= 1 ? STAGES : Math.floor(p.growth * STAGES);
 		let s = this.sprites.get(p.id);
@@ -510,7 +520,7 @@ export class Garden {
 		for (const sp of SPECIES) {
 			if (sp.kind !== 'animal' || sp.place !== this.placeId || !sp.critter.behavior) continue;
 			const c = sp.critter;
-			let want = this.state.species[sp.id] && ok(c.when) ? c.count(this.state) : 0;
+			let want = this.state.species[sp.id] && ok(c.when) ? c.count(this.state) + (this.idleBonus?.(sp) ?? 0) : 0;
 			// Sous la pluie ou la neige, les insectes volants se mettent à l'abri.
 			if (wet && FLYERS.has(c.kind)) want = 0;
 			const active = this.insects.filter(i => i.sp === sp.id && !i.leaving);
@@ -546,8 +556,8 @@ export class Garden {
 				return this.decorVisible(c.on) && { ...base, decor: c.on, x: d.x + (Math.random() - 0.5) * 20, y: d.y + this.decorSprite(c.on).top * 0.8, mode: 'perch' };
 			}
 			case 'perch': {
-				const target = pick(this.trees ?? []);
-				return target && { ...base, x: side, y: y - 100, target, ox: c.trunk ? 6 : (Math.random() - 0.5) * 60, oy: c.trunk ? 0 : 4, mode: 'seek' };
+				const target = pick((c.on === 'buisson' ? this.bushes : this.trees) ?? []);
+				return target && { ...base, x: side, y: y - 100, target, ox: c.trunk ? 6 : (Math.random() - 0.5) * (c.on === 'buisson' ? 30 : 60), oy: c.trunk ? 0 : 4, mode: 'seek' };
 			}
 			case 'walk': {
 				let home;
@@ -709,8 +719,8 @@ export class Garden {
 					b.timer -= dt;
 					if (b.timer <= 0) {
 						b.mode = 'seek';
-						b.target = pick(this.trees) ?? b.target;
-						b.ox = b.p.trunk ? 6 : (Math.random() - 0.5) * 60;
+						b.target = pick(b.p.on === 'buisson' ? this.bushes : this.trees) ?? b.target;
+						b.ox = b.p.trunk ? 6 : (Math.random() - 0.5) * (b.p.on === 'buisson' ? 30 : 60);
 					}
 					return;
 				}
@@ -857,10 +867,7 @@ export class Garden {
 			ctx.fill();
 		}
 
-		// Animaux dans l'eau, sous la surface
-		for (const b of this.insects) if (b.p.swim) this.drawInsect(ctx, b);
-
-		// Décor et plantes, triés par profondeur
+		// Décor et plantes, triés par profondeur ; les nageurs juste au-dessus de l'eau
 		const entities = [];
 		for (const key of Object.keys(DECOR)) if (this.decorVisible(key)) entities.push({ decor: key, y: DECOR[key].y });
 		for (const p of this.place.plants) entities.push({ plant: p, y: p.y });
@@ -882,6 +889,16 @@ export class Garden {
 				ctx.globalAlpha = age < 0.5 ? age / 0.5 : 1;
 				ctx.drawImage(this.decorSprite(e.decor).canvas, -box.ax * S, -box.ay * S);
 				ctx.globalAlpha = 1;
+				if (d.water || e.decor === 'nenuphars') {
+					ctx.setTransform(S, 0, 0, S, 0, -this.camY * S);
+					// Le triton nage sous les nénuphars, le canard flotte par-dessus.
+					const lilies = this.decorVisible('nenuphars');
+					for (const b of this.insects) {
+						if (!b.p.swim) continue;
+						const duck = b.kind === 'duck';
+						if (duck ? e.decor === 'nenuphars' || !lilies : e.decor !== 'nenuphars') this.drawInsect(ctx, b);
+					}
+				}
 				continue;
 			}
 			const p = e.plant, box = PLANT_TYPES[p.type].box;

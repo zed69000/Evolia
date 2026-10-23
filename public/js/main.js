@@ -9,6 +9,7 @@ import { PLACES, PLACE_BY_ID, checkSpecies, placeOpen, speciesOf } from './speci
 import { Encyclopedia } from './encyclopedia.js';
 import { PlacesMap } from './map.js';
 import { Sky, WEATHER_LABEL } from './weather.js';
+import { EcoPanel, tick, summaryHtml, addBoost, boostLeft, visualExtra, rates, GUILDS, BOOST_MULT, BOOST_PER_MIN } from './idle.js';
 import { paperTexture } from './watercolor.js';
 import { VERSION } from './version.js';
 
@@ -22,6 +23,7 @@ const state = load();
 state.totals.steps ??= 0;
 state.placesOpen ??= { prairie: true };
 const garden = new Garden($('#garden'), state);
+garden.idleBonus = sp => visualExtra(state, state.place, sp);
 if (params.has('h')) garden.hourOverride = parseFloat(params.get('h'));
 const sky = new Sky(state, garden, () => renderHud());
 if (params.has('weather')) { sky.override = params.get('weather'); sky.apply(false); }
@@ -58,6 +60,12 @@ function persist(now = false) {
 
 const species = new Encyclopedia($('#species'), state, () => { persist(); updateSpeciesDot(); });
 const places = new PlacesMap($('#map'), state, travel);
+const eco = new EcoPanel($('#eco'), state, gid => {
+	toast(`${GUILDS[gid].upgrade.name} amélioré : de nouveaux animaux arrivent`, '#F4C23E');
+	garden.nextPopulate = 0;
+	renderHud();
+	persist(true);
+});
 
 // ─── Mise en page ─────────────────────────────────────────────
 
@@ -75,7 +83,7 @@ function renderHud() {
 	const km = todayMeters(state) / 1000;
 	$('#hud-day').textContent = PLACE_BY_ID[state.place].name;
 	$('#hud-km').textContent = `${fmt(km, km < 10 ? 2 : 1)} / ${state.goalKm} km`;
-	$('#hud-steps').textContent = `${sky.label()} · jour ${dayNumber(state)}`;
+	$('#hud-steps').innerHTML = `${sky.label()} · <span class="nectar${boostLeft(state) ? ' boost' : ''}">${fmtInt(state.nectar ?? 0)}</span>`;
 	const k = Math.min(1, km / state.goalKm);
 	$('#ring-fg').style.strokeDashoffset = String(113.1 * (1 - k));
 }
@@ -161,9 +169,16 @@ garden.onTap = hit => {
 
 // ─── Distance et décor ────────────────────────────────────────
 
+/** Chaque mètre compte pour la journée, pour le lieu, et rapporte du nectar (1 pour 5 m). */
 function addMeters(m) {
 	addDistance(state, m);
 	here().km += m / 1000;
+	state.nectar = (state.nectar ?? 0) + m / 5;
+}
+
+/** L'effort fait en bougeant compte double pour la vitalité du lieu. */
+function addEffortXp(effort) {
+	here().xp = (here().xp ?? 0) + effort * 2;
 }
 
 function checkUnlocks(events) {
@@ -261,6 +276,7 @@ function handleSample(s) {
 		const effort = effortFor(s.dist, s.speedKmh, act);
 		walk.effort += effort;
 		state.totals.effort += effort;
+		addEffortXp(effort);
 		for (const ev of garden.addEffort(act.plant, effort)) {
 			walk.events.push(ev);
 			if (ev.kind === 'mature' && ev.plant.type !== 'herbe') toast(`${plantName(ev.plant)} a fini de pousser`, TYPE_COLOR[ev.plant.type]);
@@ -311,6 +327,7 @@ function endWalk() {
 	const duration = walkSeconds(w);
 	const matured = {};
 	for (const ev of w.events) if (ev.kind === 'mature') matured[ev.plant.type] = (matured[ev.plant.type] ?? 0) + 1;
+	if (w.distance > 50) addBoost(state, (duration / 60) * BOOST_PER_MIN);
 	if (w.distance > 10) {
 		// `end` sert à ne pas recompter ces pas lors de la prochaine récolte.
 		state.walks.unshift({ start: w.start, end: w.sim ? undefined : Date.now(), duration, distance: w.distance, effort: w.effort, matured, place: state.place });
@@ -339,6 +356,13 @@ function showRecap(w, duration, matured) {
 	for (const ev of w.events) if (ev.kind === 'decor') chips.push(`<span class="chip gold">${DECOR[ev.key].name}</span>`);
 	const title = w.distance < 10 ? 'À bientôt' : w.distance > 3000 ? 'Quelle balade !' : 'Belle marche !';
 	const sub = w.distance < 10 ? 'Pas encore de pas enregistrés cette fois.' : 'Voici ce qui a poussé grâce à toi.';
+	let ecoLine = '';
+	if (w.distance > 50) {
+		const r = rates(state, state.place);
+		const mins = Math.min(360, (duration / 60) * BOOST_PER_MIN);
+		const flowers = ((r.grow.fleur ?? 0) * (BOOST_MULT - 1) * mins) / 60 / PLANT_TYPES.fleur.cost;
+		ecoLine = `<p class="eco-gain">Ton écosystème profite de ta sortie : <b>+${fmtInt(w.distance / 5)} nectar</b> et production <b>×${BOOST_MULT}</b> pendant ${fmtMin(mins)}${flowers >= 0.5 ? `, soit environ ${fmtInt(flowers)} fleur${flowers >= 1.5 ? 's' : ''} en plus grâce à tes pollinisateurs` : ''}.</p>`;
+	}
 	showModal(`
 		<h2>${title}</h2><p>${sub}</p>
 		<div class="walk-stats">
@@ -347,6 +371,7 @@ function showRecap(w, duration, matured) {
 			<div><b>${fmtInt(w.steps || w.distance / STEP_LENGTH_M)}</b><span>pas</span></div>
 		</div>
 		<div class="chips">${chips.join('')}</div>
+		${ecoLine}
 		<button class="btn primary" data-close>Retour au jardin</button>`);
 }
 
@@ -375,6 +400,9 @@ async function playHarvest(res, source) {
 	state.totals.distance += res.distance;
 	here().km += res.distance / 1000;
 	state.totals.steps += res.steps;
+	state.nectar = (state.nectar ?? 0) + res.distance / 5;
+	// Une minute d'élan par minute active, ménage compris.
+	addBoost(state, res.groups.reduce((n, g) => n + g.minutes, 0));
 	renderHud();
 	closeModal();
 	toast(`${fmtInt(res.steps)} pas récoltés pendant ton absence`, '#A3BD57');
@@ -389,6 +417,7 @@ async function playHarvest(res, source) {
 			await sleep(140);
 		}
 		state.totals.effort += g.effort;
+		addEffortXp(g.effort);
 		rows.push(`<li><b>${g.act.name}</b> · ${fmtMin(g.minutes)} · ${fmtInt(g.steps)} pas<br>${growthChips(matured, touched).join('')}</li>`);
 	}
 	garden.setFollow(false);
@@ -399,8 +428,31 @@ async function playHarvest(res, source) {
 		<h2>Pendant ton absence</h2>
 		<p>${fmtInt(res.steps)} pas · ${fmt(res.distance / 1000)} km, comptés par ${source.label}. Même le ménage fait pousser ton jardin.</p>
 		<ul class="harvest-rows">${rows.join('')}</ul>${decor ? `<div class="chips">${decor}</div>` : ''}
+		${idleNote ? `<p>Et ton écosystème a travaillé :</p>${idleNote}` : ''}
 		<button class="btn primary" data-close>Voir mon jardin</button>`);
+	idleNote = '';
 	announceSpecies();
+}
+
+// ─── Écosystème qui travaille seul ────────────────────────────
+
+let idleNote = '';
+
+/** Fait travailler l'écosystème depuis la dernière fois ; `report` : montrer le bilan d'une longue absence. */
+function runIdle(report = false) {
+	const summary = tick(state, garden);
+	renderHud();
+	if (!summary) return;
+	persist();
+	if (report && summary.hours > 10 / 60) idleNote = summaryHtml(summary);
+}
+setInterval(() => { if (!document.hidden) runIdle(); }, 5000);
+
+function showIdleRecap() {
+	if (!idleNote || !$('#modal').hidden) return;
+	showModal(`<h2>Pendant ton absence</h2><p>Tes animaux ont continué de travailler. Bouge pour doubler leur production.</p>
+		${idleNote}<button class="btn primary" data-close>Voir mon jardin</button>`);
+	idleNote = '';
 }
 
 /** Propose, une fois, de lire les pas comptés par le téléphone (seulement dans l'appli installée). */
@@ -427,10 +479,12 @@ async function offerHarvest() {
 	};
 }
 
-document.addEventListener('visibilitychange', () => {
+document.addEventListener('visibilitychange', async () => {
 	if (document.hidden) { persist(true); return; }
+	runIdle(true);
 	if (walk) keepAwake();
-	else if (Date.now() - state.lastHarvest > 5 * 60000) maybeHarvest();
+	else if (Date.now() - state.lastHarvest > 5 * 60000) await maybeHarvest();
+	showIdleRecap();
 	sky.refresh();
 });
 
@@ -526,6 +580,7 @@ $('#btn-walk').addEventListener('click', () => startWalk());
 $('#btn-stop').addEventListener('click', endWalk);
 $('#btn-journal').addEventListener('click', openJournal);
 $('#btn-species').addEventListener('click', () => species.open());
+$('#btn-eco').addEventListener('click', () => eco.open());
 $('#hud').addEventListener('click', () => places.open());
 $('#btn-sim').addEventListener('click', () => { walk.sim = true; startTracker(); });
 $('#modal').addEventListener('click', e => { if (e.target.closest('[data-close]') || e.target.id === 'modal') closeModal(); });
@@ -565,6 +620,7 @@ if (firstRun) {
 	state.seenIntro = true;
 	persist(true);
 } else {
+	runIdle(true);
 	offerHarvest();
-	maybeHarvest();
+	maybeHarvest().then(showIdleRecap);
 }

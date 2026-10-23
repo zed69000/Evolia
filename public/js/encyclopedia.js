@@ -5,7 +5,7 @@ import { PLANT_TYPES, DECOR, DECOR_PAINTERS, paintPlant } from './plants.js';
 import { drawCritter } from './critters.js';
 
 const KINDS = { plante: 'Plante', animal: 'Animal', milieu: 'Milieu' };
-const CRITTER_SCALE = { hedgehog: 0.75, frog: 1.2, tit: 1.3, bird: 1.25, worm: 1.4, ladybug: 2.2, firefly: 1.8, beetle: 1.5, squirrel: 0.9, marmot: 0.95, lizard: 0.95, heron: 0.62, owl: 1.2, eagle: 0.42, gull: 0.6, crab: 1.4 };
+const CRITTER_SCALE = { duck: 1, hedgehog: 0.75, frog: 1.2, tit: 1.3, bird: 1.25, worm: 1.4, ladybug: 2.2, firefly: 1.8, beetle: 1.5, squirrel: 0.9, marmot: 0.95, lizard: 0.95, heron: 0.62, owl: 1.2, eagle: 0.42, gull: 0.6, crab: 1.4 };
 const CRITTER_SHIFT = { heron: 4, marmot: -2, owl: 1 };
 const cache = new Map();
 

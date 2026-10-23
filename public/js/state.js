@@ -54,6 +54,9 @@ function fresh() {
 		species: {},
 		lastHarvest: Date.now(),
 		harvestSource: null,
+		nectar: 0,
+		lastIdle: Date.now(),
+		boostUntil: 0,
 	};
 }
 
