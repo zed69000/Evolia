@@ -19,6 +19,7 @@
 <body>
 <div id="app">
 	<canvas id="garden" aria-label="Ton jardin"></canvas>
+	<div id="splash" aria-hidden="true"><img src="assets/logo.png" alt=""></div>
 
 	<header id="hud" class="card">
 		<img src="assets/logo.png" alt="Evolia" class="hud-logo">
@@ -32,6 +33,10 @@
 		</svg>
 	</header>
 
+	<button id="quest" class="quest card" hidden>
+		<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5L21 21"/></svg>
+		<span>Trouve : <b id="quest-name"></b></span>
+	</button>
 	<div id="toasts" aria-live="polite"></div>
 	<div id="plant-card" class="card bubble" hidden></div>
 

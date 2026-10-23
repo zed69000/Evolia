@@ -17,6 +17,7 @@ Puis ouvrir http://localhost:8642/?dev=1
 
 - `?dev=1` : mode test (marche simulée, et dans le carnet : heure, météo, journée simulée, +10 km, remise à zéro).
 - `?h=22` : force l'heure du jardin (ici 22 h, pour voir la nuit et les lucioles).
+- `?date=2026-07-15` : force la date (pour comparer la lumière d'été et d'hiver).
 - `?weather=rain` : force la météo (`clear`, `clouds`, `overcast`, `fog`, `drizzle`, `rain`, `snow`, `storm`).
 
 ## Lieux

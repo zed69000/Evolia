@@ -53,8 +53,10 @@ const DRAW = {
 		ell(ctx, 3.2, 2.2, 2.8, 2.6);
 		ctx.globalAlpha = 0.8;
 		ctx.fillStyle = p.spot ?? '#3A2A20';
-		ell(ctx, -5.5, -4, 1.1, 1);
-		ell(ctx, 5.5, -4, 1.1, 1);
+		const eye = p.eyes ? 1.9 : 1.1;
+		ell(ctx, -5.5, -4, eye, eye * 0.9);
+		ell(ctx, 5.5, -4, eye, eye * 0.9);
+		if (p.eyes) { ctx.fillStyle = '#1A1210'; ell(ctx, -5.5, -4, 0.8, 0.8); ell(ctx, 5.5, -4, 0.8, 0.8); }
 		ctx.restore();
 		ctx.globalAlpha = 1;
 		ctx.fillStyle = '#3A2A20';
@@ -72,6 +74,102 @@ const DRAW = {
 		ctx.fillStyle = p.body ?? '#C8402A';
 		ell(ctx, -3, 0, 9, p.slim ? 0.8 : 1.1);
 		ell(ctx, 6, 0, 1.8, 1.8);
+	},
+
+	hoverfly(ctx, t) {
+		const flap = Math.abs(Math.sin(t * 46));
+		ctx.fillStyle = 'rgba(240,246,250,0.6)';
+		ell(ctx, -0.5, -3.4, 4.2, 1.4 * flap + 0.6, -0.35);
+		ell(ctx, -0.5, 3.4, 4.2, 1.4 * flap + 0.6, 0.35);
+		ctx.fillStyle = '#E8A830';
+		ell(ctx, -2, 0, 4.6, 2.2);
+		ctx.fillStyle = '#2A1E18';
+		for (const x of [-4.4, -2.4, -0.4]) ell(ctx, x, 0, 0.6, 2.1);
+		ell(ctx, 2.6, 0, 1.8, 1.9);
+		ctx.fillStyle = '#9A3A22';
+		ell(ctx, 4.4, 0, 1.6, 2);
+	},
+
+	beefly(ctx, t) {
+		const flap = Math.abs(Math.sin(t * 40));
+		ctx.fillStyle = 'rgba(120,90,60,0.45)';
+		ell(ctx, -2, -3.6, 4.4, 1.6 * flap + 0.6, -0.4);
+		ell(ctx, -2, 3.6, 4.4, 1.6 * flap + 0.6, 0.4);
+		ctx.fillStyle = '#B08A5A';
+		ell(ctx, 0, 0, 4.4, 4);
+		ctx.fillStyle = '#D8B888';
+		ell(ctx, -0.6, -1, 2.6, 2);
+		ctx.fillStyle = '#2A1E18';
+		ell(ctx, 3.8, 0, 1.4, 1.4);
+		line(ctx, [[4.8, 0], [10.5, 0.6]], 0.5, '#2A1E18');
+	},
+
+	ant(ctx, t) {
+		const w = Math.sin(t * 30) * 0.7;
+		for (const x of [-0.6, 0.4, 1.4]) { line(ctx, [[x, 0], [x - 0.6 + w, -2]], 0.35, '#2A1E18'); line(ctx, [[x, 0], [x - 0.6 - w, 2]], 0.35, '#2A1E18'); }
+		ctx.fillStyle = '#2A1E18';
+		ell(ctx, -1.8, 0, 1.4, 1);
+		ell(ctx, 0.4, 0, 0.9, 0.6);
+		ell(ctx, 1.9, 0, 0.8, 0.8);
+	},
+
+	firebug(ctx, t) {
+		const w = Math.sin(t * 16) * 0.6;
+		for (const x of [-1.5, 0.3, 2]) { line(ctx, [[x, 0], [x + w, -3]], 0.45, '#1A1210'); line(ctx, [[x, 0], [x - w, 3]], 0.45, '#1A1210'); }
+		ctx.fillStyle = '#C8302A';
+		ell(ctx, 0, 0, 4, 2.4);
+		ctx.fillStyle = '#1A1210';
+		ell(ctx, -1.2, -0.9, 0.7, 0.6);
+		ell(ctx, -1.2, 0.9, 0.7, 0.6);
+		ell(ctx, 1.4, 0, 0.9, 1.3);
+		ell(ctx, 3.8, 0, 1, 1.1);
+	},
+
+	snail(ctx, t) {
+		const st = Math.sin(t * 1.4) * 0.3;
+		ctx.fillStyle = '#C8B8A0';
+		ell(ctx, 1, 2.2, 6.5 + st, 1.4);
+		line(ctx, [[5.6, 1.2], [7.4, -2]], 0.5, '#A89880');
+		line(ctx, [[5, 1.4], [6, -1.6]], 0.5, '#A89880');
+		ctx.fillStyle = '#A87A4A';
+		ell(ctx, -0.6, -1, 4.2, 3.8);
+		ctx.strokeStyle = '#6E4A2A';
+		ctx.lineWidth = 0.55;
+		ctx.beginPath();
+		for (let a = 0; a < Math.PI * 4; a += 0.3) { const r = 3.6 * (1 - a / (Math.PI * 4.4)); const x = -0.6 + Math.cos(a) * r, y = -1 + Math.sin(a) * r; if (a) ctx.lineTo(x, y); else ctx.moveTo(x, y); }
+		ctx.stroke();
+	},
+
+	grasshopper(ctx, t, mode) {
+		const crouch = mode === 'hop' ? -1.5 : 0;
+		line(ctx, [[-1, 0.6], [-5, -3.4 + crouch], [-8.5, 1.4]], 0.9, '#5A8A2E');
+		line(ctx, [[1, 0.8], [2, 2.6]], 0.5, '#5A8A2E');
+		line(ctx, [[3, 0.8], [4.2, 2.6]], 0.5, '#5A8A2E');
+		ctx.fillStyle = '#6E9A3A';
+		ell(ctx, -0.5, 0, 6, 1.7);
+		ctx.fillStyle = '#86B24A';
+		ell(ctx, -1.6, -0.8, 5, 1);
+		ctx.fillStyle = '#6E9A3A';
+		ell(ctx, 5.4, -0.4, 1.6, 1.4);
+		line(ctx, [[6.4, -1.2], [10, -6 - Math.sin(t * 3)], [13, -7.5]], 0.3, '#5A8A2E');
+		ctx.fillStyle = '#1A1210';
+		ell(ctx, 5.8, -0.8, 0.4, 0.4);
+	},
+
+	spider(ctx, t) {
+		ctx.strokeStyle = 'rgba(250,250,245,0.55)';
+		ctx.lineWidth = 0.25;
+		for (let k = 0; k < 10; k++) { const a = (k / 10) * Math.PI * 2; ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(Math.cos(a) * 13, Math.sin(a) * 13); ctx.stroke(); }
+		for (let r = 3; r < 13; r += 2.2) { ctx.beginPath(); for (let k = 0; k <= 10; k++) { const a = (k / 10) * Math.PI * 2; if (k) ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r); else ctx.moveTo(Math.cos(a) * r, Math.sin(a) * r); } ctx.stroke(); }
+		const w = Math.sin(t * 2) * 0.3;
+		for (const s of [-1, 1]) for (const k of [0.4, 0.9, 1.4, 1.9]) line(ctx, [[0, 0], [s * 3 * Math.cos(k), -2.4 + k * 2.4 + w], [s * 4.6 * Math.cos(k), -3.4 + k * 3.2]], 0.4, '#5A3A1C');
+		ctx.fillStyle = '#B07A3A';
+		ell(ctx, 0, 1.6, 2.6, 3);
+		ctx.fillStyle = '#FDF7E7';
+		ctx.fillRect(-0.25, 0, 0.5, 2.6);
+		ctx.fillRect(-1.1, 1.1, 2.2, 0.5);
+		ctx.fillStyle = '#6E4A2A';
+		ell(ctx, 0, -1.6, 1.4, 1.3);
 	},
 
 	ladybug(ctx) {
@@ -361,10 +459,21 @@ const DRAW = {
 	},
 };
 
+/** Une petite file de fourmis (vignette de l'encyclopédie ; dans le jardin, la file suit un chemin). */
+DRAW.ants = (ctx, t) => {
+	for (const [x, y, a] of [[-5, 1.5, 0.2], [0, -0.5, -0.1], [5, 1, 0.15]]) {
+		ctx.save();
+		ctx.translate(x, y);
+		ctx.rotate(a);
+		DRAW.ant(ctx, t + x);
+		ctx.restore();
+	}
+};
+
 export function drawCritter(ctx, kind, t = 0, mode, params = {}) {
 	DRAW[kind]?.(ctx, t, mode, params);
 }
 
 /** Taille d'affichage dans le jardin, et hauteur de vol (pour placer l'ombre au sol). */
-export const CRITTER_SIZE = { duck: 1.5, hedgehog: 1.6, frog: 1.4, tit: 1.4, bird: 1.4, ladybug: 1.2, squirrel: 1.5, marmot: 1.6, lizard: 1.2, heron: 1.8, owl: 1.5, eagle: 1.6, gull: 1.3, crab: 1.3, beetle: 1.2 };
-export const FLIGHT = { bee: 24, butterfly: 24, dragonfly: 24, frog: 6, hedgehog: 9, squirrel: 8, marmot: 7, lizard: 3, heron: 18, crab: 4, eagle: 160, gull: 110 };
+export const CRITTER_SIZE = { hoverfly: 1.2, beefly: 1.2, ant: 1.9, firebug: 1.3, snail: 1.4, grasshopper: 1.2, spider: 1.2, duck: 1.5, hedgehog: 1.6, frog: 1.4, tit: 1.4, bird: 1.4, ladybug: 1.2, squirrel: 1.5, marmot: 1.6, lizard: 1.2, heron: 1.8, owl: 1.5, eagle: 1.6, gull: 1.3, crab: 1.3, beetle: 1.2 };
+export const FLIGHT = { hoverfly: 24, beefly: 24, firebug: 2, snail: 2, grasshopper: 3, bee: 24, butterfly: 24, dragonfly: 24, frog: 6, hedgehog: 9, squirrel: 8, marmot: 7, lizard: 3, heron: 18, crab: 4, eagle: 160, gull: 110 };

@@ -38,6 +38,21 @@ export function sunTimes(lat, lon, date = new Date()) {
 	return { rise, set };
 }
 
+/** Hauteur du soleil au-dessus de l'horizon, en degrés, au lieu et à l'instant donnés (NOAA). */
+export function sunAltitude(lat, lon, date) {
+	const rad = Math.PI / 180;
+	const start = Date.UTC(date.getUTCFullYear(), 0, 0);
+	const doy = Math.floor((date - start) / 86400000);
+	const hr = date.getUTCHours() + date.getUTCMinutes() / 60;
+	const g = ((2 * Math.PI) / 365) * (doy - 1 + (hr - 12) / 24);
+	const eq = 229.18 * (0.000075 + 0.001868 * Math.cos(g) - 0.032077 * Math.sin(g) - 0.014615 * Math.cos(2 * g) - 0.040849 * Math.sin(2 * g));
+	const decl = 0.006918 - 0.399912 * Math.cos(g) + 0.070257 * Math.sin(g) - 0.006758 * Math.cos(2 * g) + 0.000907 * Math.sin(2 * g) - 0.002697 * Math.cos(3 * g) + 0.00148 * Math.sin(3 * g);
+	const solarMin = hr * 60 + eq + 4 * lon;
+	const ha = (solarMin / 4 - 180) * rad;
+	const cosZ = Math.sin(lat * rad) * Math.sin(decl) + Math.cos(lat * rad) * Math.cos(decl) * Math.cos(ha);
+	return 90 - Math.acos(Math.max(-1, Math.min(1, cosZ))) / rad;
+}
+
 const hoursOf = iso => { const [h, m] = iso.slice(11, 16).split(':').map(Number); return h + m / 60; };
 
 export class Sky {
@@ -102,6 +117,12 @@ export class Sky {
 		const w = this.state.weatherCache;
 		const fresh = w && Date.now() - w.at < 3 * 3600000;
 		this.garden.sun = fresh && w.rise ? { rise: w.rise, set: w.set } : sunTimes(c.lat, c.lon);
+		// Hauteur du soleil pour une heure locale d'aujourd'hui : la lumière suit la saison.
+		this.garden.altitude = h => {
+			const d = this.garden.dateOverride ? new Date(this.garden.dateOverride) : new Date();
+			d.setHours(Math.floor(h), Math.round((h % 1) * 60), 0, 0);
+			return sunAltitude(c.lat, c.lon, d);
+		};
 		this.garden.weather = this.override ? { kind: this.override, wind: this.override === 'storm' ? 35 : 15, temp: this.override === 'snow' ? -1 : 12 }
 			: fresh ? { kind: w.kind, wind: w.wind, temp: w.temp } : { kind: 'clear', wind: 10, temp: null };
 		if (notify) this.onChange?.();

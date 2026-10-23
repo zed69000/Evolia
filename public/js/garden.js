@@ -11,7 +11,7 @@ const STAGES = 30;
 const SWAY = { herbe: 0.09, fleur: 0.07, buisson: 0.02, arbre: 0.012 };
 const MIN_Y = { herbe: 60, fleur: 100, buisson: 100, arbre: 220 };
 const POND_PADS = [[40, -10], [58, 10], [-60, 14], [-20, 24], [10, -26]];
-const FLYERS = new Set(['bee', 'butterfly', 'dragonfly']);
+const FLYERS = new Set(['bee', 'butterfly', 'dragonfly', 'hoverfly', 'beefly']);
 
 // Sol de chaque lieu : couleur de fond, grandes nappes, bords, petites pousses.
 const GROUND = {
@@ -38,12 +38,33 @@ function ambientAt(h, sun) {
 	return { color: '#FFFFFF', a: 0 };
 }
 
+// Lumière selon la hauteur du soleil (degrés) : un matin d'octobre, bas sur l'horizon, reste doré
+// bien plus longtemps qu'un matin d'été. [hauteur, couleur multipliée, opacité]
+const ALT_LIGHT = [
+	[-90, '#1E2B4D', 0.58], [-12, '#1E2B4D', 0.58], [-6, '#3E4A7E', 0.5], [-2, '#8A6A9E', 0.42],
+	[1, '#F09A5E', 0.32], [5, '#F4B470', 0.2], [12, '#F8D8A8', 0.09], [25, '#FFF4E4', 0.03], [40, '#FFFFFF', 0], [90, '#FFFFFF', 0],
+];
+
+function lightFromAltitude(alt) {
+	for (let i = 0; i < ALT_LIGHT.length - 1; i++) {
+		const [a0, c0, o0] = ALT_LIGHT[i], [a1, c1, o1] = ALT_LIGHT[i + 1];
+		if (alt >= a0 && alt <= a1) {
+			const k = (alt - a0) / (a1 - a0);
+			return { color: mix(c0, c1, k), a: lerp(o0, o1, k) };
+		}
+	}
+	return { color: '#FFFFFF', a: 0 };
+}
+
 export function nightAt(h, sun = DEFAULT_SUN) {
 	if (h >= sun.set + 1.25 || h < sun.rise - 1) return 1;
 	if (h > sun.set) return (h - sun.set) / 1.25;
 	if (h < sun.rise) return (sun.rise - h);
 	return 0;
 }
+
+/** Animaux au sol : triés avec les plantes, pour passer devant ou derrière elles. */
+const onGround = b => (b.behavior === 'walk' || b.behavior === 'trail' || (b.behavior === 'hop' && b.mode !== 'hop') || b.kind === 'heron' || b.kind === 'frog') && !b.p.swim;
 
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
 const pick = arr => arr[Math.floor(Math.random() * arr.length)];
@@ -391,7 +412,16 @@ export class Garden {
 		return d.getHours() + d.getMinutes() / 60;
 	}
 
-	night() { return nightAt(this.hour(), this.sun); }
+	/** Lumière ambiante et part de nuit, d'après la vraie hauteur du soleil quand on la connaît. */
+	light(hour = this.hour()) {
+		if (this.altitude) {
+			const alt = this.altitude(hour);
+			return { amb: lightFromAltitude(alt), night: Math.max(0, Math.min(1, (-3 - alt) / 6)) };
+		}
+		return { amb: ambientAt(hour, this.sun), night: nightAt(hour, this.sun) };
+	}
+
+	night() { return this.light().night; }
 
 	precip() {
 		const k = this.weather.kind;
@@ -444,6 +474,8 @@ export class Garden {
 		const rect = this.canvas.getBoundingClientRect();
 		const wx = (e.clientX - rect.left) / this.cs;
 		const wy = (e.clientY - rect.top) / this.cs + this.camY;
+		const critter = this.critterAt(wx, wy);
+		if (critter) return { critter, x: e.clientX - rect.left, y: e.clientY - rect.top };
 		const sorted = [...this.place.plants].sort((a, b) => b.y - a.y);
 		for (const p of sorted) {
 			const box = PLANT_TYPES[p.type].box;
@@ -511,12 +543,13 @@ export class Garden {
 		if (n > 0.5) this.state.seenNight = true;
 		const night = n > 0.5, dusk = n > 0.2;
 		const wet = this.precip() > 0;
+		if (wet && this.weather.kind !== 'snow') this.state.seenRain = true;
 		const mature = this.place.plants.filter(p => p.growth >= 1);
 		this.flowers = mature.filter(p => p.type === 'fleur');
 		this.bushes = mature.filter(p => p.type === 'buisson');
 		this.trees = mature.filter(p => p.type === 'arbre');
 		this.perches = [...this.bushes, ...this.trees];
-		const ok = when => when === 'always' || (when === 'day' && !night) || (when === 'night' && night) || (when === 'dusk' && dusk);
+		const ok = when => when === 'always' || (when === 'day' && !night) || (when === 'night' && night) || (when === 'dusk' && dusk) || (when === 'wet' && (wet || night));
 		for (const sp of SPECIES) {
 			if (sp.kind !== 'animal' || sp.place !== this.placeId || !sp.critter.behavior) continue;
 			const c = sp.critter;
@@ -550,7 +583,9 @@ export class Garden {
 			case 'pinned': {
 				if (c.on === 'buisson') {
 					const target = pick(this.bushes ?? []);
-					return target && { ...base, target, ox: (Math.random() - 0.5) * 50, oy: 14 + Math.random() * 30, x: target.x, y: target.y, mode: 'perch' };
+					// Les bêtes volantes arrivent de l'extérieur du jardin avant de se poser ; l'araignée est déjà là.
+					const fly = c.kind !== 'spider';
+					return target && { ...base, target, ox: (Math.random() - 0.5) * 50, oy: 14 + Math.random() * 30, x: fly ? side : target.x, y: fly ? y - 60 : target.y, mode: fly ? 'arrive' : 'perch' };
 				}
 				const d = DECOR[c.on];
 				return this.decorVisible(c.on) && { ...base, decor: c.on, x: d.x + (Math.random() - 0.5) * 20, y: d.y + this.decorSprite(c.on).top * 0.8, mode: 'perch' };
@@ -559,12 +594,19 @@ export class Garden {
 				const target = pick((c.on === 'buisson' ? this.bushes : this.trees) ?? []);
 				return target && { ...base, x: side, y: y - 100, target, ox: c.trunk ? 6 : (Math.random() - 0.5) * (c.on === 'buisson' ? 30 : 60), oy: c.trunk ? 0 : 4, mode: 'seek' };
 			}
-			case 'walk': {
-				let home;
-				if (c.home === 'tree') { const t = pick(this.trees ?? []); home = t && { x: t.x, y: t.y }; }
-				else if (this.decorVisible(c.home)) home = DECOR[c.home];
+			case 'walk':
+			case 'hop': {
+				const home = this.homeFor(c.home);
 				if (!home) return null;
-				return { ...base, x: home.x + (Math.random() - 0.5) * 60, y: home.y + 10, mode: 'walk', ang: Math.random() * 6.28, home: { x: home.x, y: home.y } };
+				return { ...base, x: home.x + (Math.random() - 0.5) * 60, y: home.y + 10, mode: 'walk', ang: Math.random() * 6.28, home };
+			}
+			case 'trail': {
+				// Une file de fourmis entre leur nid (le muret, ou une touffe d'herbe) et un arbuste ou une fleur.
+				const a = this.homeFor('murger') ?? this.homeFor('herbe');
+				const b = this.homeFor('buisson') ?? this.homeFor('fleur');
+				if (!a || !b) return null;
+				const mx = (a.x + b.x) / 2 + (Math.random() - 0.5) * 80, my = (a.y + b.y) / 2 + (Math.random() - 0.5) * 40;
+				return { ...base, x: a.x, y: a.y, mode: 'walk', path: [[a.x, a.y + 6], [mx, my], [b.x, b.y + 4]], n: 11 };
 			}
 			case 'soar':
 				return { ...base, x: WORLD_W / 2, y, mode: 'soar', ang: Math.random() * 6.28, r: 90 + Math.random() * 60 };
@@ -573,6 +615,14 @@ export class Garden {
 			default:
 				return { ...base, x: side, y, mode: c.behavior === 'flutter' ? 'wander' : 'seek', target: null, ang: Math.random() * 6.28 };
 		}
+	}
+
+	/** Point d'attache d'un animal : un décor, ou un type de plante mûre du lieu. */
+	homeFor(key) {
+		const pool = { tree: this.trees, arbre: this.trees, buisson: this.bushes, fleur: this.flowers }[key]
+			?? (key === 'herbe' ? this.place.plants.filter(p => p.type === 'herbe' && p.growth >= 1) : null);
+		if (pool) { const p = pick(pool); return p && { x: p.x, y: p.y }; }
+		return DECOR[key] && this.decorVisible(key) ? { x: DECOR[key].x, y: DECOR[key].y } : null;
 	}
 
 	updateInsect(b, dt) {
@@ -690,10 +740,14 @@ export class Garden {
 				return;
 			}
 			case 'pinned': {
-				if (b.leaving) { b.gone = true; return; }
+				if (b.leaving) { if (b.p.kind === 'spider') b.gone = true; else flyAway(); return; }
 				if (b.target) {
 					if (!has(b.target)) { b.gone = true; return; }
 					const [hx, hy] = this.headOf(b.target);
+					if (b.mode === 'arrive') {
+						if (flyTo(hx + b.ox, hy + b.oy, 45, 20) < 2) b.mode = 'perch';
+						return;
+					}
 					b.ox += Math.cos(b.t * 0.7) * 2 * dt;
 					b.oy += Math.sin(b.t * 0.5) * 1.5 * dt;
 					b.x = hx + b.ox;
@@ -746,6 +800,30 @@ export class Garden {
 				b.y += Math.sin(b.ang) * sp * 0.65 * dt;
 				b.x = Math.max(10, Math.min(WORLD_W - 10, b.x));
 				b.dir = Math.cos(b.ang) >= 0 ? 1 : -1;
+				return;
+			}
+			case 'hop': {
+				if (b.leaving) { b.gone = true; return; }
+				if (b.mode === 'hop') {
+					b.k = Math.min(1, b.k + dt * 1.8);
+					b.x = lerp(b.fx, b.tx, b.k);
+					b.y = lerp(b.fy, b.ty, b.k) - Math.sin(b.k * Math.PI) * 22;
+					if (b.k >= 1) { b.mode = 'walk'; b.timer = 2 + Math.random() * 4; }
+					return;
+				}
+				b.timer -= dt;
+				b.x += Math.cos(b.t * 0.5) * 2 * dt;
+				if (b.timer <= 0) {
+					const a = Math.random() * Math.PI * 2, d = 25 + Math.random() * 35;
+					let tx = b.x + Math.cos(a) * d, ty = b.y + Math.sin(a) * d * 0.6;
+					if (Math.hypot(tx - b.home.x, ty - b.home.y) > 140) { tx = b.home.x; ty = b.home.y + 8; }
+					Object.assign(b, { mode: 'hop', k: 0, fx: b.x, fy: b.y, tx: Math.max(10, Math.min(WORLD_W - 10, tx)), ty });
+					b.dir = b.tx >= b.x ? 1 : -1;
+				}
+				return;
+			}
+			case 'trail': {
+				if (b.leaving) b.gone = true;
 				return;
 			}
 			case 'soar': {
@@ -829,7 +907,7 @@ export class Garden {
 
 	render() {
 		const ctx = this.ctx, S = this.S, cw = this.canvas.width, ch = this.canvas.height;
-		const hour = this.hour(), night = nightAt(hour, this.sun), day = 1 - night;
+		const hour = this.hour(), { amb, night } = this.light(hour), day = 1 - night;
 		const wk = this.weather.kind;
 		if (this.bgDirty) this.paintBg();
 
@@ -860,7 +938,7 @@ export class Garden {
 		ctx.fillStyle = 'rgba(30,50,20,0.13)';
 		for (const b of this.insects) {
 			const h = FLIGHT[b.kind] ?? (b.mode === 'perch' ? null : 24);
-			if (h == null || b.p.swim) continue;
+			if (h == null || b.p.swim || b.behavior === 'trail') continue;
 			const big = { hedgehog: 2.6, frog: 1.8, marmot: 2.6, squirrel: 2, heron: 2.4, eagle: 5, gull: 3, crab: 1.8 }[b.kind] ?? 1;
 			ctx.beginPath();
 			ctx.ellipse(b.x + h * 0.25, b.y + h, 4 * big, 1.8 * big, 0, 0, Math.PI * 2);
@@ -871,7 +949,7 @@ export class Garden {
 		const entities = [];
 		for (const key of Object.keys(DECOR)) if (this.decorVisible(key)) entities.push({ decor: key, y: DECOR[key].y });
 		for (const p of this.place.plants) entities.push({ plant: p, y: p.y });
-		for (const b of this.insects) if (b.behavior === 'walk' || b.kind === 'heron' || b.kind === 'frog') entities.push({ critter: b, y: b.y + 2 });
+		for (const b of this.insects) if (onGround(b)) entities.push({ critter: b, y: b.behavior === 'trail' ? -1e9 : b.y + 2 });
 		entities.sort((a, b) => a.y - b.y);
 		for (const e of entities) {
 			if (e.critter) {
@@ -914,7 +992,7 @@ export class Garden {
 
 		// Animaux en l'air et particules
 		ctx.setTransform(S, 0, 0, S, 0, -this.camY * S);
-		for (const b of this.insects) if (!(b.behavior === 'walk' || b.kind === 'heron' || b.kind === 'frog' || b.p.swim)) this.drawInsect(ctx, b);
+		for (const b of this.insects) if (!onGround(b) && !b.p.swim) this.drawInsect(ctx, b);
 		for (const p of this.particles) {
 			ctx.globalAlpha = Math.max(0, p.life);
 			ctx.fillStyle = p.color;
@@ -924,8 +1002,7 @@ export class Garden {
 		}
 		ctx.globalAlpha = 1;
 
-		// Lumière de l'heure et du temps
-		const amb = ambientAt(hour, this.sun);
+		// Lumière de l'heure, de la saison et du temps
 		ctx.setTransform(1, 0, 0, 1, 0, 0);
 		if (amb.a > 0.001) {
 			ctx.globalCompositeOperation = 'multiply';
@@ -974,11 +1051,49 @@ export class Garden {
 	}
 
 	drawInsect(ctx, b) {
+		if (b.behavior === 'trail') return this.drawTrail(ctx, b);
 		ctx.save();
 		ctx.translate(b.x, b.y);
 		const k = CRITTER_SIZE[b.kind] ?? 1;
 		ctx.scale((b.dir || 1) * k, k);
 		drawCritter(ctx, b.kind, b.t, b.mode, b.p);
 		ctx.restore();
+	}
+
+	/** File de fourmis : la moitié va vers la nourriture, l'autre revient au nid. */
+	drawTrail(ctx, b) {
+		const [p0, p1, p2] = b.path;
+		const at = s => {
+			const u = 1 - s;
+			return [u * u * p0[0] + 2 * u * s * p1[0] + s * s * p2[0], u * u * p0[1] + 2 * u * s * p1[1] + s * s * p2[1]];
+		};
+		b.pos = [];
+		for (let i = 0; i < b.n; i++) {
+			const back = i % 2 === 1;
+			let s = ((b.t * 0.035 + i / b.n) % 1 + 1) % 1;
+			if (back) s = 1 - s;
+			const [x, y] = at(s), [x2, y2] = at(Math.min(1, s + 0.01));
+			const ang = Math.atan2(y2 - y, x2 - x) + (back ? Math.PI : 0);
+			b.pos.push([x, y]);
+			ctx.save();
+			ctx.translate(x + Math.sin(b.t * 6 + i) * 0.6, y);
+			ctx.rotate(ang);
+			ctx.scale(CRITTER_SIZE.ant, CRITTER_SIZE.ant);
+			drawCritter(ctx, 'ant', b.t + i);
+			ctx.restore();
+		}
+	}
+
+	/** Animal le plus proche d'un point du monde (pour le toucher du doigt). */
+	critterAt(wx, wy) {
+		let best = null, bestD = 16;
+		for (const b of this.insects) {
+			const pts = b.behavior === 'trail' ? (b.pos ?? []) : [[b.x, b.y]];
+			for (const [x, y] of pts) {
+				const d = Math.hypot(x - wx, y - wy);
+				if (d < bestD) { bestD = d; best = b; }
+			}
+		}
+		return best;
 	}
 }

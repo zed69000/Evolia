@@ -231,6 +231,7 @@ html, body {
 /* ─── Récap et accueil ─── */
 .modal {
 	position: absolute;
+	z-index: 20;
 	inset: 0;
 	background: rgba(30, 45, 25, .38);
 	display: flex;
@@ -368,6 +369,48 @@ html, body {
 .pl-need .bar { height: 6px; margin-top: 2px; }
 .pl-need .bar i { background: var(--elan); }
 .pl-path { width: 0; height: 22px; margin: 0 auto 0 66px; border-left: 3px dashed #CFC6AA; }
+
+/* ─── Jeu d'observation « Trouve… » ─── */
+.quest {
+	position: absolute;
+	top: calc(env(safe-area-inset-top, 0px) + 92px);
+	left: 12px;
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 8px 14px;
+	border: none;
+	border-radius: 16px;
+	font: 600 14px Nunito, sans-serif;
+	color: var(--foret);
+	cursor: pointer;
+	animation: toast-in .45s cubic-bezier(.2, .8, .2, 1), quest-pulse 2.4s ease-in-out 1s infinite;
+}
+.quest svg { color: var(--elan); flex: none; }
+@keyframes quest-pulse { 50% { transform: scale(1.04); } }
+#toasts { top: calc(env(safe-area-inset-top, 0px) + 136px); }
+.bravo-thumb { display: flex; justify-content: center; margin: 4px 0 8px; }
+.bravo-thumb canvas { background: var(--papier-2); border-radius: 50%; }
+.modal-card .btn.ghost { margin-top: 8px; }
+
+/* ─── Écran de démarrage : le logo, puis un fondu doux vers le jardin ─── */
+#splash {
+	position: absolute;
+	inset: 0;
+	z-index: 50;
+	display: grid;
+	place-items: center;
+	background: var(--papier) var(--paper);
+	transition: opacity 1.4s ease, visibility 1.4s;
+}
+#splash img {
+	width: min(62vw, 260px);
+	border-radius: 32px;
+	animation: splash-in 1.2s cubic-bezier(.2, .8, .2, 1) both;
+}
+#splash.out { opacity: 0; visibility: hidden; }
+#splash.out img { transform: scale(1.06); transition: transform 1.4s ease; }
+@keyframes splash-in { from { opacity: 0; transform: scale(.92); } }
 
 /* ─── Écosystème ─── */
 #home { gap: 8px; }

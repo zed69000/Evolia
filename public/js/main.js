@@ -5,8 +5,8 @@ import { Garden } from './garden.js';
 import { PLANT_TYPES, DECOR, plantName } from './plants.js';
 import { GpsTracker, MotionTracker, SimTracker } from './tracker.js';
 import { SOURCES, bestSource, harvest, classifyCadence } from './harvest.js';
-import { PLACES, PLACE_BY_ID, checkSpecies, placeOpen, speciesOf } from './species.js';
-import { Encyclopedia } from './encyclopedia.js';
+import { PLACES, PLACE_BY_ID, SPECIES_BY_ID, checkSpecies, placeOpen, speciesOf } from './species.js';
+import { Encyclopedia, thumbCopy } from './encyclopedia.js';
 import { PlacesMap } from './map.js';
 import { Sky, WEATHER_LABEL } from './weather.js';
 import { EcoPanel, tick, summaryHtml, addBoost, boostLeft, visualExtra, rates, GUILDS, BOOST_MULT, BOOST_PER_MIN } from './idle.js';
@@ -25,6 +25,7 @@ state.placesOpen ??= { prairie: true };
 const garden = new Garden($('#garden'), state);
 garden.idleBonus = sp => visualExtra(state, state.place, sp);
 if (params.has('h')) garden.hourOverride = parseFloat(params.get('h'));
+if (params.has('date')) garden.dateOverride = params.get('date');
 const sky = new Sky(state, garden, () => renderHud());
 if (params.has('weather')) { sky.override = params.get('weather'); sky.apply(false); }
 if (DEV) window.evolia = { garden, state, sky };
@@ -151,6 +152,7 @@ garden.onTap = hit => {
 	const card = $('#plant-card');
 	clearTimeout(cardTimer);
 	if (!hit) { card.hidden = true; return; }
+	if (hit.critter) return tapCritter(hit, card);
 	const p = hit.plant;
 	const id = speciesOf(p);
 	const known = !!state.species[id];
@@ -166,6 +168,62 @@ garden.onTap = hit => {
 	card.hidden = false;
 	cardTimer = setTimeout(() => { card.hidden = true; }, 4500);
 };
+
+// ─── Toucher un animal, et le jeu « Trouve… » pour les enfants ─
+
+let quest = null;
+const QUEST_REWARD = 15;
+
+function tapCritter(hit, card) {
+	const sp = SPECIES_BY_ID[hit.critter.sp];
+	if (!sp) return;
+	if (quest === sp.id) return winQuest(sp);
+	card.innerHTML = `<b>${sp.name}</b>${sp.latin}<span class="more">Découvre son rôle ›</span>`;
+	card.classList.add('link');
+	card.onclick = () => { card.hidden = true; species.open(sp.id); };
+	card.style.left = `${Math.max(90, Math.min($('#app').clientWidth - 90, hit.x))}px`;
+	card.style.top = `${Math.max(170, hit.y - 14)}px`;
+	card.hidden = false;
+	cardTimer = setTimeout(() => { card.hidden = true; }, 4000);
+}
+
+/** Choisit un animal présent dans le jardin à faire trouver. */
+function pickQuest() {
+	const present = [...new Set(garden.insects.filter(b => !b.leaving && b.x > 0 && b.x < 420).map(b => b.sp))].filter(id => id !== state.lastQuest);
+	if (!present.length) return;
+	quest = present[Math.floor(Math.random() * present.length)];
+	state.lastQuest = quest;
+	$('#quest-name').textContent = SPECIES_BY_ID[quest].name;
+	$('#quest').hidden = false;
+}
+
+function endQuest() {
+	quest = null;
+	$('#quest').hidden = true;
+}
+
+function winQuest(sp) {
+	endQuest();
+	state.nectar = (state.nectar ?? 0) + QUEST_REWARD;
+	persist();
+	renderHud();
+	showModal(`<h2>Bravo !</h2><p>Tu as trouvé : <b>${sp.name}</b></p><div class="bravo-thumb" id="bravo-thumb"></div>
+		<p>${sp.role}</p><div class="chips"><span class="chip gold">+${QUEST_REWARD} nectar</span></div>
+		<button class="btn primary" data-close>Continuer</button><button class="btn ghost wide" data-close data-open-sp="${sp.id}">Voir sa fiche</button>`);
+	$('#bravo-thumb').appendChild(thumbCopy(sp, 110, false));
+}
+
+$('#quest').addEventListener('click', () => {
+	const b = garden.insects.find(i => i.sp === quest && !i.leaving);
+	if (!b) { endQuest(); return; }
+	garden.focusOn(b.y);
+	toast('Regarde bien par là, et touche-la du doigt !', '#F08A3C');
+});
+setInterval(() => {
+	if (walk || document.hidden) return;
+	if (quest && !garden.insects.some(b => b.sp === quest && !b.leaving)) endQuest();
+	else if (!quest && $('#modal').hidden) pickQuest();
+}, 9000);
 
 // ─── Distance et décor ────────────────────────────────────────
 
@@ -583,7 +641,11 @@ $('#btn-species').addEventListener('click', () => species.open());
 $('#btn-eco').addEventListener('click', () => eco.open());
 $('#hud').addEventListener('click', () => places.open());
 $('#btn-sim').addEventListener('click', () => { walk.sim = true; startTracker(); });
-$('#modal').addEventListener('click', e => { if (e.target.closest('[data-close]') || e.target.id === 'modal') closeModal(); });
+$('#modal').addEventListener('click', e => {
+	const sp = e.target.closest('[data-open-sp]');
+	if (sp) species.open(sp.dataset.openSp);
+	if (e.target.closest('[data-close]') || e.target.id === 'modal') closeModal();
+});
 $('#sim-speed').addEventListener('input', e => {
 	$('#sim-v').textContent = `${fmt(parseFloat(e.target.value), 1)} km/h`;
 	if (walk?.tracker instanceof SimTracker) walk.tracker.speedKmh = parseFloat(e.target.value);
@@ -596,6 +658,32 @@ $('#sim-ts').addEventListener('click', e => {
 });
 
 // ─── Démarrage ────────────────────────────────────────────────
+
+/** Une fois, proposer le vrai ciel : pluie, neige, lever et coucher du soleil de chez soi. */
+function offerSky(next) {
+	if (state.coords || state.skyDeclined || !('geolocation' in navigator)) return next?.();
+	showModal(`
+		<h2>Le vrai ciel de chez toi</h2>
+		<p>S'il pleut, il pleut dans ton jardin. S'il neige, il neige. Le soleil s'y lève et s'y couche à la même heure que chez toi, avec la lumière de la saison.</p>
+		<p>Evolia utilise seulement ta position approximative (à 10 km près) pour demander la météo.</p>
+		<button class="btn primary" id="btn-sky-yes">Activer</button>
+		<button class="btn ghost wide" data-close id="btn-sky-no">Plus tard</button>`);
+	$('#btn-sky-no').onclick = () => { state.skyDeclined = true; persist(true); setTimeout(() => next?.(), 300); };
+	$('#btn-sky-yes').onclick = async () => {
+		closeModal();
+		const ok = await sky.locate(true);
+		persist(true);
+		toast(ok ? 'Ton jardin suit maintenant ton ciel' : 'Position refusée : le ciel restera dégagé', ok ? '#3E8FD0' : '#C0442F');
+		setTimeout(() => next?.(), 400);
+	};
+}
+
+// Le logo pendant 3 s, puis un fondu doux vers le jardin.
+const splash = $('#splash');
+setTimeout(() => {
+	splash.classList.add('out');
+	setTimeout(() => splash.remove(), 1500);
+}, 3000);
 
 renderHud();
 updatePads();
@@ -616,11 +704,13 @@ if (firstRun) {
 		</ul>
 		<p>Plus tu avances, plus de nouveaux lieux s'ouvrent : marais, forêt, montagne, littoral.</p>
 		<button class="btn primary" data-close id="btn-start">C'est parti</button>`);
-	$('#btn-start').addEventListener('click', () => setTimeout(offerHarvest, 400));
+	$('#btn-start').addEventListener('click', () => setTimeout(() => offerSky(offerHarvest), 400));
 	state.seenIntro = true;
 	persist(true);
 } else {
 	runIdle(true);
-	offerHarvest();
-	maybeHarvest().then(showIdleRecap);
+	maybeHarvest().then(() => {
+		showIdleRecap();
+		if ($('#modal').hidden) offerSky(offerHarvest);
+	});
 }
