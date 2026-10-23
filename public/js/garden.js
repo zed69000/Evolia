@@ -445,7 +445,10 @@ export class Garden {
 		c.addEventListener('pointermove', e => {
 			if (!start) return;
 			const now = performance.now();
-			if (Math.hypot(e.clientX - start.x, e.clientY - start.y) > 6) start.moved = true;
+			if (!start.moved && Math.hypot(e.clientX - start.x, e.clientY - start.y) > 6) {
+				start.moved = true;
+				this.onPeek?.(true);
+			}
 			this.camY = start.cam - (e.clientY - start.y) / this.cs;
 			const dt = Math.max(1, now - start.lastT) / 1000;
 			this.vel = (-(e.clientY - start.lastY) / this.cs) / dt;
@@ -455,6 +458,7 @@ export class Garden {
 		const end = e => {
 			if (!start) return;
 			if (!start.moved) { this.vel = 0; this.onTap?.(this.pick(e)); }
+			else this.onPeek?.(false);
 			if (performance.now() - start.lastT > 80) this.vel = 0;
 			start = null;
 			this.dragging = false;

@@ -678,12 +678,18 @@ function offerSky(next) {
 	};
 }
 
-// Le logo pendant 3 s, puis un fondu doux vers le jardin.
+// Le logo pendant 1 s, puis un fondu doux vers le jardin.
 const splash = $('#splash');
 setTimeout(() => {
 	splash.classList.add('out');
-	setTimeout(() => splash.remove(), 1500);
-}, 3000);
+	setTimeout(() => splash.remove(), 1300);
+}, 1000);
+
+// Glisser dans le jardin efface l'interface pour le voir en entier ; relâcher la fait revenir.
+garden.onPeek = on => {
+	$('#app').classList.toggle('peek', on);
+	if (on) $('#plant-card').hidden = true;
+};
 
 renderHud();
 updatePads();

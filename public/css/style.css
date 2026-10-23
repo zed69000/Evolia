@@ -401,15 +401,20 @@ html, body {
 	display: grid;
 	place-items: center;
 	background: var(--papier) var(--paper);
-	transition: opacity 1.4s ease, visibility 1.4s;
+	transition: opacity 1.2s ease, visibility 1.2s;
 }
+
+/* Glisser dans le jardin : l'interface s'efface, elle revient au relâcher. */
+#hud, .sheet, .quest, #toasts { transition: opacity .3s ease, transform .4s cubic-bezier(.2, .8, .2, 1); }
+.peek #hud, .peek .quest, .peek #toasts { opacity: 0; transform: translateY(-16px); pointer-events: none; }
+.peek .sheet:not(.off) { opacity: 0; transform: translateY(40px); pointer-events: none; }
 #splash img {
 	width: min(62vw, 260px);
 	border-radius: 32px;
 	animation: splash-in 1.2s cubic-bezier(.2, .8, .2, 1) both;
 }
 #splash.out { opacity: 0; visibility: hidden; }
-#splash.out img { transform: scale(1.06); transition: transform 1.4s ease; }
+#splash.out img { transform: scale(1.06); transition: transform 1.2s ease; }
 @keyframes splash-in { from { opacity: 0; transform: scale(.92); } }
 
 /* ─── Écosystème ─── */
