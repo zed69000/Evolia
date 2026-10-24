@@ -1,17 +1,31 @@
-// Le jardin d'un lieu : fond peint, plantes, animaux, vent, ciel (heure, soleil, météo) et caméra.
-// Le monde fait WORLD_W unités de large ; il s'allonge vers le bas quand il n'y a plus de place.
+// Le jardin d'un lieu (prairie, marais, forêt…) : un terrain qui s'agrandit parcelle par parcelle
+// quand on bouge, une caméra libre avec zoom, trois niveaux de détail, les plantes, les animaux,
+// le vent, les ombres et le ciel (heure, saison, météo).
+// Coordonnées : chaque plante garde des coordonnées locales à sa parcelle (`c`, 0 par défaut) ;
+// le monde les décale de l'origine de la parcelle (colonne × PARCEL_W, rangée × PARCEL_H).
 
 import { rng, wash, leaf, rgba, mix, paperTexture, lerp, ribbon, curve } from './watercolor.js';
-import { PLANT_TYPES, DECOR, DECOR_PAINTERS, paintPlant, newVariant } from './plants.js';
+import { PLANT_TYPES, DECOR, DECOR_PAINTERS, paintPlant, newVariant, lookOf } from './plants.js';
 import { drawCritter, CRITTER_SIZE, FLIGHT } from './critters.js';
 import { SPECIES } from './species.js';
+import { newPlace } from './state.js';
 
-export const WORLD_W = 420;
+export const PARCEL_W = 420;
+export const PARCEL_H = 1200;
+// Parcelles d'un lieu, dans l'ordre où elles s'ouvrent, et kilomètres à faire sur place pour chacune.
+export const CELLS = [[0, 0], [1, 0], [0, 1], [1, 1], [-1, 0], [-1, 1], [2, 0], [2, 1], [0, 2], [1, 2], [-1, 2], [2, 2]];
+export const CELL_KM = [0, 1, 2.5, 4.5, 7, 10, 14, 19, 25, 32, 40, 50];
+export const cellsOpen = place => Math.min(CELLS.length, place?.cells ?? 1);
+export const cellOrigin = i => [CELLS[i][0] * PARCEL_W, CELLS[i][1] * PARCEL_H];
+const cellOf = p => p.c ?? 0;
 const STAGES = 30;
 const SWAY = { herbe: 0.09, fleur: 0.07, buisson: 0.02, arbre: 0.012 };
 const MIN_Y = { herbe: 60, fleur: 100, buisson: 100, arbre: 220 };
 const POND_PADS = [[40, -10], [58, 10], [-60, 14], [-20, 24], [10, -26]];
 const FLYERS = new Set(['bee', 'butterfly', 'dragonfly', 'hoverfly', 'beefly']);
+// Niveaux de détail selon le zoom : formes simples, aquarelle, aquarelle détaillée.
+const GLYPH_Z = 0.5, DETAIL_Z = 1.6, DETAIL_DENSITY = 2.2;
+const Z_MAX = 3.2;
 
 // Sol de chaque lieu : couleur de fond, grandes nappes, bords, petites pousses.
 const GROUND = {
@@ -22,7 +36,6 @@ const GROUND = {
 	littoral: { base: '#E9DAB4', washes: ['#DCCB9E', '#F0E4C4', '#E4D2A8', '#D2C090'], edge: ['#C8B88A', '#D8C8A0'], sprigs: ['#9DB08A', '#A8B488'], stones: '#C8C0B0', sea: true },
 };
 
-/** Lever et coucher du soleil (heures décimales) par défaut, pour la France. */
 const DEFAULT_SUN = { rise: 7.5, set: 19 };
 
 function ambientAt(h, sun) {
@@ -63,6 +76,9 @@ export function nightAt(h, sun = DEFAULT_SUN) {
 	return 0;
 }
 
+// Part de soleil direct selon la météo : elle règle la netteté des ombres.
+const SUNNY = { clear: 1, clouds: 0.6, overcast: 0.15, fog: 0.05, drizzle: 0.2, rain: 0.1, storm: 0.05, snow: 0.2 };
+
 /** Animaux au sol : triés avec les plantes, pour passer devant ou derrière elles. */
 const onGround = b => (b.behavior === 'walk' || b.behavior === 'trail' || (b.behavior === 'hop' && b.mode !== 'hop') || b.kind === 'heron' || b.kind === 'frog') && !b.p.swim;
 
@@ -75,27 +91,32 @@ export class Garden {
 		this.ctx = canvas.getContext('2d');
 		this.state = state;
 		this.sprites = new Map();
+		this.meta = new Map();
 		this.decorSprites = new Map();
-		this.camY = 0;
-		this.vel = 0;
-		this.followPausedUntil = 0;
+		this.bgs = new Map();
 		this.insects = [];
 		this.particles = [];
 		this.drops = [];
-		this.fireflies = Array.from({ length: 26 }, () => ({ x: Math.random() * WORLD_W, y: Math.random(), ph: Math.random() * 6.28, a: Math.random() * 6.28 }));
+		this.pdata = {};
+		this.fireflies = Array.from({ length: 30 }, () => ({ x: Math.random(), y: Math.random(), ph: Math.random() * 6.28, a: Math.random() * 6.28 }));
 		this.paper = paperTexture(256);
 		this.hourOverride = null;
 		this.sun = DEFAULT_SUN;
+		this.season = null;
+		this.seasonKey = '';
 		this.weather = { kind: 'clear', wind: 10, temp: 15 };
-		this.padTop = 0;
-		this.padBottom = 0;
 		this.t = 0;
 		this.flash = 0;
 		this.popAt = {};
 		this.nextPopulate = 0;
 		this.onTap = null;
+		this.pointers = new Map();
+		this.vel = { x: 0, y: 0 };
+		this.biome = state.place;
+		this.active = 0;
+		this.cam = { cx: PARCEL_W / 2, cy: PARCEL_H * 0.42, z: 1 };
 
-		this.setPlace(state.place);
+		this.ensurePlace(this.biome);
 		this.resize();
 		new ResizeObserver(() => this.resize()).observe(canvas);
 		this.bindInput();
@@ -103,22 +124,69 @@ export class Garden {
 		requestAnimationFrame(this.frame);
 	}
 
-	/** Change de lieu : chaque lieu a son propre jardin. */
-	setPlace(id) {
-		this.placeId = id;
-		this.place = this.state.places[id];
-		this.sprites.clear();
-		this.insects = [];
-		this.particles = [];
-		this.current = null;
-		this.bgDirty = true;
-		if (!this.place.plants.length) this.seedStarterGarden();
-		this.camY = Math.max(this.camMin(), (this.place.worldH - this.viewH()) * 0.35);
-		this.camTarget = null;
-		this.nextPopulate = 0;
+	// ─── Lieu et parcelles ─────────────────────────────────────────
+
+	get place() { return this.state.places[this.biome]; }
+
+	/** Crée le jardin d'un lieu la première fois qu'on y va, avec quelques plantes de départ. */
+	ensurePlace(id) {
+		const place = this.state.places[id];
+		if (place && (place.seeded || place.plants.length)) return false;
+		if (!place) this.state.places[id] = newPlace();
+		this.state.places[id].seeded = true;
+		this.seedStarterGarden(id);
+		return true;
 	}
 
-	// ─── Mise en page ──────────────────────────────────────────────
+	/** Change de lieu : un autre jardin, d'autres espèces. */
+	setPlace(id) {
+		this.ensurePlace(id);
+		this.biome = id;
+		this.active = 0;
+		this.insects = [];
+		this.pdata = {};
+		this.particles = [];
+		this.current = null;
+		this.nextPopulate = 0;
+		this.cam = { cx: PARCEL_W / 2, cy: PARCEL_H * 0.42, z: 1 };
+		this.camTarget = null;
+	}
+
+	openCells() {
+		return Array.from({ length: cellsOpen(this.place) }, (_, i) => i);
+	}
+
+	/** La prochaine parcelle, dans la brume, avec les kilomètres qu'il reste à faire ici pour l'ouvrir. */
+	lockedCells() {
+		const n = cellsOpen(this.place);
+		return n < CELLS.length ? [n] : [];
+	}
+
+	cellAt(wx, wy) {
+		const gx = Math.floor(wx / PARCEL_W), gy = Math.floor(wy / PARCEL_H);
+		return CELLS.findIndex(([x, y]) => x === gx && y === gy);
+	}
+
+	/** Une nouvelle parcelle s'ouvre : quelques herbes et un bouton de fleur pour qu'elle ne soit pas nue. */
+	openCell(i) {
+		const place = this.place;
+		place.cells = Math.max(cellsOpen(place), i + 1);
+		for (let k = 0; k < 5; k++) this.spawn(this.biome, 'herbe', 1, this.place_(this.biome, 'herbe', i), i);
+		this.spawn(this.biome, 'fleur', 0.4, this.place_(this.biome, 'fleur', i), i);
+		const [ox, oy] = cellOrigin(i);
+		this.burst(ox + PARCEL_W / 2, oy + PARCEL_H * 0.4, 30, '#F4C23E');
+	}
+
+	bounds() {
+		let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+		for (const i of [...this.openCells(), ...this.lockedCells()]) {
+			const [ox, oy] = cellOrigin(i);
+			x0 = Math.min(x0, ox); y0 = Math.min(y0, oy); x1 = Math.max(x1, ox + PARCEL_W); y1 = Math.max(y1, oy + PARCEL_H);
+		}
+		return { x0, y0, x1, y1 };
+	}
+
+	// ─── Mise en page et caméra ────────────────────────────────────
 
 	resize() {
 		const cssW = this.canvas.clientWidth, cssH = this.canvas.clientHeight;
@@ -127,13 +195,12 @@ export class Garden {
 		this.canvas.width = Math.round(cssW * dpr);
 		this.canvas.height = Math.round(cssH * dpr);
 		this.dpr = dpr;
-		this.cs = cssW / WORLD_W;
-		const S = this.cs * dpr;
-		if (S !== this.S) {
-			this.S = S;
+		const base = cssW / PARCEL_W;
+		if (base !== this.base) {
+			this.base = base;
 			this.sprites.clear();
 			this.decorSprites.clear();
-			this.bgDirty = true;
+			this.bgs.clear();
 			this.makeClouds();
 			this.makeGlow();
 		}
@@ -141,15 +208,75 @@ export class Garden {
 		this.paperPattern = this.ctx.createPattern(this.paper, 'repeat');
 	}
 
-	/** Hauteurs (px CSS) masquées par le bandeau du haut et la feuille du bas. */
-	setPads(topCss, bottomCss) {
-		this.padTop = topCss / (this.cs || 1);
-		this.padBottom = bottomCss / (this.cs || 1);
+	/** Gardé pour compatibilité : la caméra est libre, les bandeaux ne la bornent plus. */
+	setPads() {}
+
+	/** Densité de pixels d'un sprite au niveau normal (zoom 1). */
+	get density() { return this.base * this.dpr; }
+	get scale() { return this.base * this.dpr * this.cam.z; }
+	get glyph() { return this.cam.z < GLYPH_Z; }
+
+	zMin() {
+		const b = this.bounds();
+		const fit = Math.min(this.canvas.clientWidth / ((b.x1 - b.x0) * this.base), this.canvas.clientHeight / ((b.y1 - b.y0) * this.base));
+		return Math.min(0.9, Math.max(0.12, fit * 0.92));
 	}
 
-	viewH() { return this.canvas.clientHeight / (this.cs || 1); }
-	camMin() { return -this.padTop; }
-	camMax() { return Math.max(this.camMin(), this.place.worldH - this.viewH() + this.padBottom); }
+	/** Rectangle du monde visible à l'écran. */
+	view() {
+		const w = this.canvas.clientWidth / (this.base * this.cam.z), h = this.canvas.clientHeight / (this.base * this.cam.z);
+		return { x0: this.cam.cx - w / 2, y0: this.cam.cy - h / 2, w, h };
+	}
+
+	clampCam() {
+		const b = this.bounds(), v = this.view();
+		const mx = v.w * 0.35, my = v.h * 0.35;
+		this.cam.cx = Math.max(b.x0 - mx + v.w / 2, Math.min(b.x1 + mx - v.w / 2, this.cam.cx));
+		if (b.x1 - b.x0 + 2 * mx < v.w) this.cam.cx = (b.x0 + b.x1) / 2;
+		this.cam.cy = Math.max(b.y0 - my + v.h / 2, Math.min(b.y1 + my - v.h / 2, this.cam.cy));
+		if (b.y1 - b.y0 + 2 * my < v.h) this.cam.cy = (b.y0 + b.y1) / 2;
+	}
+
+	toWorld(sx, sy) {
+		return [this.cam.cx + (sx - this.canvas.clientWidth / 2) / (this.base * this.cam.z), this.cam.cy + (sy - this.canvas.clientHeight / 2) / (this.base * this.cam.z)];
+	}
+
+	/** Zoome de `factor` en gardant fixe le point d'écran (sx, sy). */
+	zoomAt(factor, sx, sy) {
+		const [wx, wy] = this.toWorld(sx, sy);
+		this.cam.z = Math.max(this.zMin(), Math.min(Z_MAX, this.cam.z * factor));
+		const [nx, ny] = this.toWorld(sx, sy);
+		this.cam.cx += wx - nx;
+		this.cam.cy += wy - ny;
+		this.camTarget = null;
+	}
+
+	/** Glisse doucement la caméra vers un point du monde, au zoom donné. */
+	flyTo(cx, cy, z = this.cam.z) {
+		this.camTarget = { cx, cy, z: Math.max(this.zMin(), Math.min(Z_MAX, z)) };
+	}
+
+	flyToCell(i) {
+		const [ox, oy] = cellOrigin(i);
+		this.flyTo(ox + PARCEL_W / 2, oy + PARCEL_H * 0.42, 1);
+	}
+
+	/** Vue d'ensemble des parcelles du lieu, ou retour sur la parcelle regardée. */
+	toggleOverview() {
+		if (this.cam.z >= GLYPH_Z) {
+			const b = this.bounds();
+			this.flyTo((b.x0 + b.x1) / 2, (b.y0 + b.y1) / 2, this.zMin());
+		} else this.flyToCell(this.active);
+	}
+
+	focusOn(wx, wy) {
+		this.flyTo(wx, wy, Math.max(1, this.cam.z));
+	}
+
+	setFollow(on) {
+		this.following = on;
+		if (!on) this.camTarget = null;
+	}
 
 	makeVignette() {
 		const c = document.createElement('canvas');
@@ -164,23 +291,23 @@ export class Garden {
 	}
 
 	makeClouds() {
-		this.clouds = [0, 1, 2].map(i => {
+		this.clouds = [0, 1, 2, 3].map(i => {
 			// Toile large et taches bien au centre : un bord coupé se verrait comme un rectangle.
 			const w = 480, h = 340;
 			const c = document.createElement('canvas');
-			c.width = Math.ceil(w * this.S); c.height = Math.ceil(h * this.S);
+			c.width = Math.ceil(w * this.density); c.height = Math.ceil(h * this.density);
 			const g = c.getContext('2d');
-			g.scale(this.S, this.S);
+			g.scale(this.density, this.density);
 			const r = rng(50 + i);
 			const off = () => Math.max(-1.5, Math.min(1.5, r.gauss()));
 			for (let k = 0; k < 4; k++) wash(g, w / 2 + off() * 40, h / 2 + off() * 20, r.range(60, 90), r.range(40, 60), '#2E4A22', r, { layers: 8, alpha: 0.05, edge: 0, variance: 0.25 });
-			return { canvas: c, w, h, x: i * 420 - 200, y: 150 + i * 380, speed: 6 + i * 2 };
+			return { canvas: c, w, h, x: i * 520, y: i * 430, speed: 6 + i * 2 };
 		});
 	}
 
 	makeGlow() {
 		const c = document.createElement('canvas');
-		const n = Math.ceil(28 * this.S);
+		const n = Math.ceil(28 * this.density);
 		c.width = c.height = n;
 		const g = c.getContext('2d');
 		const grd = g.createRadialGradient(n / 2, n / 2, 0, n / 2, n / 2, n / 2);
@@ -192,156 +319,185 @@ export class Garden {
 		this.glow = c;
 	}
 
-	paintBg() {
-		const S = this.S, H = this.place.worldH, G = GROUND[this.placeId];
-		const c = document.createElement('canvas');
-		c.width = Math.ceil(WORLD_W * S);
-		c.height = Math.ceil(H * S);
+	/** Saison du moment : elle recolore feuillages et sols ; on repeint quand elle change. */
+	setSeason(s) {
+		this.season = s;
+		const key = ['autumn', 'winter', 'spring'].map(k => Math.round((s[k] ?? 0) * 10)).join('-');
+		if (key !== this.seasonKey) {
+			this.seasonKey = key;
+			this.sprites.clear();
+			this.bgs.clear();
+		}
+	}
+
+	groundColor(c) {
+		const s = this.season;
+		if (!s) return c;
+		return mix(mix(c, '#B8A060', (s.autumn ?? 0) * 0.16), '#A8B098', (s.winter ?? 0) * 0.3);
+	}
+
+	/** Fond peint d'une parcelle du lieu, mis en cache à la densité normale. La mer ne borde que la première rangée. */
+	bgFor(ci) {
+		const id = this.biome, key = `${id}:${ci}`;
+		let c = this.bgs.get(key);
+		if (c) return c;
+		const D = this.density, H = PARCEL_H, W = PARCEL_W;
+		const G = { ...GROUND[id], sea: GROUND[id].sea && CELLS[ci][1] === 0 };
+		c = document.createElement('canvas');
+		c.width = Math.ceil(W * D);
+		c.height = Math.ceil(H * D);
 		const g = c.getContext('2d');
-		g.scale(S, S);
-		const r = rng(99);
-		g.fillStyle = G.base;
-		g.fillRect(0, 0, WORLD_W, H);
+		g.scale(D, D);
+		const r = rng(99 + id.length + ci * 131);
+		const tone = col => this.groundColor(col);
+		g.fillStyle = tone(G.base);
+		g.fillRect(0, 0, W, H);
 		const n = Math.round((H / 1000) * 50);
 		for (let i = 0; i < n; i++) {
-			wash(g, r.range(-50, WORLD_W + 50), r.range(-50, H + 50), r.range(70, 200), r.range(50, 150), r.pick(G.washes), r, { layers: 8, alpha: 0.06, edge: 0, variance: 0.25 });
+			wash(g, r.range(-50, W + 50), r.range(-50, H + 50), r.range(70, 200), r.range(50, 150), tone(r.pick(G.washes)), r, { layers: 8, alpha: 0.06, edge: 0, variance: 0.25 });
 		}
-		for (let y = 0; y < H; y += 120) {
-			for (const x of [-30, WORLD_W + 30]) wash(g, x, y + r.gauss() * 40, r.range(60, 110), r.range(70, 120), r.pick(G.edge), r, { layers: 8, alpha: 0.06, edge: 0 });
-		}
-		if (G.sun) for (let i = 0; i < Math.round(H / 140); i++) wash(g, r.range(20, WORLD_W - 20), r.range(20, H), r.range(30, 60), r.range(18, 34), G.sun, r, { layers: 5, alpha: 0.035, edge: 0 });
-		if (G.rocks) for (let i = 0; i < Math.round(H / 90); i++) { const s = r.range(6, 16); wash(g, r.range(10, WORLD_W - 10), r.range(20, H), s, s * 0.6, r.pick(['#A8A498', '#BCB8AC', '#9A968A']), r, { layers: 7, alpha: 0.16, edge: 0.4 }); }
+		if (G.sun) for (let i = 0; i < Math.round(H / 140); i++) wash(g, r.range(20, W - 20), r.range(20, H), r.range(30, 60), r.range(18, 34), G.sun, r, { layers: 5, alpha: 0.035, edge: 0 });
+		if (G.rocks) for (let i = 0; i < Math.round(H / 90); i++) { const s = r.range(6, 16); wash(g, r.range(10, W - 10), r.range(20, H), s, s * 0.6, r.pick(['#A8A498', '#BCB8AC', '#9A968A']), r, { layers: 7, alpha: 0.16, edge: 0.4 }); }
 		const sprigs = Math.round((H / 1000) * (G.sea ? 90 : 260));
 		for (let i = 0; i < sprigs; i++) {
-			const x = r.range(10, WORLD_W - 10), y = r.range(G.sea ? 260 : 10, H - 10), s = r.range(0.6, 1.25);
-			const col = r.pick(G.sprigs);
+			const x = r.range(10, W - 10), y = r.range(G.sea ? 260 : 10, H - 10), s = r.range(0.6, 1.25);
+			const col = tone(r.pick(G.sprigs));
 			leaf(g, x, y, 6 * s, 2.4 * s, -Math.PI / 2 - 0.6, col, r, 0.55);
 			leaf(g, x, y, 6 * s, 2.4 * s, -Math.PI / 2 + 0.6, col, r, 0.55);
 			if (r() < 0.3) leaf(g, x, y, 7 * s, 2 * s, -Math.PI / 2, col, r, 0.55);
 		}
-		if (G.leaves) for (let i = 0; i < Math.round(H / 6); i++) leaf(g, r.range(5, WORLD_W - 5), r.range(5, H), r.range(4, 7), r.range(1.6, 2.6), r() * 6.28, r.pick(G.leaves), r, 0.5);
+		// Feuilles mortes au sol : toujours en forêt, partout en automne.
+		const fallen = (G.leaves ? H / 6 : 0) + (this.season?.autumn ?? 0) * H / 9;
+		for (let i = 0; i < Math.round(fallen); i++) leaf(g, r.range(5, W - 5), r.range(G.sea ? 260 : 5, H), r.range(4, 7), r.range(1.6, 2.6), r() * 6.28, r.pick(G.leaves ?? ['#C8742E', '#E09A3A', '#B85A2A', '#D8B048']), r, 0.5);
 		for (let i = 0; i < Math.round((H / 1000) * 18); i++) {
-			wash(g, r.range(20, WORLD_W - 20), r.range(20, H - 20), r.range(3, 6), r.range(2, 4), G.stones, r, { layers: 5, alpha: 0.25, edge: 0.3 });
+			wash(g, r.range(20, W - 20), r.range(20, H - 20), r.range(3, 6), r.range(2, 4), G.stones, r, { layers: 5, alpha: 0.25, edge: 0.3 });
 		}
 		if (G.sea) {
-			// La mer en haut du monde, puis le sable mouillé et l'écume.
-			for (let i = 0; i < 14; i++) wash(g, r.range(-40, WORLD_W + 40), r.range(-30, 110), r.range(90, 160), r.range(40, 70), r.pick(['#6FAEC0', '#8FC4CC', '#5FA0B8']), r, { layers: 8, alpha: 0.1, edge: 0 });
+			// La mer en haut de la parcelle, puis le sable mouillé et l'écume.
+			for (let i = 0; i < 14; i++) wash(g, r.range(-40, W + 40), r.range(-30, 110), r.range(90, 160), r.range(40, 70), r.pick(['#6FAEC0', '#8FC4CC', '#5FA0B8']), r, { layers: 8, alpha: 0.1, edge: 0 });
 			g.fillStyle = 'rgba(111,174,192,0.55)';
-			g.fillRect(0, -10, WORLD_W, 120);
-			for (let i = 0; i < 10; i++) wash(g, r.range(0, WORLD_W), r.range(150, 190), r.range(60, 110), r.range(10, 18), '#CFC09A', r, { layers: 6, alpha: 0.1, edge: 0 });
-			for (const y of [120, 138, 156]) ribbon(g, curve(-10, y + r.gauss() * 4, r.gauss() * 0.04, WORLD_W + 20, r.gauss() * 0.08, 20), 2.4, 1.6, '#FDFBF3', r, 0.6);
+			g.fillRect(0, -10, W, 120);
+			for (let i = 0; i < 10; i++) wash(g, r.range(0, W), r.range(150, 190), r.range(60, 110), r.range(10, 18), '#CFC09A', r, { layers: 6, alpha: 0.1, edge: 0 });
+			for (const y of [120, 138, 156]) ribbon(g, curve(-10, y + r.gauss() * 4, r.gauss() * 0.04, W + 20, r.gauss() * 0.08, 20), 2.4, 1.6, '#FDFBF3', r, 0.6);
 		}
-		this.bg = c;
-		this.bgDirty = false;
+		this.bgs.set(key, c);
+		return c;
 	}
 
 	// ─── Plantes ───────────────────────────────────────────────────
 
 	/** Un premier jardin composé à la main pour chaque lieu, pour ne pas arriver sur un terrain vide. */
-	seedStarterGarden() {
+	seedStarterGarden(pid) {
 		const starters = {
 			prairie: { herbe: [[70, 470], [115, 520], [300, 420], [345, 560], [210, 640], [80, 690], [265, 740], [190, 500]], fleur: [[140, 440, 1], [172, 470, 1], [120, 480, 0.3]], arbre: [[310, 330, 0.08]] },
 			marais: { herbe: [[50, 330], [370, 340], [40, 770], [380, 700], [300, 820], [140, 820]], fleur: [[330, 370, 1], [80, 740, 1], [360, 760, 0.3]] },
 			foret: { herbe: [[70, 420], [340, 460], [200, 620], [90, 700], [330, 700]], fleur: [[120, 470, 1], [150, 500, 1], [300, 520, 0.3]], arbre: [[260, 300, 0.08]] },
 			montagne: { herbe: [[80, 480], [140, 540], [300, 470], [360, 600], [220, 660]], fleur: [[200, 520, 1], [230, 545, 1]], arbre: [[90, 330, 0.08]] },
 			littoral: { herbe: [[60, 420], [120, 470], [300, 450], [360, 520], [200, 560], [80, 640]], fleur: [[240, 480, 1], [150, 600, 0.3]], arbre: [[330, 760, 0.08]] },
-		}[this.placeId];
-		for (const [type, list] of Object.entries(starters)) for (const [x, y, g = 1] of list) this.spawn(type, g, { x, y });
+		}[pid];
+		for (const [type, list] of Object.entries(starters)) for (const [x, y, g = 1] of list) this.spawn(pid, type, g, { x, y });
 	}
 
-	minY(type) {
-		return MIN_Y[type] + (this.placeId === 'littoral' ? 240 : 0);
+	minY(pid, type, ci = 0) {
+		return MIN_Y[type] + (pid === 'littoral' && CELLS[ci][1] === 0 ? 240 : 0);
 	}
 
-	place_(type) {
+	/** Trouve une place libre dans une parcelle ; si elle est pleine, on serre un peu les plantes. */
+	place_(pid, type, ci = 0) {
+		const place = this.state.places[pid];
 		const sp = PLANT_TYPES[type].spacing;
+		const here = place.plants.filter(p => cellOf(p) === ci);
 		const obstacles = [
-			...this.place.plants.map(p => ({ x: p.x, y: p.y, rad: PLANT_TYPES[p.type].spacing })),
-			...Object.values(DECOR).filter(d => d.place === this.placeId && d.rad).map(d => ({ x: d.x, y: d.y, rad: d.rad })),
+			...here.map(p => ({ x: p.x, y: p.y, rad: PLANT_TYPES[p.type].spacing })),
+			...(ci === 0 ? Object.values(DECOR).filter(d => d.place === pid && d.rad).map(d => ({ x: d.x, y: d.y, rad: d.rad })) : []),
 		];
-		const same = this.place.plants.filter(p => p.type === type);
-		let best = null;
-		for (let attempt = 0; attempt < 6; attempt++) {
-			const H = this.place.worldH, y0 = this.minY(type);
-			let bestScore = -Infinity;
-			for (let i = 0; i < 60; i++) {
-				let x, y, near = false;
-				if (same.length && (type === 'herbe' || type === 'fleur') && Math.random() < 0.6) {
-					const o = pick(same);
-					const a = Math.random() * Math.PI * 2, d = sp * 2 + Math.random() * sp * 2.5;
-					x = o.x + Math.cos(a) * d;
-					y = o.y + Math.sin(a) * d;
-					near = true;
-				} else {
-					x = 40 + Math.random() * (WORLD_W - 80);
-					y = y0 + Math.random() * (H - y0 - 40);
-				}
-				if (x < 30 || x > WORLD_W - 30 || y < y0 || y > H - 30) continue;
-				let gap = Infinity;
-				for (const o of obstacles) gap = Math.min(gap, Math.hypot(o.x - x, (o.y - y) * 1.25) - o.rad - sp);
-				// Les petites plantes se regroupent en touffes ; les arbres cherchent de l'espace.
-				const score = (gap >= 0 ? 1000 : gap) + (near ? 30 : 0) + (type === 'arbre' || type === 'buisson' ? Math.min(gap, 40) : 0) + Math.random() * 20;
-				if (score > bestScore) { bestScore = score; best = { x, y }; }
+		const same = here.filter(p => p.type === type);
+		const y0 = this.minY(pid, type, ci), H = PARCEL_H;
+		let best = { x: PARCEL_W / 2, y: (y0 + H) / 2 }, bestScore = -Infinity;
+		for (let i = 0; i < 90; i++) {
+			let x, y, near = false;
+			if (same.length && (type === 'herbe' || type === 'fleur') && Math.random() < 0.6) {
+				const o = pick(same);
+				const a = Math.random() * Math.PI * 2, d = sp * 2 + Math.random() * sp * 2.5;
+				x = o.x + Math.cos(a) * d;
+				y = o.y + Math.sin(a) * d;
+				near = true;
+			} else {
+				x = 40 + Math.random() * (PARCEL_W - 80);
+				y = y0 + Math.random() * (H - y0 - 40);
 			}
-			if (bestScore >= 1000) return best;
-			// Plus de place : le jardin s'agrandit vers le bas.
-			this.place.worldH += 300;
-			this.bgDirty = true;
+			if (x < 30 || x > PARCEL_W - 30 || y < y0 || y > H - 30) continue;
+			let gap = Infinity;
+			for (const o of obstacles) gap = Math.min(gap, Math.hypot(o.x - x, (o.y - y) * 1.25) - o.rad - sp);
+			// Les petites plantes se regroupent en touffes ; les arbres cherchent de l'espace.
+			const score = (gap >= 0 ? 1000 : gap) + (near ? 30 : 0) + (type === 'arbre' || type === 'buisson' ? Math.min(gap, 40) : 0) + Math.random() * 20;
+			if (score > bestScore) { bestScore = score; best = { x, y }; }
 		}
 		return best;
 	}
 
-	spawn(type, growth = 0, pos = this.place_(type)) {
+	spawn(pid, type, growth = 0, pos = this.place_(pid, type), ci = 0) {
 		const p = {
-			id: uid(), type, x: Math.round(pos.x), y: Math.round(pos.y), growth,
-			seed: Math.floor(Math.random() * 2147483647), variant: newVariant(type, this.placeId, this.state.species), born: Date.now(),
+			id: uid(), type, x: Math.round(pos.x), y: Math.round(pos.y), growth, ...(ci ? { c: ci } : {}),
+			seed: Math.floor(Math.random() * 2147483647), variant: newVariant(type, pid, this.state.species), born: Date.now(),
 		};
-		this.place.plants.push(p);
+		this.state.places[pid].plants.push(p);
 		return p;
 	}
 
-	/** Ajoute de l'effort à la plante en cours de ce type ; plante une graine si besoin. Renvoie les évènements. */
-	addEffort(type, amount) {
+	/** Ajoute de l'effort à la plante en cours de ce type dans un lieu ; plante une graine si besoin,
+	 *  dans la parcelle regardée (ou, pour un autre lieu, dans une de ses parcelles au hasard). */
+	addEffort(type, amount, pid = this.biome, follow = true) {
+		this.ensurePlace(pid);
+		const place = this.state.places[pid];
 		const events = [];
 		const cost = PLANT_TYPES[type].cost;
-		let p = this.place.plants.find(q => q.type === type && q.growth < 1);
+		let p = place.plants.find(q => q.type === type && q.growth < 1);
 		while (amount > 1e-6) {
-			if (!p) { p = this.spawn(type); events.push({ kind: 'seed', plant: p }); }
+			if (!p) {
+				const ci = pid === this.biome ? this.active : Math.floor(Math.random() * cellsOpen(place));
+				p = this.spawn(pid, type, 0, this.place_(pid, type, ci), ci);
+				events.push({ kind: 'seed', plant: p, pid });
+			}
 			const used = Math.min((1 - p.growth) * cost, amount);
 			p.growth = Math.min(1, p.growth + used / cost);
 			amount -= used;
-			if (p.growth >= 1) { events.push({ kind: 'mature', plant: p }); this.current = p; p = null; }
-			else this.current = p;
+			if (follow) this.current = p;
+			if (p.growth >= 1) { events.push({ kind: 'mature', plant: p, pid }); p = null; }
 		}
 		return events;
 	}
 
-	/** Fait pousser un lieu, affiché ou non, sans toucher à la plante suivie à l'écran. */
-	growIn(placeId, type, amount) {
-		const keep = { place: this.place, placeId: this.placeId, current: this.current, bgDirty: this.bgDirty };
-		this.place = this.state.places[placeId];
-		this.placeId = placeId;
-		const events = this.addEffort(type, amount);
-		Object.assign(this, keep, { bgDirty: keep.bgDirty || (placeId === keep.placeId && this.bgDirty) });
-		return events;
+	/** Fait pousser un lieu, affiché ou non, sans déplacer la plante suivie à l'écran. */
+	growIn(pid, type, amount) {
+		return this.addEffort(type, amount, pid, false);
 	}
 
-	spriteFor(p) {
+	/** Sprite d'une plante au niveau de détail demandé (normal ou détaillé), repeint quand elle change de stade. */
+	spriteFor(p, detail) {
 		const stage = p.growth >= 1 ? STAGES : Math.floor(p.growth * STAGES);
-		let s = this.sprites.get(p.id);
+		const key = detail ? `${p.id}:d` : p.id;
+		let s = this.sprites.get(key);
 		if (!s || s.stage !== stage) {
 			const box = PLANT_TYPES[p.type].box;
+			const D = this.density * (detail ? DETAIL_DENSITY : 1);
 			const c = s?.canvas ?? document.createElement('canvas');
-			c.width = Math.ceil(box.w * this.S);
-			c.height = Math.ceil(box.h * this.S);
+			c.width = Math.ceil(box.w * D);
+			c.height = Math.ceil(box.h * D);
 			const g = c.getContext('2d');
-			g.setTransform(this.S, 0, 0, this.S, box.ax * this.S, box.ay * this.S);
-			const meta = paintPlant(g, p, stage / STAGES);
-			const grew = s && s.stage < stage;
-			s = { stage, canvas: c, top: meta.top, pop: grew ? this.t : (s?.pop ?? -9) };
-			this.sprites.set(p.id, s);
-			if (grew) this.burst(p.x, p.y + meta.top, stage === STAGES ? 18 : 5);
+			g.setTransform(D, 0, 0, D, box.ax * D, box.ay * D);
+			const meta = paintPlant(g, p, stage / STAGES, { detail, season: this.season });
+			const old = this.meta.get(p.id);
+			const grew = !detail && old && old.stage < stage;
+			s = { stage, canvas: c, pop: grew ? this.t : (s?.pop ?? -9) };
+			this.sprites.set(key, s);
+			if (!detail) this.meta.set(p.id, { stage, top: meta.top, r: meta.r ?? 8, pop: s.pop });
+			if (grew) {
+				const [ox, oy] = cellOrigin(cellOf(p));
+				this.burst(ox + p.x, oy + p.y + meta.top, stage === STAGES ? 18 : 5);
+			}
 		}
+		s.used = this.t;
 		return s;
 	}
 
@@ -349,11 +505,12 @@ export class Garden {
 		let s = this.decorSprites.get(key);
 		if (!s) {
 			const box = DECOR[key].box;
+			const D = this.density;
 			const c = document.createElement('canvas');
-			c.width = Math.ceil(box.w * this.S);
-			c.height = Math.ceil(box.h * this.S);
+			c.width = Math.ceil(box.w * D);
+			c.height = Math.ceil(box.h * D);
 			const g = c.getContext('2d');
-			g.setTransform(this.S, 0, 0, this.S, box.ax * this.S, box.ay * this.S);
+			g.setTransform(D, 0, 0, D, box.ax * D, box.ay * D);
 			const meta = DECOR_PAINTERS[key](g);
 			s = { canvas: c, top: meta.top };
 			this.decorSprites.set(key, s);
@@ -362,25 +519,17 @@ export class Garden {
 	}
 
 	decorVisible(key) {
-		const d = DECOR[key];
-		return d.place === this.placeId && (d.always || !!this.place.unlocked[key]);
+		const d = DECOR[key], place = this.state.places[d.place];
+		return d.place === this.biome && !!place && (d.always || !!place.unlocked[key]);
 	}
 
 	/** Montre un décor qui vient d'apparaître. */
 	reveal(key) {
 		const d = DECOR[key];
+		if (d.place !== this.biome) return;
 		this.popAt[key] = this.t;
 		this.burst(d.x, d.y - 20, 24, '#F4C23E');
-		this.focusOn(d.y);
-	}
-
-	focusOn(worldY) {
-		this.camTarget = worldY - this.viewH() * 0.5;
-	}
-
-	setFollow(on) {
-		this.following = on;
-		if (!on) this.camTarget = null;
+		this.focusOn(d.x, d.y);
 	}
 
 	burst(x, y, n, color) {
@@ -394,14 +543,18 @@ export class Garden {
 		}
 	}
 
+	/** Position de la tête d'une plante, en coordonnées du monde. */
 	headOf(p) {
-		const s = this.sprites.get(p.id);
-		return s ? [p.x, p.y + s.top] : [p.x, p.y - 20];
+		const [ox, oy] = cellOrigin(cellOf(p));
+		const m = this.meta.get(p.id);
+		return [ox + p.x, oy + p.y + (m ? m.top : -20)];
 	}
 
-	/** Point d'eau du lieu (mare, grande mare, mer), s'il y en a un. */
-	water() {
-		if (this.placeId === 'littoral') return { x: WORLD_W / 2, y: 70, rx: 200, ry: 50, scale: 3 };
+	/** Point d'eau d'une parcelle (mare, grande mare, mer), en coordonnées du monde. */
+	water(ci) {
+		const [ox, oy] = cellOrigin(ci);
+		if (this.biome === 'littoral') return CELLS[ci][1] === 0 ? { x: ox + PARCEL_W / 2, y: oy + 70, rx: 200, ry: 50, scale: 3 } : null;
+		if (ci !== 0) return null;
 		for (const [k, d] of Object.entries(DECOR)) if (d.water && this.decorVisible(k)) return { x: d.x, y: d.y, rx: 95 * (d.scale ?? 1), ry: 48 * (d.scale ?? 1), scale: d.scale ?? 1 };
 		return null;
 	}
@@ -428,67 +581,106 @@ export class Garden {
 		return k === 'rain' ? 1 : k === 'storm' ? 1.5 : k === 'drizzle' ? 0.45 : k === 'snow' ? 1 : 0;
 	}
 
-	// ─── Entrées (glisser pour parcourir, toucher une plante) ───────
+	// ─── Entrées : glisser, pincer, molette, double toucher, toucher ──
 
 	bindInput() {
 		const c = this.canvas;
-		let start = null;
+		let drag = null, pinch = null, lastTap = 0;
+		const local = e => { const r = c.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
 		c.addEventListener('pointerdown', e => {
 			c.setPointerCapture(e.pointerId);
-			const now = performance.now();
-			start = { x: e.clientX, y: e.clientY, cam: this.camY, lastY: e.clientY, lastT: now, moved: false };
-			this.vel = 0;
-			this.dragging = true;
+			this.pointers.set(e.pointerId, local(e));
 			this.camTarget = null;
-			this.followPausedUntil = now + 5000;
+			this.followPausedUntil = performance.now() + 6000;
+			this.vel = { x: 0, y: 0 };
+			if (this.pointers.size === 2) {
+				const [a, b] = [...this.pointers.values()];
+				pinch = { dist: Math.hypot(a[0] - b[0], a[1] - b[1]), z: this.cam.z, mid: [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2] };
+				pinch.world = this.toWorld(...pinch.mid);
+				drag = null;
+				this.onPeek?.(true);
+			} else {
+				const [x, y] = local(e);
+				drag = { x, y, lx: x, ly: y, lt: performance.now(), moved: false };
+			}
 		});
 		c.addEventListener('pointermove', e => {
-			if (!start) return;
-			const now = performance.now();
-			if (!start.moved && Math.hypot(e.clientX - start.x, e.clientY - start.y) > 6) {
-				start.moved = true;
+			if (!this.pointers.has(e.pointerId)) return;
+			this.pointers.set(e.pointerId, local(e));
+			if (pinch && this.pointers.size >= 2) {
+				const [a, b] = [...this.pointers.values()];
+				const dist = Math.hypot(a[0] - b[0], a[1] - b[1]);
+				const mid = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+				this.cam.z = Math.max(this.zMin(), Math.min(Z_MAX, pinch.z * dist / pinch.dist));
+				const k = this.base * this.cam.z;
+				this.cam.cx = pinch.world[0] - (mid[0] - this.canvas.clientWidth / 2) / k;
+				this.cam.cy = pinch.world[1] - (mid[1] - this.canvas.clientHeight / 2) / k;
+				return;
+			}
+			if (!drag) return;
+			const [x, y] = local(e);
+			if (!drag.moved && Math.hypot(x - drag.x, y - drag.y) > 6) {
+				drag.moved = true;
+				this.dragging = true;
 				this.onPeek?.(true);
 			}
-			this.camY = start.cam - (e.clientY - start.y) / this.cs;
-			const dt = Math.max(1, now - start.lastT) / 1000;
-			this.vel = (-(e.clientY - start.lastY) / this.cs) / dt;
-			start.lastY = e.clientY;
-			start.lastT = now;
+			if (!drag.moved) return;
+			const k = this.base * this.cam.z, now = performance.now();
+			this.cam.cx -= (x - drag.lx) / k;
+			this.cam.cy -= (y - drag.ly) / k;
+			const dt = Math.max(1, now - drag.lt) / 1000;
+			this.vel = { x: -(x - drag.lx) / k / dt, y: -(y - drag.ly) / k / dt };
+			drag.lx = x; drag.ly = y; drag.lt = now;
 		});
 		const end = e => {
-			if (!start) return;
-			if (!start.moved) { this.vel = 0; this.onTap?.(this.pick(e)); }
-			else this.onPeek?.(false);
-			if (performance.now() - start.lastT > 80) this.vel = 0;
-			start = null;
+			this.pointers.delete(e.pointerId);
+			if (pinch) {
+				if (this.pointers.size < 2) { pinch = null; this.onPeek?.(false); this.vel = { x: 0, y: 0 }; }
+				return;
+			}
+			if (!drag) return;
+			const [x, y] = local(e);
+			if (!drag.moved) {
+				const now = performance.now();
+				// Double toucher : zoomer d'un cran (ou revenir au zoom normal de très près).
+				if (now - lastTap < 300) { this.zoomAt(this.cam.z > 2.4 ? 1 / this.cam.z : 2, x, y); lastTap = 0; }
+				else { lastTap = now; this.onTap?.(this.pick(x, y)); }
+				this.vel = { x: 0, y: 0 };
+			} else {
+				this.onPeek?.(false);
+				if (performance.now() - drag.lt > 80) this.vel = { x: 0, y: 0 };
+			}
+			drag = null;
 			this.dragging = false;
-			this.followPausedUntil = performance.now() + 5000;
 		};
 		c.addEventListener('pointerup', end);
 		c.addEventListener('pointercancel', end);
 		c.addEventListener('wheel', e => {
 			e.preventDefault();
-			this.camTarget = null;
-			this.camY += e.deltaY / this.cs * 0.6;
-			this.followPausedUntil = performance.now() + 5000;
+			const [x, y] = local(e);
+			this.zoomAt(Math.exp(-e.deltaY * 0.0015), x, y);
+			this.followPausedUntil = performance.now() + 6000;
 		}, { passive: false });
 	}
 
-	pick(e) {
-		const rect = this.canvas.getBoundingClientRect();
-		const wx = (e.clientX - rect.left) / this.cs;
-		const wy = (e.clientY - rect.top) / this.cs + this.camY;
+	/** Ce qui se trouve sous le doigt : un animal, une plante, ou une parcelle (fermée, ou en vue d'ensemble). */
+	pick(sx, sy) {
+		const [wx, wy] = this.toWorld(sx, sy);
+		const ci = this.cellAt(wx, wy);
+		const open = ci >= 0 && ci < cellsOpen(this.place);
+		if (ci >= 0 && (this.glyph || !open)) return { cell: ci, open, x: sx, y: sy };
+		if (this.glyph) return null;
 		const critter = this.critterAt(wx, wy);
-		if (critter) return { critter, x: e.clientX - rect.left, y: e.clientY - rect.top };
-		const sorted = [...this.place.plants].sort((a, b) => b.y - a.y);
-		for (const p of sorted) {
+		if (critter) return { critter, x: sx, y: sy };
+		if (!open) return null;
+		const [ox, oy] = cellOrigin(ci);
+		const lx = wx - ox, ly = wy - oy;
+		for (const p of this.place.plants.filter(q => cellOf(q) === ci).sort((a, b) => b.y - a.y)) {
 			const box = PLANT_TYPES[p.type].box;
-			const s = this.sprites.get(p.id);
-			const top = s ? s.top : -20;
+			const m = this.meta.get(p.id);
+			const top = m ? m.top : -20;
 			const half = Math.max(14, (box.w / 2) * (p.type === 'arbre' || p.type === 'buisson' ? 0.6 : 0.4));
-			if (wx > p.x - half && wx < p.x + half && wy > p.y + top - 6 && wy < p.y + 10) {
-				return { plant: p, x: e.clientX - rect.left, y: e.clientY - rect.top };
-			}
+			if (lx > p.x - half && lx < p.x + half && ly > p.y + top - 6 && ly < p.y + 10) return { plant: p, x: sx, y: sy };
 		}
 		return null;
 	}
@@ -499,7 +691,7 @@ export class Garden {
 		const dt = Math.min(0.05, (now - this.last) / 1000);
 		this.last = now;
 		this.t += dt;
-		if (this.S) {
+		if (this.base) {
 			this.update(dt, now);
 			this.render();
 		}
@@ -507,22 +699,29 @@ export class Garden {
 	};
 
 	update(dt, now) {
-		if (this.following && this.current && now > this.followPausedUntil && !this.dragging) {
-			this.camTarget = this.current.y - this.viewH() * 0.55;
+		if (this.following && this.current && now > (this.followPausedUntil ?? 0) && !this.dragging && this.pointers.size === 0) {
+			const [hx, hy] = this.headOf(this.current);
+			this.camTarget = { cx: hx, cy: hy + 40, z: Math.max(1, this.cam.z) };
 		}
-		if (!this.dragging) {
-			if (this.camTarget != null) {
-				const target = Math.max(this.camMin(), Math.min(this.camMax(), this.camTarget));
-				this.camY += (target - this.camY) * Math.min(1, dt * 2.5);
-				if (Math.abs(target - this.camY) < 0.5 && !this.following) this.camTarget = null;
+		if (!this.dragging && this.pointers.size === 0) {
+			if (this.camTarget) {
+				const k = Math.min(1, dt * 3);
+				this.cam.cx += (this.camTarget.cx - this.cam.cx) * k;
+				this.cam.cy += (this.camTarget.cy - this.cam.cy) * k;
+				this.cam.z += (this.camTarget.z - this.cam.z) * k;
+				if (Math.abs(this.camTarget.cx - this.cam.cx) + Math.abs(this.camTarget.cy - this.cam.cy) < 0.5 && Math.abs(this.camTarget.z - this.cam.z) < 0.005 && !this.following) this.camTarget = null;
 			} else {
-				this.camY += this.vel * dt;
-				this.vel *= Math.pow(0.03, dt);
+				this.cam.cx += this.vel.x * dt;
+				this.cam.cy += this.vel.y * dt;
+				const f = Math.pow(0.03, dt);
+				this.vel.x *= f; this.vel.y *= f;
 			}
-			const lo = this.camMin(), hi = this.camMax();
-			if (this.camY < lo) { this.camY += (lo - this.camY) * Math.min(1, dt * 10); this.vel = 0; }
-			if (this.camY > hi) { this.camY += (hi - this.camY) * Math.min(1, dt * 10); this.vel = 0; }
+			this.clampCam();
 		}
+
+		// La parcelle regardée est celle où germent les nouvelles graines.
+		const ci = this.cellAt(this.cam.cx, this.cam.cy);
+		if (ci >= 0 && ci < cellsOpen(this.place)) this.active = ci;
 
 		if (this.t > this.nextPopulate) { this.populate(); this.nextPopulate = this.t + 1; }
 		for (const i of this.insects) this.updateInsect(i, dt);
@@ -533,48 +732,75 @@ export class Garden {
 		this.particles = this.particles.filter(p => p.life > 0);
 		for (const f of this.fireflies) {
 			f.a += (Math.random() - 0.5) * dt * 3;
-			f.x += Math.cos(f.a) * 12 * dt;
-			f.y += (Math.sin(f.a) * 12 * dt) / Math.max(1, this.viewH());
-			if (f.x < 0 || f.x > WORLD_W) f.a = Math.PI - f.a;
+			f.x += Math.cos(f.a) * 0.03 * dt;
+			f.y += Math.sin(f.a) * 0.02 * dt;
+			if (f.x < 0 || f.x > 1) f.a = Math.PI - f.a;
 			if (f.y < 0 || f.y > 1) f.y = Math.random();
 		}
 		this.updateWeather(dt);
+		// Les sprites détaillés hors de vue depuis un moment libèrent leur mémoire.
+		if (this.sprites.size > 400) for (const [k, s] of this.sprites) if (this.t - (s.used ?? 0) > 20) this.sprites.delete(k);
 	}
 
-	/** Animaux présents : ceux du lieu déjà découverts, chacun à son heure et selon la météo. */
+	/** Parcelles (ouvertes, par défaut) au moins en partie à l'écran. */
+	visibleCells(margin = 80, list = this.openCells()) {
+		const v = this.view();
+		return list.filter(i => {
+			const [ox, oy] = cellOrigin(i);
+			return ox < v.x0 + v.w + margin && ox + PARCEL_W > v.x0 - margin && oy < v.y0 + v.h + margin && oy + PARCEL_H > v.y0 - margin;
+		});
+	}
+
+	/** Animaux présents : ceux des parcelles visibles déjà découverts, chacun à son heure et selon la météo. */
 	populate() {
 		const n = this.night();
 		if (n > 0.5) this.state.seenNight = true;
 		const night = n > 0.5, dusk = n > 0.2;
 		const wet = this.precip() > 0;
 		if (wet && this.weather.kind !== 'snow') this.state.seenRain = true;
-		const mature = this.place.plants.filter(p => p.growth >= 1);
-		this.flowers = mature.filter(p => p.type === 'fleur');
-		this.bushes = mature.filter(p => p.type === 'buisson');
-		this.trees = mature.filter(p => p.type === 'arbre');
-		this.perches = [...this.bushes, ...this.trees];
+		const visible = this.glyph ? [] : this.visibleCells(200);
+		for (const b of this.insects) if (!visible.includes(b.ci)) b.gone = true;
+		this.pdata = {};
 		const ok = when => when === 'always' || (when === 'day' && !night) || (when === 'night' && night) || (when === 'dusk' && dusk) || (when === 'wet' && (wet || night));
+		const place = this.place;
+		for (const ci of visible) {
+			const [ox, oy] = cellOrigin(ci);
+			const mature = place.plants.filter(p => p.growth >= 1 && cellOf(p) === ci);
+			const P = this.pdata[ci] = {
+				ci, ox, oy,
+				flowers: mature.filter(p => p.type === 'fleur'),
+				bushes: mature.filter(p => p.type === 'buisson'),
+				trees: mature.filter(p => p.type === 'arbre'),
+				herbs: mature.filter(p => p.type === 'herbe'),
+			};
+			P.perches = [...P.bushes, ...P.trees];
+		}
+		if (!visible.length) return;
+		// Un effectif par espèce pour tout le lieu ; chaque animal s'installe dans une parcelle visible qui lui convient.
+		const scale = Math.min(2, 1 + (visible.length - 1) * 0.35);
 		for (const sp of SPECIES) {
-			if (sp.kind !== 'animal' || sp.place !== this.placeId || !sp.critter.behavior) continue;
+			if (sp.kind !== 'animal' || sp.place !== this.biome || !sp.critter.behavior) continue;
 			const c = sp.critter;
-			let want = this.state.species[sp.id] && ok(c.when) ? c.count(this.state) + (this.idleBonus?.(sp) ?? 0) : 0;
+			let want = this.state.species[sp.id] && ok(c.when) ? Math.round((c.count(this.state) + (this.idleBonus?.(sp) ?? 0)) * scale) : 0;
 			// Sous la pluie ou la neige, les insectes volants se mettent à l'abri.
 			if (wet && FLYERS.has(c.kind)) want = 0;
 			const active = this.insects.filter(i => i.sp === sp.id && !i.leaving);
 			for (let k = active.length; k < want; k++) {
-				const b = this.newCritter(sp);
+				let b = null;
+				for (const ci of [...visible].sort(() => Math.random() - 0.5)) if ((b = this.newCritter(sp, this.pdata[ci]))) break;
 				if (b) this.insects.push(b);
 			}
 			for (let k = active.length; k > want; k--) active[k - 1].leaving = true;
 		}
 	}
 
-	newCritter(sp) {
+	newCritter(sp, P) {
 		const c = sp.critter;
-		const side = Math.random() < 0.5 ? -30 : WORLD_W + 30;
-		const y = this.camY + this.viewH() * (0.2 + Math.random() * 0.6);
-		const base = { sp: sp.id, kind: c.kind, p: c, behavior: c.behavior, t: Math.random() * 10, dir: 1, timer: 2 + Math.random() * 4 };
-		const w = this.water();
+		const v = this.view();
+		const side = Math.random() < 0.5 ? P.ox - 30 : P.ox + PARCEL_W + 30;
+		const y = Math.max(P.oy, Math.min(P.oy + PARCEL_H, v.y0 + v.h * (0.2 + Math.random() * 0.6)));
+		const base = { sp: sp.id, ci: P.ci, kind: c.kind, p: c, behavior: c.behavior, t: Math.random() * 10, dir: 1, timer: 2 + Math.random() * 4 };
+		const w = this.water(P.ci);
 		switch (c.behavior) {
 			case 'water':
 				return w && { ...base, x: w.x, y: w.y - 40, mode: 'hover', timer: 1 };
@@ -586,34 +812,34 @@ export class Garden {
 			}
 			case 'pinned': {
 				if (c.on === 'buisson') {
-					const target = pick(this.bushes ?? []);
-					// Les bêtes volantes arrivent de l'extérieur du jardin avant de se poser ; l'araignée est déjà là.
+					const target = pick(P.bushes);
+					// Les bêtes volantes arrivent de l'extérieur avant de se poser ; l'araignée est déjà là.
 					const fly = c.kind !== 'spider';
-					return target && { ...base, target, ox: (Math.random() - 0.5) * 50, oy: 14 + Math.random() * 30, x: fly ? side : target.x, y: fly ? y - 60 : target.y, mode: fly ? 'arrive' : 'perch' };
+					return target && { ...base, target, ox: (Math.random() - 0.5) * 50, oy: 14 + Math.random() * 30, x: fly ? side : P.ox + target.x, y: fly ? y - 60 : P.oy + target.y, mode: fly ? 'arrive' : 'perch' };
 				}
 				const d = DECOR[c.on];
-				return this.decorVisible(c.on) && { ...base, decor: c.on, x: d.x + (Math.random() - 0.5) * 20, y: d.y + this.decorSprite(c.on).top * 0.8, mode: 'perch' };
+				return P.ci === 0 && this.decorVisible(c.on) && { ...base, decor: c.on, x: d.x + (Math.random() - 0.5) * 20, y: d.y + this.decorSprite(c.on).top * 0.8, mode: 'perch' };
 			}
 			case 'perch': {
-				const target = pick((c.on === 'buisson' ? this.bushes : this.trees) ?? []);
+				const target = pick(c.on === 'buisson' ? P.bushes : P.trees);
 				return target && { ...base, x: side, y: y - 100, target, ox: c.trunk ? 6 : (Math.random() - 0.5) * (c.on === 'buisson' ? 30 : 60), oy: c.trunk ? 0 : 4, mode: 'seek' };
 			}
 			case 'walk':
 			case 'hop': {
-				const home = this.homeFor(c.home);
+				const home = this.homeFor(c.home, P);
 				if (!home) return null;
 				return { ...base, x: home.x + (Math.random() - 0.5) * 60, y: home.y + 10, mode: 'walk', ang: Math.random() * 6.28, home };
 			}
 			case 'trail': {
 				// Une file de fourmis entre leur nid (le muret, ou une touffe d'herbe) et un arbuste ou une fleur.
-				const a = this.homeFor('murger') ?? this.homeFor('herbe');
-				const b = this.homeFor('buisson') ?? this.homeFor('fleur');
+				const a = this.homeFor('murger', P) ?? this.homeFor('herbe', P);
+				const b = this.homeFor('buisson', P) ?? this.homeFor('fleur', P);
 				if (!a || !b) return null;
 				const mx = (a.x + b.x) / 2 + (Math.random() - 0.5) * 80, my = (a.y + b.y) / 2 + (Math.random() - 0.5) * 40;
 				return { ...base, x: a.x, y: a.y, mode: 'walk', path: [[a.x, a.y + 6], [mx, my], [b.x, b.y + 4]], n: 11 };
 			}
 			case 'soar':
-				return { ...base, x: WORLD_W / 2, y, mode: 'soar', ang: Math.random() * 6.28, r: 90 + Math.random() * 60 };
+				return { ...base, x: P.ox + PARCEL_W / 2, y, mode: 'soar', ang: Math.random() * 6.28, r: 90 + Math.random() * 60 };
 			case 'flower':
 			case 'flutter':
 			default:
@@ -621,16 +847,17 @@ export class Garden {
 		}
 	}
 
-	/** Point d'attache d'un animal : un décor, ou un type de plante mûre du lieu. */
-	homeFor(key) {
-		const pool = { tree: this.trees, arbre: this.trees, buisson: this.bushes, fleur: this.flowers }[key]
-			?? (key === 'herbe' ? this.place.plants.filter(p => p.type === 'herbe' && p.growth >= 1) : null);
-		if (pool) { const p = pick(pool); return p && { x: p.x, y: p.y }; }
-		return DECOR[key] && this.decorVisible(key) ? { x: DECOR[key].x, y: DECOR[key].y } : null;
+	/** Point d'attache d'un animal (coordonnées du monde) : un décor, ou un type de plante mûre de sa parcelle. */
+	homeFor(key, P) {
+		const pool = { tree: P.trees, arbre: P.trees, buisson: P.bushes, fleur: P.flowers, herbe: P.herbs }[key];
+		if (pool) { const p = pick(pool); return p && { x: P.ox + p.x, y: P.oy + p.y }; }
+		return DECOR[key] && P.ci === 0 && this.decorVisible(key) ? { x: DECOR[key].x, y: DECOR[key].y } : null;
 	}
 
 	updateInsect(b, dt) {
 		b.t += dt;
+		const P = this.pdata[b.ci];
+		if (!P) { b.gone = true; return; }
 		const flyTo = (tx, ty, speed, wobble) => {
 			const dx = tx - b.x, dy = ty - b.y, dist = Math.hypot(dx, dy) || 1;
 			const step = Math.min(dist, speed * dt);
@@ -639,26 +866,29 @@ export class Garden {
 			if (Math.abs(dx) > 1) b.dir = Math.sign(dx);
 			return dist;
 		};
+		const midX = P.ox + PARCEL_W / 2;
 		const flyAway = () => {
-			if (b.exitX == null) b.exitX = b.x < WORLD_W / 2 ? -60 : WORLD_W + 60;
+			if (b.exitX == null) b.exitX = b.x < midX ? P.ox - 60 : P.ox + PARCEL_W + 60;
 			if (flyTo(b.exitX, b.y - 80, 90, 10) < 5) b.gone = true;
 		};
-		const has = p => this.place.plants.includes(p);
+		const place = this.place;
+		const has = p => place.plants.includes(p);
+		const head = p => this.headOf(p);
 
 		switch (b.behavior) {
 			case 'flower': {
 				if (b.leaving) return flyAway();
 				if (b.mode === 'hover' && b.target && has(b.target)) {
 					b.timer -= dt;
-					const [hx, hy] = this.headOf(b.target);
+					const [hx, hy] = head(b.target);
 					b.x = hx + Math.cos(b.t * 3) * 5;
 					b.y = hy - 4 + Math.sin(b.t * 5) * 2;
 					if (b.timer <= 0) { b.mode = 'seek'; b.target = null; }
 					return;
 				}
-				if (!b.target || !has(b.target)) b.target = this.flowers?.length ? pick(this.flowers) : null;
+				if (!b.target || !has(b.target)) b.target = P.flowers.length ? pick(P.flowers) : null;
 				if (!b.target) { b.leaving = true; return; }
-				const [hx, hy] = this.headOf(b.target);
+				const [hx, hy] = head(b.target);
 				if (flyTo(hx, hy - 4, 70, 25) < 4) { b.mode = 'hover'; b.timer = 1.5 + Math.random() * 2; }
 				return;
 			}
@@ -666,18 +896,18 @@ export class Garden {
 				if (b.leaving) return flyAway();
 				if (b.mode === 'perch' && b.target && has(b.target)) {
 					b.timer -= dt;
-					const [hx, hy] = this.headOf(b.target);
+					const [hx, hy] = head(b.target);
 					b.x = hx + b.ox; b.y = hy + b.oy;
 					if (b.timer <= 0) { b.mode = 'wander'; b.target = null; b.timer = 3 + Math.random() * 4; }
 					return;
 				}
 				if (b.mode === 'seek' && b.target && has(b.target)) {
-					const [hx, hy] = this.headOf(b.target);
+					const [hx, hy] = head(b.target);
 					if (flyTo(hx + b.ox, hy + b.oy, 40, 30) < 3) { b.mode = 'perch'; b.timer = 2 + Math.random() * 3; }
 					return;
 				}
 				b.timer -= dt;
-				const spots = [...(this.perches ?? []), ...(this.flowers ?? [])];
+				const spots = [...P.perches, ...P.flowers];
 				if (b.timer <= 0 && spots.length) {
 					b.target = pick(spots);
 					b.ox = (Math.random() - 0.5) * (b.target.type === 'fleur' ? 4 : 30);
@@ -685,9 +915,8 @@ export class Garden {
 					b.mode = 'seek';
 					return;
 				}
-				const top = this.camY + 40, bottom = this.camY + this.viewH() - 60;
-				if (b.y < top || b.y > bottom || b.x < 20 || b.x > WORLD_W - 20) {
-					const back = Math.atan2(this.camY + this.viewH() / 2 - b.y, WORLD_W / 2 - b.x);
+				if (b.y < P.oy + 40 || b.y > P.oy + PARCEL_H - 60 || b.x < P.ox + 20 || b.x > P.ox + PARCEL_W - 20) {
+					const back = Math.atan2(P.oy + PARCEL_H / 2 - b.y, midX - b.x);
 					b.ang += Math.sign(Math.sin(back - b.ang)) * dt * 2;
 				}
 				b.ang += (Math.random() - 0.5) * dt * 4;
@@ -698,7 +927,7 @@ export class Garden {
 			}
 			case 'water': {
 				if (b.leaving) return flyAway();
-				const w = this.water();
+				const w = this.water(b.ci);
 				if (!w) { b.leaving = true; return; }
 				if (b.mode === 'hover') {
 					b.timer -= dt;
@@ -712,7 +941,7 @@ export class Garden {
 			}
 			case 'pond': {
 				if (b.leaving) { b.gone = true; return; }
-				const w = this.water();
+				const w = this.water(b.ci);
 				if (!w) { b.gone = true; return; }
 				if (b.kind === 'heron') {
 					b.timer -= dt;
@@ -747,7 +976,7 @@ export class Garden {
 				if (b.leaving) { if (b.p.kind === 'spider') b.gone = true; else flyAway(); return; }
 				if (b.target) {
 					if (!has(b.target)) { b.gone = true; return; }
-					const [hx, hy] = this.headOf(b.target);
+					const [hx, hy] = head(b.target);
 					if (b.mode === 'arrive') {
 						if (flyTo(hx + b.ox, hy + b.oy, 45, 20) < 2) b.mode = 'perch';
 						return;
@@ -765,19 +994,19 @@ export class Garden {
 			case 'perch': {
 				if (b.leaving) b.target = null;
 				if (!b.target || !has(b.target)) {
-					if (flyTo(b.x < WORLD_W / 2 ? -60 : WORLD_W + 60, b.y - 60, 120, 0) < 5) b.gone = true;
+					if (flyTo(b.x < midX ? P.ox - 60 : P.ox + PARCEL_W + 60, b.y - 60, 120, 0) < 5) b.gone = true;
 					return;
 				}
-				const [hx, hy] = this.headOf(b.target);
+				const [hx, hy] = head(b.target);
 				// Le pic se pose sur le tronc, les autres oiseaux dans le feuillage.
-				const ty = b.p.trunk ? b.target.y - 45 : hy + b.oy;
+				const ty = b.p.trunk ? P.oy + b.target.y - 45 : hy + b.oy;
 				if (b.mode === 'perch') {
 					b.x = hx + b.ox;
 					b.y = ty + (b.p.trunk ? Math.sin(b.t * 0.6) * 6 : 0);
 					b.timer -= dt;
 					if (b.timer <= 0) {
 						b.mode = 'seek';
-						b.target = pick(b.p.on === 'buisson' ? this.bushes : this.trees) ?? b.target;
+						b.target = pick(b.p.on === 'buisson' ? P.bushes : P.trees) ?? b.target;
 						b.ox = b.p.trunk ? 6 : (Math.random() - 0.5) * (b.p.on === 'buisson' ? 30 : 60);
 					}
 					return;
@@ -802,7 +1031,7 @@ export class Garden {
 				const sp = b.p.speed ?? 14;
 				b.x += Math.cos(b.ang) * sp * dt;
 				b.y += Math.sin(b.ang) * sp * 0.65 * dt;
-				b.x = Math.max(10, Math.min(WORLD_W - 10, b.x));
+				b.x = Math.max(P.ox + 10, Math.min(P.ox + PARCEL_W - 10, b.x));
 				b.dir = Math.cos(b.ang) >= 0 ? 1 : -1;
 				return;
 			}
@@ -821,7 +1050,7 @@ export class Garden {
 					const a = Math.random() * Math.PI * 2, d = 25 + Math.random() * 35;
 					let tx = b.x + Math.cos(a) * d, ty = b.y + Math.sin(a) * d * 0.6;
 					if (Math.hypot(tx - b.home.x, ty - b.home.y) > 140) { tx = b.home.x; ty = b.home.y + 8; }
-					Object.assign(b, { mode: 'hop', k: 0, fx: b.x, fy: b.y, tx: Math.max(10, Math.min(WORLD_W - 10, tx)), ty });
+					Object.assign(b, { mode: 'hop', k: 0, fx: b.x, fy: b.y, tx: Math.max(P.ox + 10, Math.min(P.ox + PARCEL_W - 10, tx)), ty });
 					b.dir = b.tx >= b.x ? 1 : -1;
 				}
 				return;
@@ -833,8 +1062,9 @@ export class Garden {
 			case 'soar': {
 				if (b.leaving) return flyAway();
 				b.ang += dt * 0.25;
-				const cx = WORLD_W / 2, cy = this.camY + this.viewH() * 0.4;
-				b.x = cx + Math.cos(b.ang) * b.r * 1.3;
+				const v = this.view();
+				const cy = Math.max(P.oy + 150, Math.min(P.oy + PARCEL_H - 150, v.y0 + v.h * 0.4));
+				b.x = midX + Math.cos(b.ang) * b.r * 1.3;
 				b.y = cy + Math.sin(b.ang) * b.r * 0.7;
 				b.dir = Math.sin(b.ang) > 0 ? -1 : 1;
 			}
@@ -845,13 +1075,13 @@ export class Garden {
 
 	updateWeather(dt) {
 		const k = this.weather.kind;
-		const vh = this.viewH();
+		const v = this.view();
 		const amount = this.precip();
 		if (amount > 0) {
 			const snow = k === 'snow';
-			const rate = (snow ? 40 : 160) * amount;
+			const rate = (snow ? 40 : 160) * amount * Math.min(4, (v.w * v.h) / (420 * 900));
 			for (let i = 0; i < rate * dt; i++) {
-				this.drops.push({ x: Math.random() * (WORLD_W + 80) - 40, y: this.camY - 20 - Math.random() * 40, z: 0.6 + Math.random() * 0.6, snow, ground: this.camY + Math.random() * vh, ph: Math.random() * 6.28 });
+				this.drops.push({ x: v.x0 - 40 + Math.random() * (v.w + 80), y: v.y0 - 20 - Math.random() * 40, z: 0.6 + Math.random() * 0.6, snow, ground: v.y0 + Math.random() * v.h, ph: Math.random() * 6.28 });
 			}
 		}
 		const wind = Math.min(40, this.weather.wind ?? 10);
@@ -861,15 +1091,13 @@ export class Garden {
 			else { d.y += 520 * d.z * dt; d.x += wind * 3 * dt; }
 			if (d.y >= d.ground) { if (d.snow) d.gone = true; else d.splash = 0; }
 		}
-		this.drops = this.drops.filter(d => !d.gone && !(d.splash > 1) && d.y < this.camY + vh + 40);
+		this.drops = this.drops.filter(d => !d.gone && !(d.splash > 1) && d.y < v.y0 + v.h + 40);
 		if (k === 'storm' && Math.random() < dt * 0.12) this.flash = 1;
 		this.flash = Math.max(0, this.flash - dt * 3);
 	}
 
-	drawWeather(ctx, S) {
-		const k = this.weather.kind;
+	drawWeather(ctx) {
 		if (!this.drops.length) return;
-		ctx.setTransform(S, 0, 0, S, 0, -this.camY * S);
 		const wind = Math.min(40, this.weather.wind ?? 10);
 		ctx.lineCap = 'round';
 		for (const d of this.drops) {
@@ -893,11 +1121,6 @@ export class Garden {
 				ctx.stroke();
 			}
 		}
-		if (k === 'storm' && this.flash > 0) {
-			ctx.setTransform(1, 0, 0, 1, 0, 0);
-			ctx.fillStyle = `rgba(255,255,250,${this.flash * 0.35})`;
-			ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
-		}
 	}
 
 	// ─── Rendu ─────────────────────────────────────────────────────
@@ -909,94 +1132,177 @@ export class Garden {
 		return strength * (0.45 * Math.sin(t * 0.9 + x * 0.012) + 0.25 * Math.sin(t * 2.3 + x * 0.03) + gust);
 	}
 
+	/** Couleur d'une plante en vue d'ensemble (forme simple), selon son espèce et la saison. */
+	glyphColor(p) {
+		const L = lookOf(p);
+		const s = this.season ?? {};
+		const base = p.type === 'fleur' ? L.color : p.type === 'herbe' ? '#7FAA48' : p.type === 'buisson' ? (L.foliage ?? ['#2A6034', '#3E7A3C'])[1] : (L.canopy ?? ['#1C5A35', '#326832'])[1];
+		if (p.type === 'fleur' || L.evergreen || L.form === 'conifere' || L.form === 'parasol') return base ?? '#7FAA48';
+		return mix(mix(base, '#C8742E', (s.autumn ?? 0) * 0.55), '#7A6A50', (s.winter ?? 0) * 0.6);
+	}
+
 	render() {
-		const ctx = this.ctx, S = this.S, cw = this.canvas.width, ch = this.canvas.height;
+		const ctx = this.ctx, cw = this.canvas.width, ch = this.canvas.height;
+		const S = this.scale, D = this.density;
 		const hour = this.hour(), { amb, night } = this.light(hour), day = 1 - night;
 		const wk = this.weather.kind;
-		if (this.bgDirty) this.paintBg();
+		const glyph = this.glyph, detail = this.cam.z >= DETAIL_Z;
+		const tx = cw / 2 - this.cam.cx * S, ty = ch / 2 - this.cam.cy * S;
+		const world = () => ctx.setTransform(S, 0, 0, S, tx, ty);
+		const v = this.view();
+		const visible = this.visibleCells();
+		const locked = this.visibleCells(80, this.lockedCells());
+		const place = this.place;
+		const plantPos = p => { const [ox, oy] = cellOrigin(cellOf(p)); return [ox + p.x, oy + p.y]; };
 
 		ctx.setTransform(1, 0, 0, 1, 0, 0);
 		ctx.globalCompositeOperation = 'source-over';
 		ctx.globalAlpha = 1;
-		ctx.fillStyle = GROUND[this.placeId].base;
+		ctx.fillStyle = '#E4DEC6';
 		ctx.fillRect(0, 0, cw, ch);
-		ctx.drawImage(this.bg, 0, Math.round(-this.camY * S));
 
-		// Ombres de nuages : plus nombreuses et plus sombres par temps couvert.
+		// Sols des parcelles ouvertes ; la prochaine parcelle se devine sous la brume, bordée de pointillés.
+		world();
+		for (const i of visible) {
+			const [ox, oy] = cellOrigin(i);
+			ctx.drawImage(this.bgFor(i), ox, oy, PARCEL_W, PARCEL_H);
+		}
+		for (const i of locked) {
+			const [ox, oy] = cellOrigin(i);
+			ctx.drawImage(this.bgFor(i), ox, oy, PARCEL_W, PARCEL_H);
+			ctx.fillStyle = 'rgba(236,230,208,0.72)';
+			ctx.fillRect(ox, oy, PARCEL_W, PARCEL_H);
+			ctx.strokeStyle = 'rgba(140,120,80,0.75)';
+			ctx.lineWidth = Math.max(2.5, 2 / this.cam.z);
+			ctx.lineCap = 'round';
+			ctx.setLineDash([2, Math.max(12, 9 / this.cam.z)]);
+			ctx.strokeRect(ox + 6, oy + 6, PARCEL_W - 12, PARCEL_H - 12);
+			ctx.setLineDash([]);
+		}
+		this.softenSeams(ctx);
+		// La clôture fait le tour du terrain ouvert ; elle recule à chaque nouvelle parcelle.
+		this.drawFence(ctx, v);
+
+		// Ombres de nuages, plus denses par temps couvert.
 		const cloudy = { clouds: 1.5, overcast: 2.2, rain: 2, drizzle: 2, storm: 2.6, snow: 1.6, fog: 0.4 }[wk] ?? 1;
 		if (day > 0) {
 			ctx.globalCompositeOperation = 'multiply';
 			ctx.globalAlpha = Math.min(0.85, 0.32 * day * cloudy);
 			for (const cl of this.clouds) {
-				const span = WORLD_W + cl.w * 2;
-				const x = ((cl.x + this.t * cl.speed * (0.5 + (this.weather.wind ?? 10) / 20)) % span + span) % span - cl.w;
-				const y = (cl.y % Math.max(600, this.place.worldH)) - this.camY;
-				ctx.drawImage(cl.canvas, x * S, y * S);
+				const spanX = v.w + cl.w * 2, spanY = v.h + cl.h * 2;
+				const x = v.x0 - cl.w + ((((cl.x + this.t * cl.speed * (0.5 + (this.weather.wind ?? 10) / 20)) - v.x0) % spanX) + spanX) % spanX;
+				const y = v.y0 - cl.h + (((cl.y - v.y0) % spanY) + spanY) % spanY;
+				ctx.drawImage(cl.canvas, x, y, cl.w, cl.h);
 			}
 			ctx.globalCompositeOperation = 'source-over';
 			ctx.globalAlpha = 1;
 		}
 
-		// Ombres des animaux au sol
-		ctx.setTransform(S, 0, 0, S, 0, -this.camY * S);
-		ctx.fillStyle = 'rgba(30,50,20,0.13)';
-		for (const b of this.insects) {
-			const h = FLIGHT[b.kind] ?? (b.mode === 'perch' ? null : 24);
-			if (h == null || b.p.swim || b.behavior === 'trail') continue;
-			const big = { hedgehog: 2.6, frog: 1.8, marmot: 2.6, squirrel: 2, heron: 2.4, eagle: 5, gull: 3, crab: 1.8 }[b.kind] ?? 1;
-			ctx.beginPath();
-			ctx.ellipse(b.x + h * 0.25, b.y + h, 4 * big, 1.8 * big, 0, 0, Math.PI * 2);
-			ctx.fill();
+		// Ombres portées : direction et longueur d'après la vraie position du soleil, nettes par beau temps.
+		const sun = this.sunPos?.(hour);
+		const sunny = (SUNNY[wk] ?? 1) * day;
+		if (!glyph && sun && sun.alt > 1 && sunny > 0.02) {
+			const dir = ((sun.az + 180) * Math.PI) / 180;
+			const dx = Math.sin(dir), dy = -Math.cos(dir);
+			const len = Math.min(4, 1 / Math.tan((sun.alt * Math.PI) / 180)) * 0.45;
+			const ang = Math.atan2(dy, dx);
+			ctx.fillStyle = `rgba(25,45,20,${(0.16 * sunny * Math.min(1, sun.alt / 8)).toFixed(3)})`;
+			for (const p of place.plants) {
+				const m = this.meta.get(p.id);
+				if (!m) continue;
+				const [x, y] = plantPos(p);
+				if (x < v.x0 - 200 || x > v.x0 + v.w + 200 || y < v.y0 - 50 || y > v.y0 + v.h + 300) continue;
+				const L = Math.max(2, -m.top * len);
+				const r = Math.max(2, m.r);
+				ctx.beginPath();
+				ctx.ellipse(x + dx * L * 0.5, y + dy * L * 0.5, L * 0.5 + r * 0.5, r * 0.5, ang, 0, Math.PI * 2);
+				ctx.fill();
+			}
 		}
 
-		// Décor et plantes, triés par profondeur ; les nageurs juste au-dessus de l'eau
+		// Ombres des animaux au sol
+		if (!glyph) {
+			ctx.fillStyle = 'rgba(30,50,20,0.13)';
+			for (const b of this.insects) {
+				const h = FLIGHT[b.kind] ?? (b.mode === 'perch' ? null : 24);
+				if (h == null || b.p.swim || b.behavior === 'trail') continue;
+				const big = { hedgehog: 2.6, frog: 1.8, marmot: 2.6, squirrel: 2, heron: 2.4, eagle: 5, gull: 3, crab: 1.8 }[b.kind] ?? 1;
+				ctx.beginPath();
+				ctx.ellipse(b.x + h * 0.25, b.y + h, 4 * big, 1.8 * big, 0, 0, Math.PI * 2);
+				ctx.fill();
+			}
+		}
+
+		// Décor, plantes et animaux au sol, triés par profondeur.
 		const entities = [];
-		for (const key of Object.keys(DECOR)) if (this.decorVisible(key)) entities.push({ decor: key, y: DECOR[key].y });
-		for (const p of this.place.plants) entities.push({ plant: p, y: p.y });
-		for (const b of this.insects) if (onGround(b)) entities.push({ critter: b, y: b.behavior === 'trail' ? -1e9 : b.y + 2 });
+		for (const key of Object.keys(DECOR)) {
+			const d = DECOR[key];
+			if (!this.decorVisible(key)) continue;
+			entities.push({ decor: key, x: d.x, y: d.y });
+		}
+		for (const p of place.plants) {
+			const [wx, wy] = plantPos(p), box = PLANT_TYPES[p.type].box;
+			if (wx + box.w < v.x0 || wx - box.w > v.x0 + v.w || wy - box.ay > v.y0 + v.h + 20 || wy + 30 < v.y0) continue;
+			entities.push({ plant: p, x: wx, y: wy });
+		}
+		if (!glyph) for (const b of this.insects) if (onGround(b)) entities.push({ critter: b, y: b.behavior === 'trail' ? -1e9 : b.y + 2 });
 		entities.sort((a, b) => a.y - b.y);
+
 		for (const e of entities) {
 			if (e.critter) {
-				ctx.setTransform(S, 0, 0, S, 0, -this.camY * S);
+				world();
 				this.drawInsect(ctx, e.critter);
 				continue;
 			}
 			if (e.decor) {
 				const d = DECOR[e.decor], box = d.box;
-				const sx = d.x * S, sy = (d.y - this.camY) * S;
-				if (sy - box.ay * S > ch + 20 || sy + (box.h - box.ay) * S < -20) continue;
 				const age = this.t - (this.popAt[e.decor] ?? -9);
 				const k = age < 0.8 ? 0.6 + 0.4 * Math.min(1, age / 0.5) + 0.06 * Math.sin(Math.min(1, age / 0.8) * Math.PI) : 1;
-				ctx.setTransform(k, 0, 0, k, sx, sy);
+				world();
+				ctx.translate(e.x, e.y);
+				ctx.scale(k, k);
 				ctx.globalAlpha = age < 0.5 ? age / 0.5 : 1;
-				ctx.drawImage(this.decorSprite(e.decor).canvas, -box.ax * S, -box.ay * S);
+				ctx.drawImage(this.decorSprite(e.decor).canvas, -box.ax, -box.ay, box.w, box.h);
 				ctx.globalAlpha = 1;
-				if (d.water || e.decor === 'nenuphars') {
-					ctx.setTransform(S, 0, 0, S, 0, -this.camY * S);
+				if (!glyph && (d.water || e.decor === 'nenuphars')) {
 					// Le triton nage sous les nénuphars, le canard flotte par-dessus.
+					world();
 					const lilies = this.decorVisible('nenuphars');
 					for (const b of this.insects) {
-						if (!b.p.swim) continue;
+						if (!b.p.swim || b.ci !== 0) continue;
 						const duck = b.kind === 'duck';
 						if (duck ? e.decor === 'nenuphars' || !lilies : e.decor !== 'nenuphars') this.drawInsect(ctx, b);
 					}
 				}
 				continue;
 			}
-			const p = e.plant, box = PLANT_TYPES[p.type].box;
-			const sx = p.x * S, sy = (p.y - this.camY) * S;
-			if (sy - box.ay * S > ch + 20 || sy + (box.h - box.ay) * S < -20) continue;
-			const s = this.spriteFor(p);
-			const shear = this.wind(p.x) * SWAY[p.type] * (0.4 + 0.6 * (s.stage / STAGES));
-			const age = this.t - s.pop;
+			const p = e.plant;
+			if (glyph) {
+				// Vue d'ensemble : une forme simple par plante, à sa couleur.
+				world();
+				const g = Math.max(0.05, p.growth);
+				const r = p.type === 'arbre' ? 8 + 68 * g : p.type === 'buisson' ? 8 + 34 * g : p.type === 'fleur' ? 7 : 6;
+				ctx.fillStyle = rgba(this.glyphColor(p), p.type === 'herbe' ? 0.55 : 0.85);
+				ctx.beginPath();
+				ctx.ellipse(e.x, e.y - (p.type === 'arbre' ? r * 0.9 : r * 0.5), r, r * 0.8, 0, 0, Math.PI * 2);
+				ctx.fill();
+				continue;
+			}
+			const box = PLANT_TYPES[p.type].box;
+			const s = this.spriteFor(p, false);
+			const img = detail ? this.spriteFor(p, true) : s;
+			const shear = this.wind(e.x) * SWAY[p.type] * (0.4 + 0.6 * (s.stage / STAGES));
+			const age = this.t - (this.meta.get(p.id)?.pop ?? -9);
 			const k = age < 0.45 ? 1 + 0.14 * Math.sin((age / 0.45) * Math.PI) : 1;
-			ctx.setTransform(k, 0, shear * k, k, sx, sy);
-			ctx.drawImage(s.canvas, -box.ax * S, -box.ay * S);
+			world();
+			ctx.translate(e.x, e.y);
+			ctx.transform(k, 0, shear * k, k, 0, 0);
+			ctx.drawImage(img.canvas, -box.ax, -box.ay, box.w, box.h);
 		}
 
 		// Animaux en l'air et particules
-		ctx.setTransform(S, 0, 0, S, 0, -this.camY * S);
-		for (const b of this.insects) if (!onGround(b) && !b.p.swim) this.drawInsect(ctx, b);
+		world();
+		if (!glyph) for (const b of this.insects) if (!onGround(b) && !b.p.swim) this.drawInsect(ctx, b);
 		for (const p of this.particles) {
 			ctx.globalAlpha = Math.max(0, p.life);
 			ctx.fillStyle = p.color;
@@ -1013,15 +1319,19 @@ export class Garden {
 			ctx.fillStyle = rgba(amb.color, amb.a);
 			ctx.fillRect(0, 0, cw, ch);
 		}
+		const se = this.season ?? {};
+		// Automne cuivré, hiver froid et bleuté, printemps à peine plus frais.
+		const grade = [['#F2CFA8', 0.12 * (se.autumn ?? 0)], ['#CCD8EC', 0.16 * (se.winter ?? 0)], ['#EEF6DA', 0.05 * (se.spring ?? 0)]];
+		ctx.globalCompositeOperation = 'multiply';
+		for (const [c, a] of grade) if (a > 0.005) { ctx.fillStyle = rgba(c, a * day); ctx.fillRect(0, 0, cw, ch); }
 		const grey = { overcast: 0.22, rain: 0.28, drizzle: 0.18, storm: 0.38, snow: 0.12, clouds: 0.08 }[wk] ?? 0;
 		if (grey) {
-			ctx.globalCompositeOperation = 'multiply';
 			ctx.fillStyle = `rgba(130,140,152,${grey})`;
 			ctx.fillRect(0, 0, cw, ch);
 		}
 		ctx.globalCompositeOperation = 'source-over';
-		if (wk === 'snow') {
-			ctx.fillStyle = 'rgba(250,252,255,0.22)';
+		if (wk === 'snow' || (se.winter ?? 0) > 0.7) {
+			ctx.fillStyle = `rgba(250,252,255,${wk === 'snow' ? 0.22 : 0.08})`;
 			ctx.fillRect(0, 0, cw, ch);
 		}
 		if (wk === 'fog') {
@@ -1032,26 +1342,170 @@ export class Garden {
 			ctx.fillRect(0, 0, cw, ch);
 		}
 
-		if (night > 0 && this.state.species['ver-luisant'] && !this.precip()) {
+		// Lucioles (le ver luisant) la nuit, une fois l'espèce découverte et hors de la pluie.
+		if (!glyph && night > 0 && this.state.species['ver-luisant'] && !this.precip()) {
 			ctx.globalCompositeOperation = 'lighter';
-			const n = this.glow.width, vh = this.viewH();
+			const n = this.glow.width;
 			for (const f of this.fireflies) {
-				const a = night * Math.pow(0.5 + 0.5 * Math.sin(this.t * 2 + f.ph), 2);
-				ctx.globalAlpha = a;
-				ctx.drawImage(this.glow, f.x * S - n / 2, f.y * vh * S - n / 2);
+				ctx.globalAlpha = night * Math.pow(0.5 + 0.5 * Math.sin(this.t * 2 + f.ph), 2);
+				ctx.drawImage(this.glow, f.x * cw - n / 2, f.y * ch - n / 2, n * this.cam.z, n * this.cam.z);
 			}
 			ctx.globalAlpha = 1;
 			ctx.globalCompositeOperation = 'source-over';
 		}
 
-		this.drawWeather(ctx, S);
+		world();
+		this.drawWeather(ctx);
+		if (wk === 'storm' && this.flash > 0) {
+			ctx.setTransform(1, 0, 0, 1, 0, 0);
+			ctx.fillStyle = `rgba(255,255,250,${this.flash * 0.35})`;
+			ctx.fillRect(0, 0, cw, ch);
+		}
 
 		// Grain de papier (attaché au monde) et vignette
 		ctx.setTransform(1, 0, 0, 1, 0, 0);
-		this.paperPattern.setTransform(new DOMMatrix().translateSelf(0, Math.round(-this.camY * S)));
+		this.paperPattern.setTransform(new DOMMatrix().translateSelf(Math.round(tx), Math.round(ty)));
 		ctx.fillStyle = this.paperPattern;
 		ctx.fillRect(0, 0, cw, ch);
 		ctx.drawImage(this.vignette, 0, 0);
+
+		if (glyph || this.lockedCells().length) this.drawLabels(ctx, glyph, S, tx, ty);
+	}
+
+	/** Fond les raccords entre deux parcelles ouvertes voisines dans une nappe de la couleur du sol. */
+	softenSeams(ctx) {
+		const open = this.openCells();
+		if (open.length < 2) return;
+		const set = new Set(open.map(i => CELLS[i].join(',')));
+		const base = this.groundColor(GROUND[this.biome].base);
+		const band = 46;
+		for (const i of open) {
+			const [gx, gy] = CELLS[i], [ox, oy] = cellOrigin(i);
+			if (set.has(`${gx + 1},${gy}`)) {
+				const x = ox + PARCEL_W, g = ctx.createLinearGradient(x - band, 0, x + band, 0);
+				g.addColorStop(0, rgba(base, 0)); g.addColorStop(0.5, rgba(base, 0.75)); g.addColorStop(1, rgba(base, 0));
+				ctx.fillStyle = g;
+				ctx.fillRect(x - band, oy, band * 2, PARCEL_H);
+			}
+			if (set.has(`${gx},${gy + 1}`)) {
+				const y = oy + PARCEL_H, g = ctx.createLinearGradient(0, y - band, 0, y + band);
+				g.addColorStop(0, rgba(base, 0)); g.addColorStop(0.5, rgba(base, 0.75)); g.addColorStop(1, rgba(base, 0));
+				ctx.fillStyle = g;
+				ctx.fillRect(ox, y - band, PARCEL_W, band * 2);
+			}
+		}
+	}
+
+	/** Clôture en bois sur le pourtour des parcelles ouvertes (les bords qui ne touchent pas une autre parcelle ouverte). */
+	drawFence(ctx, v) {
+		const open = this.openCells();
+		const set = new Set(open.map(i => CELLS[i].join(',')));
+		const glyph = this.glyph;
+		const segs = [];
+		for (const i of open) {
+			const [gx, gy] = CELLS[i], [ox, oy] = cellOrigin(i);
+			if (!set.has(`${gx},${gy - 1}`)) segs.push([ox, oy, ox + PARCEL_W, oy]);
+			if (!set.has(`${gx},${gy + 1}`)) segs.push([ox, oy + PARCEL_H, ox + PARCEL_W, oy + PARCEL_H]);
+			if (!set.has(`${gx - 1},${gy}`)) segs.push([ox, oy, ox, oy + PARCEL_H]);
+			if (!set.has(`${gx + 1},${gy}`)) segs.push([ox + PARCEL_W, oy, ox + PARCEL_W, oy + PARCEL_H]);
+		}
+		ctx.lineCap = 'round';
+		for (const [x0, y0, x1, y1] of segs) {
+			if (Math.max(x0, x1) < v.x0 - 20 || Math.min(x0, x1) > v.x0 + v.w + 20 || Math.max(y0, y1) < v.y0 - 40 || Math.min(y0, y1) > v.y0 + v.h + 20) continue;
+			const horiz = y0 === y1;
+			// Deux lisses, un peu d'ombre dessous.
+			ctx.strokeStyle = 'rgba(40,50,25,0.18)';
+			ctx.lineWidth = glyph ? 10 : 5;
+			ctx.beginPath(); ctx.moveTo(x0 + 3, y0 + 4); ctx.lineTo(x1 + 3, y1 + 4); ctx.stroke();
+			ctx.strokeStyle = '#9A7448';
+			ctx.lineWidth = glyph ? 7 : 3;
+			for (const off of glyph ? [0] : [-7, 0]) {
+				ctx.beginPath();
+				ctx.moveTo(x0 + (horiz ? 0 : 0), y0 + off);
+				ctx.lineTo(x1, y1 + off);
+				ctx.stroke();
+			}
+			if (glyph) continue;
+			// Piquets tous les 35 environ.
+			const len = Math.hypot(x1 - x0, y1 - y0), n = Math.round(len / 35);
+			for (let k = 0; k <= n; k++) {
+				const x = x0 + ((x1 - x0) * k) / n, y = y0 + ((y1 - y0) * k) / n;
+				if (x < v.x0 - 10 || x > v.x0 + v.w + 10 || y < v.y0 - 30 || y > v.y0 + v.h + 10) continue;
+				ctx.fillStyle = 'rgba(40,50,25,0.2)';
+				ctx.beginPath(); ctx.ellipse(x + 3, y + 3, 4, 2, 0, 0, Math.PI * 2); ctx.fill();
+				ctx.fillStyle = '#8A6238';
+				ctx.beginPath(); ctx.roundRect(x - 3.2, y - 18, 6.4, 20, 2); ctx.fill();
+				ctx.fillStyle = '#B48A58';
+				ctx.beginPath(); ctx.ellipse(x, y - 18, 3.2, 1.6, 0, 0, Math.PI * 2); ctx.fill();
+			}
+		}
+	}
+
+	/** Étiquettes : en vue d'ensemble, chaque parcelle ; toujours, ce qu'il faut pour ouvrir la suivante. */
+	drawLabels(ctx, all, S, tx, ty) {
+		const dpr = this.dpr, place = this.place;
+		const km = place.km ?? 0;
+		ctx.textAlign = 'center';
+		const cells = all ? [...this.openCells(), ...this.lockedCells()] : this.lockedCells();
+		for (const i of cells) {
+			const [ox, oy] = cellOrigin(i);
+			const isOpen = i < cellsOpen(place);
+			const title = isOpen ? `Parcelle ${i + 1}` : 'Nouvelle parcelle';
+			const left = Math.max(0.1, Math.ceil((CELL_KM[i] - km) * 10) / 10);
+			const sub = isOpen
+				? `${place.plants.filter(p => cellOf(p) === i && p.growth >= 1).length} plantes`
+				: `encore ${left.toLocaleString('fr-FR', { maximumFractionDigits: 1 })} km ici`;
+			ctx.font = `${Math.round((all ? 16 : 20) * dpr)}px Courgette, cursive`;
+			const w = Math.max(ctx.measureText(title).width, (all ? 80 : 130) * dpr) + (all ? 20 : 32) * dpr;
+			// Centre de la parcelle à l'écran ; une parcelle fermée garde son étiquette visible tant qu'on en voit un bout.
+			const cw = this.canvas.width, ch = this.canvas.height;
+			const sx0 = ox * S + tx, sx1 = (ox + PARCEL_W) * S + tx, sy0 = oy * S + ty, sy1 = (oy + PARCEL_H) * S + ty;
+			let x = (sx0 + sx1) / 2, y = (sy0 + sy1) / 2;
+			if (!all) {
+				const seenW = Math.min(sx1, cw) - Math.max(sx0, 0), seenH = Math.min(sy1, ch) - Math.max(sy0, 0);
+				// Parcelle hors de l'écran ou à peine visible : une petite flèche au bord, vers elle.
+				if (seenW < w + 16 * dpr || seenH < 200 * dpr) {
+					this.drawEdgeHint(ctx, sx0, sx1, sy0, sy1, `${left.toLocaleString('fr-FR', { maximumFractionDigits: 1 })} km`);
+					continue;
+				}
+				x = Math.max(Math.max(sx0, 0) + w / 2 + 8 * dpr, Math.min(Math.min(sx1, cw) - w / 2 - 8 * dpr, x));
+				y = Math.max(Math.max(sy0, 0) + 140 * dpr, Math.min(Math.min(sy1, ch) - 260 * dpr, y));
+			}
+			ctx.fillStyle = isOpen ? 'rgba(253,247,231,0.92)' : 'rgba(243,237,217,0.95)';
+			ctx.beginPath();
+			ctx.roundRect(x - w / 2, y - 34 * dpr, w, 62 * dpr, 16 * dpr);
+			ctx.fill();
+			ctx.fillStyle = isOpen ? '#1F6B47' : '#8A846E';
+			ctx.fillText(title, x, y - 4 * dpr);
+			ctx.font = `${Math.round(13 * dpr)}px Nunito, sans-serif`;
+			ctx.fillStyle = isOpen ? '#5A6B4E' : '#8A846E';
+			ctx.fillText(sub, x, y + 16 * dpr);
+		}
+	}
+
+	/** Petite étiquette au bord de l'écran, tournée vers la prochaine parcelle hors de vue. */
+	drawEdgeHint(ctx, sx0, sx1, sy0, sy1, text) {
+		const dpr = this.dpr, cw = this.canvas.width, ch = this.canvas.height;
+		const cx = (sx0 + sx1) / 2, cy = (sy0 + sy1) / 2;
+		const right = sx0 >= cw * 0.6, left = sx1 <= cw * 0.4, below = sy0 >= ch * 0.6, above = sy1 <= ch * 0.4;
+		const arrow = right ? '›' : left ? '‹' : below ? '⌄' : '⌃';
+		const label = right ? `${text} ${arrow}` : `${arrow} ${text}`;
+		ctx.font = `bold ${Math.round(13 * dpr)}px Nunito, sans-serif`;
+		const w = ctx.measureText(label).width + 22 * dpr, h = 28 * dpr;
+		const x = right ? cw - w / 2 - 8 * dpr : left ? w / 2 + 8 * dpr : Math.max(w / 2 + 8 * dpr, Math.min(cw - w / 2 - 8 * dpr, cx));
+		const y = below ? ch - 230 * dpr : above ? 120 * dpr : Math.max(140 * dpr, Math.min(ch - 240 * dpr, cy));
+		ctx.fillStyle = 'rgba(243,237,217,0.95)';
+		ctx.beginPath();
+		ctx.roundRect(x - w / 2, y - h / 2, w, h, h / 2);
+		ctx.fill();
+		ctx.strokeStyle = 'rgba(140,120,80,0.6)';
+		ctx.lineWidth = 1.5 * dpr;
+		ctx.setLineDash([2 * dpr, 4 * dpr]);
+		ctx.stroke();
+		ctx.setLineDash([]);
+		ctx.fillStyle = '#7A5A30';
+		ctx.textAlign = 'center';
+		ctx.fillText(label, x, y + 5 * dpr);
 	}
 
 	drawInsect(ctx, b) {
@@ -1090,7 +1544,7 @@ export class Garden {
 
 	/** Animal le plus proche d'un point du monde (pour le toucher du doigt). */
 	critterAt(wx, wy) {
-		let best = null, bestD = 16;
+		let best = null, bestD = 16 / Math.min(1, this.cam.z);
 		for (const b of this.insects) {
 			const pts = b.behavior === 'trail' ? (b.pos ?? []) : [[b.x, b.y]];
 			for (const [x, y] of pts) {

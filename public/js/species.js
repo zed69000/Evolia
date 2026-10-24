@@ -597,6 +597,21 @@ export const SPECIES = [
 ];
 
 export const SPECIES_BY_ID = Object.fromEntries(SPECIES.map(s => [s.id, s]));
+
+// Silhouettes propres à chaque arbre et arbuste : nombre de bouquets de feuillage et largeur de la couronne,
+// port de l'arbuste, feuillage persistant, floraison de printemps.
+const SILHOUETTE = {
+	chene: { clumps: 6, spread: 1.3 }, merisier: { clumps: 4, spread: 0.85, blossom: '#FDFBF3' }, tilleul: { clumps: 5, spread: 1 },
+	aulne: { clumps: 4, spread: 0.75 }, hetre: { clumps: 5, spread: 1.05 }, charme: { clumps: 5, spread: 0.95 },
+	'chene-vert': { clumps: 7, spread: 1.1, evergreen: true }, epicea: { evergreen: true }, 'pin-cembro': { evergreen: true },
+	'pin-maritime': { evergreen: true },
+	eglantier: { shape: 'arching' }, aubepine: { shape: 'dome', blossom: '#FDFBF3' }, prunellier: { shape: 'dome', blossom: '#FDFBF3' },
+	sureau: { shape: 'upright' }, 'saule-marsault': { shape: 'upright' }, bourdaine: { shape: 'upright' }, viorne: { shape: 'dome' },
+	noisetier: { shape: 'upright' }, houx: { shape: 'dome', evergreen: true }, ronce: { shape: 'arching' },
+	rhododendron: { shape: 'spreading', evergreen: true }, myrtille: { shape: 'spreading' }, genevrier: { shape: 'upright', evergreen: true },
+	argousier: { shape: 'upright' }, tamaris: { shape: 'arching' }, ajonc: { shape: 'dome', evergreen: true },
+};
+for (const [id, extra] of Object.entries(SILHOUETTE)) Object.assign(SPECIES_BY_ID[id].look, extra);
 export const speciesIn = (place, type) => SPECIES.filter(s => s.place === place && s.kind === 'plante' && s.type === type);
 
 for (const s of SPECIES) {

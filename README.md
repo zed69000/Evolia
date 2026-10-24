@@ -23,7 +23,9 @@ Puis ouvrir http://localhost:8642/?dev=1
 ## Lieux
 
 Prairie (départ), marais (8 km et 10 espèces), forêt (20 km, 24), montagne (40 km, 40), littoral (60 km, 55).
-Chaque lieu a son jardin, son sol, ses décors et ses espèces (113 en tout, dans `js/species.js`).
+Chaque lieu a son jardin, son sol, ses décors et ses espèces (125 en tout, dans `js/species.js`).
+Dans chaque lieu, le terrain s'agrandit parcelle par parcelle : une clôture entoure les parcelles ouvertes,
+la suivante attend en pointillés et s'ouvre à 1 ; 2,5 ; 4,5 ; 7 ; 10… km faits sur place (12 au plus).
 
 ## Ciel
 
@@ -34,10 +36,11 @@ arrondie à 0,1° (environ 10 km), seulement si la personne a autorisé sa posit
 
 - `js/watercolor.js` : primitives de peinture (lavis, rubans, feuilles, grain de papier).
 - `js/plants.js` : herbes, fleurs, buissons, arbres et décor (mare, champignons, tronc).
-- `js/garden.js` : scène, caméra, vent, insectes, heure du jour.
+- `js/garden.js` : le jardin d'un lieu (parcelles, clôture), caméra et zoom à trois niveaux de détail, vent, animaux, ombres, saisons.
 - `js/tracker.js` : GPS et simulation.
 - `js/state.js` : activités (reprises du prototype Unity), effort, sauvegarde locale.
-- `js/main.js` : interface (bandeau, marche, récap, carnet).
+- `js/main.js` : interface (bandeau, suivi automatique, récap, carnet, tutoriel).
+- `js/daily.js` : revenir chaque jour (cadeau, série de jours actifs, trois défis, prochain objectif, album).
 
 - `js/harvest.js` : récolte des pas comptés appli fermée (Santé / Health Connect, podomètre), allure déduite de la cadence.
 - `js/species.js` : les lieux et leurs espèces, leur rôle, comment les aider, et ce qui les débloque.

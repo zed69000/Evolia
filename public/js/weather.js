@@ -38,6 +38,42 @@ export function sunTimes(lat, lon, date = new Date()) {
 	return { rise, set };
 }
 
+/**
+ * Saison du moment (hémisphère nord) : chaque valeur va de 0 à 1, au plus fort de la saison.
+ * Fin octobre, l'automne est presque à son maximum ; mi-janvier, c'est l'hiver plein.
+ */
+export function seasonOf(date) {
+	const start = new Date(date.getFullYear(), 0, 0);
+	const doy = Math.floor((date - start) / 86400000);
+	const bell = (center, width) => {
+		const d = Math.abs(doy - center), dist = Math.min(d, 365 - d);
+		return Math.max(0, 1 - dist / width);
+	};
+	return { spring: bell(110, 50), summer: bell(200, 55), autumn: bell(300, 42), winter: bell(15, 55) };
+}
+
+/** Hauteur (degrés au-dessus de l'horizon) et direction du soleil (degrés depuis le nord, sens horaire), formules de la NOAA. */
+export function sunPosition(lat, lon, date) {
+	const rad = Math.PI / 180;
+	const start = Date.UTC(date.getUTCFullYear(), 0, 0);
+	const doy = Math.floor((date - start) / 86400000);
+	const hr = date.getUTCHours() + date.getUTCMinutes() / 60;
+	const g = ((2 * Math.PI) / 365) * (doy - 1 + (hr - 12) / 24);
+	const eq = 229.18 * (0.000075 + 0.001868 * Math.cos(g) - 0.032077 * Math.sin(g) - 0.014615 * Math.cos(2 * g) - 0.040849 * Math.sin(2 * g));
+	const decl = 0.006918 - 0.399912 * Math.cos(g) + 0.070257 * Math.sin(g) - 0.006758 * Math.cos(2 * g) + 0.000907 * Math.sin(2 * g) - 0.002697 * Math.cos(3 * g) + 0.00148 * Math.sin(3 * g);
+	const ha = (hr * 60 + eq + 4 * lon) / 4 - 180;
+	const cosZ = Math.sin(lat * rad) * Math.sin(decl) + Math.cos(lat * rad) * Math.cos(decl) * Math.cos(ha * rad);
+	const zen = Math.acos(Math.max(-1, Math.min(1, cosZ)));
+	const den = Math.cos(lat * rad) * Math.sin(zen);
+	let az = 180;
+	if (Math.abs(den) > 1e-6) {
+		az = 180 - Math.acos(Math.max(-1, Math.min(1, (Math.sin(lat * rad) * Math.cos(zen) - Math.sin(decl)) / den))) / rad;
+		if (ha > 0) az = -az;
+		if (az < 0) az += 360;
+	}
+	return { alt: 90 - zen / rad, az };
+}
+
 /** Hauteur du soleil au-dessus de l'horizon, en degrés, au lieu et à l'instant donnés (NOAA). */
 export function sunAltitude(lat, lon, date) {
 	const rad = Math.PI / 180;
@@ -117,12 +153,15 @@ export class Sky {
 		const w = this.state.weatherCache;
 		const fresh = w && Date.now() - w.at < 3 * 3600000;
 		this.garden.sun = fresh && w.rise ? { rise: w.rise, set: w.set } : sunTimes(c.lat, c.lon);
-		// Hauteur du soleil pour une heure locale d'aujourd'hui : la lumière suit la saison.
-		this.garden.altitude = h => {
-			const d = this.garden.dateOverride ? new Date(this.garden.dateOverride) : new Date();
+		// Position du soleil pour une heure locale d'aujourd'hui : la lumière et les ombres suivent la saison.
+		const day = () => (this.garden.dateOverride ? new Date(this.garden.dateOverride) : new Date());
+		this.garden.sunPos = h => {
+			const d = day();
 			d.setHours(Math.floor(h), Math.round((h % 1) * 60), 0, 0);
-			return sunAltitude(c.lat, c.lon, d);
+			return sunPosition(c.lat, c.lon, d);
 		};
+		this.garden.altitude = h => this.garden.sunPos(h).alt;
+		this.garden.setSeason(seasonOf(day()));
 		this.garden.weather = this.override ? { kind: this.override, wind: this.override === 'storm' ? 35 : 15, temp: this.override === 'snow' ? -1 : 12 }
 			: fresh ? { kind: w.kind, wind: w.wind, temp: w.temp } : { kind: 'clear', wind: 10, temp: null };
 		if (notify) this.onChange?.();

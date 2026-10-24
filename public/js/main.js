@@ -1,17 +1,18 @@
-// Interface : bandeau, marche en cours, récolte des pas, récap, carnet, lieux, biodiversité.
+// Interface : bandeau, suivi automatique du mouvement, récolte des pas, récap, carnet, biodiversité, tutoriel.
 
-import { load, save, reset, newPlace, allPlants, ACTIVITIES, ACTIVITY_BY_ID, MAX_SPEED_KMH, activityFor, effortFor, dayKey, dayNumber, todayMeters, addDistance, STEP_LENGTH_M } from './state.js';
-import { Garden } from './garden.js';
+import { load, save, reset, newPlace, allPlants, ACTIVITIES, ACTIVITY_BY_ID, MAX_SPEED_KMH, activityFor, effortFor, dayKey, todayMeters, addDistance, STEP_LENGTH_M } from './state.js';
+import { Garden, CELLS, CELL_KM, cellsOpen } from './garden.js';
+import { PlacesMap } from './map.js';
 import { PLANT_TYPES, DECOR, plantName } from './plants.js';
 import { GpsTracker, MotionTracker, SimTracker } from './tracker.js';
 import { SOURCES, bestSource, harvest, classifyCadence } from './harvest.js';
 import { PLACES, PLACE_BY_ID, SPECIES_BY_ID, checkSpecies, placeOpen, speciesOf } from './species.js';
 import { Encyclopedia, thumbCopy } from './encyclopedia.js';
-import { PlacesMap } from './map.js';
 import { Sky, WEATHER_LABEL } from './weather.js';
 import { EcoPanel, tick, summaryHtml, addBoost, boostLeft, visualExtra, rates, GUILDS, BOOST_MULT, BOOST_PER_MIN } from './idle.js';
 import { paperTexture } from './watercolor.js';
 import { VERSION } from './version.js';
+import { rollDay, markActive, giftReady, giftFor, claimGift, claim, toClaim, noteTap, noteQuest, challengesHtml, weekHtml, nextGoal, albumHtml, collection } from './daily.js';
 
 const params = new URLSearchParams(location.search);
 const DEV = params.has('dev');
@@ -23,7 +24,7 @@ const state = load();
 state.totals.steps ??= 0;
 state.placesOpen ??= { prairie: true };
 const garden = new Garden($('#garden'), state);
-garden.idleBonus = sp => visualExtra(state, state.place, sp);
+garden.idleBonus = sp => visualExtra(state, sp.place, sp);
 if (params.has('h')) garden.hourOverride = parseFloat(params.get('h'));
 if (params.has('date')) garden.dateOverride = params.get('date');
 const sky = new Sky(state, garden, () => renderHud());
@@ -68,16 +69,6 @@ const eco = new EcoPanel($('#eco'), state, gid => {
 	persist(true);
 });
 
-// ─── Mise en page ─────────────────────────────────────────────
-
-function updatePads() {
-	const app = $('#app').getBoundingClientRect();
-	const hud = $('#hud').getBoundingClientRect();
-	const sheet = (walk ? $('#walk') : $('#home')).getBoundingClientRect();
-	garden.setPads(hud.bottom - app.top + 10, app.bottom - sheet.top + 10);
-}
-new ResizeObserver(() => updatePads()).observe($('#app'));
-
 // ─── Bandeau ──────────────────────────────────────────────────
 
 function renderHud() {
@@ -109,17 +100,17 @@ function showModal(html) {
 }
 function closeModal() { $('#modal').hidden = true; }
 
-// ─── Espèces et lieux ─────────────────────────────────────────
+// ─── Espèces et parcelles ─────────────────────────────────────
 
 function updateSpeciesDot() {
 	$('#species-dot').hidden = !Object.keys(state.species).some(id => !state.speciesSeen?.[id]);
 }
 
-/** Annonce les espèces et les lieux qui viennent de s'ouvrir. `quiet` : au tout premier lancement, sans bruit. */
+/** Annonce les espèces et les parcelles qui viennent de s'ouvrir. `quiet` : au tout premier lancement, sans bruit. */
 function announceSpecies(quiet = false) {
 	const found = checkSpecies(state);
 	const opened = PLACES.filter(p => !state.placesOpen[p.id] && placeOpen(state, p));
-	for (const p of opened) state.placesOpen[p.id] = true;
+	for (const p of opened) state.placesOpen[p.id] = Date.now();
 	if (!found.length && !opened.length) return;
 	persist();
 	updateSpeciesDot();
@@ -127,32 +118,47 @@ function announceSpecies(quiet = false) {
 	for (const sp of found) toast(`${sp.kind === 'milieu' ? 'Nouveau milieu' : 'Nouvelle espèce'} : ${sp.name}`, '#F08A3C', () => species.open(sp.id));
 	for (const p of opened) toast(`Nouveau lieu ouvert : ${p.name}`, p.color, () => places.open());
 }
-setInterval(() => { if (!walk) announceSpecies(); }, 4000);
+setInterval(announceSpecies, 4000);
 
+/** Change de lieu : chaque lieu a son jardin, ses parcelles et ses espèces. */
 function travel(id) {
 	if (id === state.place || !placeOpen(state, id)) return;
-	if (walk) { toast('Termine ta marche avant de changer de lieu'); return; }
+	if (session) endSession();
 	const first = !state.places[id];
 	state.places[id] ??= newPlace();
 	state.place = id;
 	garden.setPlace(id);
+	endQuest();
 	renderHud();
+	renderStatus();
 	persist(true);
 	const p = PLACE_BY_ID[id];
 	if (first) {
-		showModal(`<h2>${p.name}</h2><p>${p.intro}</p><p>Ici poussent d'autres espèces. Tes pas d'aujourd'hui feront pousser ce jardin-là.</p>
+		showModal(`<h2>${p.name}</h2><p>${p.intro}</p><p>Ici poussent d'autres espèces. Tes pas feront pousser ce jardin-là, et sa clôture reculera à mesure que tu bougeras.</p>
 			<button class="btn primary" data-close>Explorer</button>`);
 	} else toast(`Tu es dans ${p.name.toLowerCase()}`, p.color);
 }
 
-// ─── Toucher une plante ───────────────────────────────────────
+// ─── Toucher : plante, animal, parcelle ───────────────────────
 
 let cardTimer = 0;
+function placeCard(card, hit, ms = 4500) {
+	card.style.left = `${Math.max(90, Math.min($('#app').clientWidth - 90, hit.x))}px`;
+	card.style.top = `${Math.max(170, hit.y - 20)}px`;
+	card.hidden = false;
+	cardTimer = setTimeout(() => { card.hidden = true; }, ms);
+}
+
 garden.onTap = hit => {
 	const card = $('#plant-card');
 	clearTimeout(cardTimer);
 	if (!hit) { card.hidden = true; return; }
 	if (hit.critter) return tapCritter(hit, card);
+	if (hit.cell != null) {
+		if (hit.open) garden.flyToCell(hit.cell);
+		else toast(`Nouvelle parcelle : encore ${fmt(Math.max(0.1, Math.ceil((CELL_KM[hit.cell] - here().km) * 10) / 10), 1)} km dans ${PLACE_BY_ID[state.place].name.toLowerCase()}`, '#9A7448');
+		return;
+	}
 	const p = hit.plant;
 	const id = speciesOf(p);
 	const known = !!state.species[id];
@@ -163,10 +169,7 @@ garden.onTap = hit => {
 		${known ? '<span class="more">Son rôle dans la nature ›</span>' : ''}`;
 	card.classList.toggle('link', known);
 	card.onclick = known ? () => { card.hidden = true; species.open(id); } : null;
-	card.style.left = `${Math.max(90, Math.min($('#app').clientWidth - 90, hit.x))}px`;
-	card.style.top = `${Math.max(170, hit.y - 20)}px`;
-	card.hidden = false;
-	cardTimer = setTimeout(() => { card.hidden = true; }, 4500);
+	placeCard(card, hit);
 };
 
 // ─── Toucher un animal, et le jeu « Trouve… » pour les enfants ─
@@ -177,19 +180,20 @@ const QUEST_REWARD = 15;
 function tapCritter(hit, card) {
 	const sp = SPECIES_BY_ID[hit.critter.sp];
 	if (!sp) return;
+	noteTap(state, sp.id);
+	renderDaily();
 	if (quest === sp.id) return winQuest(sp);
 	card.innerHTML = `<b>${sp.name}</b>${sp.latin}<span class="more">Découvre son rôle ›</span>`;
 	card.classList.add('link');
 	card.onclick = () => { card.hidden = true; species.open(sp.id); };
-	card.style.left = `${Math.max(90, Math.min($('#app').clientWidth - 90, hit.x))}px`;
-	card.style.top = `${Math.max(170, hit.y - 14)}px`;
-	card.hidden = false;
-	cardTimer = setTimeout(() => { card.hidden = true; }, 4000);
+	placeCard(card, hit, 4000);
 }
 
-/** Choisit un animal présent dans le jardin à faire trouver. */
+/** Choisit un animal visible à l'écran à faire trouver. */
 function pickQuest() {
-	const present = [...new Set(garden.insects.filter(b => !b.leaving && b.x > 0 && b.x < 420).map(b => b.sp))].filter(id => id !== state.lastQuest);
+	const v = garden.view();
+	const seen = garden.insects.filter(b => !b.leaving && b.x > v.x0 && b.x < v.x0 + v.w && b.y > v.y0 && b.y < v.y0 + v.h);
+	const present = [...new Set(seen.map(b => b.sp))].filter(id => id !== state.lastQuest);
 	if (!present.length) return;
 	quest = present[Math.floor(Math.random() * present.length)];
 	state.lastQuest = quest;
@@ -204,6 +208,8 @@ function endQuest() {
 
 function winQuest(sp) {
 	endQuest();
+	noteQuest(state);
+	renderDaily();
 	state.nectar = (state.nectar ?? 0) + QUEST_REWARD;
 	persist();
 	renderHud();
@@ -216,173 +222,154 @@ function winQuest(sp) {
 $('#quest').addEventListener('click', () => {
 	const b = garden.insects.find(i => i.sp === quest && !i.leaving);
 	if (!b) { endQuest(); return; }
-	garden.focusOn(b.y);
+	garden.focusOn(b.x, b.y);
 	toast('Regarde bien par là, et touche-la du doigt !', '#F08A3C');
 });
 setInterval(() => {
-	if (walk || document.hidden) return;
+	if (document.hidden || !$('#coach').hidden) return;
 	if (quest && !garden.insects.some(b => b.sp === quest && !b.leaving)) endQuest();
-	else if (!quest && $('#modal').hidden) pickQuest();
+	else if (!quest && $('#modal').hidden && !garden.glyph) pickQuest();
 }, 9000);
 
 // ─── Distance et décor ────────────────────────────────────────
 
-/** Chaque mètre compte pour la journée, pour le lieu, et rapporte du nectar (1 pour 5 m). */
+/** Chaque mètre compte pour la journée, pour la parcelle, et rapporte du nectar (1 pour 5 m). */
 function addMeters(m) {
 	addDistance(state, m);
 	here().km += m / 1000;
 	state.nectar = (state.nectar ?? 0) + m / 5;
+	if (markActive(state)) {
+		const s = state.daily.streak;
+		toast(s > 1 ? `Jour actif : ${s} jours de suite !` : 'Jour actif : ta série commence', '#F08A3C', () => showDaily());
+	}
+	renderDaily();
 }
 
-/** L'effort fait en bougeant compte double pour la vitalité du lieu. */
+/** L'effort fait en bougeant compte double pour la vitalité de la parcelle. */
 function addEffortXp(effort) {
 	here().xp = (here().xp ?? 0) + effort * 2;
 }
 
 function checkUnlocks(events) {
 	const pl = here();
+	// La clôture recule : une nouvelle parcelle s'ouvre tous les quelques kilomètres faits dans ce lieu.
+	for (let n = cellsOpen(pl); n < CELLS.length && pl.km >= CELL_KM[n]; n = cellsOpen(pl)) {
+		garden.openCell(n);
+		(pl.cellDates ??= {})[n] = Date.now();
+		garden.flyToCell(n);
+		toast('La clôture recule : une nouvelle parcelle !', '#9A7448');
+		events?.push({ kind: 'cell', n });
+	}
 	for (const [key, d] of Object.entries(DECOR)) {
 		if (d.place !== state.place || d.always || pl.unlocked[key] || pl.km < d.km) continue;
-		pl.unlocked[key] = true;
+		pl.unlocked[key] = Date.now();
 		garden.reveal(key);
 		toast(DECOR_MSG[key], '#5BB5B0');
 		events?.push({ kind: 'decor', key });
 	}
 }
 
-// ─── Marche en direct ─────────────────────────────────────────
+// ─── Suivi automatique : pas de bouton, l'appli voit seule quand on bouge ─
 
-let walk = null;
+const STOP_AFTER = 60000;
+const tracking = { gps: null, motion: null, sim: null, lastGpsMove: 0, located: false };
+let session = null;
 
-async function keepAwake() {
-	try { walk.lock = await navigator.wakeLock?.request('screen'); } catch (e) { /* pas grave */ }
-}
-
-async function startWalk(useSim = DEV || !GpsTracker.available()) {
-	if (walk) return;
-	$('#plant-card').hidden = true;
-	walk = { start: Date.now(), simTime: 0, distance: 0, steps: 0, effort: 0, events: [], speed: 0, act: null, sim: useSim, touched: new Set(), lastGpsMove: 0 };
-	$('#home').classList.add('off');
-	$('#walk').classList.remove('off');
-	// iOS n'accorde l'accéléromètre que pendant le geste qui lance la marche : on le demande en premier.
-	const motionOk = !useSim && (await MotionTracker.permit());
-	startTracker();
-	if (motionOk) {
-		walk.motion = new MotionTracker(handleSample, classifyCadence);
-		walk.motion.start();
+/** Démarre le GPS et l'accéléromètre. `gesture` : appelé pendant un toucher (iOS ne donne l'accéléromètre qu'à ce moment). */
+async function enableTracking(gesture = false) {
+	if (!tracking.motion) {
+		const needsGesture = typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function';
+		if (!needsGesture || gesture) {
+			if (await MotionTracker.permit()) {
+				tracking.motion = new MotionTracker(onSample, classifyCadence);
+				tracking.motion.start();
+			}
+		}
 	}
-	garden.setFollow(true);
-	keepAwake();
-	walk.tick = setInterval(renderWalk, 1000);
-	renderWalk();
-	setTimeout(updatePads, 450);
-}
-
-function startTracker() {
-	walk.tracker?.stop();
-	const Tracker = walk.sim ? SimTracker : GpsTracker;
-	walk.tracker = new Tracker(handleSample, handleStatus);
-	if (walk.sim) {
-		walk.tracker.speedKmh = parseFloat($('#sim-speed').value);
-		walk.tracker.timeScale = parseFloat($('#sim-ts .on').dataset.ts);
+	if (!tracking.gps && GpsTracker.available()) {
+		tracking.gps = new GpsTracker(onSample, onGpsStatus);
+		tracking.gps.start();
 	}
-	$('#sim').hidden = !walk.sim;
-	$('#btn-sim').hidden = walk.sim || !DEV;
-	walk.tracker.start();
+	state.tracking = true;
+	persist(true);
+	renderStatus();
 }
 
-function setGpsLabel(cls, text) {
-	const el = $('#walk-gps');
-	el.className = `gps ${cls}`;
-	el.querySelector('span').textContent = text;
+/** Au lancement : reprendre le suivi sans redemander, si la position est déjà autorisée. */
+async function resumeTracking() {
+	if (!state.tracking) return;
+	let granted = true;
+	try { granted = (await navigator.permissions?.query({ name: 'geolocation' }))?.state !== 'prompt'; } catch (e) { /* navigateur sans API : on tente */ }
+	if (granted) enableTracking(false);
+	// Sur iPhone, l'accéléromètre attend le premier toucher.
+	document.addEventListener('pointerdown', () => { if (state.tracking) enableTracking(true); }, { once: true });
 }
 
-function handleStatus(st) {
-	if (st.kind === 'searching') setGpsLabel('', 'Recherche du GPS…');
-	if (st.kind === 'sim') setGpsLabel('', 'Mode test');
-	if (st.kind === 'ok') setGpsLabel('ok', `GPS ±${Math.round(st.accuracy)} m`);
-	if (st.kind === 'weak') setGpsLabel('weak', `Signal faible (±${Math.round(st.accuracy)} m)`);
-	if (st.kind === 'error') {
-		setGpsLabel('err', st.code === 1 ? 'Position refusée' : 'GPS indisponible');
-		if (DEV) $('#btn-sim').hidden = false;
-		if (st.code === 1 && !walk?.motion) toast('Autorise la position pour suivre ta marche', '#C0442F');
+function onGpsStatus(st) {
+	tracking.gpsState = st.kind;
+	if (st.kind === 'ok' && !tracking.located && tracking.gps?.last) {
+		tracking.located = true;
+		sky.setCoords(tracking.gps.last.coords.latitude, tracking.gps.last.coords.longitude);
 	}
+	if (st.kind === 'error' && st.code === 1 && !tracking.motion) toast('Autorise la position pour que tes pas comptent', '#C0442F');
+	renderStatus();
 }
 
 // En mode test le temps peut être accéléré : la durée suit alors le temps simulé.
-const walkSeconds = w => (w.sim ? w.simTime : (Date.now() - w.start) / 1000);
+const sessionSeconds = w => (w.sim ? w.simTime : (Date.now() - w.start) / 1000);
 
-function handleSample(s) {
-	if (!walk) return;
+function startSession(sim) {
+	session = { start: Date.now(), simTime: 0, distance: 0, steps: 0, effort: 0, events: [], speed: 0, act: null, sim, touched: new Set(), lastMove: Date.now() };
+	garden.setFollow(true);
+	toast('Tu bouges : ton jardin pousse', '#F08A3C');
+}
+
+function onSample(s) {
+	const now = Date.now();
 	let act;
 	if (s.motion) {
-		walk.steps += s.steps;
-		// Le GPS a la priorité dehors ; l'accéléromètre prend le relais quand il ne voit plus de déplacement.
-		if (Date.now() - walk.lastGpsMove < 15000) { renderWalk(); return; }
-		if (s.steps) setGpsLabel('ok', 'Pas comptés au podomètre');
+		if (session) session.steps += s.steps;
+		// Dehors, le GPS a la priorité ; l'accéléromètre prend le relais quand il ne voit plus de déplacement.
+		if (now - tracking.lastGpsMove < 15000) { renderStatus(); return; }
 		act = s.act ? ACTIVITY_BY_ID[s.act] : null;
 	} else {
-		walk.simTime += s.dt;
-		if (s.dist > 0 && !walk.sim) walk.lastGpsMove = Date.now();
+		if (s.dist > 0 && !s.sim) tracking.lastGpsMove = now;
 		act = activityFor(s.speedKmh);
 	}
-	walk.speed = s.speedKmh;
-	walk.act = act;
-	if (act && s.dist > 0) {
-		walk.distance += s.dist;
-		addMeters(s.dist);
-		const effort = effortFor(s.dist, s.speedKmh, act);
-		walk.effort += effort;
-		state.totals.effort += effort;
-		addEffortXp(effort);
-		for (const ev of garden.addEffort(act.plant, effort)) {
-			walk.events.push(ev);
-			if (ev.kind === 'mature' && ev.plant.type !== 'herbe') toast(`${plantName(ev.plant)} a fini de pousser`, TYPE_COLOR[ev.plant.type]);
-		}
-		if (garden.current) walk.touched.add(garden.current);
-		checkUnlocks(walk.events);
-		announceSpecies();
-		renderHud();
-		persist();
+	if (!act || !(s.dist > 0)) {
+		if (session) { session.speed = s.speedKmh ?? 0; session.act = null; if (s.sim) session.simTime += s.dt; }
+		renderStatus();
+		return;
 	}
-	renderWalk();
+	if (!session) startSession(!!s.sim);
+	if (s.sim) session.simTime += s.dt;
+	session.lastMove = now;
+	session.speed = s.speedKmh;
+	session.act = act;
+	session.distance += s.dist;
+	addMeters(s.dist);
+	const effort = effortFor(s.dist, s.speedKmh, act);
+	session.effort += effort;
+	state.totals.effort += effort;
+	addEffortXp(effort);
+	for (const ev of garden.addEffort(act.plant, effort)) {
+		session.events.push(ev);
+		if (ev.kind === 'mature' && ev.plant.type !== 'herbe') toast(`${plantName(ev.plant)} a fini de pousser`, TYPE_COLOR[ev.plant.type]);
+	}
+	if (garden.current) session.touched.add(garden.current);
+	checkUnlocks(session.events);
+	announceSpecies();
+	renderHud();
+	renderStatus();
+	persist();
 }
 
-function renderWalk() {
-	if (!walk) return;
-	$('#walk-km').textContent = fmt(walk.distance / 1000);
-	$('#walk-time').textContent = fmtTime(walkSeconds(walk));
-	$('#walk-speed').textContent = fmt(walk.speed, 1);
-	$('#walk-steps').textContent = fmtInt(walk.steps || walk.distance / STEP_LENGTH_M);
-	const pill = $('#walk-act');
-	if (walk.speed > MAX_SPEED_KMH) { pill.className = 'pill fast'; pill.textContent = 'Trop rapide pour marcher'; }
-	else if (!walk.act) { pill.className = 'pill pause'; pill.textContent = walk.speed ? 'En pause' : 'En attente'; }
-	else { pill.className = 'pill'; pill.textContent = walk.act.name; }
-	const p = garden.current;
-	if (p) {
-		const pct = Math.floor(p.growth * 100);
-		$('#grow-name').textContent = plantName(p);
-		$('#grow-pct').textContent = `${pct} %`;
-		$('#grow-bar').style.width = `${pct}%`;
-	}
-}
-
-function endWalk() {
-	if (!walk) return;
-	walk.tracker.stop();
-	walk.motion?.stop();
-	clearInterval(walk.tick);
-	walk.lock?.release?.();
+/** Une minute sans bouger : la balade se termine toute seule, avec un petit bilan. */
+function endSession() {
+	const w = session;
+	session = null;
 	garden.setFollow(false);
-	const last = walk.tracker.last?.coords;
-	if (last) sky.setCoords(last.latitude, last.longitude);
-	const w = walk;
-	walk = null;
-	$('#walk').classList.add('off');
-	$('#home').classList.remove('off');
-	setTimeout(updatePads, 450);
-
-	const duration = walkSeconds(w);
+	const duration = sessionSeconds(w);
 	const matured = {};
 	for (const ev of w.events) if (ev.kind === 'mature') matured[ev.plant.type] = (matured[ev.plant.type] ?? 0) + 1;
 	if (w.distance > 50) addBoost(state, (duration / 60) * BOOST_PER_MIN);
@@ -392,11 +379,119 @@ function endWalk() {
 		state.walks.length = Math.min(state.walks.length, 100);
 		state.totals.walks += 1;
 		state.totals.steps += w.steps;
+		const grown = Object.entries(matured).map(([t, n]) => `+${n} ${plural(n, t)}`).join(', ');
+		toast(`Balade finie : ${fmt(w.distance / 1000)} km${grown ? ` · ${grown}` : ''}`, '#F08A3C', () => showRecap(w, duration, matured));
 	}
 	persist(true);
 	renderHud();
-	showRecap(w, duration, matured);
+	renderStatus();
 }
+setInterval(() => {
+	if (session && Date.now() - session.lastMove > STOP_AFTER) endSession();
+	else renderStatus();
+}, 5000);
+
+function renderStatus() {
+	const dot = $('#status-dot'), title = $('#status-title'), sub = $('#status-sub');
+	$('#btn-track').hidden = !!state.tracking;
+	$('#live').hidden = !session;
+	if (session) {
+		dot.className = 'status-dot moving';
+		title.textContent = session.act?.name ?? 'En pause';
+		sub.textContent = `Ton jardin pousse · élan ×${BOOST_MULT} à la fin`;
+		$('#live-km').textContent = fmt(session.distance / 1000);
+		$('#live-time').textContent = fmtTime(sessionSeconds(session));
+		$('#live-speed').textContent = fmt(session.speed ?? 0, 1);
+		$('#live-steps').textContent = fmtInt(session.steps || session.distance / STEP_LENGTH_M);
+		const p = garden.current;
+		if (p) {
+			const pct = Math.floor(p.growth * 100);
+			$('#grow-name').textContent = plantName(p);
+			$('#grow-pct').textContent = `${pct} %`;
+			$('#grow-bar').style.width = `${pct}%`;
+		}
+		return;
+	}
+	const r = rates(state, state.place);
+	const x = boostLeft(state) ? BOOST_MULT : 1;
+	dot.className = `status-dot${state.tracking ? ' idle' : ''}`;
+	title.textContent = state.tracking ? 'Au repos' : 'Suivi en pause';
+	sub.textContent = state.tracking
+		? `Ton écosystème travaille · +${fmtInt(r.nectar * x)} nectar/h${x > 1 ? ` · élan ×${x}` : ''}`
+		: 'Active le suivi : tes pas feront pousser le jardin';
+	renderDaily();
+}
+
+// ─── Chaque jour : cadeau, défis, prochain objectif ───────────
+
+function renderDaily() {
+	if (!state.daily) return;
+	const goal = session ? null : nextGoal(state);
+	$('#next-goal').hidden = !goal;
+	if (goal) $('#next-goal-text').textContent = goal;
+	const done = state.daily.challenges.filter(c => state.daily.claimed[c.id]).length;
+	$('#daily-count').textContent = `${done} / 3`;
+	$('#daily-dot').hidden = !(giftReady(state) || toClaim(state).length);
+}
+
+/** Le panneau du jour ; `gift` : premier passage de la journée, avec le cadeau à ouvrir. */
+function showDaily(gift = false) {
+	const d = state.daily;
+	const g = giftFor(state);
+	const top = giftReady(state)
+		? `<div class="gift"><div class="gift-box" aria-hidden="true">🎁</div>
+			<p>${d.streak > 1 ? `<b>${d.streak} jours actifs de suite.</b> ` : ''}Ton jardin t'a gardé un cadeau :</p>
+			<div class="chips"><span class="chip gold">+${g.nectar} nectar</span>${g.boost ? `<span class="chip">élan ×3 · ${g.boost} min</span>` : ''}</div>
+			<button class="btn primary" id="btn-gift">Ouvrir</button></div>`
+		: `<p class="streak">${d.streak > 0 ? `Série : <b>${d.streak} jour${d.streak > 1 ? 's' : ''} actif${d.streak > 1 ? 's' : ''}</b>` : 'Bouge 500 m pour lancer ta série'}${d.best > d.streak ? ` · record ${d.best}` : ''}</p>`;
+	const note = gift && idleNote ? `<h3>Pendant ton absence</h3>${idleNote}` : '';
+	if (gift) idleNote = '';
+	const goal = nextGoal(state);
+	showModal(`<h2>${gift ? 'Bonjour !' : "Aujourd'hui"}</h2>
+		${weekHtml(state)}${top}
+		<h3>Défis du jour</h3>${challengesHtml(state)}
+		${goal ? `<p class="next-line">${goal}</p>` : ''}${note}
+		<button class="btn ghost wide" data-close>Voir mon jardin</button>`);
+	$('#btn-gift')?.addEventListener('click', () => {
+		const got = claimGift(state);
+		state.nectar = (state.nectar ?? 0) + got.nectar;
+		if (got.boost) addBoost(state, got.boost);
+		garden.burst(garden.cam.cx, garden.cam.cy, 30, '#F4C23E');
+		toast(`Cadeau : +${got.nectar} nectar${got.boost ? ` et élan ×3 pendant ${got.boost} min` : ''}`, '#F4C23E');
+		persist(true);
+		renderHud();
+		renderDaily();
+		showDaily();
+	});
+}
+
+$('#modal').addEventListener('click', e => {
+	const b = e.target.closest('[data-claim]');
+	if (!b) return;
+	const c = claim(state, b.dataset.claim);
+	if (!c) return;
+	state.nectar = (state.nectar ?? 0) + c.reward;
+	if (c.boost) addBoost(state, c.boost);
+	toast(`Défi réussi : +${c.reward} nectar${c.boost ? ` et élan ${c.boost} min` : ''}`, '#F08A3C');
+	persist(true);
+	renderHud();
+	renderDaily();
+	showDaily();
+});
+
+$('#daily').addEventListener('click', () => showDaily());
+
+/** Nouveau jour (ouverture, ou retour dans l'appli) : on prépare les défis et on offre le cadeau. */
+function newDay() {
+	rollDay(state);
+	persist();
+	renderDaily();
+	return giftReady(state);
+}
+
+$('#btn-track').addEventListener('click', () => { enableTracking(true); sky.locate(true); });
+
+// ─── Récap d'une balade ───────────────────────────────────────
 
 function growthChips(matured, touched) {
 	const chips = [];
@@ -412,8 +507,8 @@ function growthChips(matured, touched) {
 function showRecap(w, duration, matured) {
 	const chips = growthChips(matured, w.touched);
 	for (const ev of w.events) if (ev.kind === 'decor') chips.push(`<span class="chip gold">${DECOR[ev.key].name}</span>`);
-	const title = w.distance < 10 ? 'À bientôt' : w.distance > 3000 ? 'Quelle balade !' : 'Belle marche !';
-	const sub = w.distance < 10 ? 'Pas encore de pas enregistrés cette fois.' : 'Voici ce qui a poussé grâce à toi.';
+	if (w.events.some(ev => ev.kind === 'cell')) chips.push('<span class="chip gold">Nouvelle parcelle</span>');
+	const title = w.distance > 3000 ? 'Quelle balade !' : 'Belle balade !';
 	let ecoLine = '';
 	if (w.distance > 50) {
 		const r = rates(state, state.place);
@@ -422,7 +517,7 @@ function showRecap(w, duration, matured) {
 		ecoLine = `<p class="eco-gain">Ton écosystème profite de ta sortie : <b>+${fmtInt(w.distance / 5)} nectar</b> et production <b>×${BOOST_MULT}</b> pendant ${fmtMin(mins)}${flowers >= 0.5 ? `, soit environ ${fmtInt(flowers)} fleur${flowers >= 1.5 ? 's' : ''} en plus grâce à tes pollinisateurs` : ''}.</p>`;
 	}
 	showModal(`
-		<h2>${title}</h2><p>${sub}</p>
+		<h2>${title}</h2><p>Voici ce qui a poussé grâce à toi.</p>
 		<div class="walk-stats">
 			<div><b>${fmt(w.distance / 1000)}</b><span>km</span></div>
 			<div><b>${fmtTime(duration)}</b><span>durée</span></div>
@@ -438,7 +533,7 @@ function showRecap(w, duration, matured) {
 let harvesting = false;
 
 async function maybeHarvest(source = SOURCES[state.harvestSource], since = state.lastHarvest) {
-	if (harvesting || walk || !source) return;
+	if (harvesting || session || !source) return;
 	harvesting = true;
 	try {
 		const skip = state.walks.filter(w => w.end).map(w => [w.start, w.end]);
@@ -507,8 +602,8 @@ function runIdle(report = false) {
 setInterval(() => { if (!document.hidden) runIdle(); }, 5000);
 
 function showIdleRecap() {
-	if (!idleNote || !$('#modal').hidden) return;
-	showModal(`<h2>Pendant ton absence</h2><p>Tes animaux ont continué de travailler. Bouge pour doubler leur production.</p>
+	if (!idleNote || !$('#modal').hidden || !$('#coach').hidden) return;
+	showModal(`<h2>Pendant ton absence</h2><p>Tes animaux ont continué de travailler. Bouge pour tripler leur production.</p>
 		${idleNote}<button class="btn primary" data-close>Voir mon jardin</button>`);
 	idleNote = '';
 }
@@ -520,7 +615,7 @@ async function offerHarvest() {
 	if (!source) return;
 	showModal(`
 		<h2>Ton jardin pousse même appli fermée</h2>
-		<p>Ton téléphone compte déjà tes pas avec ${source.label}. Evolia peut les relire à chaque ouverture : la marche, les courses, et même le ménage font pousser ton jardin. Ces données restent sur ton téléphone.</p>
+		<p>Ton téléphone compte déjà tes pas avec ${source.label}. Evolia peut les relire à chaque ouverture. Ces données restent sur ton téléphone.</p>
 		<button class="btn primary" id="btn-allow">Autoriser</button>
 		<button class="btn ghost wide" data-close id="btn-later">Plus tard</button>`);
 	$('#btn-later').onclick = () => { state.harvestDeclined = true; persist(true); };
@@ -528,7 +623,7 @@ async function offerHarvest() {
 		closeModal();
 		let ok = false;
 		try { ok = await source.authorize(); } catch (e) { console.warn(e); }
-		if (!ok) { toast('Sans autorisation, seules les marches suivies en direct comptent', '#C0442F'); return; }
+		if (!ok) { toast('Sans autorisation, seuls les pas faits appli ouverte comptent', '#C0442F'); return; }
 		state.harvestSource = source.id;
 		const midnight = new Date(); midnight.setHours(0, 0, 0, 0);
 		state.lastHarvest = midnight.getTime(); // premier cadeau : les pas d'aujourd'hui
@@ -540,9 +635,9 @@ async function offerHarvest() {
 document.addEventListener('visibilitychange', async () => {
 	if (document.hidden) { persist(true); return; }
 	runIdle(true);
-	if (walk) keepAwake();
-	else if (Date.now() - state.lastHarvest > 5 * 60000) await maybeHarvest();
-	showIdleRecap();
+	if (Date.now() - state.lastHarvest > 5 * 60000) await maybeHarvest();
+	if (newDay() && $('#modal').hidden) showDaily(true);
+	else showIdleRecap();
 	sky.refresh();
 });
 
@@ -569,8 +664,13 @@ function renderJournal() {
 		<div class="panel-head"><h2>Carnet</h2><button class="close" data-close-journal aria-label="Fermer">×</button></div>
 		<div class="tiles">
 			<div class="tile"><b>${fmt(km, 1)}</b><span>km au total</span></div>
-			<div class="tile"><b>${fmtInt(state.totals.steps)}</b><span>pas récoltés</span></div>
+			<div class="tile"><b>${fmtInt(state.totals.steps)}</b><span>pas</span></div>
 			<div class="tile"><b>${plants.filter(p => p.growth >= 1).length}</b><span>plantes</span></div>
+		</div>
+		<div class="tiles">
+			<div class="tile"><b>${state.daily?.streak ?? 0}</b><span>jours de suite</span></div>
+			<div class="tile"><b>${state.daily?.best ?? 0}</b><span>record</span></div>
+			<div class="tile"><b>${collection(state).found}</b><span>espèces sur ${collection(state).total}</span></div>
 		</div>
 		<h3>Ces 7 derniers jours</h3>
 		<div class="week">
@@ -579,12 +679,14 @@ function renderJournal() {
 		</div>
 		<h3>Objectif du jour</h3>
 		<div class="seg" id="goal-seg">${[2, 3, 5, 8].map(g => `<button data-goal="${g}" class="${g === state.goalKm ? 'on' : ''}">${g} km</button>`).join('')}</div>
+		<h3>Suivi de tes pas</h3>
+		<p class="empty">${state.tracking ? "Actif : dès que tu bouges appli ouverte, une balade démarre toute seule et s'arrête après une minute d'immobilité." : 'En pause.'}
+			${src ? ` Pas relus appli fermée avec ${src.label} ; dernière récolte : ${new Date(state.lastHarvest).toLocaleString('fr-FR', { weekday: 'short', hour: '2-digit', minute: '2-digit' })}.` : " Dans l'appli mobile, les pas faits appli fermée seront aussi relus."}</p>
+		${state.tracking ? '' : '<button class="btn ghost wide" id="btn-track-2">Activer le suivi</button>'}
 		<h3>Le ciel</h3>
 		<p class="empty">${sky.label()} · lever ${fmtHour(garden.sun.rise)}, coucher ${fmtHour(garden.sun.set)}.
 			${state.coords ? 'Météo réelle de ton coin (position arrondie à 10 km, envoyée à Open-Meteo).' : 'Active ta position approximative pour voir la vraie météo et le vrai coucher du soleil.'}</p>
 		${state.coords ? '' : '<button class="btn ghost wide" id="btn-sky">Utiliser ma position approximative</button>'}
-		<h3>Pas comptés appli fermée</h3>
-		<p class="empty">${src ? `Activé avec ${src.label}. Dernière récolte : ${new Date(state.lastHarvest).toLocaleString('fr-FR', { weekday: 'short', hour: '2-digit', minute: '2-digit' })}.` : "Disponible dans l'appli mobile : tes pas seront relus à chaque ouverture."}</p>
 		<h3>Tous tes jardins</h3>
 		<ul class="rows">
 			${Object.entries(PLANT_TYPES).map(([t, d]) => `<li><span>${d.plural[0].toUpperCase() + d.plural.slice(1)} <small>· ${ACTIVITIES.filter(a => a.plant === t).map(a => a.name.toLowerCase()).join(', ')}</small></span><b>${mature(t)}</b></li>`).join('')}
@@ -593,13 +695,19 @@ function renderJournal() {
 		<ul class="rows">
 			${Object.entries(DECOR).filter(([, d]) => d.place === state.place && !d.always).map(([k, d]) => `<li><span>${d.name}</span><b>${pl.unlocked[k] ? '✓' : `à ${d.km} km`}</b></li>`).join('')}
 		</ul>
-		<h3>Dernières marches</h3>
-		${walks ? `<ul class="rows">${walks}</ul>` : '<p class="empty">Ta première marche apparaîtra ici.</p>'}
+		<h3>Ton album</h3>
+		<div id="album">${albumHtml(state)}</div>
+		<h3>Dernières balades</h3>
+		${walks ? `<ul class="rows">${walks}</ul>` : '<p class="empty">Ta première balade apparaîtra ici.</p>'}
 		${DEV ? `<div class="dev">Mode test · heure du jardin <b id="dev-h">${garden.hourOverride ?? 'réelle'}</b>
 			<input type="range" id="dev-hour" min="0" max="24" step="0.25" value="${garden.hourOverride ?? new Date().getHours()}">
 			<div class="seg" id="dev-weather">${['réelle', ...Object.keys(WEATHER_LABEL)].map(k => `<button data-w="${k}" class="${(sky.override ?? 'réelle') === k ? 'on' : ''}">${WEATHER_LABEL[k] ?? 'Réelle'}</button>`).join('')}</div>
+			Déplacement simulé <b id="sim-v">${tracking.sim ? `${fmt(tracking.sim.speedKmh, 1)} km/h` : 'arrêté'}</b>
+			<input type="range" id="sim-speed" min="0" max="20" step="0.5" value="${tracking.sim?.speedKmh ?? 5}">
+			<div class="seg" id="sim-ts">${[1, 10, 60].map(t => `<button data-ts="${t}" class="${(tracking.sim?.timeScale ?? 1) === t ? 'on' : ''}">×${t}</button>`).join('')}</div>
+			<button id="dev-sim">${tracking.sim ? 'Arrêter le déplacement simulé' : 'Simuler un déplacement'}</button>
 			<button id="dev-harvest">Simuler une journée d'activité</button>
-			<button id="dev-km">+10 km (ouvrir des lieux)</button>
+			<button id="dev-km">+10 km (ouvrir des parcelles)</button>
 			<button id="dev-reset">Effacer le jardin</button></div>` : ''}
 		<p class="ver">Evolia v${VERSION}</p>`;
 }
@@ -616,11 +724,26 @@ function closeJournal() {
 
 $('#journal').addEventListener('click', async e => {
 	if (e.target.closest('[data-close-journal]')) closeJournal();
+	const al = e.target.closest('[data-open-sp]');
+	if (al) species.open(al.dataset.openSp);
 	const g = e.target.closest('[data-goal]');
 	if (g) { state.goalKm = Number(g.dataset.goal); persist(true); renderHud(); renderJournal(); }
 	const w = e.target.closest('[data-w]');
 	if (w) { sky.override = w.dataset.w === 'réelle' ? null : w.dataset.w; sky.apply(); renderJournal(); }
+	const ts = e.target.closest('[data-ts]');
+	if (ts && tracking.sim) { tracking.sim.timeScale = Number(ts.dataset.ts); renderJournal(); }
 	if (e.target.id === 'btn-sky') { await sky.locate(true); persist(true); renderJournal(); }
+	if (e.target.id === 'btn-track-2') { enableTracking(true); sky.locate(true); renderJournal(); }
+	if (e.target.id === 'dev-sim') {
+		if (tracking.sim) { tracking.sim.stop(); tracking.sim = null; }
+		else {
+			tracking.sim = new SimTracker(s => onSample({ ...s, sim: true }), () => {});
+			tracking.sim.speedKmh = parseFloat($('#sim-speed').value);
+			tracking.sim.timeScale = Number($('#sim-ts .on')?.dataset.ts ?? 1);
+			tracking.sim.start();
+		}
+		renderJournal();
+	}
 	if (e.target.id === 'dev-harvest') { closeJournal(); maybeHarvest(SOURCES.mock, Date.now() - 16 * 3600000); }
 	if (e.target.id === 'dev-km') { addMeters(10000); checkUnlocks(); announceSpecies(); renderHud(); persist(true); renderJournal(); }
 	if (e.target.id === 'dev-reset' && confirm('Effacer tout le jardin ?')) { reset(); location.reload(); }
@@ -630,53 +753,56 @@ $('#journal').addEventListener('input', e => {
 		garden.hourOverride = parseFloat(e.target.value);
 		$('#dev-h').textContent = `${e.target.value} h`;
 	}
+	if (e.target.id === 'sim-speed' && tracking.sim) {
+		tracking.sim.speedKmh = parseFloat(e.target.value);
+		$('#sim-v').textContent = `${fmt(tracking.sim.speedKmh, 1)} km/h`;
+	}
 });
 
 // ─── Boutons ──────────────────────────────────────────────────
 
-$('#btn-walk').addEventListener('click', () => startWalk());
-$('#btn-stop').addEventListener('click', endWalk);
 $('#btn-journal').addEventListener('click', openJournal);
 $('#btn-species').addEventListener('click', () => species.open());
 $('#btn-eco').addEventListener('click', () => eco.open());
 $('#hud').addEventListener('click', () => places.open());
-$('#btn-sim').addEventListener('click', () => { walk.sim = true; startTracker(); });
 $('#modal').addEventListener('click', e => {
 	const sp = e.target.closest('[data-open-sp]');
 	if (sp) species.open(sp.dataset.openSp);
 	if (e.target.closest('[data-close]') || e.target.id === 'modal') closeModal();
 });
-$('#sim-speed').addEventListener('input', e => {
-	$('#sim-v').textContent = `${fmt(parseFloat(e.target.value), 1)} km/h`;
-	if (walk?.tracker instanceof SimTracker) walk.tracker.speedKmh = parseFloat(e.target.value);
-});
-$('#sim-ts').addEventListener('click', e => {
-	const b = e.target.closest('button');
-	if (!b) return;
-	for (const x of $('#sim-ts').children) x.classList.toggle('on', x === b);
-	if (walk?.tracker instanceof SimTracker) walk.tracker.timeScale = parseFloat(b.dataset.ts);
-});
 
-// ─── Démarrage ────────────────────────────────────────────────
+// ─── Tutoriel express : trois étapes, presque sans texte ──────
 
-/** Une fois, proposer le vrai ciel : pluie, neige, lever et coucher du soleil de chez soi. */
-function offerSky(next) {
-	if (state.coords || state.skyDeclined || !('geolocation' in navigator)) return next?.();
-	showModal(`
-		<h2>Le vrai ciel de chez toi</h2>
-		<p>S'il pleut, il pleut dans ton jardin. S'il neige, il neige. Le soleil s'y lève et s'y couche à la même heure que chez toi, avec la lumière de la saison.</p>
-		<p>Evolia utilise seulement ta position approximative (à 10 km près) pour demander la météo.</p>
-		<button class="btn primary" id="btn-sky-yes">Activer</button>
-		<button class="btn ghost wide" data-close id="btn-sky-no">Plus tard</button>`);
-	$('#btn-sky-no').onclick = () => { state.skyDeclined = true; persist(true); setTimeout(() => next?.(), 300); };
-	$('#btn-sky-yes').onclick = async () => {
-		closeModal();
-		const ok = await sky.locate(true);
-		persist(true);
-		toast(ok ? 'Ton jardin suit maintenant ton ciel' : 'Position refusée : le ciel restera dégagé', ok ? '#3E8FD0' : '#C0442F');
-		setTimeout(() => next?.(), 400);
+const COACH = [
+	{ title: 'Ton jardin est vivant', text: 'Glisse pour te promener, pince pour zoomer.', actions: [['Suivant', 'next']] },
+	{ title: 'Bouge, il pousse', text: 'Tes pas le font grandir. Même le ménage.', actions: [['Activer le suivi', 'track'], ['Plus tard', 'next']] },
+	{ title: 'Touche les animaux', text: 'Chaque espèce a un rôle. Découvre-les.', actions: [["C'est parti", 'done']] },
+];
+
+function coach(step = 0) {
+	const c = COACH[step], el = $('#coach');
+	el.querySelector('.coach-card').innerHTML = `
+		<div class="coach-dots">${COACH.map((_, i) => `<i class="${i === step ? 'on' : ''}"></i>`).join('')}</div>
+		<h2>${c.title}</h2><p>${c.text}</p>
+		<div class="coach-actions">${c.actions.map(([label, act], i) => `<button class="btn ${i ? 'ghost' : 'primary'}" data-coach="${act}">${label}</button>`).join('')}</div>`;
+	el.hidden = false;
+	el.onclick = async e => {
+		const act = e.target.closest('[data-coach]')?.dataset.coach;
+		if (!act) return;
+		if (act === 'track') { enableTracking(true); sky.locate(true); }
+		if (act === 'done') {
+			el.hidden = true;
+			state.seenIntro = true;
+			persist(true);
+			setTimeout(offerHarvest, 400);
+			renderDaily();
+			return;
+		}
+		coach(step + 1);
 	};
 }
+
+// ─── Démarrage ────────────────────────────────────────────────
 
 // Le logo pendant 1 s, puis un fondu doux vers le jardin.
 const splash = $('#splash');
@@ -692,31 +818,18 @@ garden.onPeek = on => {
 };
 
 renderHud();
-updatePads();
+renderStatus();
 const firstRun = !state.seenIntro;
+rollDay(state);
+checkUnlocks();
 announceSpecies(firstRun);
 updateSpeciesDot();
 persist(true);
 if (!sky.override) sky.start();
+resumeTracking();
 if (firstRun) {
-	showModal(`
-		<h2>Bienvenue</h2>
-		<p>Ce jardin pousse quand tu bouges. Chaque façon de te déplacer fait naître une plante différente, et chaque plante attire de nouvelles espèces.</p>
-		<ul class="legend">
-			<li><i class="dot" style="background:${TYPE_COLOR.herbe}"></i><span><b>Ménage, marche lente</b> · herbes</span></li>
-			<li><i class="dot" style="background:${TYPE_COLOR.fleur}"></i><span><b>Marche</b> · fleurs sauvages</span></li>
-			<li><i class="dot" style="background:${TYPE_COLOR.buisson}"></i><span><b>Marche rapide, jogging</b> · arbustes</span></li>
-			<li><i class="dot" style="background:${TYPE_COLOR.arbre}"></i><span><b>Course</b> · arbres</span></li>
-		</ul>
-		<p>Plus tu avances, plus de nouveaux lieux s'ouvrent : marais, forêt, montagne, littoral.</p>
-		<button class="btn primary" data-close id="btn-start">C'est parti</button>`);
-	$('#btn-start').addEventListener('click', () => setTimeout(() => offerSky(offerHarvest), 400));
-	state.seenIntro = true;
-	persist(true);
+	setTimeout(() => coach(0), 1600);
 } else {
 	runIdle(true);
-	maybeHarvest().then(() => {
-		showIdleRecap();
-		if ($('#modal').hidden) offerSky(offerHarvest);
-	});
+	maybeHarvest().then(() => (newDay() ? setTimeout(() => showDaily(true), 300) : showIdleRecap()));
 }
