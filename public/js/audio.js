@@ -1,11 +1,10 @@
 // Les sons de la nature, fabriqués sur place avec Web Audio (aucun fichier, marche hors ligne) :
-//   - un fond qui suit le vrai ciel et le lieu : vent, pluie, orage, ressac du littoral, grillons la nuit ;
+//   - un fond très discret qui suit le vrai ciel et le lieu : pluie et orage quand il pleut vraiment,
+//     ressac du littoral, grillons la nuit ; aucun souffle ni bruit de fond continu ;
 //   - les cris des animaux visibles à l'écran (merle, mésange, pic, chouette, grenouille, abeilles…),
 //     placés à gauche ou à droite selon où ils sont ;
 //   - une petite cloche douce, en gamme pentatonique, quand quelque chose de beau arrive.
 // Tout reste bas et lent : c'est un paysage sonore, pas une musique de jeu.
-
-import { riverDistance } from './zones.js';
 
 const NOTES = [523.25, 587.33, 659.25, 783.99, 880, 1046.5]; // do ré mi sol la do : pentatonique, jamais de fausse note
 
@@ -73,14 +72,9 @@ export class Soundscape {
 		let b = 0;
 		for (let i = 0; i < len; i++) { const w = Math.random() * 2 - 1; b = 0.97 * b + 0.03 * w; d[i] = w * 0.5 + b * 3; }
 
-		this.wind = this.bed({ type: 'bandpass', freq: 380, q: 0.5 }, 0);
 		this.rain = this.bed({ type: 'highpass', freq: 900, q: 0.3 }, 0, { type: 'lowpass', freq: 7000 });
 		this.rainBody = this.bed({ type: 'lowpass', freq: 500, q: 0.4 }, 0);
 		this.sea = this.bed({ type: 'lowpass', freq: 520, q: 0.5 }, 0, null, 0.11);
-		// La rivière : un petit clapotis clair qui ondule (pas de grondement : ce n'est pas une cascade).
-		this.riverHi = this.bed({ type: 'bandpass', freq: 2600, q: 1.2 }, 0, null, 1.7);
-		// Les feuilles qui bruissent, plus fort avec le vent.
-		this.leaves = this.bed({ type: 'highpass', freq: 3200, q: 0.3 }, 0, null, 0.07);
 		this.loop = setInterval(() => this.tick(), 250);
 	}
 
@@ -129,34 +123,15 @@ export class Soundscape {
 	tick() {
 		const ctx = this.ctx, g = this.garden;
 		if (!ctx || ctx.state !== 'running') return;
-		const k = g.weather.kind, wind = Math.min(40, g.weather.wind ?? 10);
+		const k = g.weather.kind;
 		const rain = { drizzle: 0.35, rain: 0.8, storm: 1, snow: 0 }[k] ?? 0;
 		const night = g.night();
 		const biome = g.biome;
-		// Pas de souffle permanent : le vent n'arrive que par rafales, quand il y a vraiment du vent,
-		// et les feuilles ne bruissent que pendant ces rafales.
+		// Pas de vent ni de bruissement : un souffle, même par rafales, finit par sonner comme un bruit de fond.
 		const now = ctx.currentTime;
-		const windy = Math.max(0, (wind - 12) / 28) + (k === 'storm' ? 0.6 : 0);
-		if (windy > 0 && now > (this.nextGust ?? 0)) {
-			this.nextGust = now + 9 + Math.random() * 14 / (0.5 + windy);
-			const peak = Math.min(0.09, 0.03 + windy * 0.05) * (biome === 'montagne' ? 1.3 : 1);
-			for (const [bed, k2] of [[this.wind, 1], [this.leaves, biome === 'littoral' ? 0 : 0.35]]) {
-				const gg = bed.gain.gain;
-				gg.cancelScheduledValues(now);
-				gg.setValueAtTime(gg.value, now);
-				gg.linearRampToValueAtTime(peak * k2, now + 2.5 + Math.random() * 1.5);
-				gg.linearRampToValueAtTime(0, now + 7 + Math.random() * 3);
-			}
-			this.wind.filt.frequency.setTargetAtTime(300 + wind * 8, now, 2);
-		}
-		if (!windy) { this.set(this.wind, 0, 2); this.set(this.leaves, 0, 2); }
 		this.set(this.rain, rain * 0.12);
 		this.set(this.rainBody, rain * 0.08);
 		this.set(this.sea, biome === 'littoral' ? 0.16 : 0);
-		// Un filet d'eau, seulement tout près de la rivière.
-		const v0 = g.view(), d = riverDistance(biome, v0.x0 + v0.w / 2, v0.y0 + v0.h / 2);
-		const byRiver = Math.max(0, 1 - d / 420) ** 2;
-		this.set(this.riverHi, byRiver * 0.025, 0.8);
 
 		// Orage : le tonnerre suit l'éclair, avec un peu de retard (il est loin).
 		if (g.flash > 0.9 && performance.now() - this.lastFlash > 3000) {

@@ -364,16 +364,6 @@ function featuresOf(biome, gx, gy) {
 	return f;
 }
 
-/** Distance (monde) du point à la rivière la plus proche du lieu, pour l'entendre couler quand on s'en approche. */
-export function riverDistance(biome, x, y) {
-	let best = Infinity;
-	for (const a of longFeatures(biome)) {
-		if (a.kind !== 'river') continue;
-		for (let k = 0; k < a.pts.length; k += 4) best = Math.min(best, Math.hypot(a.pts[k][0] - x, a.pts[k][1] - y));
-	}
-	return best;
-}
-
 /** Le point (monde) tombe-t-il sur une rivière, une flaque ou un sentier ? */
 export function keepOut(biome, x, y, pad = 0) {
 	const gx = Math.floor(x / PARCEL_W), gy = Math.floor(y / PARCEL_H);
