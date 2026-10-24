@@ -24,7 +24,7 @@ Puis ouvrir http://localhost:8642/?dev=1
 
 Prairie (départ), marais (8 km et 10 espèces), forêt (20 km, 24), montagne (40 km, 40), littoral (60 km, 55).
 Chaque lieu a son jardin, son sol, ses décors et ses espèces (125 en tout, dans `js/species.js`).
-Dans chaque lieu, le terrain s'agrandit parcelle par parcelle : une clôture entoure les parcelles ouvertes,
+Dans chaque lieu, le terrain s'agrandit clairière par clairière (formes rondes ou ovales qui se fondent entre elles) : une clôture suit leur bord,
 la suivante attend en pointillés et s'ouvre à 1 ; 2,5 ; 4,5 ; 7 ; 10… km faits sur place (12 au plus).
 
 ## Ciel

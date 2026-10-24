@@ -18,6 +18,7 @@ export const CELL_KM = [0, 1, 2.5, 4.5, 7, 10, 14, 19, 25, 32, 40, 50];
 export const cellsOpen = place => Math.min(CELLS.length, place?.cells ?? 1);
 export const cellOrigin = i => [CELLS[i][0] * PARCEL_W, CELLS[i][1] * PARCEL_H];
 const cellOf = p => p.c ?? 0;
+const FENCE_STEP = 34;
 const STAGES = 30;
 const SWAY = { herbe: 0.09, fleur: 0.07, buisson: 0.02, arbre: 0.012 };
 const MIN_Y = { herbe: 60, fleur: 100, buisson: 100, arbre: 220 };
@@ -98,6 +99,7 @@ export class Garden {
 		this.particles = [];
 		this.drops = [];
 		this.pdata = {};
+		this.blobs = new Map();
 		this.fireflies = Array.from({ length: 30 }, () => ({ x: Math.random(), y: Math.random(), ph: Math.random() * 6.28, a: Math.random() * 6.28 }));
 		this.paper = paperTexture(256);
 		this.hourOverride = null;
@@ -175,6 +177,62 @@ export class Garden {
 		this.spawn(this.biome, 'fleur', 0.4, this.place_(this.biome, 'fleur', i), i);
 		const [ox, oy] = cellOrigin(i);
 		this.burst(ox + PARCEL_W / 2, oy + PARCEL_H * 0.4, 30, '#F4C23E');
+	}
+
+	// ─── Clairières : chaque parcelle est une forme ronde ou ovale, un peu bosselée ; elles se fondent entre elles.
+
+	/** Forme d'une parcelle : ovale tiré au hasard (mais toujours le même pour ce lieu et cette parcelle), bord ondulé. */
+	blob(ci) {
+		const key = `${this.biome}:${ci}`;
+		let b = this.blobs.get(key);
+		if (b) return b;
+		const r = rng(7 + this.biome.length * 97 + ci * 53);
+		const [ox, oy] = cellOrigin(ci);
+		b = {
+			cx: ox + PARCEL_W / 2 + r.range(-20, 20), cy: oy + PARCEL_H / 2 + r.range(-40, 40),
+			rx: PARCEL_W * r.range(0.76, 0.88), ry: PARCEL_H * r.range(0.53, 0.57), rot: r.range(-0.1, 0.1),
+			waves: [[2, r.range(0.04, 0.08), r() * 6.28], [3, r.range(0.03, 0.06), r() * 6.28], [5, r.range(0.01, 0.025), r() * 6.28], [7, r.range(0.005, 0.012), r() * 6.28]],
+		};
+		// Vers les parcelles voisines (haut, bas, côtés), le bord ne rentre jamais : les clairières se rejoignent toujours.
+		b.ry *= 1.02 / Math.min(1.02, this.blobRadius(b, Math.PI / 2), this.blobRadius(b, -Math.PI / 2));
+		b.rx *= 1.02 / Math.min(1.02, this.blobRadius(b, 0), this.blobRadius(b, Math.PI));
+		const per = Math.PI * (b.rx + b.ry);
+		const n = Math.max(48, Math.round(per / 12));
+		b.pts = Array.from({ length: n }, (_, k) => this.blobPoint(b, (k / n) * Math.PI * 2));
+		this.blobs.set(key, b);
+		return b;
+	}
+
+	blobRadius(b, a) {
+		let k = 1;
+		for (const [f, amp, ph] of b.waves) k += amp * Math.sin(f * a + ph);
+		return k;
+	}
+
+	blobPoint(b, a) {
+		const k = this.blobRadius(b, a);
+		const x = Math.cos(a) * b.rx * k, y = Math.sin(a) * b.ry * k;
+		const c = Math.cos(b.rot), sn = Math.sin(b.rot);
+		return [b.cx + x * c - y * sn, b.cy + x * sn + y * c];
+	}
+
+	/** Le point (monde) est-il dans la clairière, avec une marge `pad` en unités du monde ? */
+	inBlob(b, x, y, pad = 0) {
+		const c = Math.cos(-b.rot), sn = Math.sin(-b.rot);
+		const dx = x - b.cx, dy = y - b.cy;
+		const lx = (dx * c - dy * sn) / b.rx, ly = (dx * sn + dy * c) / b.ry;
+		const a = Math.atan2(ly, lx);
+		return Math.hypot(lx, ly) < this.blobRadius(b, a) - pad / Math.min(b.rx, b.ry);
+	}
+
+	inOpen(x, y, pad = 0) {
+		return this.openCells().some(i => this.inBlob(this.blob(i), x, y, pad));
+	}
+
+	tracePath(ctx, b) {
+		ctx.moveTo(b.pts[0][0], b.pts[0][1]);
+		for (let k = 1; k < b.pts.length; k++) ctx.lineTo(b.pts[k][0], b.pts[k][1]);
+		ctx.closePath();
 	}
 
 	bounds() {
@@ -413,7 +471,7 @@ export class Garden {
 		];
 		const same = here.filter(p => p.type === type);
 		const y0 = this.minY(pid, type, ci), H = PARCEL_H;
-		let best = { x: PARCEL_W / 2, y: (y0 + H) / 2 }, bestScore = -Infinity;
+		let best = { x: PARCEL_W / 2, y: H / 2 }, bestScore = -Infinity;
 		for (let i = 0; i < 90; i++) {
 			let x, y, near = false;
 			if (same.length && (type === 'herbe' || type === 'fleur') && Math.random() < 0.6) {
@@ -427,6 +485,7 @@ export class Garden {
 				y = y0 + Math.random() * (H - y0 - 40);
 			}
 			if (x < 30 || x > PARCEL_W - 30 || y < y0 || y > H - 30) continue;
+			if (pid === this.biome && !this.inBlob(this.blob(ci), cellOrigin(ci)[0] + x, cellOrigin(ci)[1] + y, type === 'arbre' ? 50 : 26)) continue;
 			let gap = Infinity;
 			for (const o of obstacles) gap = Math.min(gap, Math.hypot(o.x - x, (o.y - y) * 1.25) - o.rad - sp);
 			// Les petites plantes se regroupent en touffes ; les arbres cherchent de l'espace.
@@ -1161,26 +1220,36 @@ export class Garden {
 		ctx.fillStyle = '#E4DEC6';
 		ctx.fillRect(0, 0, cw, ch);
 
-		// Sols des parcelles ouvertes ; la prochaine parcelle se devine sous la brume, bordée de pointillés.
+		// Le sol continue partout ; hors des clairières ouvertes, une prairie sauvage voilée de brume.
 		world();
-		for (const i of visible) {
-			const [ox, oy] = cellOrigin(i);
-			ctx.drawImage(this.bgFor(i), ox, oy, PARCEL_W, PARCEL_H);
-		}
+		const G = GROUND[this.biome];
+		ctx.fillStyle = this.groundColor(G.base);
+		ctx.fillRect(v.x0 - 10, v.y0 - 10, v.w + 20, v.h + 20);
+		const grid = this.visibleCells(40, CELLS.map((_, i) => i));
+		const paintGround = () => { for (const i of grid) { const [ox, oy] = cellOrigin(i); ctx.drawImage(this.bgFor(i), ox, oy, PARCEL_W, PARCEL_H); } };
+		paintGround();
+		ctx.fillStyle = glyph ? 'rgba(232,226,204,0.8)' : 'rgba(236,231,212,0.62)';
+		ctx.fillRect(v.x0 - 10, v.y0 - 10, v.w + 20, v.h + 20);
+		// La prochaine clairière : à demi dévoilée.
 		for (const i of locked) {
-			const [ox, oy] = cellOrigin(i);
-			ctx.drawImage(this.bgFor(i), ox, oy, PARCEL_W, PARCEL_H);
-			ctx.fillStyle = 'rgba(236,230,208,0.72)';
-			ctx.fillRect(ox, oy, PARCEL_W, PARCEL_H);
-			ctx.strokeStyle = 'rgba(140,120,80,0.75)';
-			ctx.lineWidth = Math.max(2.5, 2 / this.cam.z);
-			ctx.lineCap = 'round';
-			ctx.setLineDash([2, Math.max(12, 9 / this.cam.z)]);
-			ctx.strokeRect(ox + 6, oy + 6, PARCEL_W - 12, PARCEL_H - 12);
-			ctx.setLineDash([]);
+			ctx.save();
+			ctx.beginPath();
+			this.tracePath(ctx, this.blob(i));
+			ctx.clip();
+			ctx.globalAlpha = 0.45;
+			paintGround();
+			ctx.restore();
 		}
-		this.softenSeams(ctx);
-		// La clôture fait le tour du terrain ouvert ; elle recule à chaque nouvelle parcelle.
+		// Les clairières ouvertes, d'un seul tenant.
+		ctx.save();
+		ctx.beginPath();
+		for (const i of this.openCells()) this.tracePath(ctx, this.blob(i));
+		ctx.clip();
+		paintGround();
+		this.softenSeams(ctx, grid);
+		ctx.restore();
+		this.drawNextOutline(ctx, v);
+		// La clôture suit le bord des clairières ; elle recule à chaque nouvelle parcelle.
 		this.drawFence(ctx, v);
 
 		// Ombres de nuages, plus denses par temps couvert.
@@ -1372,9 +1441,8 @@ export class Garden {
 		if (glyph || this.lockedCells().length) this.drawLabels(ctx, glyph, S, tx, ty);
 	}
 
-	/** Fond les raccords entre deux parcelles ouvertes voisines dans une nappe de la couleur du sol. */
-	softenSeams(ctx) {
-		const open = this.openCells();
+	/** Fond les raccords entre les fonds de parcelles voisines dans une nappe de la couleur du sol. */
+	softenSeams(ctx, open = this.openCells()) {
 		if (open.length < 2) return;
 		const set = new Set(open.map(i => CELLS[i].join(',')));
 		const base = this.groundColor(GROUND[this.biome].base);
@@ -1396,47 +1464,87 @@ export class Garden {
 		}
 	}
 
-	/** Clôture en bois sur le pourtour des parcelles ouvertes (les bords qui ne touchent pas une autre parcelle ouverte). */
+	/** Morceaux du bord d'une clairière qui ne sont pas couverts par une autre clairière ouverte. */
+	outerRuns(i, others) {
+		const pts = this.blob(i).pts;
+		const out = pts.map(([x, y]) => !others.some(j => this.inBlob(this.blob(j), x, y, -2)));
+		const runs = [];
+		const start = out.findIndex(o => !o);
+		if (start < 0) return [pts.concat([pts[0]])];
+		let cur = null;
+		for (let k = 1; k <= pts.length; k++) {
+			const idx = (start + k) % pts.length;
+			if (out[idx]) (cur ??= []).push(pts[idx]);
+			else if (cur) { runs.push(cur); cur = null; }
+		}
+		if (cur) runs.push(cur);
+		return runs;
+	}
+
+	/** Pointillés autour de la prochaine clairière, là où elle sort des clairières ouvertes. */
+	drawNextOutline(ctx, v) {
+		const open = this.openCells();
+		ctx.fillStyle = 'rgba(140,112,70,0.7)';
+		for (const i of this.lockedCells()) {
+			for (const run of this.outerRuns(i, open)) {
+				let acc = 0;
+				for (let k = 1; k < run.length; k++) {
+					const [x0, y0] = run[k - 1], [x1, y1] = run[k];
+					const len = Math.hypot(x1 - x0, y1 - y0);
+					for (let d = (14 - acc) % 14; d < len; d += 14) {
+						const x = x0 + ((x1 - x0) * d) / len, y = y0 + ((y1 - y0) * d) / len;
+						if (x < v.x0 - 10 || x > v.x0 + v.w + 10 || y < v.y0 - 10 || y > v.y0 + v.h + 10) continue;
+						ctx.beginPath();
+						ctx.arc(x, y, this.glyph ? 5 : 2.2, 0, Math.PI * 2);
+						ctx.fill();
+					}
+					acc = (acc + len) % 14;
+				}
+			}
+		}
+	}
+
+	/** Clôture en bois sur le pourtour des clairières ouvertes : deux lisses et des piquets. */
 	drawFence(ctx, v) {
 		const open = this.openCells();
-		const set = new Set(open.map(i => CELLS[i].join(',')));
 		const glyph = this.glyph;
-		const segs = [];
-		for (const i of open) {
-			const [gx, gy] = CELLS[i], [ox, oy] = cellOrigin(i);
-			if (!set.has(`${gx},${gy - 1}`)) segs.push([ox, oy, ox + PARCEL_W, oy]);
-			if (!set.has(`${gx},${gy + 1}`)) segs.push([ox, oy + PARCEL_H, ox + PARCEL_W, oy + PARCEL_H]);
-			if (!set.has(`${gx - 1},${gy}`)) segs.push([ox, oy, ox, oy + PARCEL_H]);
-			if (!set.has(`${gx + 1},${gy}`)) segs.push([ox + PARCEL_W, oy, ox + PARCEL_W, oy + PARCEL_H]);
-		}
 		ctx.lineCap = 'round';
-		for (const [x0, y0, x1, y1] of segs) {
-			if (Math.max(x0, x1) < v.x0 - 20 || Math.min(x0, x1) > v.x0 + v.w + 20 || Math.max(y0, y1) < v.y0 - 40 || Math.min(y0, y1) > v.y0 + v.h + 20) continue;
-			const horiz = y0 === y1;
-			// Deux lisses, un peu d'ombre dessous.
-			ctx.strokeStyle = 'rgba(40,50,25,0.18)';
-			ctx.lineWidth = glyph ? 10 : 5;
-			ctx.beginPath(); ctx.moveTo(x0 + 3, y0 + 4); ctx.lineTo(x1 + 3, y1 + 4); ctx.stroke();
-			ctx.strokeStyle = '#9A7448';
-			ctx.lineWidth = glyph ? 7 : 3;
-			for (const off of glyph ? [0] : [-7, 0]) {
-				ctx.beginPath();
-				ctx.moveTo(x0 + (horiz ? 0 : 0), y0 + off);
-				ctx.lineTo(x1, y1 + off);
-				ctx.stroke();
-			}
-			if (glyph) continue;
-			// Piquets tous les 35 environ.
-			const len = Math.hypot(x1 - x0, y1 - y0), n = Math.round(len / 35);
-			for (let k = 0; k <= n; k++) {
-				const x = x0 + ((x1 - x0) * k) / n, y = y0 + ((y1 - y0) * k) / n;
-				if (x < v.x0 - 10 || x > v.x0 + v.w + 10 || y < v.y0 - 30 || y > v.y0 + v.h + 10) continue;
-				ctx.fillStyle = 'rgba(40,50,25,0.2)';
-				ctx.beginPath(); ctx.ellipse(x + 3, y + 3, 4, 2, 0, 0, Math.PI * 2); ctx.fill();
-				ctx.fillStyle = '#8A6238';
-				ctx.beginPath(); ctx.roundRect(x - 3.2, y - 18, 6.4, 20, 2); ctx.fill();
-				ctx.fillStyle = '#B48A58';
-				ctx.beginPath(); ctx.ellipse(x, y - 18, 3.2, 1.6, 0, 0, Math.PI * 2); ctx.fill();
+		ctx.lineJoin = 'round';
+		for (const i of open) {
+			for (const run of this.outerRuns(i, open.filter(j => j !== i))) {
+				const xs = run.map(p => p[0]), ys = run.map(p => p[1]);
+				if (Math.max(...xs) < v.x0 - 30 || Math.min(...xs) > v.x0 + v.w + 30 || Math.max(...ys) < v.y0 - 40 || Math.min(...ys) > v.y0 + v.h + 30) continue;
+				const line = (dx, dy) => {
+					ctx.beginPath();
+					ctx.moveTo(run[0][0] + dx, run[0][1] + dy);
+					for (let k = 1; k < run.length; k++) ctx.lineTo(run[k][0] + dx, run[k][1] + dy);
+					ctx.stroke();
+				};
+				ctx.strokeStyle = 'rgba(40,50,25,0.18)';
+				ctx.lineWidth = glyph ? 10 : 5;
+				line(3, 4);
+				ctx.strokeStyle = '#9A7448';
+				ctx.lineWidth = glyph ? 7 : 3;
+				line(0, 0);
+				if (glyph) continue;
+				line(0, -8);
+				// Piquets à intervalle régulier le long du bord.
+				let acc = 0;
+				for (let k = 1; k < run.length; k++) {
+					const [x0, y0] = run[k - 1], [x1, y1] = run[k];
+					const len = Math.hypot(x1 - x0, y1 - y0);
+					for (let d = (FENCE_STEP - acc) % FENCE_STEP; d < len; d += FENCE_STEP) {
+						const x = x0 + ((x1 - x0) * d) / len, y = y0 + ((y1 - y0) * d) / len;
+						if (x < v.x0 - 10 || x > v.x0 + v.w + 10 || y < v.y0 - 30 || y > v.y0 + v.h + 10) continue;
+						ctx.fillStyle = 'rgba(40,50,25,0.2)';
+						ctx.beginPath(); ctx.ellipse(x + 3, y + 3, 4, 2, 0, 0, Math.PI * 2); ctx.fill();
+						ctx.fillStyle = '#8A6238';
+						ctx.beginPath(); ctx.roundRect(x - 3.2, y - 18, 6.4, 20, 2); ctx.fill();
+						ctx.fillStyle = '#B48A58';
+						ctx.beginPath(); ctx.ellipse(x, y - 18, 3.2, 1.6, 0, 0, Math.PI * 2); ctx.fill();
+					}
+					acc = (acc + len) % FENCE_STEP;
+				}
 			}
 		}
 	}
