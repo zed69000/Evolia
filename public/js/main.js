@@ -737,6 +737,49 @@ $('#journal').addEventListener('click', e => {
 	if (al) species.open(al.dataset.openSp);
 });
 
+// ─── De près : la récolte du nectar en direct ─────────────────
+
+// Le compteur du bandeau, cible des gouttes de nectar (coordonnées dans le canevas).
+garden.nectarTarget = () => {
+	const el = $('#hud-steps .nectar'), c = garden.canvas.getBoundingClientRect();
+	if (!el) return [garden.canvas.clientWidth - 60, 40];
+	const r = el.getBoundingClientRect();
+	return [r.left - c.left + 6, r.top - c.top + r.height / 2];
+};
+garden.onNectar = () => {
+	const el = $('#hud-steps .nectar');
+	if (!el) return;
+	el.classList.remove('bump');
+	void el.offsetWidth; // relance l'animation
+	el.classList.add('bump');
+};
+
+/** Production par heure, dans tous les lieux (l'écosystème travaille partout à la fois). */
+function nectarPerHour() {
+	const x = boostLeft(state) ? BOOST_MULT : 1;
+	return Object.keys(state.places).reduce((a, id) => a + rates(state, id).nectar, 0) * x;
+}
+
+function renderZoomInfo() {
+	const card = $('#zoom-info');
+	const show = garden.cam.z >= 1.3 && !garden.glyph && !placing && $('#modal').hidden && $('#coach').hidden;
+	card.hidden = !show;
+	if (!show) return;
+	const x = boostLeft(state) ? BOOST_MULT : 1;
+	const r = rates(state, state.place);
+	// Le total avance en direct entre deux passages de l'écosystème (toutes les 5 s).
+	const live = (state.nectar ?? 0) + nectarPerHour() * (Date.now() - (state.lastIdle ?? Date.now())) / 3600000;
+	const rows = Object.entries(GUILDS).filter(([gid]) => r.members[gid] > 0).map(([gid, g]) =>
+		`<li><span>${g.name} <small>×${r.members[gid]}</small></span><b>+${fmt(g.nectar * r.members[gid] * r.mult * x, 1)}/h</b></li>`).join('');
+	const growing = garden.current && garden.current.growth < 1 ? garden.current : null;
+	card.innerHTML = `<div class="zi-head"><b>Récolte du nectar</b>${x > 1 ? `<span class="zi-boost">élan ×${x} · ${fmtMin(boostLeft(state) / 60000)}</span>` : ''}</div>
+		<div class="zi-total"><span class="nectar">${live.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span><small>+${fmt(r.nectar * x, 1)}/h ici</small></div>
+		${rows ? `<ul>${rows}</ul>` : '<p>Découvre des pollinisateurs : ils récoltent le nectar pour toi.</p>'}
+		<p class="zi-move">En marchant : +1 nectar tous les 5 m${x === 1 ? ', et la récolte triple ensuite' : ''}.</p>
+		${growing ? `<p class="zi-grow">${plantName(growing)} · ${Math.floor(growing.growth * 100)} %</p>` : ''}`;
+}
+setInterval(renderZoomInfo, 250);
+
 // ─── Aménager : cabane, banc, abris pour les animaux ──────────
 
 let placing = null; // { kind, item? } pendant qu'on choisit la place d'un objet

@@ -88,6 +88,7 @@ export class Garden {
 		this.insects = [];
 		this.particles = [];
 		this.drops = [];
+		this.nectarDrops = []; // gouttes de nectar qui volent d'une fleur jusqu'au compteur
 		this.pdata = {};
 		this.blobs = new Map();
 		this.fireflies = Array.from({ length: 30 }, () => ({ x: Math.random(), y: Math.random(), ph: Math.random() * 6.28, a: Math.random() * 6.28 }));
@@ -634,6 +635,15 @@ export class Garden {
 		this.focusOn(d.x, d.y);
 	}
 
+	/** Une goutte de nectar part d'une fleur butinée vers le compteur (seulement quand on regarde de près). */
+	nectarFrom(x, y) {
+		if (this.cam.z < 1 || !this.nectarTarget || this.t - (this.lastDrop ?? -9) < 0.7) return;
+		const v = this.view();
+		if (x < v.x0 || x > v.x0 + v.w || y < v.y0 || y > v.y0 + v.h) return;
+		this.lastDrop = this.t;
+		this.nectarDrops.push({ x, y, t: 0, dur: 1.1 + Math.random() * 0.4, wob: Math.random() * 6.28 });
+	}
+
 	burst(x, y, n, color) {
 		for (let i = 0; i < n; i++) {
 			this.particles.push({
@@ -836,6 +846,9 @@ export class Garden {
 			p.x += p.vx * dt; p.y += p.vy * dt; p.vy += 10 * dt; p.vx *= 0.98; p.life -= p.decay * dt;
 		}
 		this.particles = this.particles.filter(p => p.life > 0);
+		for (const d of this.nectarDrops) d.t += dt;
+		const arrived = this.nectarDrops.filter(d => d.t >= d.dur).length;
+		if (arrived) { this.nectarDrops = this.nectarDrops.filter(d => d.t < d.dur); this.onNectar?.(arrived); }
 		for (const f of this.fireflies) {
 			f.a += (Math.random() - 0.5) * dt * 3;
 			f.x += Math.cos(f.a) * 0.03 * dt;
@@ -989,7 +1002,7 @@ export class Garden {
 					const [hx, hy] = head(b.target);
 					b.x = hx + Math.cos(b.t * 3) * 5;
 					b.y = hy - 4 + Math.sin(b.t * 5) * 2;
-					if (b.timer <= 0) { b.mode = 'seek'; b.target = null; }
+					if (b.timer <= 0) { this.nectarFrom(hx, hy - 4); b.mode = 'seek'; b.target = null; }
 					return;
 				}
 				if (!b.target || !has(b.target)) b.target = P.flowers.length ? pick(P.flowers) : null;
@@ -1275,7 +1288,7 @@ export class Garden {
 			for (let gy = gy0; gy <= gy1; gy++) for (let gx = gx0; gx <= gx1; gx++) ctx.drawImage(this.bgFor(gx, gy), gx * PARCEL_W, gy * PARCEL_H, PARCEL_W, PARCEL_H);
 		};
 		paintGround();
-		ctx.fillStyle = glyph ? 'rgba(232,226,204,0.8)' : 'rgba(236,231,212,0.62)';
+		ctx.fillStyle = glyph ? 'rgba(232,226,204,0.72)' : 'rgba(236,231,212,0.5)';
 		ctx.fillRect(v.x0 - 10, v.y0 - 10, v.w + 20, v.h + 20);
 		// La prochaine clairière : à demi dévoilée.
 		for (const i of locked) {
@@ -1422,6 +1435,7 @@ export class Garden {
 				continue;
 			}
 			const box = PLANT_TYPES[p.type].box;
+			if (this.cam.z >= 1.6 && p.growth < 1) this.drawGrowth(ctx, e.x, e.y, p.growth, world);
 			const s = this.spriteFor(p, false);
 			const img = detail ? this.spriteFor(p, true) : s;
 			const shear = this.wind(e.x) * SWAY[p.type] * (0.4 + 0.6 * (s.stage / STAGES));
@@ -1535,6 +1549,7 @@ export class Garden {
 		ctx.drawImage(this.vignette, 0, 0);
 
 		if (glyph || this.lockedCells().length) this.drawLabels(ctx, glyph, S, tx, ty);
+		this.drawNectarDrops(ctx, S, tx, ty);
 	}
 
 	/** Morceaux du bord d'une clairière qui ne sont pas couverts par une autre clairière ouverte. */
@@ -1675,6 +1690,45 @@ export class Garden {
 			ctx.fillStyle = isOpen ? '#5A6B4E' : '#8A846E';
 			ctx.fillText(sub, x, y + 16 * dpr + extra / 2);
 		}
+	}
+
+	/** Anneau de croissance au pied d'une plante qui pousse ; le pourcentage s'affiche de tout près. */
+	drawGrowth(ctx, x, y, growth, world) {
+		world();
+		const r = 9;
+		ctx.lineWidth = 2.2;
+		ctx.strokeStyle = 'rgba(253,247,231,0.75)';
+		ctx.beginPath(); ctx.arc(x, y + 6, r, 0, Math.PI * 2); ctx.stroke();
+		ctx.strokeStyle = 'rgba(240,138,60,0.95)';
+		ctx.beginPath(); ctx.arc(x, y + 6, r, -Math.PI / 2, -Math.PI / 2 + growth * Math.PI * 2); ctx.stroke();
+		if (this.cam.z >= 2.2) {
+			ctx.font = '700 7px Nunito, sans-serif';
+			ctx.textAlign = 'center';
+			ctx.fillStyle = 'rgba(58,42,32,0.9)';
+			ctx.fillText(`${Math.floor(growth * 100)}`, x, y + 8.5);
+		}
+	}
+
+	/** Les gouttes de nectar : de la fleur (monde) au compteur du bandeau (écran), en courbe. */
+	drawNectarDrops(ctx, S, tx, ty) {
+		if (!this.nectarDrops.length) return;
+		const [txs, tys] = this.nectarTarget().map(v => v * this.dpr);
+		ctx.setTransform(1, 0, 0, 1, 0, 0);
+		for (const d of this.nectarDrops) {
+			const k = Math.min(1, d.t / d.dur), e = k * k * (3 - 2 * k);
+			const sx = d.x * S + tx, sy = d.y * S + ty;
+			const x = sx + (txs - sx) * e + Math.sin(k * Math.PI) * 40 * this.dpr * Math.cos(d.wob);
+			const y = sy + (tys - sy) * e - Math.sin(k * Math.PI) * 60 * this.dpr;
+			const r = (3.2 - 1.2 * k) * this.dpr;
+			ctx.globalAlpha = k < 0.1 ? k * 10 : 1;
+			ctx.fillStyle = 'rgba(244,194,62,0.35)';
+			ctx.beginPath(); ctx.arc(x, y, r * 2.2, 0, Math.PI * 2); ctx.fill();
+			ctx.fillStyle = '#F4C23E';
+			ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+			ctx.fillStyle = 'rgba(255,250,220,0.9)';
+			ctx.beginPath(); ctx.arc(x - r * 0.3, y - r * 0.3, r * 0.35, 0, Math.PI * 2); ctx.fill();
+		}
+		ctx.globalAlpha = 1;
 	}
 
 	/** Petite étiquette au bord de l'écran, tournée vers la prochaine parcelle hors de vue. */

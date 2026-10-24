@@ -128,6 +128,9 @@ function tileFeatures(biome, gx, gy) {
 		for (const m of zone.marks) marks(m, add, washAt, r, ox, oy, W, H, top, out.avoid);
 	}
 
+	// Au-delà des parcelles, la campagne sauvage continue : buissons, bosquets, hautes herbes.
+	if (cellIndexAt(gx, gy) < 0) wild(biome, add, washAt, r, ox, oy, W, H, top);
+
 	// Petites pousses, feuilles mortes, cailloux.
 	for (let i = 0; i < (sea ? 110 : 300); i++) {
 		const x = ox + r.range(0, W), y = oy + r.range(top, H), s = r.range(0.6, 1.25), col = r.pick(G.sprigs), third = r() < 0.3;
@@ -159,48 +162,6 @@ function marks(kind, add, washAt, r, ox, oy, W, H, top, avoid) {
 	const [name, arg] = kind.split(':');
 	const cx = ox + W / 2, cy = oy + H / 2;
 	switch (name) {
-		case 'brook': {
-			// Une source entre quelques pierres, un ruisseau qui s'élargit en serpentant, et une petite mare où il se jette.
-			const x0 = ox + r.range(130, W - 130), y0 = oy + top + r.range(170, 260);
-			const L = H - top - r.range(520, 620), b = r.range(-0.7, 0.7);
-			const pts = curve(x0, y0, Math.PI / 2 + r.range(-0.25, 0.25), L, b, 28)
-				.map(([x, y], i) => [x + Math.sin(i * 0.65 + r() * 0.4) * 16 * Math.min(1, i / 6), y]);
-			const [ex, ey] = pts[pts.length - 1];
-			const pond = { x: ex + r.range(-10, 10), y: ey + 50, rx: r.range(62, 80), ry: r.range(36, 46) };
-			add(2, cx, cy, H / 2, (g, rr) => {
-				ribbon(g, pts, 16, 46, '#7FAA48', rr, 0.3);
-				ribbon(g, pts, 5, 22, '#7FB8C8', rr, 0.75);
-				ribbon(g, pts.slice(3).map(([x, y]) => [x - 3, y]), 1.5, 5, '#E8F4F4', rr, 0.5);
-				wash(g, pond.x, pond.y, pond.rx * 1.25, pond.ry * 1.35, '#6E9A4A', rr, { layers: 6, alpha: 0.12, edge: 0 });
-				wash(g, pond.x, pond.y, pond.rx, pond.ry, '#7FB8C8', rr, { layers: 10, alpha: 0.16, edge: 0.3 });
-				wash(g, pond.x - pond.rx * 0.25, pond.y - pond.ry * 0.3, pond.rx * 0.35, pond.ry * 0.2, '#E8F4F4', rr, { layers: 4, alpha: 0.12, edge: 0 });
-			});
-			// La source : un petit bassin bordé de pierres.
-			washAt(2, x0, y0 - 6, 16, 10, '#8CC0C8', { layers: 6, alpha: 0.2, edge: 0.3 });
-			for (let k = 0; k < 6; k++) {
-				const a = (k / 6) * 6.28 + r() * 0.5, s2 = r.range(5, 9);
-				washAt(3, x0 + Math.cos(a) * 20, y0 - 6 + Math.sin(a) * 12, s2, s2 * 0.7, r.pick(['#A8A498', '#BCB8AC', '#9A968A']), { layers: 6, alpha: 0.25, edge: 0.45 });
-			}
-			avoid.push({ pts, r: 26 }, { pts: [[pond.x, pond.y]], r: pond.rx + 14 }, { pts: [[x0, y0]], r: 30 });
-			break;
-		}
-		case 'path': {
-			// Un sentier en boucle qui fait le tour de la parcelle : il ne s'arrête jamais au milieu de nulle part.
-			const ccx = ox + W / 2 + r.range(-20, 20), ccy = oy + (top + H) / 2 + r.range(-40, 40);
-			const ax = r.range(110, 140), ay = r.range(280, 380), ph = r() * 6.28;
-			const pts = [];
-			for (let k = 0; k <= 48; k++) {
-				const a = (k / 48) * Math.PI * 2;
-				const wob = 1 + 0.12 * Math.sin(a * 3 + ph) + 0.06 * Math.sin(a * 5 + ph * 2);
-				pts.push([ccx + Math.cos(a) * ax * wob, ccy + Math.sin(a) * ay * wob]);
-			}
-			add(2, ccx, ccy, ay * 1.3, (g, rr) => {
-				ribbon(g, pts, 24, 24, '#CDB98A', rr, 0.42);
-				ribbon(g, pts, 11, 11, '#D8C8A0', rr, 0.32);
-			});
-			avoid.push({ pts, r: 16 });
-			break;
-		}
 		case 'mown':
 			for (let i = 0; i < 7; i++) washAt(1, ox + r.range(60, W - 60), oy + r.range(200, H - 200), r.range(70, 120), r.range(40, 70), '#C4D47A', { layers: 6, alpha: 0.08, edge: 0 });
 			break;
@@ -261,6 +222,7 @@ function marks(kind, add, washAt, r, ox, oy, W, H, top, avoid) {
 				const x = ox + r.range(70, W - 70), y = oy + r.range(top + 140, H - 140), s = r.range(22, 46);
 				washAt(2, x, y, s * 1.4, s * 0.8, '#6E9A5A', { layers: 5, alpha: 0.08, edge: 0 });
 				washAt(2, x, y, s, s * 0.55, '#8CC0C8', { layers: 8, alpha: 0.14, edge: 0.25 });
+				avoid.push({ pts: [[x, y]], r: s * 1.1 });
 			}
 			break;
 		case 'reeds':
@@ -291,6 +253,109 @@ function marks(kind, add, washAt, r, ox, oy, W, H, top, avoid) {
 	}
 }
 
+/** Campagne sauvage, peinte en masses douces : on la devine sous la brume, au-delà de la clôture. */
+function wild(biome, add, washAt, r, ox, oy, W, H, top) {
+	const dark = { prairie: '#4E7A3A', marais: '#4E7A5A', foret: '#2E5A30', montagne: '#4E6A4A', littoral: '#7A8A5A' }[biome];
+	const light = { prairie: '#7FAA48', marais: '#7FAA6A', foret: '#4E7A3E', montagne: '#7F9A6A', littoral: '#A8B488' }[biome];
+	const trees = biome === 'littoral' ? 2 : biome === 'foret' ? 7 : 4;
+	for (let i = 0; i < trees; i++) {
+		const x = ox + r.range(40, W - 40), y = oy + r.range(top + 80, H - 40), s = r.range(50, 85);
+		washAt(3, x + s * 0.3, y + s * 0.15, s * 0.9, s * 0.35, '#2E4A22', { layers: 5, alpha: 0.06, edge: 0 });
+		washAt(3, x, y - s * 0.5, s, s * 0.8, dark, { layers: 10, alpha: 0.12, edge: 0.15 });
+		washAt(3, x - s * 0.25, y - s * 0.75, s * 0.55, s * 0.45, light, { layers: 6, alpha: 0.1, edge: 0 });
+	}
+	for (let i = 0; i < 10; i++) {
+		const x = ox + r.range(20, W - 20), y = oy + r.range(top + 40, H - 20), s = r.range(18, 34);
+		washAt(3, x, y - s * 0.4, s, s * 0.6, r() < 0.5 ? dark : light, { layers: 7, alpha: 0.12, edge: 0.1 });
+	}
+	for (let k = 0; k < 6; k++) {
+		const x = ox + r.range(20, W - 20), y = oy + r.range(top + 40, H - 20);
+		for (let j = 0; j < 7; j++) {
+			const px = x + r.gauss() * 10, L = r.range(10, 20), a = -Math.PI / 2 + r.gauss() * 0.35;
+			add(3, px, y, L, (g, rr, tone) => leaf(g, px, y, L, 2, a, tone(light), rr, 0.55));
+		}
+	}
+}
+
+// ─── Rivières et sentiers au long cours ────────────────────────
+// Ils traversent un coin du lieu et continuent bien au-delà, sous la brume : le monde ne s'arrête pas au bord.
+
+const SPAN = 7000;
+const longCache = new Map();
+
+/** Ligne qui serpente en passant par (cx, cy), sur ±SPAN, verticale ou horizontale. */
+function meander(r, cx, cy, vertical, amp) {
+	const a1 = amp * r.range(0.7, 1), a2 = amp * r.range(0.25, 0.4), p1 = r() * 6.28, p2 = r() * 6.28;
+	const off = t => a1 * Math.sin(t / 520 + p1) + a2 * Math.sin(t / 170 + p2);
+	const o0 = off(0), pts = [];
+	for (let t = -SPAN; t <= SPAN; t += 30) {
+		const d = off(t) - o0;
+		pts.push(vertical ? [cx + d, cy + t] : [cx + t, cy + d]);
+	}
+	return pts;
+}
+
+function longFeatures(biome) {
+	let list = longCache.get(biome);
+	if (list) return list;
+	list = [];
+	const axes = []; // [verticale ?, abscisse ou ordonnée] : deux tracés parallèles ne se superposent jamais
+	const orient = (want, cx, cy) => {
+		const clash = v => axes.some(([av, c]) => av === v && Math.abs(c - (v ? cx : cy)) < 300);
+		const v = clash(want) ? !want : want;
+		axes.push([v, v ? cx : cy]);
+		return v;
+	};
+	ZONES[biome].forEach((z, zi) => {
+		const ci = zi + 1;
+		if (ci >= CELLS.length) return;
+		const [gx, gy] = CELLS[ci], cx = (gx + 0.5) * PARCEL_W, cy = (gy + 0.5) * PARCEL_H;
+		const r = rng(hash(biome, 'long', zi));
+		for (const m of z.marks) {
+			if (m === 'brook') {
+				// Une rivière : verticale, sauf si elle devait traverser le cœur du lieu (alors elle passe de côté, à l'horizontale).
+				const pts = meander(r, cx, cy, orient(gx !== 0, cx, cy), 110);
+				list.push(longItem(pts, 30, (g, rr) => {
+					ribbon(g, pts, 48, 48, '#7FAA48', rr, 0.3);
+					ribbon(g, pts, 24, 24, '#7FB8C8', rr, 0.75);
+					ribbon(g, pts.map(([x, y]) => [x - 3, y - 2]), 5, 5, '#E8F4F4', rr, 0.45);
+				}, hash(biome, 'river', zi)));
+			}
+			if (m === 'path') {
+				const pts = meander(r, cx, cy, orient(gx !== 0, cx, cy), 70);
+				list.push(longItem(pts, 16, (g, rr) => {
+					ribbon(g, pts, 24, 24, '#CDB98A', rr, 0.42);
+					ribbon(g, pts, 11, 11, '#D8C8A0', rr, 0.32);
+				}, hash(biome, 'path', zi)));
+			}
+		}
+	});
+	longCache.set(biome, list);
+	return list;
+}
+
+function longItem(pts, r, paint, seed) {
+	const xs = pts.map(p => p[0]), ys = pts.map(p => p[1]);
+	return { pts, r, paint, seed, x0: Math.min(...xs) - 30, x1: Math.max(...xs) + 30, y0: Math.min(...ys) - 30, y1: Math.max(...ys) + 30 };
+}
+
+/** Distance d'un point à une ligne brisée, avec un rejet rapide par boîte. */
+function nearLine(a, x, y, pad) {
+	if (x < a.x0 - pad || x > a.x1 + pad || y < a.y0 - pad || y > a.y1 + pad) return false;
+	for (let k = 0; k < a.pts.length; k++) {
+		const [px, py] = a.pts[k];
+		if (Math.abs(px - x) > a.r + pad + 40 || Math.abs(py - y) > a.r + pad + 40) continue;
+		if (Math.hypot(px - x, py - y) < a.r + pad) return true;
+		const q = a.pts[k + 1];
+		if (q) {
+			const dx = q[0] - px, dy = q[1] - py, L2 = dx * dx + dy * dy || 1;
+			const t = Math.max(0, Math.min(1, ((x - px) * dx + (y - py) * dy) / L2));
+			if (Math.hypot(px + dx * t - x, py + dy * t - y) < a.r + pad) return true;
+		}
+	}
+	return false;
+}
+
 const featureCache = new Map();
 function featuresOf(biome, gx, gy) {
 	const key = `${biome}:${gx},${gy}`;
@@ -299,23 +364,11 @@ function featuresOf(biome, gx, gy) {
 	return f;
 }
 
-/** Le point (monde) tombe-t-il sur un ruisseau, une mare ou un sentier ? */
+/** Le point (monde) tombe-t-il sur une rivière, une flaque ou un sentier ? */
 export function keepOut(biome, x, y, pad = 0) {
 	const gx = Math.floor(x / PARCEL_W), gy = Math.floor(y / PARCEL_H);
-	for (const a of featuresOf(biome, gx, gy).avoid) {
-		for (let k = 0; k < a.pts.length; k++) {
-			const [px, py] = a.pts[k];
-			if (Math.abs(px - x) > a.r + pad + 40 || Math.abs(py - y) > a.r + pad + 40) continue;
-			if (Math.hypot(px - x, py - y) < a.r + pad) return true;
-			const q = a.pts[k + 1];
-			if (q) {
-				const dx = q[0] - px, dy = q[1] - py, L2 = dx * dx + dy * dy || 1;
-				const t = Math.max(0, Math.min(1, ((x - px) * dx + (y - py) * dy) / L2));
-				if (Math.hypot(px + dx * t - x, py + dy * t - y) < a.r + pad) return true;
-			}
-		}
-	}
-	return false;
+	for (const a of featuresOf(biome, gx, gy).avoid) if (nearLine({ ...a, x0: -Infinity, x1: Infinity, y0: -Infinity, y1: Infinity }, x, y, pad)) return true;
+	return longFeatures(biome).some(a => nearLine(a, x, y, pad));
 }
 
 /**
@@ -332,9 +385,12 @@ export function paintTile(g, biome, gx, gy, tone, season) {
 	for (let y = gy - 1; y <= gy + 1; y++) for (let x = gx - 1; x <= gx + 1; x++) {
 		for (const f of featuresOf(biome, x, y)) if (f.x1 > ox && f.x0 < ox + W && f.y1 > oy && f.y0 < oy + H) all.push(f);
 	}
-	// Même ordre partout : par couche, puis par case, puis dans l'ordre de création.
+	// Même ordre partout : par couche, puis par case, puis dans l'ordre de création ;
+	// rivières et sentiers passent entre le sol et les petits détails.
 	all.sort((a, b) => a.layer - b.layer);
-	for (const f of all) f.paint(g, rng(f.seed), tone, season);
+	for (const f of all) if (f.layer < 2) f.paint(g, rng(f.seed), tone, season);
+	for (const f of longFeatures(biome)) if (f.x1 > ox && f.x0 < ox + W && f.y1 > oy && f.y0 < oy + H) f.paint(g, rng(f.seed));
+	for (const f of all) if (f.layer >= 2) f.paint(g, rng(f.seed), tone, season);
 	g.restore();
 }
 

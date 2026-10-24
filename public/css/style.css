@@ -627,3 +627,26 @@ html, body {
 .status-row { flex-wrap: wrap; row-gap: 10px; }
 .status-row .status { flex: 1 0 100%; }
 #home .status-row .btn.round { flex: 1; width: auto; height: 46px; }
+
+/* ─── De près : la récolte du nectar ─── */
+.zoom-info {
+	position: absolute; z-index: 4; left: 12px;
+	top: calc(env(safe-area-inset-top, 0px) + 140px);
+	width: 220px; padding: 10px 12px; border-radius: 18px; font-size: 12.5px; color: var(--doux);
+	pointer-events: none;
+	transition: opacity .3s ease;
+}
+.peek .zoom-info { opacity: 0; }
+.zi-head { display: flex; justify-content: space-between; align-items: center; gap: 6px; }
+.zi-head b { font: 400 16px Courgette, cursive; color: var(--foret); }
+.zi-boost { font-size: 11px; font-weight: 800; color: #fff; background: var(--elan); border-radius: 8px; padding: 2px 6px; white-space: nowrap; }
+.zi-total { display: flex; align-items: baseline; gap: 8px; margin: 2px 0 4px; }
+.zi-total .nectar { font-size: 20px; font-weight: 800; color: #8A5A10; font-variant-numeric: tabular-nums; }
+.zoom-info ul { list-style: none; margin: 0; padding: 0; }
+.zoom-info li { display: flex; justify-content: space-between; padding: 2px 0; border-top: 1px solid var(--trait); }
+.zoom-info li b { color: var(--foret); }
+.zoom-info p { margin: 4px 0 0; }
+.zi-move { font-weight: 700; color: #7A5A30; }
+.zi-grow { font-weight: 700; color: var(--foret); }
+.nectar.bump { display: inline-block; animation: nectar-bump .45s ease; }
+@keyframes nectar-bump { 40% { transform: scale(1.35); color: #F08A3C; } }
