@@ -762,7 +762,11 @@ function nectarPerHour() {
 
 function renderZoomInfo() {
 	const card = $('#zoom-info');
-	const show = garden.cam.z >= 1.3 && !garden.glyph && !placing && $('#modal').hidden && $('#coach').hidden;
+	// De près, une petite icône ; les détails ne s'ouvrent que si on la touche (et restent ouverts ensuite).
+	const close = garden.cam.z >= 1.3 && !garden.glyph && !placing && $('#modal').hidden && $('#coach').hidden;
+	$('#btn-zoom-info').hidden = !close;
+	$('#btn-zoom-info').classList.toggle('on', !!state.showZoomInfo);
+	const show = close && !!state.showZoomInfo;
 	card.hidden = !show;
 	if (!show) return;
 	const x = boostLeft(state) ? BOOST_MULT : 1;
@@ -779,6 +783,11 @@ function renderZoomInfo() {
 		${growing ? `<p class="zi-grow">${plantName(growing)} · ${Math.floor(growing.growth * 100)} %</p>` : ''}`;
 }
 setInterval(renderZoomInfo, 250);
+$('#btn-zoom-info').addEventListener('click', () => {
+	state.showZoomInfo = !state.showZoomInfo;
+	persist();
+	renderZoomInfo();
+});
 
 // Mode test : images par seconde, pour vérifier la fluidité sur un vrai téléphone.
 setInterval(() => {
