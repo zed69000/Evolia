@@ -3,7 +3,9 @@
 //     ressac du littoral, grillons la nuit ; aucun souffle ni bruit de fond continu ;
 //   - les cris des animaux visibles à l'écran (merle, mésange, pic, chouette, grenouille, abeilles…),
 //     placés à gauche ou à droite selon où ils sont ;
-//   - une petite cloche douce, en gamme pentatonique, quand quelque chose de beau arrive.
+//   - une petite cloche douce, en gamme pentatonique, quand quelque chose de beau arrive ;
+//   - une musique générative très calme : notes et accords tirés au hasard dans une gamme pentatonique,
+//     avec de longs silences ; elle ne boucle jamais, donc ne se répète jamais.
 // Tout reste bas et lent : c'est un paysage sonore, pas une musique de jeu.
 
 const NOTES = [523.25, 587.33, 659.25, 783.99, 880, 1046.5]; // do ré mi sol la do : pentatonique, jamais de fausse note
@@ -18,13 +20,15 @@ export class Soundscape {
 	}
 
 	get settings() { return (this.state.sound ??= { on: true, vol: 0.7 }); }
+	get musicSettings() { return (this.state.music ??= { on: true, vol: 0.5 }); }
+	get anyOn() { return this.settings.on || this.musicSettings.on; }
 
 	/**
 	 * Le téléphone n'autorise le son qu'après un vrai geste : le doigt qui se relève (pas celui qui se pose),
 	 * un clic ou une touche. On démarre là, avec un court silence joué tout de suite (nécessaire sur iPhone).
 	 */
 	unlock() {
-		if (!this.settings.on) return;
+		if (!this.anyOn) return;
 		if (!this.ctx) this.build();
 		if (this.ctx.state !== 'running') this.ctx.resume();
 		if (!this.primed) {
@@ -36,19 +40,38 @@ export class Soundscape {
 		}
 	}
 
+	/** Sons de la nature et musique se règlent chacun de leur côté ; tout s'arrête si les deux sont coupés. */
 	setOn(on) {
 		this.settings.on = on;
-		if (on) this.unlock();
-		else this.ctx?.suspend();
+		this.applyLevels();
 	}
 
 	setVolume(v) {
 		this.settings.vol = v;
-		if (this.master) this.master.gain.setTargetAtTime(v * 1.3, this.ctx.currentTime, 0.2);
+		this.applyLevels();
+	}
+
+	setMusicOn(on) {
+		this.musicSettings.on = on;
+		this.applyLevels();
+	}
+
+	setMusicVolume(v) {
+		this.musicSettings.vol = v;
+		this.applyLevels();
+	}
+
+	applyLevels() {
+		if (this.anyOn) this.unlock();
+		if (!this.ctx) return;
+		const t = this.ctx.currentTime;
+		this.master.gain.setTargetAtTime(this.settings.on ? this.settings.vol * 1.3 : 0, t, 0.3);
+		this.musicBus.gain.setTargetAtTime(this.musicSettings.on ? this.musicSettings.vol * 0.7 : 0, t, 0.8);
+		if (!this.anyOn) this.ctx.suspend();
 	}
 
 	pause() { this.ctx?.suspend(); }
-	resume() { if (this.settings.on && this.ctx) this.ctx.resume(); }
+	resume() { if (this.anyOn && this.ctx) this.ctx.resume(); }
 
 	build() {
 		const ctx = this.ctx = new (window.AudioContext || window.webkitAudioContext)();
@@ -57,8 +80,20 @@ export class Soundscape {
 		comp.ratio.value = 3;
 		comp.connect(ctx.destination);
 		this.master = ctx.createGain();
-		this.master.gain.value = this.settings.vol * 1.3;
+		this.master.gain.value = this.settings.on ? this.settings.vol * 1.3 : 0;
 		this.master.connect(comp);
+		// La musique a son propre volume et son propre écho, plus long et plus doux.
+		this.musicBus = ctx.createGain();
+		this.musicBus.gain.value = this.musicSettings.on ? this.musicSettings.vol * 0.7 : 0;
+		this.musicBus.connect(comp);
+		this.musicVerb = ctx.createConvolver();
+		this.musicVerb.buffer = this.impulse(4.5);
+		const mwet = ctx.createGain();
+		mwet.gain.value = 0.55;
+		this.musicVerb.connect(mwet).connect(this.musicBus);
+		this.nextNote = ctx.currentTime + 4;
+		this.nextPad = ctx.currentTime + 1.5;
+		this.deg = 7;
 		// Un peu d'écho de sous-bois pour les cris : ils semblent venir de plus loin, plus doux.
 		this.verb = ctx.createConvolver();
 		this.verb.buffer = this.impulse(2.2);
@@ -129,6 +164,7 @@ export class Soundscape {
 		const biome = g.biome;
 		// Pas de vent ni de bruissement : un souffle, même par rafales, finit par sonner comme un bruit de fond.
 		const now = ctx.currentTime;
+		this.music(now, night);
 		this.set(this.rain, rain * 0.12);
 		this.set(this.rainBody, rain * 0.08);
 		this.set(this.sea, biome === 'littoral' ? 0.16 : 0);
@@ -346,6 +382,80 @@ export class Soundscape {
 		src.stop(t + 4.6);
 	}
 
+	// ─── La musique ───────────────────────────────────────────────
+
+	/**
+	 * Musique générative : un accord tenu de temps en temps, et de courtes phrases de quelques notes
+	 * qui se promènent dans la gamme, séparées par de longs silences. Rien n'est écrit à l'avance.
+	 * La nuit, tout descend d'une octave et ralentit.
+	 */
+	music(now, night) {
+		if (!this.musicSettings.on) return;
+		const slow = night > 0.5 ? 1.5 : 1;
+		if (now >= this.nextPad) {
+			this.pad(night > 0.5);
+			this.nextPad = now + (22 + Math.random() * 20) * slow;
+		}
+		if (now >= this.nextNote) {
+			if (!this.phrase) this.phrase = 3 + Math.floor(Math.random() * 4);
+			// La mélodie avance par petits pas, parfois un saut, et reste dans un registre doux.
+			const step = [-2, -1, -1, 1, 1, 2, 3, -3][Math.floor(Math.random() * 8)];
+			const lo = night > 0.5 ? 2 : 5, hi = night > 0.5 ? 9 : 12;
+			this.deg = Math.max(lo, Math.min(hi, this.deg + step));
+			this.bell(SCALE[this.deg], 0.5 + Math.random() * 0.5);
+			this.phrase--;
+			this.nextNote = now + (this.phrase > 0 ? 0.9 + Math.random() * 1.6 : 9 + Math.random() * 14) * slow;
+		}
+	}
+
+	/** Une note de musique : douce, longue, un peu d'écho. */
+	bell(f, vel) {
+		const ctx = this.ctx, t = ctx.currentTime + 0.05, dur = 3.5 + Math.random() * 2;
+		const pan = ctx.createStereoPanner(), lp = ctx.createBiquadFilter();
+		pan.pan.value = (Math.random() - 0.5) * 0.8;
+		lp.type = 'lowpass'; lp.frequency.value = 2400;
+		lp.connect(pan);
+		pan.connect(this.musicBus);
+		pan.connect(this.musicVerb);
+		for (const [mult, amp, type] of [[1, 0.06, 'sine'], [2, 0.012, 'sine'], [3, 0.004, 'triangle']]) {
+			const o = ctx.createOscillator(), e = ctx.createGain();
+			o.type = type;
+			o.frequency.value = f * mult;
+			e.gain.setValueAtTime(0, t);
+			e.gain.linearRampToValueAtTime(amp * vel, t + 0.04);
+			e.gain.exponentialRampToValueAtTime(0.0001, t + dur / mult);
+			o.connect(e).connect(lp);
+			o.start(t);
+			o.stop(t + dur + 0.1);
+		}
+	}
+
+	/** Un accord tenu qui monte et redescend très lentement. */
+	pad(low) {
+		const ctx = this.ctx, t = ctx.currentTime + 0.05;
+		const root = PAD_ROOTS[Math.floor(Math.random() * PAD_ROOTS.length)] / (low ? 2 : 1);
+		const voicing = PAD_VOICINGS[Math.floor(Math.random() * PAD_VOICINGS.length)];
+		const lp = ctx.createBiquadFilter();
+		lp.type = 'lowpass'; lp.frequency.value = low ? 650 : 900;
+		lp.connect(this.musicBus);
+		lp.connect(this.musicVerb);
+		const up = 5 + Math.random() * 3, hold = 6 + Math.random() * 6, down = 9 + Math.random() * 5;
+		for (const semi of voicing) {
+			for (const cents of [-4, 4]) {
+				const o = ctx.createOscillator(), e = ctx.createGain();
+				o.type = 'sine';
+				o.frequency.value = root * Math.pow(2, semi / 12) * Math.pow(2, cents / 1200);
+				e.gain.setValueAtTime(0, t);
+				e.gain.linearRampToValueAtTime(0.018, t + up);
+				e.gain.setValueAtTime(0.018, t + up + hold);
+				e.gain.linearRampToValueAtTime(0, t + up + hold + down);
+				o.connect(e).connect(lp);
+				o.start(t);
+				o.stop(t + up + hold + down + 0.1);
+			}
+		}
+	}
+
 	/** Cloche douce pour un bon moment : `size` 1 (une plante a poussé) à 3 (nouveau lieu). */
 	chime(size = 1) {
 		if (!this.ctx || this.ctx.state !== 'running') return;
@@ -380,3 +490,9 @@ const CALLS = {
 	sauterelle: { voice: 'chirr', every: 6, chance: 0.5 },
 	heron: { voice: 'croak', every: 30, chance: 0.3 },
 };
+
+// Gamme pentatonique de ré (ré mi fa# la si) sur trois octaves : aucune note ne peut sonner faux avec une autre.
+const SCALE = [146.83, 164.81, 185.0, 220.0, 246.94, 293.66, 329.63, 369.99, 440.0, 493.88, 587.33, 659.25, 739.99, 880.0, 987.77];
+// Accords tenus : fondamentales graves et dispositions ouvertes (quinte, neuvième, sixte), toujours consonantes.
+const PAD_ROOTS = [146.83, 110.0, 123.47, 164.81];
+const PAD_VOICINGS = [[0, 7, 14], [0, 7, 16], [0, 4, 9], [0, 7, 12, 16]];

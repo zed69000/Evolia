@@ -936,8 +936,11 @@ function renderOptions() {
 			${state.coords ? 'Météo réelle de ton coin (position arrondie à 10 km, envoyée à Open-Meteo).' : 'Active ta position approximative pour voir la vraie météo et le vrai coucher du soleil.'}</p>
 		${state.coords ? '' : '<button class="btn ghost wide" id="btn-sky">Utiliser ma position approximative</button>'}
 		<h3>Sons de la nature</h3>
-		<label class="switch"><input type="checkbox" id="opt-sound" ${sound.settings.on ? 'checked' : ''}><i></i><span>Vent, pluie, oiseaux et petites bêtes de ton jardin</span></label>
-		${sound.settings.on ? `<input type="range" id="opt-volume" class="volume" min="0" max="1" step="0.05" value="${sound.settings.vol}" aria-label="Volume">` : ''}
+		<label class="switch"><input type="checkbox" id="opt-sound" ${sound.settings.on ? 'checked' : ''}><i></i><span>Pluie, oiseaux et petites bêtes de ton jardin</span></label>
+		${sound.settings.on ? `<input type="range" id="opt-volume" class="volume" min="0" max="1" step="0.05" value="${sound.settings.vol}" aria-label="Volume des sons">` : ''}
+		<h3>Musique</h3>
+		<label class="switch"><input type="checkbox" id="opt-music" ${sound.musicSettings.on ? 'checked' : ''}><i></i><span>Musique zen, jamais la même</span></label>
+		${sound.musicSettings.on ? `<input type="range" id="opt-music-vol" class="volume" min="0" max="1" step="0.05" value="${sound.musicSettings.vol}" aria-label="Volume de la musique">` : ''}
 		<h3>Aide</h3>
 		<button class="btn ghost wide" id="opt-coach">Revoir le tutoriel</button>
 		<a class="btn ghost wide opt-link" href="privacy.html" target="_blank" rel="noopener">Confidentialité</a>
@@ -1018,7 +1021,8 @@ $('#options').addEventListener('click', async e => {
 });
 $('#options').addEventListener('change', e => {
 	if (e.target.id === 'opt-sound') { sound.setOn(e.target.checked); persist(true); renderOptions(); return; }
-	if (e.target.id === 'opt-volume') { persist(true); return; }
+	if (e.target.id === 'opt-music') { sound.setMusicOn(e.target.checked); persist(true); renderOptions(); return; }
+	if (e.target.id === 'opt-volume' || e.target.id === 'opt-music-vol') { persist(true); return; }
 	if (e.target.id !== 'opt-dev') return;
 	DEV = e.target.checked;
 	try { localStorage.setItem(DEV_KEY, DEV ? '1' : '0'); } catch (err) { /* stockage indisponible */ }
@@ -1027,6 +1031,7 @@ $('#options').addEventListener('change', e => {
 });
 $('#options').addEventListener('input', e => {
 	if (e.target.id === 'opt-volume') sound.setVolume(parseFloat(e.target.value));
+	if (e.target.id === 'opt-music-vol') sound.setMusicVolume(parseFloat(e.target.value));
 	if (e.target.id === 'dev-hour') {
 		garden.hourOverride = parseFloat(e.target.value);
 		$('#dev-h').textContent = `${e.target.value} h`;

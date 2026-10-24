@@ -76,7 +76,7 @@ CHAQUE JOUR
 Un cadeau à l'ouverture, trois défis doux, ta série de jours actifs, et un album de tout ce que tu as découvert. Aucune punition si tu rates un jour.
 
 ZEN
-Des sons de la nature discrets, aucune publicité, aucun achat, aucun compte. Tes données restent sur ton téléphone.
+Des sons de la nature discrets, une musique douce qui ne se répète jamais, aucune publicité, aucun achat, aucun compte. Tes données restent sur ton téléphone.
 
 **Notes de version (première version)**
 Première version de test : jardin, lieux, espèces, aménagements, défis du jour et lecture des pas avec Health Connect. Merci de nous dire ce qui vous plaît et ce qui coince !
@@ -111,7 +111,7 @@ EVERY DAY
 A gift when you open the app, three gentle challenges, your streak of active days, and an album of everything you found. No punishment if you miss a day.
 
 CALM
-Soft nature sounds, no ads, no purchases, no account. Your data stays on your phone.
+Soft nature sounds, gentle music that never repeats, no ads, no purchases, no account. Your data stays on your phone.
 
 ---
 
