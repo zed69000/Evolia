@@ -36,7 +36,12 @@ jobs:
         run: |
           cd android
           chmod +x gradlew
-          ./gradlew assembleDebug
+          # En cas d'échec, les lignes utiles remontent en annotations (lisibles sans compte GitHub).
+          ./gradlew assembleDebug --console=plain 2>&1 | tee build.log; code=${PIPESTATUS[0]}
+          if [ "$code" != 0 ]; then
+            grep -iE "error|what went wrong|failed|exception|cannot|unresolved" build.log | grep -v "^> Task" | head -40 | while IFS= read -r l; do echo "::error::$l"; done
+          fi
+          exit $code
       - uses: actions/upload-artifact@v4
         with:
           name: evolia-apk

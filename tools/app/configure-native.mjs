@@ -62,6 +62,8 @@ edit("android/app/src/main/res/values/styles.xml", s => {
 console.log("Health Connect : politique de confidentialité ; démarrage couleur papier");
 
 edit("android/app/build.gradle", s => s.replace(/versionCode \d+/, `versionCode ${BUILD}`).replace(/versionName "[^"]*"/, `versionName "${VERSION}"`));
+// Health Connect demande Android 8 (API 26) au minimum ; le modèle Capacitor part de plus bas.
+edit("android/variables.gradle", s => s.replace(/minSdkVersion\s*=\s*\d+/, m => (Number(m.match(/\d+/)[0]) < 26 ? "minSdkVersion = 26" : m)));
 console.log(`build.gradle : version ${VERSION} (${BUILD})`);
 
 // L'icône du jeu (dessinée par tools/app/make_icon.py) remplace celle du modèle Capacitor.
