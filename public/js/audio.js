@@ -174,14 +174,15 @@ export class Soundscape {
 		const v = g.view();
 		const seen = g.insects.filter(b => !b.leaving && b.x > v.x0 && b.x < v.x0 + v.w && b.y > v.y0 && b.y < v.y0 + v.h);
 		const near = Math.min(1, g.cam.z / 1.2);
-		// Bourdonnement continu, selon les abeilles et bourdons proches du centre.
-		const buzzers = seen.filter(b => BUZZ[b.kind]);
-		if (buzzers.length && !this.buzz) this.buzz = this.makeBuzz();
-		if (this.buzz) {
+		// Une abeille qui passe tout près : un bref bourdonnement, de temps en temps, seulement quand on regarde de près.
+		if (g.cam.z >= 1.2 && now > (this.nextBuzz ?? 0)) {
 			const cx = v.x0 + v.w / 2, cy = v.y0 + v.h / 2;
-			let level = 0;
-			for (const b of buzzers) level += BUZZ[b.kind] * Math.max(0, 1 - Math.hypot(b.x - cx, b.y - cy) / (v.w * 0.8));
-			this.buzz.gain.gain.setTargetAtTime(Math.min(0.05, level * 0.02 * near * near), now, 0.4);
+			const close = seen.filter(b => BUZZ[b.kind] && Math.hypot(b.x - cx, b.y - cy) < v.w * 0.3);
+			if (close.length && Math.random() < 0.3) {
+				const b = close[Math.floor(Math.random() * close.length)];
+				this.nextBuzz = now + 8 + Math.random() * 10;
+				this.flyby(Math.max(-0.7, Math.min(0.7, ((b.x - v.x0) / v.w) * 2 - 1)), BUZZ[b.kind]);
+			}
 		}
 		// Un animal visible, au hasard, chante s'il en a envie.
 		const b = seen[Math.floor(Math.random() * seen.length)];
@@ -334,19 +335,26 @@ export class Soundscape {
 		for (let i = 0; i < 3; i++) this.note(out, t + i * 0.045, f, f, 0.03, 0.018);
 	}
 
-	makeBuzz() {
-		const ctx = this.ctx;
-		const o = ctx.createOscillator(), o2 = ctx.createOscillator(), f = ctx.createBiquadFilter(), g = ctx.createGain();
-		o.type = 'sawtooth'; o.frequency.value = 190;
-		o2.type = 'sawtooth'; o2.frequency.value = 223;
-		f.type = 'lowpass'; f.frequency.value = 900;
-		g.gain.value = 0;
+	/** Un insecte qui passe : un bourdonnement doux qui monte, change de hauteur en passant, et s'éloigne. */
+	flyby(pan, kind) {
+		const ctx = this.ctx, t = ctx.currentTime + 0.05, dur = 1.1 + Math.random() * 0.8;
+		const base = kind === 1 ? 165 + Math.random() * 40 : 260 + Math.random() * 60;
+		const o = ctx.createOscillator(), f = ctx.createBiquadFilter(), g = ctx.createGain(), p = ctx.createStereoPanner();
+		o.type = 'triangle';
+		o.frequency.setValueAtTime(base * 1.06, t);
+		o.frequency.linearRampToValueAtTime(base * 0.94, t + dur);
 		const lfo = ctx.createOscillator(), depth = ctx.createGain();
-		lfo.frequency.value = 0.7; depth.gain.value = 12;
-		lfo.connect(depth); depth.connect(o.frequency); depth.connect(o2.frequency);
-		o.connect(f); o2.connect(f); f.connect(g).connect(this.master);
-		o.start(); o2.start(); lfo.start();
-		return { gain: g };
+		lfo.frequency.value = 9; depth.gain.value = base * 0.02;
+		lfo.connect(depth).connect(o.frequency);
+		f.type = 'lowpass'; f.frequency.value = 700;
+		g.gain.setValueAtTime(0, t);
+		g.gain.linearRampToValueAtTime(0.025 * (kind === 1 ? 1 : 0.6), t + dur * 0.45);
+		g.gain.linearRampToValueAtTime(0, t + dur);
+		p.pan.setValueAtTime(pan - 0.3, t);
+		p.pan.linearRampToValueAtTime(pan + 0.3, t + dur);
+		o.connect(f).connect(g).connect(p).connect(this.master);
+		o.start(t); lfo.start(t);
+		o.stop(t + dur + 0.05); lfo.stop(t + dur + 0.05);
 	}
 
 	thunder() {
@@ -376,7 +384,7 @@ export class Soundscape {
 	}
 }
 
-// Volume relatif du bourdonnement de chaque insecte.
+// Insectes qui bourdonnent : 1 pour abeilles et bourdons (plus grave), moins pour les petites mouches.
 const BUZZ = { bee: 1, hoverfly: 0.4, beefly: 0.5 };
 
 // Qui chante comment, et à quelle fréquence au plus (secondes).
