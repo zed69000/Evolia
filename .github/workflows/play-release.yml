@@ -23,5 +23,5 @@ jobs:
         npx cap add android
         npm run native:android
         npx cap sync android
-        cd android && ./gradlew bundleRelease
+        cd android && chmod +x gradlew && ./gradlew bundleRelease
     secrets: inherit
