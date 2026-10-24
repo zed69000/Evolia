@@ -650,3 +650,4 @@ html, body {
 .zi-grow { font-weight: 700; color: var(--foret); }
 .nectar.bump { display: inline-block; animation: nectar-bump .45s ease; }
 @keyframes nectar-bump { 40% { transform: scale(1.35); color: #F08A3C; } }
+.fps { position: absolute; z-index: 30; left: 50%; transform: translateX(-50%); top: calc(env(safe-area-inset-top, 0px) + 4px); padding: 2px 8px; border-radius: 8px; background: rgba(30,45,25,.7); color: #fff; font: 700 11px Nunito, sans-serif; pointer-events: none; }

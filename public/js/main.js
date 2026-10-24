@@ -780,6 +780,13 @@ function renderZoomInfo() {
 }
 setInterval(renderZoomInfo, 250);
 
+// Mode test : images par seconde, pour vérifier la fluidité sur un vrai téléphone.
+setInterval(() => {
+	const el = $('#fps');
+	el.hidden = !DEV;
+	if (DEV) el.textContent = `${Math.round(garden.fps ?? 0)} i/s · ${garden.place.plants.length} plantes · ${garden.insects.length} bêtes`;
+}, 500);
+
 // ─── Aménager : cabane, banc, abris pour les animaux ──────────
 
 let placing = null; // { kind, item? } pendant qu'on choisit la place d'un objet
@@ -856,6 +863,7 @@ $('#btn-place').addEventListener('click', () => {
 	if (!garden.canPlace(kind, x, y, item)) return;
 	if (item) {
 		item.x = Math.round(x); item.y = Math.round(y);
+		garden.clearUnder(item);
 		garden.popItem(item);
 	} else {
 		if ((state.nectar ?? 0) < ITEMS[kind].cost) { toast('Pas assez de nectar', '#C0442F'); return endPlacing(); }

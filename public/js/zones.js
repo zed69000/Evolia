@@ -376,11 +376,18 @@ export function keepOut(biome, x, y, pad = 0) {
  * `tone` recolore selon la saison ; l'ordre de peinture est le même pour toutes les cases (pas de raccord).
  */
 export function paintTile(g, biome, gx, gy, tone, season) {
+	for (const step of tileSteps(biome, gx, gy, tone, season)) step(g);
+}
+
+/** La même peinture, découpée en petites étapes : on peut l'étaler sur plusieurs images sans jamais figer l'écran. */
+export function tileSteps(biome, gx, gy, tone, season) {
 	const W = PARCEL_W, H = PARCEL_H, ox = gx * W, oy = gy * H;
-	g.save();
-	g.translate(-ox, -oy);
-	g.fillStyle = tone(GROUND[biome].base);
-	g.fillRect(ox, oy, W, H);
+	const steps = [g => {
+		g.save();
+		g.translate(-ox, -oy);
+		g.fillStyle = tone(GROUND[biome].base);
+		g.fillRect(ox, oy, W, H);
+	}];
 	const all = [];
 	for (let y = gy - 1; y <= gy + 1; y++) for (let x = gx - 1; x <= gx + 1; x++) {
 		for (const f of featuresOf(biome, x, y)) if (f.x1 > ox && f.x0 < ox + W && f.y1 > oy && f.y0 < oy + H) all.push(f);
@@ -388,9 +395,10 @@ export function paintTile(g, biome, gx, gy, tone, season) {
 	// Même ordre partout : par couche, puis par case, puis dans l'ordre de création ;
 	// rivières et sentiers passent entre le sol et les petits détails.
 	all.sort((a, b) => a.layer - b.layer);
-	for (const f of all) if (f.layer < 2) f.paint(g, rng(f.seed), tone, season);
-	for (const f of longFeatures(biome)) if (f.x1 > ox && f.x0 < ox + W && f.y1 > oy && f.y0 < oy + H) f.paint(g, rng(f.seed));
-	for (const f of all) if (f.layer >= 2) f.paint(g, rng(f.seed), tone, season);
-	g.restore();
+	for (const f of all) if (f.layer < 2) steps.push(g => f.paint(g, rng(f.seed), tone, season));
+	for (const f of longFeatures(biome)) if (f.x1 > ox && f.x0 < ox + W && f.y1 > oy && f.y0 < oy + H) steps.push(g => f.paint(g, rng(f.seed)));
+	for (const f of all) if (f.layer >= 2) steps.push(g => f.paint(g, rng(f.seed), tone, season));
+	steps.push(g => g.restore());
+	return steps;
 }
 

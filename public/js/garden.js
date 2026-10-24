@@ -8,7 +8,7 @@ import { rng, wash, rgba, mix, paperTexture, lerp } from './watercolor.js';
 import { PLANT_TYPES, DECOR, DECOR_PAINTERS, paintPlant, newVariant, lookOf } from './plants.js';
 import { drawCritter, CRITTER_SIZE, FLIGHT } from './critters.js';
 import { SPECIES, PLACE_BY_ID } from './species.js';
-import { PARCEL_W, PARCEL_H, CELLS, CELL_KM, zoneOf, zoneName, paintTile, keepOut } from './zones.js';
+import { PARCEL_W, PARCEL_H, CELLS, CELL_KM, GROUND, zoneOf, zoneName, tileSteps, keepOut } from './zones.js';
 import { newPlace } from './state.js';
 import { ITEMS, ITEM_PAINTERS, attracted } from './deco.js';
 
@@ -85,6 +85,7 @@ export class Garden {
 		this.decorSprites = new Map();
 		this.itemSprites = new Map();
 		this.bgs = new Map();
+		this.tileJobs = new Map();
 		this.insects = [];
 		this.particles = [];
 		this.drops = [];
@@ -140,6 +141,7 @@ export class Garden {
 			const pos = this.place_(this.biome, p.type, ci);
 			p.x = Math.round(pos.x); p.y = Math.round(pos.y);
 		}
+		for (const it of this.place.items ?? []) this.clearUnder(it);
 	}
 
 	/** Change de lieu : un autre jardin, d'autres espèces. */
@@ -267,6 +269,7 @@ export class Garden {
 			this.decorSprites.clear();
 			this.itemSprites.clear();
 			this.bgs.clear();
+			this.tileJobs.clear();
 			this.makeClouds();
 			this.makeGlow();
 		}
@@ -393,6 +396,7 @@ export class Garden {
 			this.seasonKey = key;
 			this.sprites.clear();
 			this.bgs.clear();
+			this.tileJobs.clear();
 		}
 	}
 
@@ -402,23 +406,95 @@ export class Garden {
 		return mix(mix(c, '#B8A060', (s.autumn ?? 0) * 0.16), '#A8B098', (s.winter ?? 0) * 0.3);
 	}
 
-	/** Sol d'une case de la grille (gx, gy) du lieu, mis en cache à la densité normale ; sans raccord avec ses voisines. */
-	bgFor(gx, gy) {
+	/**
+	 * Sol d'une case de la grille (gx, gy), mis en cache ; sans raccord avec ses voisines.
+	 * De loin (`lo`), une version légère, six fois plus petite en mémoire. Une case pas encore peinte
+	 * attend son tour (une par image) : on montre en attendant sa version légère, ou la couleur du sol.
+	 */
+	tileFor(gx, gy, lo = false) {
 		const key = `${this.biome}:${gx},${gy}`;
-		let c = this.bgs.get(key);
-		if (c) return c;
-		const D = this.density;
-		c = document.createElement('canvas');
+		const hi = this.bgs.get(key), light = this.bgs.get(`${key}:lo`);
+		const want = lo ? light : hi;
+		if (want) { want.used = this.t; return want.canvas; }
+		// D'abord la version légère (vite prête), puis la détaillée si on regarde de près.
+		if (!light) this.queueTile(gx, gy, true);
+		else if (!lo) this.queueTile(gx, gy, false);
+		const other = lo ? hi : light;
+		if (other) other.used = this.t;
+		return other?.canvas ?? null;
+	}
+
+	queueTile(gx, gy, lo) {
+		const key = `${this.biome}:${gx},${gy}${lo ? ':lo' : ''}`;
+		if (this.tileJobs.has(key)) return;
+		const D = this.density * (lo ? 0.4 : 1);
+		const c = document.createElement('canvas');
 		c.width = Math.ceil(PARCEL_W * D);
 		c.height = Math.ceil(PARCEL_H * D);
 		const g = c.getContext('2d');
 		g.scale(D, D);
-		paintTile(g, this.biome, gx, gy, col => this.groundColor(col), this.season);
-		this.bgs.set(key, c);
-		return c;
+		this.tileJobs.set(key, { key, c, g, steps: tileSteps(this.biome, gx, gy, col => this.groundColor(col), this.season), i: 0, lo, at: this.t });
 	}
 
-	// ─── Plantes ───────────────────────────────────────────────────
+	/** Avance la peinture des cases en attente, sans dépasser `ms` millisecondes par image. */
+	workTiles(ms) {
+		if (!this.tileJobs.size) return;
+		const end = performance.now() + ms;
+		// Les versions légères d'abord, puis les plus anciennes demandes.
+		const jobs = [...this.tileJobs.values()].sort((a, b) => (b.lo - a.lo) || (a.at - b.at));
+		for (const job of jobs) {
+			while (job.i < job.steps.length) {
+				job.steps[job.i++](job.g);
+				if (performance.now() > end) return;
+			}
+			this.tileJobs.delete(job.key);
+			this.bgs.set(job.key, { canvas: job.c, used: this.t });
+		}
+	}
+
+	/** Garde en mémoire au plus 8 cases détaillées et 30 légères, les plus récemment vues. */
+	trimTiles() {
+		if (this.bgs.size < 30) return;
+		const hi = [], lo = [];
+		for (const [k, t] of this.bgs) (k.endsWith(':lo') ? lo : hi).push([k, t.used]);
+		for (const [list, max] of [[hi, 8], [lo, 30]]) {
+			if (list.length <= max) continue;
+			list.sort((a, b) => b[1] - a[1]);
+			for (const [k] of list.slice(max)) this.bgs.delete(k);
+		}
+	}
+
+	/**
+	 * La brume au-delà des clairières, en une seule couche : on la remplit, puis on y découpe les clairières
+	 * ouvertes (et, à moitié, la prochaine). Le sol n'est ainsi peint qu'une fois par image.
+	 */
+	drawMist(ctx, world, cw, ch) {
+		if (!this.mist || this.mist.width !== cw || this.mist.height !== ch) {
+			this.mist = document.createElement('canvas');
+			this.mist.width = cw; this.mist.height = ch;
+		}
+		const m = this.mist.getContext('2d');
+		m.setTransform(1, 0, 0, 1, 0, 0);
+		m.globalCompositeOperation = 'source-over';
+		m.globalAlpha = 1;
+		m.clearRect(0, 0, cw, ch);
+		m.fillStyle = this.glyph ? 'rgba(232,226,204,0.72)' : 'rgba(236,231,212,0.5)';
+		m.fillRect(0, 0, cw, ch);
+		const S = this.scale;
+		m.setTransform(S, 0, 0, S, cw / 2 - this.cam.cx * S, ch / 2 - this.cam.cy * S);
+		m.globalCompositeOperation = 'destination-out';
+		m.globalAlpha = 0.55;
+		for (const i of this.lockedCells()) { m.beginPath(); this.tracePath(m, this.blob(i)); m.fill(); }
+		m.globalAlpha = 1;
+		m.beginPath();
+		for (const i of this.openCells()) this.tracePath(m, this.blob(i));
+		m.fill();
+		ctx.setTransform(1, 0, 0, 1, 0, 0);
+		ctx.drawImage(this.mist, 0, 0);
+		world();
+	}
+
+	// ─── Plantes	// ─── Plantes ───────────────────────────────────────────────────
 
 	/** Un premier jardin composé à la main pour chaque lieu, pour ne pas arriver sur un terrain vide. */
 	seedStarterGarden(pid) {
@@ -444,7 +520,7 @@ export class Garden {
 		const obstacles = [
 			...here.map(p => ({ x: p.x, y: p.y, rad: PLANT_TYPES[p.type].spacing })),
 			...(ci === 0 ? Object.values(DECOR).filter(d => d.place === pid && d.rad).map(d => ({ x: d.x, y: d.y, rad: d.rad })) : []),
-			...(place.items ?? []).map(it => ({ x: it.x - cellOrigin(ci)[0], y: it.y - cellOrigin(ci)[1], rad: ITEMS[it.kind].box.w * 0.35 })),
+			...(place.items ?? []).map(it => ({ x: it.x - cellOrigin(ci)[0], y: it.y - cellOrigin(ci)[1] - ITEMS[it.kind].box.ay * 0.3, rad: ITEMS[it.kind].box.w * 0.5 })),
 		];
 		const same = here.filter(p => p.type === type);
 		const y0 = this.minY(pid, type, ci), H = PARCEL_H;
@@ -535,6 +611,13 @@ export class Garden {
 		const stage = p.growth >= 1 ? STAGES : Math.floor(p.growth * STAGES);
 		const key = detail ? `${p.id}:d` : p.id;
 		let s = this.sprites.get(key);
+		// Au-delà du temps de peinture de l'image, on garde l'ancien stade, ou on attend l'image suivante.
+		// Les images détaillées pèsent lourd : au plus 40 à la fois, les autres plantes gardent leur image normale.
+		if (detail && !s && (this.detailCount ?? 0) >= 40) return null;
+		if ((!s || s.stage !== stage) && performance.now() > (this.paintUntil ?? Infinity)) {
+			if (s) s.used = this.t;
+			return s ?? null;
+		}
 		if (!s || s.stage !== stage) {
 			const box = PLANT_TYPES[p.type].box;
 			const D = this.density * (detail ? DETAIL_DENSITY : 1);
@@ -546,6 +629,7 @@ export class Garden {
 			const meta = paintPlant(g, p, stage / STAGES, { detail, season: this.season });
 			const old = this.meta.get(p.id);
 			const grew = !detail && old && old.stage < stage;
+			if (detail && !this.sprites.has(key)) this.detailCount = (this.detailCount ?? 0) + 1;
 			s = { stage, canvas: c, pop: grew ? this.t : (s?.pop ?? -9) };
 			this.sprites.set(key, s);
 			if (!detail) this.meta.set(p.id, { stage, top: meta.top, r: meta.r ?? 8, pop: s.pop });
@@ -594,8 +678,28 @@ export class Garden {
 	placeItem(kind, x, y) {
 		const it = { id: uid(), kind, x: Math.round(x), y: Math.round(y), at: Date.now() };
 		this.items.push(it);
+		this.clearUnder(it);
 		this.popItem(it);
 		return it;
+	}
+
+	/** Emprise au sol d'un objet : le rectangle derrière et sous lui où rien ne doit pousser. */
+	footprint(it) {
+		const box = ITEMS[it.kind].box;
+		return { x0: it.x - box.w * 0.5, x1: it.x + box.w * 0.5, y0: it.y - box.ay * 0.75, y1: it.y + 16 };
+	}
+
+	/** Les herbes et fleurs qui se trouvaient sous un objet repoussent un peu plus loin. */
+	clearUnder(it) {
+		const f = this.footprint(it);
+		for (const p of this.place.plants) {
+			if (p.type === 'arbre' || p.type === 'buisson') continue;
+			const ci = cellOf(p), [ox, oy] = cellOrigin(ci), x = ox + p.x, y = oy + p.y;
+			if (x < f.x0 || x > f.x1 || y < f.y0 || y > f.y1) continue;
+			const pos = this.place_(this.biome, p.type, ci);
+			p.x = Math.round(pos.x); p.y = Math.round(pos.y);
+			this.meta.delete(p.id);
+		}
 	}
 
 	popItem(it) {
@@ -804,8 +908,10 @@ export class Garden {
 	// ─── Boucle ────────────────────────────────────────────────────
 
 	frame = now => {
-		const dt = Math.min(0.05, (now - this.last) / 1000);
+		const raw = (now - this.last) / 1000, dt = Math.min(0.05, raw);
 		this.last = now;
+		// Images par seconde (moyenne glissante), affichées en mode test.
+		if (raw > 0 && raw < 1) this.fps = this.fps ? this.fps * 0.95 + (1 / raw) * 0.05 : 1 / raw;
 		this.t += dt;
 		if (this.base) {
 			this.update(dt, now);
@@ -857,8 +963,17 @@ export class Garden {
 			if (f.y < 0 || f.y > 1) f.y = Math.random();
 		}
 		this.updateWeather(dt);
-		// Les sprites détaillés hors de vue depuis un moment libèrent leur mémoire.
-		if (this.sprites.size > 400) for (const [k, s] of this.sprites) if (this.t - (s.used ?? 0) > 20) this.sprites.delete(k);
+		// Les images de plantes hors de vue libèrent leur mémoire : vite pour les détaillées (lourdes), un peu plus tard pour les autres.
+		if (this.sprites.size > 120 && this.t > (this.nextTrim ?? 0)) {
+			this.nextTrim = this.t + 1;
+			for (const [k, s] of this.sprites) if (this.t - (s.used ?? 0) > (k.endsWith(':d') ? 3 : 12)) this.sprites.delete(k);
+		}
+		if (this.t > (this.nextCount ?? 0)) {
+			this.nextCount = this.t + 1;
+			let n = 0;
+			for (const k of this.sprites.keys()) if (k.endsWith(':d')) n++;
+			this.detailCount = n;
+		}
 	}
 
 	/** Parcelles (ouvertes, par défaut) au moins en partie à l'écran. */
@@ -1199,7 +1314,7 @@ export class Garden {
 		if (amount > 0) {
 			const snow = k === 'snow';
 			const rate = (snow ? 40 : 160) * amount * Math.min(4, (v.w * v.h) / (420 * 900));
-			for (let i = 0; i < rate * dt; i++) {
+			for (let i = 0; i < rate * dt && this.drops.length < 450; i++) {
 				this.drops.push({ x: v.x0 - 40 + Math.random() * (v.w + 80), y: v.y0 - 20 - Math.random() * 40, z: 0.6 + Math.random() * 0.6, snow, ground: v.y0 + Math.random() * v.h, ph: Math.random() * 6.28 });
 			}
 		}
@@ -1270,7 +1385,6 @@ export class Garden {
 		const world = () => ctx.setTransform(S, 0, 0, S, tx, ty);
 		const v = this.view();
 		const visible = this.visibleCells();
-		const locked = this.visibleCells(80, this.lockedCells());
 		const place = this.place;
 		const plantPos = p => { const [ox, oy] = cellOrigin(cellOf(p)); return [ox + p.x, oy + p.y]; };
 
@@ -1281,32 +1395,20 @@ export class Garden {
 		ctx.fillRect(0, 0, cw, ch);
 
 		// Le sol continue partout ; hors des clairières ouvertes, une prairie sauvage voilée de brume.
-		world();
+		// Peintures en attente (sol, plantes) : quelques millisecondes par image, jamais d'écran figé.
+		this.workTiles(5);
+		this.paintUntil = performance.now() + 6;
+		const lo = this.cam.z < 0.6;
 		const gx0 = Math.floor((v.x0 - 10) / PARCEL_W), gx1 = Math.floor((v.x0 + v.w + 10) / PARCEL_W);
 		const gy0 = Math.floor((v.y0 - 10) / PARCEL_H), gy1 = Math.floor((v.y0 + v.h + 10) / PARCEL_H);
-		const paintGround = () => {
-			for (let gy = gy0; gy <= gy1; gy++) for (let gx = gx0; gx <= gx1; gx++) ctx.drawImage(this.bgFor(gx, gy), gx * PARCEL_W, gy * PARCEL_H, PARCEL_W, PARCEL_H);
-		};
-		paintGround();
-		ctx.fillStyle = glyph ? 'rgba(232,226,204,0.72)' : 'rgba(236,231,212,0.5)';
-		ctx.fillRect(v.x0 - 10, v.y0 - 10, v.w + 20, v.h + 20);
-		// La prochaine clairière : à demi dévoilée.
-		for (const i of locked) {
-			ctx.save();
-			ctx.beginPath();
-			this.tracePath(ctx, this.blob(i));
-			ctx.clip();
-			ctx.globalAlpha = 0.45;
-			paintGround();
-			ctx.restore();
+		world();
+		for (let gy = gy0; gy <= gy1; gy++) for (let gx = gx0; gx <= gx1; gx++) {
+			const tile = this.tileFor(gx, gy, lo);
+			if (tile) ctx.drawImage(tile, gx * PARCEL_W, gy * PARCEL_H, PARCEL_W, PARCEL_H);
+			else { ctx.fillStyle = this.groundColor(GROUND[this.biome].base); ctx.fillRect(gx * PARCEL_W, gy * PARCEL_H, PARCEL_W, PARCEL_H); }
 		}
-		// Les clairières ouvertes, d'un seul tenant.
-		ctx.save();
-		ctx.beginPath();
-		for (const i of this.openCells()) this.tracePath(ctx, this.blob(i));
-		ctx.clip();
-		paintGround();
-		ctx.restore();
+		this.drawMist(ctx, world, cw, ch);
+		this.trimTiles();
 		this.drawNextOutline(ctx, v);
 		// La clôture suit le bord des clairières ; elle recule à chaque nouvelle parcelle.
 		this.drawFence(ctx, v);
@@ -1437,7 +1539,16 @@ export class Garden {
 			const box = PLANT_TYPES[p.type].box;
 			if (this.cam.z >= 1.6 && p.growth < 1) this.drawGrowth(ctx, e.x, e.y, p.growth, world);
 			const s = this.spriteFor(p, false);
-			const img = detail ? this.spriteFor(p, true) : s;
+			if (!s) {
+				// Pas encore peinte : une tache douce à sa couleur, le temps d'une ou deux images.
+				world();
+				ctx.fillStyle = rgba(this.glyphColor(p), 0.35);
+				ctx.beginPath();
+				ctx.ellipse(e.x, e.y - box.ay * 0.35, box.w * 0.18, box.ay * 0.3, 0, 0, Math.PI * 2);
+				ctx.fill();
+				continue;
+			}
+			const img = detail ? (this.spriteFor(p, true) ?? s) : s;
 			const shear = this.wind(e.x) * SWAY[p.type] * (0.4 + 0.6 * (s.stage / STAGES));
 			const age = this.t - (this.meta.get(p.id)?.pop ?? -9);
 			const k = age < 0.45 ? 1 + 0.14 * Math.sin((age / 0.45) * Math.PI) : 1;
@@ -1569,72 +1680,86 @@ export class Garden {
 		return runs;
 	}
 
+	/**
+	 * Tracés de la clôture et des pointillés, calculés une fois (ils ne changent qu'à l'ouverture d'une parcelle) :
+	 * morceaux de bord, piquets et points, chacun avec sa boîte pour ne dessiner que ce qui est à l'écran.
+	 */
+	edges() {
+		const n = cellsOpen(this.place), key = `${this.biome}:${n}`;
+		if (this.edgeCache?.key === key) return this.edgeCache;
+		const open = this.openCells();
+		const along = (run, step) => {
+			const out = [];
+			let acc = 0;
+			for (let k = 1; k < run.length; k++) {
+				const [x0, y0] = run[k - 1], [x1, y1] = run[k];
+				const len = Math.hypot(x1 - x0, y1 - y0);
+				for (let d = (step - acc) % step; d < len; d += step) out.push([x0 + ((x1 - x0) * d) / len, y0 + ((y1 - y0) * d) / len]);
+				acc = (acc + len) % step;
+			}
+			return out;
+		};
+		const box = pts => {
+			const xs = pts.map(p => p[0]), ys = pts.map(p => p[1]);
+			return { x0: Math.min(...xs), x1: Math.max(...xs), y0: Math.min(...ys), y1: Math.max(...ys) };
+		};
+		const fence = [];
+		for (const i of open) for (const run of this.outerRuns(i, open.filter(j => j !== i))) fence.push({ run, posts: along(run, FENCE_STEP), ...box(run) });
+		const dots = [];
+		for (const i of this.lockedCells()) for (const run of this.outerRuns(i, open)) dots.push(...along(run, 14));
+		this.edgeCache = { key, fence, dots };
+		return this.edgeCache;
+	}
+
 	/** Pointillés autour de la prochaine clairière, là où elle sort des clairières ouvertes. */
 	drawNextOutline(ctx, v) {
-		const open = this.openCells();
 		ctx.fillStyle = 'rgba(140,112,70,0.7)';
-		for (const i of this.lockedCells()) {
-			for (const run of this.outerRuns(i, open)) {
-				let acc = 0;
-				for (let k = 1; k < run.length; k++) {
-					const [x0, y0] = run[k - 1], [x1, y1] = run[k];
-					const len = Math.hypot(x1 - x0, y1 - y0);
-					for (let d = (14 - acc) % 14; d < len; d += 14) {
-						const x = x0 + ((x1 - x0) * d) / len, y = y0 + ((y1 - y0) * d) / len;
-						if (x < v.x0 - 10 || x > v.x0 + v.w + 10 || y < v.y0 - 10 || y > v.y0 + v.h + 10) continue;
-						ctx.beginPath();
-						ctx.arc(x, y, this.glyph ? 5 : 2.2, 0, Math.PI * 2);
-						ctx.fill();
-					}
-					acc = (acc + len) % 14;
-				}
-			}
+		const r = this.glyph ? 5 : 2.2;
+		ctx.beginPath();
+		for (const [x, y] of this.edges().dots) {
+			if (x < v.x0 - 10 || x > v.x0 + v.w + 10 || y < v.y0 - 10 || y > v.y0 + v.h + 10) continue;
+			ctx.moveTo(x + r, y);
+			ctx.arc(x, y, r, 0, Math.PI * 2);
 		}
+		ctx.fill();
 	}
 
 	/** Clôture en bois sur le pourtour des clairières ouvertes : deux lisses et des piquets. */
 	drawFence(ctx, v) {
-		const open = this.openCells();
 		const glyph = this.glyph;
 		ctx.lineCap = 'round';
 		ctx.lineJoin = 'round';
-		for (const i of open) {
-			for (const run of this.outerRuns(i, open.filter(j => j !== i))) {
-				const xs = run.map(p => p[0]), ys = run.map(p => p[1]);
-				if (Math.max(...xs) < v.x0 - 30 || Math.min(...xs) > v.x0 + v.w + 30 || Math.max(...ys) < v.y0 - 40 || Math.min(...ys) > v.y0 + v.h + 30) continue;
-				const line = (dx, dy) => {
-					ctx.beginPath();
-					ctx.moveTo(run[0][0] + dx, run[0][1] + dy);
-					for (let k = 1; k < run.length; k++) ctx.lineTo(run[k][0] + dx, run[k][1] + dy);
-					ctx.stroke();
-				};
-				ctx.strokeStyle = 'rgba(40,50,25,0.18)';
-				ctx.lineWidth = glyph ? 10 : 5;
-				line(3, 4);
-				ctx.strokeStyle = '#9A7448';
-				ctx.lineWidth = glyph ? 7 : 3;
-				line(0, 0);
-				if (glyph) continue;
-				line(0, -8);
-				// Piquets à intervalle régulier le long du bord.
-				let acc = 0;
-				for (let k = 1; k < run.length; k++) {
-					const [x0, y0] = run[k - 1], [x1, y1] = run[k];
-					const len = Math.hypot(x1 - x0, y1 - y0);
-					for (let d = (FENCE_STEP - acc) % FENCE_STEP; d < len; d += FENCE_STEP) {
-						const x = x0 + ((x1 - x0) * d) / len, y = y0 + ((y1 - y0) * d) / len;
-						if (x < v.x0 - 10 || x > v.x0 + v.w + 10 || y < v.y0 - 30 || y > v.y0 + v.h + 10) continue;
-						ctx.fillStyle = 'rgba(40,50,25,0.2)';
-						ctx.beginPath(); ctx.ellipse(x + 3, y + 3, 4, 2, 0, 0, Math.PI * 2); ctx.fill();
-						ctx.fillStyle = '#8A6238';
-						ctx.beginPath(); ctx.roundRect(x - 3.2, y - 18, 6.4, 20, 2); ctx.fill();
-						ctx.fillStyle = '#B48A58';
-						ctx.beginPath(); ctx.ellipse(x, y - 18, 3.2, 1.6, 0, 0, Math.PI * 2); ctx.fill();
-					}
-					acc = (acc + len) % FENCE_STEP;
-				}
-			}
-		}
+		const seen = this.edges().fence.filter(f => f.x1 > v.x0 - 30 && f.x0 < v.x0 + v.w + 30 && f.y1 > v.y0 - 40 && f.y0 < v.y0 + v.h + 30);
+		const line = (run, dx, dy) => {
+			ctx.moveTo(run[0][0] + dx, run[0][1] + dy);
+			for (let k = 1; k < run.length; k++) ctx.lineTo(run[k][0] + dx, run[k][1] + dy);
+		};
+		ctx.strokeStyle = 'rgba(40,50,25,0.18)';
+		ctx.lineWidth = glyph ? 10 : 5;
+		ctx.beginPath();
+		for (const f of seen) line(f.run, 3, 4);
+		ctx.stroke();
+		ctx.strokeStyle = '#9A7448';
+		ctx.lineWidth = glyph ? 7 : 3;
+		ctx.beginPath();
+		for (const f of seen) { line(f.run, 0, 0); if (!glyph) line(f.run, 0, -8); }
+		ctx.stroke();
+		if (glyph) return;
+		// Piquets : ombre, poteau, tête, chacun en un seul tracé.
+		const posts = [];
+		for (const f of seen) for (const [x, y] of f.posts) if (x > v.x0 - 10 && x < v.x0 + v.w + 10 && y > v.y0 - 30 && y < v.y0 + v.h + 10) posts.push([x, y]);
+		ctx.fillStyle = 'rgba(40,50,25,0.2)';
+		ctx.beginPath();
+		for (const [x, y] of posts) { ctx.moveTo(x + 7, y + 3); ctx.ellipse(x + 3, y + 3, 4, 2, 0, 0, Math.PI * 2); }
+		ctx.fill();
+		ctx.fillStyle = '#8A6238';
+		ctx.beginPath();
+		for (const [x, y] of posts) ctx.roundRect(x - 3.2, y - 18, 6.4, 20, 2);
+		ctx.fill();
+		ctx.fillStyle = '#B48A58';
+		ctx.beginPath();
+		for (const [x, y] of posts) { ctx.moveTo(x + 3.2, y - 18); ctx.ellipse(x, y - 18, 3.2, 1.6, 0, 0, Math.PI * 2); }
+		ctx.fill();
 	}
 
 	/** Étiquettes : en vue d'ensemble, chaque parcelle ; toujours, ce qu'il faut pour ouvrir la suivante. */
