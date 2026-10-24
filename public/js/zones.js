@@ -101,6 +101,7 @@ function tileFeatures(biome, gx, gy) {
 	const sea = !!G.sea && gy === 0;
 	const top = sea ? 260 : 0;
 	const out = [];
+	out.avoid = []; // ruisseaux, mares et sentiers : les plantes n'y poussent pas
 	const add = (layer, x, y, rad, paint) => out.push({ layer, x0: x - rad, y0: y - rad, x1: x + rad, y1: y + rad, seed: hash(biome, gx, gy, out.length), paint });
 	const washAt = (layer, x, y, rx, ry, col, o) => add(layer, x, y, Math.max(rx, ry) * 1.3, (g, rr, tone) => wash(g, x, y, rx, ry, tone(col), rr, o));
 
@@ -124,7 +125,7 @@ function tileFeatures(biome, gx, gy) {
 	const zone = zoneOf(biome, cellIndexAt(gx, gy));
 	if (zone) {
 		for (let i = 0; i < 8; i++) washAt(1, ox + r.range(60, W - 60), oy + r.range(120, H - 120), r.range(80, 160), r.range(60, 130), zone.tint, { layers: 8, alpha: 0.07, edge: 0, variance: 0.3 });
-		for (const m of zone.marks) marks(m, add, washAt, r, ox, oy, W, H, top);
+		for (const m of zone.marks) marks(m, add, washAt, r, ox, oy, W, H, top, out.avoid);
 	}
 
 	// Petites pousses, feuilles mortes, cailloux.
@@ -154,29 +155,50 @@ function dropLeaf(add, r, x, y, colors, rank, autumnOnly = false) {
 }
 
 /** Ce qui donne son caractère à un coin : ruisseau, chemin, rocaille, tapis de fleurs, flaques… */
-function marks(kind, add, washAt, r, ox, oy, W, H, top) {
+function marks(kind, add, washAt, r, ox, oy, W, H, top, avoid) {
 	const [name, arg] = kind.split(':');
 	const cx = ox + W / 2, cy = oy + H / 2;
 	switch (name) {
 		case 'brook': {
-			// Un ruisseau qui serpente à travers la parcelle, de haut en bas, entre deux berges plus vertes.
-			const x0 = ox + r.range(120, W - 120), b = r.range(-0.6, 0.6);
-			const pts = curve(x0, oy + top + 140, Math.PI / 2 + r.range(-0.3, 0.3), H - top - 280, b, 26)
-				.map(([x, y], i) => [x + Math.sin(i * 0.7 + r() * 0.3) * 18, y]);
+			// Une source entre quelques pierres, un ruisseau qui s'élargit en serpentant, et une petite mare où il se jette.
+			const x0 = ox + r.range(130, W - 130), y0 = oy + top + r.range(170, 260);
+			const L = H - top - r.range(520, 620), b = r.range(-0.7, 0.7);
+			const pts = curve(x0, y0, Math.PI / 2 + r.range(-0.25, 0.25), L, b, 28)
+				.map(([x, y], i) => [x + Math.sin(i * 0.65 + r() * 0.4) * 16 * Math.min(1, i / 6), y]);
+			const [ex, ey] = pts[pts.length - 1];
+			const pond = { x: ex + r.range(-10, 10), y: ey + 50, rx: r.range(62, 80), ry: r.range(36, 46) };
 			add(2, cx, cy, H / 2, (g, rr) => {
-				ribbon(g, pts, 40, 34, '#7FAA48', rr, 0.35);
-				ribbon(g, pts, 20, 16, '#7FB8C8', rr, 0.75);
-				ribbon(g, pts.map(([x, y]) => [x - 3, y]), 5, 3, '#E8F4F4', rr, 0.5);
+				ribbon(g, pts, 16, 46, '#7FAA48', rr, 0.3);
+				ribbon(g, pts, 5, 22, '#7FB8C8', rr, 0.75);
+				ribbon(g, pts.slice(3).map(([x, y]) => [x - 3, y]), 1.5, 5, '#E8F4F4', rr, 0.5);
+				wash(g, pond.x, pond.y, pond.rx * 1.25, pond.ry * 1.35, '#6E9A4A', rr, { layers: 6, alpha: 0.12, edge: 0 });
+				wash(g, pond.x, pond.y, pond.rx, pond.ry, '#7FB8C8', rr, { layers: 10, alpha: 0.16, edge: 0.3 });
+				wash(g, pond.x - pond.rx * 0.25, pond.y - pond.ry * 0.3, pond.rx * 0.35, pond.ry * 0.2, '#E8F4F4', rr, { layers: 4, alpha: 0.12, edge: 0 });
 			});
+			// La source : un petit bassin bordé de pierres.
+			washAt(2, x0, y0 - 6, 16, 10, '#8CC0C8', { layers: 6, alpha: 0.2, edge: 0.3 });
+			for (let k = 0; k < 6; k++) {
+				const a = (k / 6) * 6.28 + r() * 0.5, s2 = r.range(5, 9);
+				washAt(3, x0 + Math.cos(a) * 20, y0 - 6 + Math.sin(a) * 12, s2, s2 * 0.7, r.pick(['#A8A498', '#BCB8AC', '#9A968A']), { layers: 6, alpha: 0.25, edge: 0.45 });
+			}
+			avoid.push({ pts, r: 26 }, { pts: [[pond.x, pond.y]], r: pond.rx + 14 }, { pts: [[x0, y0]], r: 30 });
 			break;
 		}
 		case 'path': {
-			const y0 = oy + top + r.range(160, 300), b = r.range(-0.5, 0.5);
-			const pts = curve(ox + 50, y0, r.range(0.6, 1.2), H * 0.75, b, 22);
-			add(2, cx, cy, H / 2, (g, rr) => {
-				ribbon(g, pts, 26, 22, '#CDB98A', rr, 0.45);
-				ribbon(g, pts, 12, 10, '#D8C8A0', rr, 0.35);
+			// Un sentier en boucle qui fait le tour de la parcelle : il ne s'arrête jamais au milieu de nulle part.
+			const ccx = ox + W / 2 + r.range(-20, 20), ccy = oy + (top + H) / 2 + r.range(-40, 40);
+			const ax = r.range(110, 140), ay = r.range(280, 380), ph = r() * 6.28;
+			const pts = [];
+			for (let k = 0; k <= 48; k++) {
+				const a = (k / 48) * Math.PI * 2;
+				const wob = 1 + 0.12 * Math.sin(a * 3 + ph) + 0.06 * Math.sin(a * 5 + ph * 2);
+				pts.push([ccx + Math.cos(a) * ax * wob, ccy + Math.sin(a) * ay * wob]);
+			}
+			add(2, ccx, ccy, ay * 1.3, (g, rr) => {
+				ribbon(g, pts, 24, 24, '#CDB98A', rr, 0.42);
+				ribbon(g, pts, 11, 11, '#D8C8A0', rr, 0.32);
 			});
+			avoid.push({ pts, r: 16 });
 			break;
 		}
 		case 'mown':
@@ -275,6 +297,25 @@ function featuresOf(biome, gx, gy) {
 	let f = featureCache.get(key);
 	if (!f) featureCache.set(key, (f = tileFeatures(biome, gx, gy)));
 	return f;
+}
+
+/** Le point (monde) tombe-t-il sur un ruisseau, une mare ou un sentier ? */
+export function keepOut(biome, x, y, pad = 0) {
+	const gx = Math.floor(x / PARCEL_W), gy = Math.floor(y / PARCEL_H);
+	for (const a of featuresOf(biome, gx, gy).avoid) {
+		for (let k = 0; k < a.pts.length; k++) {
+			const [px, py] = a.pts[k];
+			if (Math.abs(px - x) > a.r + pad + 40 || Math.abs(py - y) > a.r + pad + 40) continue;
+			if (Math.hypot(px - x, py - y) < a.r + pad) return true;
+			const q = a.pts[k + 1];
+			if (q) {
+				const dx = q[0] - px, dy = q[1] - py, L2 = dx * dx + dy * dy || 1;
+				const t = Math.max(0, Math.min(1, ((x - px) * dx + (y - py) * dy) / L2));
+				if (Math.hypot(px + dx * t - x, py + dy * t - y) < a.r + pad) return true;
+			}
+		}
+	}
+	return false;
 }
 
 /**

@@ -66,6 +66,9 @@
 				<i class="status-dot" id="status-dot"></i>
 				<div class="status-text"><b id="status-title">Au repos</b><span id="status-sub"></span></div>
 			</div>
+			<button id="btn-deco" class="btn round" aria-label="Aménager le jardin">
+				<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l9-7 9 7"/><path d="M5.5 9.5V20h13V9.5"/><path d="M10 20v-5h4v5"/></svg>
+			</button>
 			<button id="btn-eco" class="btn round" aria-label="Écosystème">
 				<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l7 4v8l-7 4-7-4V7z"/><path d="M12 8l3.5 2v4L12 16l-3.5-2v-4z"/></svg>
 			</button>
@@ -88,6 +91,12 @@
 	<section id="species" class="panel" aria-hidden="true"></section>
 	<section id="map" class="panel" aria-hidden="true"></section>
 	<section id="options" class="panel" aria-hidden="true"></section>
+	<section id="deco" class="panel" aria-hidden="true"></section>
+	<div id="placing" class="placing-bar card" hidden>
+		<b id="placing-name"></b>
+		<span id="placing-hint"></span>
+		<div class="placing-actions"><button class="btn ghost" id="btn-place-cancel">Annuler</button><button class="btn primary" id="btn-place">Installer ici</button></div>
+	</div>
 	<section id="eco" class="panel" aria-hidden="true"></section>
 </div>
 <script type="module" src="js/main.js"></script>

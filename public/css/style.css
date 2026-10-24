@@ -421,7 +421,7 @@ html, body {
 
 /* ─── Feuille du bas : état du suivi automatique ─── */
 #home { display: block; }
-#home .btn.round { width: 52px; height: 52px; flex: none; }
+#home .btn.round { width: 48px; height: 48px; flex: none; }
 .status-row { display: flex; align-items: center; gap: 8px; }
 .status { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; }
 .status-dot { width: 12px; height: 12px; border-radius: 50%; background: #C9C2AA; flex: none; }
@@ -592,3 +592,38 @@ html, body {
 .away { text-align: left; margin-top: 6px; font-size: 14px; color: var(--doux); }
 .away summary { cursor: pointer; font-weight: 800; color: var(--foret); padding: 6px 0; }
 .volume { width: 100%; margin: 12px 0 2px; accent-color: var(--elan); }
+
+/* ─── Aménager ─── */
+.deco-list { display: flex; flex-direction: column; gap: 10px; }
+.deco-card { display: flex; gap: 12px; align-items: center; padding: 10px; border-radius: 18px; background: var(--papier-2); }
+.deco-card.locked { opacity: .7; }
+.deco-card.locked .deco-art { filter: grayscale(.8) opacity(.6); }
+.deco-art { flex: none; width: 74px; height: 74px; display: grid; place-items: center; background: #E9F0D6; border-radius: 14px; }
+.deco-art canvas { max-width: 66px; max-height: 66px; }
+.deco-body { flex: 1; min-width: 0; }
+.deco-body h3 { margin: 0 0 2px; font-size: 15px; color: var(--foret); }
+.deco-body p { margin: 0 0 6px; font-size: 13px; color: var(--doux); line-height: 1.35; }
+.deco-row { display: flex; align-items: center; gap: 8px; }
+.deco-row .nectar { font-weight: 800; color: #8A5A10; }
+.deco-row small { color: var(--doux); }
+.deco-row .btn { margin-left: auto; }
+.deco-row .btn:disabled { background: #D8D2BE; box-shadow: none; color: #7A7462; font-size: 12px; }
+.deco-lock { margin-left: auto; font-size: 12px; font-weight: 700; color: #8A846E; }
+.placing-bar {
+	position: absolute; z-index: 15; left: 12px; right: 12px;
+	bottom: calc(env(safe-area-inset-bottom, 0px) + 12px);
+	padding: 14px; border-radius: 22px; display: flex; flex-direction: column; gap: 4px;
+}
+.placing-bar b { font: 400 22px Courgette, cursive; color: var(--foret); }
+.placing-bar span { font-size: 13px; color: var(--doux); }
+.placing-actions { display: flex; gap: 8px; margin-top: 8px; }
+.placing-actions .btn { flex: 1; margin: 0; }
+.placing-actions .btn.primary:disabled { opacity: .5; }
+.placing #home, .placing #daily, .placing #btn-options, .placing #quest { opacity: 0; pointer-events: none; }
+.item-actions { display: flex; gap: 6px; margin-top: 8px; }
+.item-actions .btn { padding: 8px; font-size: 13px; margin: 0; }
+.bubble.actions { pointer-events: auto; }
+/* La feuille du bas : l'état du suivi sur toute la largeur, les quatre boutons en dessous. */
+.status-row { flex-wrap: wrap; row-gap: 10px; }
+.status-row .status { flex: 1 0 100%; }
+#home .status-row .btn.round { flex: 1; width: auto; height: 46px; }

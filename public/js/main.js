@@ -13,6 +13,7 @@ import { Sky, WEATHER_LABEL } from './weather.js';
 import { EcoPanel, tick, summaryHtml, addBoost, boostLeft, visualExtra, rates, GUILDS, BOOST_MULT, BOOST_PER_MIN } from './idle.js';
 import { paperTexture } from './watercolor.js';
 import { Soundscape } from './audio.js';
+import { ITEMS, ITEM_ORDER } from './deco.js';
 import { VERSION } from './version.js';
 import { rollDay, markActive, giftReady, giftFor, claimGift, claim, toClaim, noteTap, noteQuest, challengesHtml, weekHtml, nextGoal, albumHtml, collection } from './daily.js';
 
@@ -163,7 +164,9 @@ function placeCard(card, hit, ms = 4500) {
 garden.onTap = hit => {
 	const card = $('#plant-card');
 	clearTimeout(cardTimer);
+	if (placing) return movePlacing(hit);
 	if (!hit) { card.hidden = true; return; }
+	if (hit.item) return tapItem(hit, card);
 	if (hit.critter) return tapCritter(hit, card);
 	if (hit.cell != null) {
 		if (hit.open) garden.flyToCell(hit.cell);
@@ -247,7 +250,16 @@ setInterval(() => {
 
 /** Chaque mètre compte pour la journée, pour la parcelle, et rapporte du nectar (1 pour 5 m). */
 function addMeters(m) {
+	const before = state.totals.distance / 1000;
 	addDistance(state, m);
+	// Un nouvel aménagement devient possible (la cabane à 5 km…).
+	const after = state.totals.distance / 1000;
+	for (const k of ITEM_ORDER) {
+		if (ITEMS[k].km > 0 && before < ITEMS[k].km && after >= ITEMS[k].km) {
+			sound.chime(2);
+			toast(`Tu peux maintenant installer ${ITEMS[k].name.toLowerCase()}`, '#9A7448', () => openDeco());
+		}
+	}
 	here().km += m / 1000;
 	state.nectar = (state.nectar ?? 0) + m / 5;
 	if (markActive(state)) {
@@ -724,6 +736,124 @@ $('#journal').addEventListener('click', e => {
 	const al = e.target.closest('[data-open-sp]');
 	if (al) species.open(al.dataset.openSp);
 });
+
+// ─── Aménager : cabane, banc, abris pour les animaux ──────────
+
+let placing = null; // { kind, item? } pendant qu'on choisit la place d'un objet
+
+function renderDeco() {
+	const km = state.totals.distance / 1000;
+	const nectar = state.nectar ?? 0;
+	const here_ = garden.items;
+	$('#deco').innerHTML = `
+		<div class="panel-head"><h2>Aménager</h2><button class="close" data-close-deco aria-label="Fermer">×</button></div>
+		<p class="sp-intro">Installe de quoi rendre ton jardin accueillant, pour toi et pour les animaux. Tout se paie en nectar, et se range quand tu veux (le nectar t'est rendu).</p>
+		<div class="deco-list">${ITEM_ORDER.map(k => {
+			const it = ITEMS[k], locked = km < it.km, poor = nectar < it.cost, n = here_.filter(x => x.kind === k).length;
+			const action = locked ? `<span class="deco-lock">dès ${it.km} km parcourus</span>`
+				: `<button class="btn primary small" data-buy="${k}" ${poor ? 'disabled' : ''}>${poor ? `il manque ${fmtInt(it.cost - nectar)}` : 'Installer'}</button>`;
+			return `<div class="deco-card${locked ? ' locked' : ''}"><div class="deco-art" data-art="${k}"></div>
+				<div class="deco-body"><h3>${it.name}</h3><p>${it.text}</p>
+				<div class="deco-row"><span class="nectar">${it.cost}</span>${n ? `<small>${n} ici</small>` : ''}${action}</div></div></div>`;
+		}).join('')}</div>`;
+	for (const el of $('#deco').querySelectorAll('[data-art]')) {
+		const sp = garden.itemSprite(el.dataset.art), c = document.createElement('canvas');
+		c.width = sp.canvas.width; c.height = sp.canvas.height;
+		c.getContext('2d').drawImage(sp.canvas, 0, 0);
+		el.appendChild(c);
+	}
+}
+
+function openDeco() {
+	renderDeco();
+	$('#deco').classList.add('open');
+	$('#deco').setAttribute('aria-hidden', 'false');
+}
+function closeDeco() {
+	$('#deco').classList.remove('open');
+	$('#deco').setAttribute('aria-hidden', 'true');
+}
+
+/** Choisir la place d'un objet : un fantôme suit le doigt, vert si la place convient ; « Installer ici » confirme. */
+function startPlacing(kind, item = null) {
+	closeDeco();
+	placing = { kind, item };
+	garden.lifted = item;
+	const [cx, cy] = item ? [item.x, item.y] : garden.toWorld(garden.canvas.clientWidth / 2, garden.canvas.clientHeight * 0.45);
+	garden.ghost = { kind, x: cx, y: cy };
+	$('#placing-name').textContent = ITEMS[kind].name;
+	$('#app').classList.add('placing');
+	$('#placing').hidden = false;
+	renderPlacing();
+}
+
+function renderPlacing() {
+	const ok = garden.canPlace(placing.kind, garden.ghost.x, garden.ghost.y, placing.item);
+	$('#placing-hint').textContent = ok ? 'Bonne place. Touche ailleurs pour la changer.' : 'Touche le jardin, à l’intérieur de la clôture.';
+	$('#btn-place').disabled = !ok;
+}
+
+function movePlacing(hit) {
+	if (!hit) return;
+	const [wx, wy] = garden.toWorld(hit.x, hit.y);
+	garden.ghost = { kind: placing.kind, x: wx, y: wy };
+	renderPlacing();
+}
+
+function endPlacing() {
+	placing = null;
+	garden.ghost = null;
+	garden.lifted = null;
+	$('#app').classList.remove('placing');
+	$('#placing').hidden = true;
+}
+
+$('#btn-place').addEventListener('click', () => {
+	const { kind, item } = placing, { x, y } = garden.ghost;
+	if (!garden.canPlace(kind, x, y, item)) return;
+	if (item) {
+		item.x = Math.round(x); item.y = Math.round(y);
+		garden.popItem(item);
+	} else {
+		if ((state.nectar ?? 0) < ITEMS[kind].cost) { toast('Pas assez de nectar', '#C0442F'); return endPlacing(); }
+		state.nectar -= ITEMS[kind].cost;
+		garden.placeItem(kind, x, y);
+		toast(`${ITEMS[kind].name} : installé${/^Une /.test(ITEMS[kind].name) ? 'e' : ''} !`, '#9A7448');
+	}
+	sound.chime(2);
+	endPlacing();
+	renderHud();
+	persist(true);
+});
+$('#btn-place-cancel').addEventListener('click', endPlacing);
+
+function tapItem(hit, card) {
+	const it = hit.item, def = ITEMS[it.kind];
+	card.innerHTML = `<b>${def.name}</b>${def.text}
+		<div class="item-actions"><button class="btn ghost" data-move>Déplacer</button><button class="btn ghost" data-store>Ranger (+${def.cost})</button></div>`;
+	card.classList.remove('link');
+	card.classList.add('actions');
+	card.onclick = e => {
+		if (e.target.closest('[data-move]')) { card.hidden = true; startPlacing(it.kind, it); }
+		if (e.target.closest('[data-store]')) {
+			card.hidden = true;
+			garden.items.splice(garden.items.indexOf(it), 1);
+			state.nectar = (state.nectar ?? 0) + def.cost;
+			garden.nextPopulate = 0;
+			toast(`${def.name} rangé${/^Une /.test(def.name) ? 'e' : ''} : +${def.cost} nectar`, '#9A7448');
+			renderHud();
+			persist(true);
+		}
+	};
+	placeCard(card, hit, 6000);
+}
+
+$('#deco').addEventListener('click', e => {
+	if (e.target.closest('[data-close-deco]')) return closeDeco();
+	const b = e.target.closest('[data-buy]');
+	if (b && !b.disabled) startPlacing(b.dataset.buy);
+});
+$('#btn-deco').addEventListener('click', openDeco);
 
 // ─── Options : version, réglages, mode test ───────────────────
 

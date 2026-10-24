@@ -8,8 +8,9 @@ import { rng, wash, rgba, mix, paperTexture, lerp } from './watercolor.js';
 import { PLANT_TYPES, DECOR, DECOR_PAINTERS, paintPlant, newVariant, lookOf } from './plants.js';
 import { drawCritter, CRITTER_SIZE, FLIGHT } from './critters.js';
 import { SPECIES, PLACE_BY_ID } from './species.js';
-import { PARCEL_W, PARCEL_H, CELLS, CELL_KM, zoneOf, zoneName, paintTile } from './zones.js';
+import { PARCEL_W, PARCEL_H, CELLS, CELL_KM, zoneOf, zoneName, paintTile, keepOut } from './zones.js';
 import { newPlace } from './state.js';
+import { ITEMS, ITEM_PAINTERS, attracted } from './deco.js';
 
 export { PARCEL_W, PARCEL_H, CELLS, CELL_KM };
 export const cellsOpen = place => Math.min(CELLS.length, place?.cells ?? 1);
@@ -82,6 +83,7 @@ export class Garden {
 		this.sprites = new Map();
 		this.meta = new Map();
 		this.decorSprites = new Map();
+		this.itemSprites = new Map();
 		this.bgs = new Map();
 		this.insects = [];
 		this.particles = [];
@@ -133,7 +135,7 @@ export class Garden {
 	tidyPlants() {
 		for (const p of this.place.plants) {
 			const ci = cellOf(p), [ox, oy] = cellOrigin(ci);
-			if (ci >= cellsOpen(this.place) || this.inBlob(this.blob(ci), ox + p.x, oy + p.y, 10)) continue;
+			if (ci >= cellsOpen(this.place) || (this.inBlob(this.blob(ci), ox + p.x, oy + p.y, 10) && !keepOut(this.biome, ox + p.x, oy + p.y))) continue;
 			const pos = this.place_(this.biome, p.type, ci);
 			p.x = Math.round(pos.x); p.y = Math.round(pos.y);
 		}
@@ -262,6 +264,7 @@ export class Garden {
 			this.base = base;
 			this.sprites.clear();
 			this.decorSprites.clear();
+			this.itemSprites.clear();
 			this.bgs.clear();
 			this.makeClouds();
 			this.makeGlow();
@@ -440,6 +443,7 @@ export class Garden {
 		const obstacles = [
 			...here.map(p => ({ x: p.x, y: p.y, rad: PLANT_TYPES[p.type].spacing })),
 			...(ci === 0 ? Object.values(DECOR).filter(d => d.place === pid && d.rad).map(d => ({ x: d.x, y: d.y, rad: d.rad })) : []),
+			...(place.items ?? []).map(it => ({ x: it.x - cellOrigin(ci)[0], y: it.y - cellOrigin(ci)[1], rad: ITEMS[it.kind].box.w * 0.35 })),
 		];
 		const same = here.filter(p => p.type === type);
 		const y0 = this.minY(pid, type, ci), H = PARCEL_H;
@@ -457,7 +461,9 @@ export class Garden {
 				y = y0 + Math.random() * (H - y0 - 40);
 			}
 			if (x < 30 || x > PARCEL_W - 30 || y < y0 || y > H - 30) continue;
-			if (pid === this.biome && !this.inBlob(this.blob(ci), cellOrigin(ci)[0] + x, cellOrigin(ci)[1] + y, type === 'arbre' ? 50 : 26)) continue;
+			const wx = cellOrigin(ci)[0] + x, wy = cellOrigin(ci)[1] + y;
+			if (pid === this.biome && !this.inBlob(this.blob(ci), wx, wy, type === 'arbre' ? 50 : 26)) continue;
+			if (keepOut(pid, wx, wy, type === 'arbre' ? 30 : 8)) continue;
 			let gap = Infinity;
 			for (const o of obstacles) gap = Math.min(gap, Math.hypot(o.x - x, (o.y - y) * 1.25) - o.rad - sp);
 			// Les petites plantes se regroupent en touffes ; les arbres cherchent de l'espace.
@@ -549,6 +555,52 @@ export class Garden {
 		}
 		s.used = this.t;
 		return s;
+	}
+
+	// ─── Objets posés par la personne (cabane, banc, nichoir…) ─────
+
+	get items() { return (this.place.items ??= []); }
+
+	itemSprite(kind) {
+		let s = this.itemSprites.get(kind);
+		if (!s) {
+			const box = ITEMS[kind].box, D = this.density * 1.4;
+			const c = document.createElement('canvas');
+			c.width = Math.ceil(box.w * D);
+			c.height = Math.ceil(box.h * D);
+			const g = c.getContext('2d');
+			g.setTransform(D, 0, 0, D, box.ax * D, box.ay * D);
+			const meta = ITEM_PAINTERS[kind](g);
+			s = { canvas: c, ...meta };
+			this.itemSprites.set(kind, s);
+		}
+		return s;
+	}
+
+	/** Peut-on poser cet objet ici : dans une clairière ouverte, pas dans l'eau ni sur un sentier, pas sur un autre objet. */
+	canPlace(kind, x, y, except = null) {
+		const r = ITEMS[kind].box.w * 0.35;
+		if (!this.inOpen(x, y, r * 0.6) || keepOut(this.biome, x, y, r * 0.5)) return false;
+		// Pas sur un arbre ou un arbuste : herbes et fleurs, elles, s'écartent sans dommage.
+		for (const p of this.place.plants) {
+			if (p.type !== 'arbre' && p.type !== 'buisson') continue;
+			const [ox, oy] = cellOrigin(cellOf(p));
+			if (Math.hypot(ox + p.x - x, (oy + p.y - y) * 1.3) < r + PLANT_TYPES[p.type].spacing * 0.6) return false;
+		}
+		return !this.items.some(it => it !== except && Math.hypot(it.x - x, (it.y - y) * 1.3) < r + ITEMS[it.kind].box.w * 0.35);
+	}
+
+	placeItem(kind, x, y) {
+		const it = { id: uid(), kind, x: Math.round(x), y: Math.round(y), at: Date.now() };
+		this.items.push(it);
+		this.popItem(it);
+		return it;
+	}
+
+	popItem(it) {
+		this.popAt[`item:${it.id}`] = this.t;
+		this.burst(it.x, it.y - 20, 22, '#F4C23E');
+		this.nextPopulate = 0;
 	}
 
 	decorSprite(key) {
@@ -722,6 +774,10 @@ export class Garden {
 		if (this.glyph) return null;
 		const critter = this.critterAt(wx, wy);
 		if (critter) return { critter, x: sx, y: sy };
+		for (const it of [...this.items].sort((a, b) => b.y - a.y)) {
+			const box = ITEMS[it.kind].box, top = this.itemSprite(it.kind).top;
+			if (Math.abs(wx - it.x) < Math.max(18, box.w * 0.4) && wy > it.y + top && wy < it.y + 10) return { item: it, x: sx, y: sy };
+		}
 		if (!open) return null;
 		const [ox, oy] = cellOrigin(ci);
 		const lx = wx - ox, ly = wy - oy;
@@ -831,7 +887,7 @@ export class Garden {
 		for (const sp of SPECIES) {
 			if (sp.kind !== 'animal' || sp.place !== this.biome || !sp.critter.behavior) continue;
 			const c = sp.critter;
-			let want = this.state.species[sp.id] && ok(c.when) ? Math.round((c.count(this.state) + (this.idleBonus?.(sp) ?? 0)) * scale) : 0;
+			let want = this.state.species[sp.id] && ok(c.when) ? Math.round((c.count(this.state) + (this.idleBonus?.(sp) ?? 0)) * scale) + attracted(place, sp.id) : 0;
 			// Sous la pluie ou la neige, les insectes volants se mettent à l'abri.
 			if (wet && FLYERS.has(c.kind)) want = 0;
 			const active = this.insects.filter(i => i.sp === sp.id && !i.leaving);
@@ -1304,6 +1360,7 @@ export class Garden {
 			if (wx + box.w < v.x0 || wx - box.w > v.x0 + v.w || wy - box.ay > v.y0 + v.h + 20 || wy + 30 < v.y0) continue;
 			entities.push({ plant: p, x: wx, y: wy });
 		}
+		for (const it of this.items) if (it !== this.lifted && it.x > v.x0 - 120 && it.x < v.x0 + v.w + 120 && it.y > v.y0 - 40 && it.y < v.y0 + v.h + 200) entities.push({ item: it, x: it.x, y: it.y });
 		if (!glyph) for (const b of this.insects) if (onGround(b)) entities.push({ critter: b, y: b.behavior === 'trail' ? -1e9 : b.y + 2 });
 		entities.sort((a, b) => a.y - b.y);
 
@@ -1311,6 +1368,23 @@ export class Garden {
 			if (e.critter) {
 				world();
 				this.drawInsect(ctx, e.critter);
+				continue;
+			}
+			if (e.item) {
+				const it = e.item, box = ITEMS[it.kind].box;
+				world();
+				if (glyph) {
+					ctx.fillStyle = 'rgba(122,84,52,0.9)';
+					ctx.beginPath();
+					ctx.roundRect(e.x - box.w * 0.3, e.y - box.h * 0.45, box.w * 0.6, box.h * 0.45, 4);
+					ctx.fill();
+					continue;
+				}
+				const age = this.t - (this.popAt[`item:${it.id}`] ?? -9);
+				const k = age < 0.6 ? 0.7 + 0.3 * Math.min(1, age / 0.35) + 0.08 * Math.sin(Math.min(1, age / 0.6) * Math.PI) : 1;
+				ctx.translate(e.x, e.y);
+				ctx.scale(k, k);
+				ctx.drawImage(this.itemSprite(it.kind).canvas, -box.ax, -box.ay, box.w, box.h);
 				continue;
 			}
 			if (e.decor) {
@@ -1401,6 +1475,23 @@ export class Garden {
 			ctx.fillRect(0, 0, cw, ch);
 		}
 
+		// La nuit, les lanternes et la fenêtre de la cabane s'allument.
+		if (!glyph && night > 0.05) {
+			ctx.globalCompositeOperation = 'lighter';
+			const n = this.glow.width;
+			for (const it of this.items) {
+				const sp = this.itemSprite(it.kind);
+				if (sp.glow == null) continue;
+				const x = (it.x + (sp.glowX ?? 0)) * S + tx, y = (it.y + sp.glow) * S + ty;
+				if (x < -200 || x > cw + 200 || y < -200 || y > ch + 200) continue;
+				const size = n * this.cam.z * 3.2;
+				ctx.globalAlpha = Math.min(1, night * 1.2) * (0.85 + 0.15 * Math.sin(this.t * 1.7 + it.x));
+				ctx.drawImage(this.glow, x - size / 2, y - size / 2, size, size);
+			}
+			ctx.globalAlpha = 1;
+			ctx.globalCompositeOperation = 'source-over';
+		}
+
 		// Lucioles (le ver luisant) la nuit, une fois l'espèce découverte et hors de la pluie.
 		if (!glyph && night > 0 && this.state.species['ver-luisant'] && !this.precip()) {
 			ctx.globalCompositeOperation = 'lighter';
@@ -1411,6 +1502,21 @@ export class Garden {
 			}
 			ctx.globalAlpha = 1;
 			ctx.globalCompositeOperation = 'source-over';
+		}
+
+		if (this.ghost) {
+			const { kind, x, y } = this.ghost, box = ITEMS[kind].box, ok = this.canPlace(kind, x, y, this.lifted);
+			world();
+			ctx.globalAlpha = 0.6;
+			ctx.drawImage(this.itemSprite(kind).canvas, x - box.ax, y - box.ay, box.w, box.h);
+			ctx.globalAlpha = 1;
+			ctx.strokeStyle = ok ? 'rgba(95,147,62,0.9)' : 'rgba(192,68,47,0.9)';
+			ctx.lineWidth = 2.5 / this.cam.z;
+			ctx.setLineDash([6 / this.cam.z, 5 / this.cam.z]);
+			ctx.beginPath();
+			ctx.ellipse(x, y, box.w * 0.42, box.w * 0.14, 0, 0, Math.PI * 2);
+			ctx.stroke();
+			ctx.setLineDash([]);
 		}
 
 		world();
