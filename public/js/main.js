@@ -12,6 +12,7 @@ import { Encyclopedia, thumbCopy } from './encyclopedia.js';
 import { Sky, WEATHER_LABEL } from './weather.js';
 import { EcoPanel, tick, summaryHtml, addBoost, boostLeft, visualExtra, rates, GUILDS, BOOST_MULT, BOOST_PER_MIN } from './idle.js';
 import { paperTexture } from './watercolor.js';
+import { Soundscape } from './audio.js';
 import { VERSION } from './version.js';
 import { rollDay, markActive, giftReady, giftFor, claimGift, claim, toClaim, noteTap, noteQuest, challengesHtml, weekHtml, nextGoal, albumHtml, collection } from './daily.js';
 
@@ -32,8 +33,11 @@ garden.idleBonus = sp => visualExtra(state, sp.place, sp);
 if (params.has('h')) garden.hourOverride = parseFloat(params.get('h'));
 if (params.has('date')) garden.dateOverride = params.get('date');
 const sky = new Sky(state, garden, () => renderHud());
+// Sons de la nature : ils démarrent au premier toucher (règle des navigateurs).
+const sound = new Soundscape(garden, state);
+document.addEventListener('pointerdown', () => sound.unlock(), { passive: true });
 if (params.has('weather')) { sky.override = params.get('weather'); sky.apply(false); }
-if (DEV) window.evolia = { garden, state, sky };
+if (DEV) window.evolia = { garden, state, sky, sound };
 
 const DECOR_MSG = {
 	pond: 'Une mare est apparue dans ta prairie', murger: 'Un muret de pierres est apparu', log: 'Un vieux tronc est apparu',
@@ -121,6 +125,7 @@ function announceSpecies(quiet = false) {
 	persist();
 	updateSpeciesDot();
 	if (quiet) return;
+	if (found.length || opened.length) sound.chime(opened.length ? 3 : 2);
 	for (const sp of found) toast(`${sp.kind === 'milieu' ? 'Nouveau milieu' : 'Nouvelle espèce'} : ${sp.name}`, '#F08A3C', () => species.open(sp.id));
 	for (const p of opened) toast(`Nouveau lieu ouvert : ${p.name}`, p.color, () => places.open());
 }
@@ -213,6 +218,7 @@ function endQuest() {
 }
 
 function winQuest(sp) {
+	sound.chime(2);
 	endQuest();
 	noteQuest(state);
 	renderDaily();
@@ -263,6 +269,7 @@ function checkUnlocks(events) {
 		garden.openCell(n);
 		(pl.cellDates ??= {})[n] = Date.now();
 		garden.flyToCell(n);
+		sound.chime(3);
 		toast(`La clôture recule : ${zoneName(state.place, n, 'une nouvelle parcelle').toLowerCase()} !`, '#9A7448');
 		events?.push({ kind: 'cell', n });
 	}
@@ -360,7 +367,7 @@ function onSample(s) {
 	addEffortXp(effort);
 	for (const ev of garden.addEffort(act.plant, effort)) {
 		session.events.push(ev);
-		if (ev.kind === 'mature' && ev.plant.type !== 'herbe') toast(`${plantName(ev.plant)} a fini de pousser`, TYPE_COLOR[ev.plant.type]);
+		if (ev.kind === 'mature' && ev.plant.type !== 'herbe') { toast(`${plantName(ev.plant)} a fini de pousser`, TYPE_COLOR[ev.plant.type]); sound.chime(1); }
 	}
 	if (garden.current) session.touched.add(garden.current);
 	checkUnlocks(session.events);
@@ -461,6 +468,7 @@ function showDaily(gift = false) {
 		<div class="modal-foot">${ready ? '<button class="btn primary" id="btn-gift">Ouvrir le cadeau</button>' : '<button class="btn primary" data-close>Voir mon jardin</button>'}</div>`);
 	$('#btn-gift')?.addEventListener('click', () => {
 		const got = claimGift(state);
+		sound.chime(3);
 		state.nectar = (state.nectar ?? 0) + got.nectar;
 		if (got.boost) addBoost(state, got.boost);
 		garden.burst(garden.cam.cx, garden.cam.cy, 30, '#F4C23E');
@@ -479,6 +487,7 @@ $('#modal').addEventListener('click', e => {
 	if (!c) return;
 	state.nectar = (state.nectar ?? 0) + c.reward;
 	if (c.boost) addBoost(state, c.boost);
+	sound.chime(2);
 	toast(`Défi réussi : +${c.reward} nectar${c.boost ? ` et élan ${c.boost} min` : ''}`, '#F08A3C');
 	persist(true);
 	renderHud();
@@ -640,7 +649,8 @@ async function offerHarvest() {
 }
 
 document.addEventListener('visibilitychange', async () => {
-	if (document.hidden) { persist(true); return; }
+	if (document.hidden) { persist(true); sound.pause(); return; }
+	sound.resume();
 	runIdle(true);
 	if (Date.now() - state.lastHarvest > 5 * 60000) await maybeHarvest();
 	if (newDay() && $('#modal').hidden) showDaily(true);
@@ -735,6 +745,9 @@ function renderOptions() {
 		<p class="empty">${sky.label()} · lever ${fmtHour(garden.sun.rise)}, coucher ${fmtHour(garden.sun.set)}.
 			${state.coords ? 'Météo réelle de ton coin (position arrondie à 10 km, envoyée à Open-Meteo).' : 'Active ta position approximative pour voir la vraie météo et le vrai coucher du soleil.'}</p>
 		${state.coords ? '' : '<button class="btn ghost wide" id="btn-sky">Utiliser ma position approximative</button>'}
+		<h3>Sons de la nature</h3>
+		<label class="switch"><input type="checkbox" id="opt-sound" ${sound.settings.on ? 'checked' : ''}><i></i><span>Vent, pluie, oiseaux et petites bêtes de ton jardin</span></label>
+		${sound.settings.on ? `<input type="range" id="opt-volume" class="volume" min="0" max="1" step="0.05" value="${sound.settings.vol}" aria-label="Volume">` : ''}
 		<h3>Aide</h3>
 		<button class="btn ghost wide" id="opt-coach">Revoir le tutoriel</button>
 		<a class="btn ghost wide opt-link" href="privacy.html" target="_blank" rel="noopener">Confidentialité</a>
@@ -814,13 +827,16 @@ $('#options').addEventListener('click', async e => {
 	}
 });
 $('#options').addEventListener('change', e => {
+	if (e.target.id === 'opt-sound') { sound.setOn(e.target.checked); persist(true); renderOptions(); return; }
+	if (e.target.id === 'opt-volume') { persist(true); return; }
 	if (e.target.id !== 'opt-dev') return;
 	DEV = e.target.checked;
 	try { localStorage.setItem(DEV_KEY, DEV ? '1' : '0'); } catch (err) { /* stockage indisponible */ }
-	if (DEV) window.evolia = { garden, state, sky };
+	if (DEV) window.evolia = { garden, state, sky, sound };
 	renderOptions();
 });
 $('#options').addEventListener('input', e => {
+	if (e.target.id === 'opt-volume') sound.setVolume(parseFloat(e.target.value));
 	if (e.target.id === 'dev-hour') {
 		garden.hourOverride = parseFloat(e.target.value);
 		$('#dev-h').textContent = `${e.target.value} h`;

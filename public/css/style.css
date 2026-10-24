@@ -591,3 +591,4 @@ html, body {
 .next-line { font-size: 13px; margin: 8px 0 4px; }
 .away { text-align: left; margin-top: 6px; font-size: 14px; color: var(--doux); }
 .away summary { cursor: pointer; font-weight: 800; color: var(--foret); padding: 6px 0; }
+.volume { width: 100%; margin: 12px 0 2px; accent-color: var(--elan); }

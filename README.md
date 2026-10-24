@@ -41,6 +41,7 @@ arrondie à 0,1° (environ 10 km), seulement si la personne a autorisé sa posit
 - `js/state.js` : activités (reprises du prototype Unity), effort, sauvegarde locale.
 - `js/main.js` : interface (bandeau, suivi automatique, récap, carnet, tutoriel).
 - `js/zones.js` : le sol sans raccord et les coins de chaque lieu (champ de coquelicots, verger, roselière…).
+- `js/audio.js` : les sons de la nature, fabriqués avec Web Audio (vent, pluie, ressac, grillons, cris des animaux visibles, cloches douces).
 - `js/daily.js` : revenir chaque jour (cadeau, série de jours actifs, trois défis, prochain objectif, album).
 
 - `js/harvest.js` : récolte des pas comptés appli fermée (Santé / Health Connect, podomètre), allure déduite de la cadence.
