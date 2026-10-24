@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<!-- Capture Google Play (1080 x 1920) : une légende, puis l'écran du jeu (raw/*.png, 1080 x 2338) dans un téléphone.
+     Rendu : ouvrir shot.html?img=1-marche.png à 1080 x 1920 et l'enregistrer (voir fiche.md). -->
+<link href="https://fonts.googleapis.com/css2?family=Courgette&family=Nunito:wght@600;800&display=swap" rel="stylesheet">
+<style>
+:root { --papier: #FDF7E7; --papier-2: #F3EDD9; --foret: #1F6B47; --prairie: #5F933E; --elan: #F08A3C; --doux: #5A6B4E; }
+html, body { margin: 0; width: 1080px; height: 1920px; overflow: hidden; background: var(--papier); font-family: Nunito, sans-serif; }
+.bg { position: absolute; inset: 0;
+	background: radial-gradient(circle 520px at 88% 6%, rgba(244,194,62,.28), transparent 70%),
+		radial-gradient(circle 560px at 0% 78%, rgba(163,189,87,.32), transparent 70%),
+		radial-gradient(circle 420px at 100% 96%, rgba(95,147,62,.22), transparent 70%), var(--papier); }
+.head { position: absolute; left: 80px; right: 80px; top: 0; height: 400px; display: flex; flex-direction: column; justify-content: center; gap: 18px; text-align: center; }
+h1 { margin: 0; font: 400 86px/1.05 Courgette, cursive; color: var(--foret); }
+h1 span { color: var(--elan); }
+p { margin: 0; font: 600 38px/1.3 Nunito, sans-serif; color: var(--doux); }
+.phone { position: absolute; left: 50%; top: 410px; width: 669px; height: 1448px; transform: translateX(-50%); border-radius: 64px; overflow: hidden;
+	box-shadow: 0 0 0 12px #FFFFFF, 0 0 0 16px #E4DCC4, 0 30px 70px rgba(40,60,30,.28); background: #B5C565; }
+.phone img { width: 100%; height: 100%; object-fit: cover; object-position: top; display: block; }
+</style>
+</head>
+<body>
+<div class="bg"></div>
+<div class="head"><h1 id="t"></h1><p id="s"></p></div>
+<div class="phone"><img id="i" alt=""></div>
+<script>
+const CAPTIONS = {
+	'1-marche.png': ['Bouge, ton <span>jardin</span> pousse', 'Chaque pas fait grandir une fleur, un arbuste, un arbre.'],
+	'4-parcelles.png': ['Un monde qui <span>s’agrandit</span>', 'La clôture recule à chaque kilomètre : verger, ruisseau, haie…'],
+	'2-especes.png': ['<span>126</span> espèces à découvrir', 'Abeilles, mésanges, hérissons… et leur rôle dans la nature.'],
+	'3-fiche.png': ['Apprends à les <span>protéger</span>', 'Pour chaque espèce, un geste simple pour l’aider vraiment.'],
+	'5-cabane.png': ['Aménage ton <span>coin</span> de nature', 'Cabane, nichoir, hôtel à insectes : ils attirent la vie.'],
+	'6-cadeau.png': ['Reviens <span>chaque jour</span>', 'Un cadeau, trois défis doux et ta série de jours actifs.'],
+};
+const f = new URLSearchParams(location.search).get('img') || '1-marche.png';
+const c = CAPTIONS[f] || ['', ''];
+document.getElementById('t').innerHTML = c[0];
+document.getElementById('s').textContent = c[1];
+document.getElementById('i').src = 'raw/' + f;
+</script>
+</body>
+</html>
