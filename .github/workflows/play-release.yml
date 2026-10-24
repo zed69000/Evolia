@@ -1,0 +1,27 @@
+# Envoie Evolia sur Google Play (tests internes) par la chaîne commune zed69000/game-pipeline.
+# Pour l'instant, seulement à la main : Actions > « Android · Google Play » > Run workflow.
+# On essaie d'abord chaque version sur le site Cloudflare. Plus tard, pour envoyer à chaque nouvelle version,
+# ajouter sous « on: » : push: { branches: [master], paths: [public/js/version.js] }.
+# Secrets du dépôt : voir game-pipeline/README.md (clé d'envoi + compte de service).
+# Le numéro de version Play (versionCode) vient de VERSION dans version.js : 0.6.1 -> 601.
+name: Android · Google Play
+
+on:
+  workflow_dispatch:
+
+jobs:
+  play:
+    uses: zed69000/game-pipeline/.github/workflows/android-play.yml@main
+    with:
+      package-name: com.zed69000.evolia
+      aab-path: android/app/build/outputs/bundle/release/app-release.aab
+      # l'appli n'est pas encore publiée en production : la release arrive en brouillon, il reste à cliquer « Déployer »
+      release-status: draft
+      build-command: |
+        npm install --no-audit --no-fund
+        npm run build:web
+        npx cap add android
+        npm run native:android
+        npx cap sync android
+        cd android && ./gradlew bundleRelease
+    secrets: inherit

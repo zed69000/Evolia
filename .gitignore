@@ -1,3 +1,14 @@
 node_modules/
 .wrangler/
 .DS_Store
+
+# Application Android (Capacitor) : recréée à chaque build
+www/
+android/
+package-lock.json
+
+# Signature de release : la clé d'envoi reste hors du dépôt
+keystore.properties
+*.jks
+*.keystore
+*.aab

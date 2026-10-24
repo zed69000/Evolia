@@ -1,0 +1,18 @@
+{
+  "name": "evolia",
+  "private": true,
+  "description": "Evolia : le jardin web (public/), emballé en application Android avec Capacitor.",
+  "scripts": {
+    "build:web": "node tools/app/copy-web.mjs",
+    "native:android": "node tools/app/configure-native.mjs android"
+  },
+  "dependencies": {
+    "@capacitor/android": "^8.5.3",
+    "@capacitor/core": "^8.5.3",
+    "@capgo/capacitor-health": "^8.11.12",
+    "@capgo/capacitor-pedometer": "^8.0.51"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^8.5.3"
+  }
+}

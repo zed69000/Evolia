@@ -1,0 +1,9 @@
+{
+  "appId": "com.zed69000.evolia",
+  "appName": "Evolia",
+  "webDir": "www",
+  "backgroundColor": "#FDF7E7",
+  "android": {
+    "backgroundColor": "#FDF7E7"
+  }
+}

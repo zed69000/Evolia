@@ -15,7 +15,10 @@ import { VERSION } from './version.js';
 import { rollDay, markActive, giftReady, giftFor, claimGift, claim, toClaim, noteTap, noteQuest, challengesHtml, weekHtml, nextGoal, albumHtml, collection } from './daily.js';
 
 const params = new URLSearchParams(location.search);
-const DEV = params.has('dev');
+const DEV_KEY = 'evolia.dev';
+const readDev = () => { try { return localStorage.getItem(DEV_KEY) === '1'; } catch (e) { return false; } };
+// Mode test : ?dev=1 dans l'adresse, ou l'interrupteur de la page Options (indispensable dans l'appli installée).
+let DEV = params.has('dev') || readDev();
 const $ = s => document.querySelector(s);
 
 document.documentElement.style.setProperty('--paper', `url(${paperTexture(200, 11).toDataURL()})`);
@@ -677,16 +680,6 @@ function renderJournal() {
 			<div class="goal" style="bottom:${(state.goalKm / max) * 100}%" title="Objectif"></div>
 			${days.map(x => `<div class="col${x.today ? ' today' : ''}"><div class="b" style="height:${(x.km / max) * 100}%"></div><span>${letters[x.d.getDay()]}</span></div>`).join('')}
 		</div>
-		<h3>Objectif du jour</h3>
-		<div class="seg" id="goal-seg">${[2, 3, 5, 8].map(g => `<button data-goal="${g}" class="${g === state.goalKm ? 'on' : ''}">${g} km</button>`).join('')}</div>
-		<h3>Suivi de tes pas</h3>
-		<p class="empty">${state.tracking ? "Actif : dès que tu bouges appli ouverte, une balade démarre toute seule et s'arrête après une minute d'immobilité." : 'En pause.'}
-			${src ? ` Pas relus appli fermée avec ${src.label} ; dernière récolte : ${new Date(state.lastHarvest).toLocaleString('fr-FR', { weekday: 'short', hour: '2-digit', minute: '2-digit' })}.` : " Dans l'appli mobile, les pas faits appli fermée seront aussi relus."}</p>
-		${state.tracking ? '' : '<button class="btn ghost wide" id="btn-track-2">Activer le suivi</button>'}
-		<h3>Le ciel</h3>
-		<p class="empty">${sky.label()} · lever ${fmtHour(garden.sun.rise)}, coucher ${fmtHour(garden.sun.set)}.
-			${state.coords ? 'Météo réelle de ton coin (position arrondie à 10 km, envoyée à Open-Meteo).' : 'Active ta position approximative pour voir la vraie météo et le vrai coucher du soleil.'}</p>
-		${state.coords ? '' : '<button class="btn ghost wide" id="btn-sky">Utiliser ma position approximative</button>'}
 		<h3>Tous tes jardins</h3>
 		<ul class="rows">
 			${Object.entries(PLANT_TYPES).map(([t, d]) => `<li><span>${d.plural[0].toUpperCase() + d.plural.slice(1)} <small>· ${ACTIVITIES.filter(a => a.plant === t).map(a => a.name.toLowerCase()).join(', ')}</small></span><b>${mature(t)}</b></li>`).join('')}
@@ -699,16 +692,6 @@ function renderJournal() {
 		<div id="album">${albumHtml(state)}</div>
 		<h3>Dernières balades</h3>
 		${walks ? `<ul class="rows">${walks}</ul>` : '<p class="empty">Ta première balade apparaîtra ici.</p>'}
-		${DEV ? `<div class="dev">Mode test · heure du jardin <b id="dev-h">${garden.hourOverride ?? 'réelle'}</b>
-			<input type="range" id="dev-hour" min="0" max="24" step="0.25" value="${garden.hourOverride ?? new Date().getHours()}">
-			<div class="seg" id="dev-weather">${['réelle', ...Object.keys(WEATHER_LABEL)].map(k => `<button data-w="${k}" class="${(sky.override ?? 'réelle') === k ? 'on' : ''}">${WEATHER_LABEL[k] ?? 'Réelle'}</button>`).join('')}</div>
-			Déplacement simulé <b id="sim-v">${tracking.sim ? `${fmt(tracking.sim.speedKmh, 1)} km/h` : 'arrêté'}</b>
-			<input type="range" id="sim-speed" min="0" max="20" step="0.5" value="${tracking.sim?.speedKmh ?? 5}">
-			<div class="seg" id="sim-ts">${[1, 10, 60].map(t => `<button data-ts="${t}" class="${(tracking.sim?.timeScale ?? 1) === t ? 'on' : ''}">×${t}</button>`).join('')}</div>
-			<button id="dev-sim">${tracking.sim ? 'Arrêter le déplacement simulé' : 'Simuler un déplacement'}</button>
-			<button id="dev-harvest">Simuler une journée d'activité</button>
-			<button id="dev-km">+10 km (ouvrir des parcelles)</button>
-			<button id="dev-reset">Effacer le jardin</button></div>` : ''}
 		<p class="ver">Evolia v${VERSION}</p>`;
 }
 
@@ -722,19 +705,79 @@ function closeJournal() {
 	$('#journal').setAttribute('aria-hidden', 'true');
 }
 
-$('#journal').addEventListener('click', async e => {
+$('#journal').addEventListener('click', e => {
 	if (e.target.closest('[data-close-journal]')) closeJournal();
 	const al = e.target.closest('[data-open-sp]');
 	if (al) species.open(al.dataset.openSp);
+});
+
+// ─── Options : version, réglages, mode test ───────────────────
+
+const isApp = () => !!window.Capacitor?.isNativePlatform?.();
+
+function renderOptions() {
+	const src = SOURCES[state.harvestSource];
+	$('#options').innerHTML = `
+		<div class="panel-head"><h2>Options</h2><button class="close" data-close-options aria-label="Fermer">×</button></div>
+		<div class="opt-version"><img src="assets/logo.png" alt=""><div><b>Evolia v${VERSION}</b><span>${isApp() ? 'Appli Android' : 'Version web'} · données gardées sur ce téléphone</span></div></div>
+		<h3>Objectif du jour</h3>
+		<div class="seg" id="goal-seg">${[2, 3, 5, 8].map(g => `<button data-goal="${g}" class="${g === state.goalKm ? 'on' : ''}">${g} km</button>`).join('')}</div>
+		<h3>Suivi de tes pas</h3>
+		<p class="empty">${state.tracking ? "Actif : dès que tu bouges appli ouverte, une balade démarre toute seule et s'arrête après une minute d'immobilité." : 'En pause.'}
+			${src ? ` Pas relus appli fermée avec ${src.label} ; dernière récolte : ${new Date(state.lastHarvest).toLocaleString('fr-FR', { weekday: 'short', hour: '2-digit', minute: '2-digit' })}.` : isApp() ? '' : " Dans l'appli mobile, les pas faits appli fermée sont aussi relus."}</p>
+		${state.tracking ? '' : '<button class="btn ghost wide" id="btn-track-2">Activer le suivi</button>'}
+		${isApp() && !src ? '<button class="btn ghost wide" id="opt-harvest">Relire les pas faits appli fermée</button>' : ''}
+		<h3>Le ciel</h3>
+		<p class="empty">${sky.label()} · lever ${fmtHour(garden.sun.rise)}, coucher ${fmtHour(garden.sun.set)}.
+			${state.coords ? 'Météo réelle de ton coin (position arrondie à 10 km, envoyée à Open-Meteo).' : 'Active ta position approximative pour voir la vraie météo et le vrai coucher du soleil.'}</p>
+		${state.coords ? '' : '<button class="btn ghost wide" id="btn-sky">Utiliser ma position approximative</button>'}
+		<h3>Aide</h3>
+		<button class="btn ghost wide" id="opt-coach">Revoir le tutoriel</button>
+		<a class="btn ghost wide opt-link" href="privacy.html" target="_blank" rel="noopener">Confidentialité</a>
+		<h3>Mode test</h3>
+		<label class="switch"><input type="checkbox" id="opt-dev" ${DEV ? 'checked' : ''}><i></i><span>Outils de test et raccourcis (pour essayer le jeu sans marcher)</span></label>
+		${DEV ? `<div class="dev">Heure du jardin <b id="dev-h">${garden.hourOverride ?? 'réelle'}</b>
+			<input type="range" id="dev-hour" min="0" max="24" step="0.25" value="${garden.hourOverride ?? new Date().getHours()}">
+			<button id="dev-hour-real">Revenir à l'heure réelle</button>
+			<div class="dev-label">Météo</div>
+			<div class="seg" id="dev-weather">${['réelle', ...Object.keys(WEATHER_LABEL)].map(k => `<button data-w="${k}" class="${(sky.override ?? 'réelle') === k ? 'on' : ''}">${WEATHER_LABEL[k] ?? 'Réelle'}</button>`).join('')}</div>
+			<div class="dev-label">Déplacement simulé <b id="sim-v">${tracking.sim ? `${fmt(tracking.sim.speedKmh, 1)} km/h` : 'arrêté'}</b></div>
+			<input type="range" id="sim-speed" min="0" max="20" step="0.5" value="${tracking.sim?.speedKmh ?? 5}">
+			<div class="seg" id="sim-ts">${[1, 10, 60].map(t => `<button data-ts="${t}" class="${(tracking.sim?.timeScale ?? 1) === t ? 'on' : ''}">×${t}</button>`).join('')}</div>
+			<button id="dev-sim">${tracking.sim ? 'Arrêter le déplacement simulé' : 'Simuler un déplacement'}</button>
+			<button id="dev-harvest">Simuler une journée d'activité</button>
+			<button id="dev-km">+1 km ici (agrandir la clôture)</button>
+			<button id="dev-km10">+10 km (ouvrir des lieux)</button>
+			<button id="dev-nectar">+500 nectar</button>
+			<button id="dev-day">Nouveau jour (cadeau et défis)</button>
+			<button id="dev-reset" class="danger">Effacer le jardin</button></div>` : ''}`;
+}
+
+function openOptions() {
+	renderOptions();
+	$('#options').classList.add('open');
+	$('#options').setAttribute('aria-hidden', 'false');
+}
+function closeOptions() {
+	$('#options').classList.remove('open');
+	$('#options').setAttribute('aria-hidden', 'true');
+}
+
+$('#options').addEventListener('click', async e => {
+	if (e.target.closest('[data-close-options]')) return closeOptions();
 	const g = e.target.closest('[data-goal]');
-	if (g) { state.goalKm = Number(g.dataset.goal); persist(true); renderHud(); renderJournal(); }
+	if (g) { state.goalKm = Number(g.dataset.goal); persist(true); renderHud(); renderDaily(); renderOptions(); }
 	const w = e.target.closest('[data-w]');
-	if (w) { sky.override = w.dataset.w === 'réelle' ? null : w.dataset.w; sky.apply(); renderJournal(); }
+	if (w) { sky.override = w.dataset.w === 'réelle' ? null : w.dataset.w; sky.apply(); renderOptions(); }
 	const ts = e.target.closest('[data-ts]');
-	if (ts && tracking.sim) { tracking.sim.timeScale = Number(ts.dataset.ts); renderJournal(); }
-	if (e.target.id === 'btn-sky') { await sky.locate(true); persist(true); renderJournal(); }
-	if (e.target.id === 'btn-track-2') { enableTracking(true); sky.locate(true); renderJournal(); }
-	if (e.target.id === 'dev-sim') {
+	if (ts && tracking.sim) { tracking.sim.timeScale = Number(ts.dataset.ts); renderOptions(); }
+	const id = e.target.id;
+	if (id === 'btn-sky') { await sky.locate(true); persist(true); renderOptions(); }
+	if (id === 'btn-track-2') { enableTracking(true); sky.locate(true); renderOptions(); }
+	if (id === 'opt-harvest') { state.harvestDeclined = false; closeOptions(); offerHarvest(); }
+	if (id === 'opt-coach') { closeOptions(); coach(0); }
+	if (id === 'dev-hour-real') { garden.hourOverride = null; renderOptions(); }
+	if (id === 'dev-sim') {
 		if (tracking.sim) { tracking.sim.stop(); tracking.sim = null; }
 		else {
 			tracking.sim = new SimTracker(s => onSample({ ...s, sim: true }), () => {});
@@ -742,13 +785,30 @@ $('#journal').addEventListener('click', async e => {
 			tracking.sim.timeScale = Number($('#sim-ts .on')?.dataset.ts ?? 1);
 			tracking.sim.start();
 		}
-		renderJournal();
+		renderOptions();
 	}
-	if (e.target.id === 'dev-harvest') { closeJournal(); maybeHarvest(SOURCES.mock, Date.now() - 16 * 3600000); }
-	if (e.target.id === 'dev-km') { addMeters(10000); checkUnlocks(); announceSpecies(); renderHud(); persist(true); renderJournal(); }
-	if (e.target.id === 'dev-reset' && confirm('Effacer tout le jardin ?')) { reset(); location.reload(); }
+	if (id === 'dev-harvest') { closeOptions(); maybeHarvest(SOURCES.mock, Date.now() - 16 * 3600000); }
+	if (id === 'dev-km' || id === 'dev-km10') { addMeters(id === 'dev-km' ? 1000 : 10000); checkUnlocks(); announceSpecies(); renderHud(); persist(true); renderOptions(); }
+	if (id === 'dev-nectar') { state.nectar = (state.nectar ?? 0) + 500; renderHud(); persist(true); toast('+500 nectar', '#F4C23E'); }
+	if (id === 'dev-day') {
+		if (state.daily) state.daily.day = null;
+		rollDay(state);
+		state.daily.giftDay = null;
+		persist(true);
+		renderDaily();
+		closeOptions();
+		showDaily(true);
+	}
+	if (id === 'dev-reset' && confirm('Effacer tout le jardin ?')) { reset(); location.reload(); }
 });
-$('#journal').addEventListener('input', e => {
+$('#options').addEventListener('change', e => {
+	if (e.target.id !== 'opt-dev') return;
+	DEV = e.target.checked;
+	try { localStorage.setItem(DEV_KEY, DEV ? '1' : '0'); } catch (err) { /* stockage indisponible */ }
+	if (DEV) window.evolia = { garden, state, sky };
+	renderOptions();
+});
+$('#options').addEventListener('input', e => {
 	if (e.target.id === 'dev-hour') {
 		garden.hourOverride = parseFloat(e.target.value);
 		$('#dev-h').textContent = `${e.target.value} h`;
@@ -762,6 +822,7 @@ $('#journal').addEventListener('input', e => {
 // ─── Boutons ──────────────────────────────────────────────────
 
 $('#btn-journal').addEventListener('click', openJournal);
+$('#btn-options').addEventListener('click', openOptions);
 $('#btn-species').addEventListener('click', () => species.open());
 $('#btn-eco').addEventListener('click', () => eco.open());
 $('#hud').addEventListener('click', () => places.open());
