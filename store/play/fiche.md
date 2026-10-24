@@ -14,40 +14,33 @@ Pour refaire les visuels : captures du jeu dans `raw/` (1080 × 2338), fonds lé
 
 ## Mise en ligne, pas à pas
 
-### 1. Les secrets GitHub (une fois)
+### 1. L'App Bundle signé (sans aucun secret dans GitHub)
 
-Dépôt `zed69000/Evolia` › *Settings* › *Secrets and variables* › *Actions* › *New repository secret*.
-Les valeurs sont dans `C:\Users\salzamora\.evolia\` (jamais dans le dépôt).
+1. GitHub construit l'App Bundle **non signé** à chaque changement de `public/js/version.js` (workflow
+   « Android · App Bundle ») et le dépose dans la version GitHub `android-latest`.
+2. Sur l'ordinateur qui garde la clé (`%USERPROFILE%\.evolia`) :
+   `powershell -ExecutionPolicy Bypass -File toolspp\sign-aab.ps1`
+   télécharge ce fichier, le signe avec la clé d'envoi et le vérifie. Le fichier prêt arrive dans
+   `%USERPROFILE%\Downloads\evolia-play\evolia-<version>.aab`.
 
-| Nom du secret | Valeur |
-|---|---|
-| `PLAY_UPLOAD_KEYSTORE_BASE64` | tout le contenu de `PLAY_UPLOAD_KEYSTORE_BASE64.txt` |
-| `PLAY_UPLOAD_KEYSTORE_PASSWORD` | la valeur `storePassword` de `keystore.properties` |
-| `PLAY_UPLOAD_KEY_ALIAS` | `upload` |
-| `PLAY_UPLOAD_KEY_PASSWORD` | la valeur `keyPassword` de `keystore.properties` |
-| `PLAY_SERVICE_ACCOUNT_JSON` (facultatif) | le JSON du compte de service, le même que pour les autres jeux |
+Garder une copie de `%USERPROFILE%\.evolia` en lieu sûr : sans la clé d'envoi, il faut demander à Google de la réinitialiser.
 
-Ou, avec l'outil `gh` connecté : `scripts/set-play-secrets.sh zed69000/Evolia ~/.evolia [compte-de-service.json]`
-(dans `game-pipeline`).
+### 2. (Plus tard, facultatif) Envoi automatique
 
-Garder une copie de `~/.evolia` en lieu sûr : sans la clé d'envoi, il faut demander à Google de la réinitialiser.
-
-### 2. L'App Bundle signé
-
-Dépôt › *Actions* › « Android · Google Play » › *Run workflow* (branche `master`).
-À la fin, en bas de la page du build, *Artifacts* › `com.zed69000.evolia-aab` : un zip qui contient `app-release.aab`.
+Le workflow « Android · Google Play » (chaîne commune game-pipeline) signe et envoie tout seul, une fois les secrets
+`PLAY_UPLOAD_KEYSTORE_BASE64`, `PLAY_UPLOAD_KEYSTORE_PASSWORD`, `PLAY_UPLOAD_KEY_ALIAS` (`upload`),
+`PLAY_UPLOAD_KEY_PASSWORD` et `PLAY_SERVICE_ACCOUNT_JSON` ajoutés au dépôt.
 
 ### 3. Le premier envoi dans la Play Console (à la main, Google l'exige)
 
 1. *Créer une application* : nom « Evolia », langue par défaut français, application, gratuite.
-2. *Tests* › *Tests internes* › *Créer une version* : déposer `app-release.aab`. Notes de version : voir plus bas.
+2. *Tests* › *Tests internes* › *Créer une version* : déposer `evolia-<version>.aab`. Notes de version : voir plus bas.
 3. *Testeurs* : créer une liste avec les adresses e-mail des testeurs, copier le lien d'inscription et le leur envoyer.
 4. Remplir les questionnaires (réponses ci-dessous), la fiche du store (textes et visuels ci-dessous).
 5. *Examiner et déployer*.
 
-Ensuite, à chaque nouvelle version : augmenter la version dans `public/js/version.js`, pousser, relancer
-« Android · Google Play » : la version arrive en brouillon dans les tests internes (avec le compte de service),
-il reste à cliquer *Déployer*.
+Ensuite, à chaque nouvelle version : augmenter la version dans `public/js/version.js` et pousser, lancer
+`toolspp\sign-aab.ps1`, puis déposer le nouveau fichier dans *Tests internes* › *Créer une version*.
 
 ---
 
