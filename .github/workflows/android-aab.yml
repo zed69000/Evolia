@@ -1,0 +1,45 @@
+# Fabrique l'App Bundle Android NON signé et le dépose dans la version GitHub « android-latest ».
+# Aucun secret ici : la signature se fait ensuite sur l'ordinateur, avec la clé d'envoi gardée dans ~/.evolia
+# (tools/app/sign-aab.ps1). Se lance quand la version change, ou à la main : Actions > « Android · App Bundle ».
+name: Android · App Bundle
+
+on:
+  push:
+    branches: [master]
+    paths: [public/js/version.js, .github/workflows/android-aab.yml]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  aab:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - name: Construction de l'App Bundle (non signé)
+        run: |
+          npm install --no-audit --no-fund
+          npm run build:web
+          npx cap add android
+          npm run native:android
+          npx cap sync android
+          cd android && chmod +x gradlew && ./gradlew bundleRelease
+      - name: Nom du fichier, d'après la version
+        id: v
+        run: echo "name=evolia-$(grep -oE "[0-9]+\.[0-9]+\.[0-9]+" public/js/version.js)-unsigned.aab" >> "$GITHUB_OUTPUT"
+      - name: Dépôt dans la version « android-latest »
+        run: |
+          cp android/app/build/outputs/bundle/release/app-release.aab "${{ steps.v.outputs.name }}"
+          gh release view android-latest >/dev/null 2>&1 || gh release create android-latest --prerelease --title "Android (dernier build)" --notes "App Bundle non signé, à signer avec tools/app/sign-aab.ps1."
+          gh release upload android-latest "${{ steps.v.outputs.name }}" --clobber
+        env:
+          GH_TOKEN: ${{ github.token }}
