@@ -115,7 +115,7 @@ Soft nature sounds, no ads, no purchases, no account. Your data stays on your ph
 
 **Catégorie** : Application › Santé et remise en forme (ou Jeu › Simulation, au choix). Tags : marche, nature, jardin.
 
-**Coordonnées** : e-mail sebastienalzamora@gmail.com.
+**Coordonnées** : e-mail musclorzed@gmail.com.
 
 **Politique de confidentialité** : `https://evolia.sebastienalzamora.workers.dev/privacy.html`
 
