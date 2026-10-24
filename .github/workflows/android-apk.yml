@@ -37,6 +37,7 @@ jobs:
           cd android
           chmod +x gradlew
           # En cas d'échec, les lignes utiles remontent en annotations (lisibles sans compte GitHub).
+          set +e
           ./gradlew assembleDebug --console=plain 2>&1 | tee build.log; code=${PIPESTATUS[0]}
           if [ "$code" != 0 ]; then
             grep -iE "error|what went wrong|failed|exception|cannot|unresolved" build.log | grep -v "^> Task" | head -40 | while IFS= read -r l; do echo "::error::$l"; done
