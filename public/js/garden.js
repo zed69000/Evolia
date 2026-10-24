@@ -4,17 +4,14 @@
 // Coordonnées : chaque plante garde des coordonnées locales à sa parcelle (`c`, 0 par défaut) ;
 // le monde les décale de l'origine de la parcelle (colonne × PARCEL_W, rangée × PARCEL_H).
 
-import { rng, wash, leaf, rgba, mix, paperTexture, lerp, ribbon, curve } from './watercolor.js';
+import { rng, wash, rgba, mix, paperTexture, lerp } from './watercolor.js';
 import { PLANT_TYPES, DECOR, DECOR_PAINTERS, paintPlant, newVariant, lookOf } from './plants.js';
 import { drawCritter, CRITTER_SIZE, FLIGHT } from './critters.js';
-import { SPECIES } from './species.js';
+import { SPECIES, PLACE_BY_ID } from './species.js';
+import { PARCEL_W, PARCEL_H, CELLS, CELL_KM, zoneOf, zoneName, paintTile } from './zones.js';
 import { newPlace } from './state.js';
 
-export const PARCEL_W = 420;
-export const PARCEL_H = 1200;
-// Parcelles d'un lieu, dans l'ordre où elles s'ouvrent, et kilomètres à faire sur place pour chacune.
-export const CELLS = [[0, 0], [1, 0], [0, 1], [1, 1], [-1, 0], [-1, 1], [2, 0], [2, 1], [0, 2], [1, 2], [-1, 2], [2, 2]];
-export const CELL_KM = [0, 1, 2.5, 4.5, 7, 10, 14, 19, 25, 32, 40, 50];
+export { PARCEL_W, PARCEL_H, CELLS, CELL_KM };
 export const cellsOpen = place => Math.min(CELLS.length, place?.cells ?? 1);
 export const cellOrigin = i => [CELLS[i][0] * PARCEL_W, CELLS[i][1] * PARCEL_H];
 const cellOf = p => p.c ?? 0;
@@ -27,15 +24,6 @@ const FLYERS = new Set(['bee', 'butterfly', 'dragonfly', 'hoverfly', 'beefly']);
 // Niveaux de détail selon le zoom : formes simples, aquarelle, aquarelle détaillée.
 const GLYPH_Z = 0.5, DETAIL_Z = 1.6, DETAIL_DENSITY = 2.2;
 const Z_MAX = 3.2;
-
-// Sol de chaque lieu : couleur de fond, grandes nappes, bords, petites pousses.
-const GROUND = {
-	prairie: { base: '#B5C565', washes: ['#9AB450', '#A3BD57', '#CDC88D', '#B9C668', '#7FAA48', '#B9C668'], edge: ['#5F933E', '#488641'], sprigs: ['#5F933E', '#7FAA48', '#488641'], stones: '#C9B48A' },
-	marais: { base: '#A6C27A', washes: ['#8FB98A', '#9AC08A', '#B9CC8A', '#7FAA6A', '#C8D0A0'], edge: ['#4E7A5A', '#5F8A62'], sprigs: ['#4E7A4A', '#6E9A5A'], stones: '#A8B898' },
-	foret: { base: '#7E9A55', washes: ['#6E8A4A', '#5F7F45', '#8AA060', '#9A9A60', '#7A7A48'], edge: ['#3E5A32', '#2E4A2A'], sprigs: ['#3E6A35', '#4E7A3E'], stones: '#9A8A6A', leaves: ['#A8783A', '#C8903A', '#8A5A2A', '#B8A050'], sun: '#E8E0A0' },
-	montagne: { base: '#B9C98E', washes: ['#A8BC80', '#C8D3A0', '#9FB878', '#D0D8B0'], edge: ['#7A9A6A', '#8AA07A'], sprigs: ['#6E8F6A', '#7FA08A'], stones: '#A8A8A0', rocks: true },
-	littoral: { base: '#E9DAB4', washes: ['#DCCB9E', '#F0E4C4', '#E4D2A8', '#D2C090'], edge: ['#C8B88A', '#D8C8A0'], sprigs: ['#9DB08A', '#A8B488'], stones: '#C8C0B0', sea: true },
-};
 
 const DEFAULT_SUN = { rise: 7.5, set: 19 };
 
@@ -119,6 +107,7 @@ export class Garden {
 		this.cam = { cx: PARCEL_W / 2, cy: PARCEL_H * 0.42, z: 1 };
 
 		this.ensurePlace(this.biome);
+		this.tidyPlants();
 		this.resize();
 		new ResizeObserver(() => this.resize()).observe(canvas);
 		this.bindInput();
@@ -140,6 +129,16 @@ export class Garden {
 		return true;
 	}
 
+	/** Les plantes d'une ancienne version restées hors des clairières reviennent à l'intérieur. */
+	tidyPlants() {
+		for (const p of this.place.plants) {
+			const ci = cellOf(p), [ox, oy] = cellOrigin(ci);
+			if (ci >= cellsOpen(this.place) || this.inBlob(this.blob(ci), ox + p.x, oy + p.y, 10)) continue;
+			const pos = this.place_(this.biome, p.type, ci);
+			p.x = Math.round(pos.x); p.y = Math.round(pos.y);
+		}
+	}
+
 	/** Change de lieu : un autre jardin, d'autres espèces. */
 	setPlace(id) {
 		this.ensurePlace(id);
@@ -152,6 +151,7 @@ export class Garden {
 		this.nextPopulate = 0;
 		this.cam = { cx: PARCEL_W / 2, cy: PARCEL_H * 0.42, z: 1 };
 		this.camTarget = null;
+		this.tidyPlants();
 	}
 
 	openCells() {
@@ -169,12 +169,16 @@ export class Garden {
 		return CELLS.findIndex(([x, y]) => x === gx && y === gy);
 	}
 
-	/** Une nouvelle parcelle s'ouvre : quelques herbes et un bouton de fleur pour qu'elle ne soit pas nue. */
+	/** Une nouvelle parcelle s'ouvre avec les plantes de son coin, pour qu'elle ait tout de suite son caractère. */
 	openCell(i) {
 		const place = this.place;
 		place.cells = Math.max(cellsOpen(place), i + 1);
-		for (let k = 0; k < 5; k++) this.spawn(this.biome, 'herbe', 1, this.place_(this.biome, 'herbe', i), i);
-		this.spawn(this.biome, 'fleur', 0.4, this.place_(this.biome, 'fleur', i), i);
+		const start = zoneOf(this.biome, i)?.start ?? [['herbe', 5, 1], ['fleur', 2, 1]];
+		// Une parcelle est grande : on double les herbes et on ajoute moitié plus de fleurs, pour qu'elle ne paraisse jamais vide.
+		const more = { herbe: 2, fleur: 1.5 };
+		for (const [type, count, growth] of start) {
+			for (let k = 0; k < Math.round(count * (more[type] ?? 1)); k++) this.spawn(this.biome, type, growth, this.place_(this.biome, type, i), i);
+		}
 		const [ox, oy] = cellOrigin(i);
 		this.burst(ox + PARCEL_W / 2, oy + PARCEL_H * 0.4, 30, '#F4C23E');
 	}
@@ -394,50 +398,18 @@ export class Garden {
 		return mix(mix(c, '#B8A060', (s.autumn ?? 0) * 0.16), '#A8B098', (s.winter ?? 0) * 0.3);
 	}
 
-	/** Fond peint d'une parcelle du lieu, mis en cache à la densité normale. La mer ne borde que la première rangée. */
-	bgFor(ci) {
-		const id = this.biome, key = `${id}:${ci}`;
+	/** Sol d'une case de la grille (gx, gy) du lieu, mis en cache à la densité normale ; sans raccord avec ses voisines. */
+	bgFor(gx, gy) {
+		const key = `${this.biome}:${gx},${gy}`;
 		let c = this.bgs.get(key);
 		if (c) return c;
-		const D = this.density, H = PARCEL_H, W = PARCEL_W;
-		const G = { ...GROUND[id], sea: GROUND[id].sea && CELLS[ci][1] === 0 };
+		const D = this.density;
 		c = document.createElement('canvas');
-		c.width = Math.ceil(W * D);
-		c.height = Math.ceil(H * D);
+		c.width = Math.ceil(PARCEL_W * D);
+		c.height = Math.ceil(PARCEL_H * D);
 		const g = c.getContext('2d');
 		g.scale(D, D);
-		const r = rng(99 + id.length + ci * 131);
-		const tone = col => this.groundColor(col);
-		g.fillStyle = tone(G.base);
-		g.fillRect(0, 0, W, H);
-		const n = Math.round((H / 1000) * 50);
-		for (let i = 0; i < n; i++) {
-			wash(g, r.range(-50, W + 50), r.range(-50, H + 50), r.range(70, 200), r.range(50, 150), tone(r.pick(G.washes)), r, { layers: 8, alpha: 0.06, edge: 0, variance: 0.25 });
-		}
-		if (G.sun) for (let i = 0; i < Math.round(H / 140); i++) wash(g, r.range(20, W - 20), r.range(20, H), r.range(30, 60), r.range(18, 34), G.sun, r, { layers: 5, alpha: 0.035, edge: 0 });
-		if (G.rocks) for (let i = 0; i < Math.round(H / 90); i++) { const s = r.range(6, 16); wash(g, r.range(10, W - 10), r.range(20, H), s, s * 0.6, r.pick(['#A8A498', '#BCB8AC', '#9A968A']), r, { layers: 7, alpha: 0.16, edge: 0.4 }); }
-		const sprigs = Math.round((H / 1000) * (G.sea ? 90 : 260));
-		for (let i = 0; i < sprigs; i++) {
-			const x = r.range(10, W - 10), y = r.range(G.sea ? 260 : 10, H - 10), s = r.range(0.6, 1.25);
-			const col = tone(r.pick(G.sprigs));
-			leaf(g, x, y, 6 * s, 2.4 * s, -Math.PI / 2 - 0.6, col, r, 0.55);
-			leaf(g, x, y, 6 * s, 2.4 * s, -Math.PI / 2 + 0.6, col, r, 0.55);
-			if (r() < 0.3) leaf(g, x, y, 7 * s, 2 * s, -Math.PI / 2, col, r, 0.55);
-		}
-		// Feuilles mortes au sol : toujours en forêt, partout en automne.
-		const fallen = (G.leaves ? H / 6 : 0) + (this.season?.autumn ?? 0) * H / 9;
-		for (let i = 0; i < Math.round(fallen); i++) leaf(g, r.range(5, W - 5), r.range(G.sea ? 260 : 5, H), r.range(4, 7), r.range(1.6, 2.6), r() * 6.28, r.pick(G.leaves ?? ['#C8742E', '#E09A3A', '#B85A2A', '#D8B048']), r, 0.5);
-		for (let i = 0; i < Math.round((H / 1000) * 18); i++) {
-			wash(g, r.range(20, W - 20), r.range(20, H - 20), r.range(3, 6), r.range(2, 4), G.stones, r, { layers: 5, alpha: 0.25, edge: 0.3 });
-		}
-		if (G.sea) {
-			// La mer en haut de la parcelle, puis le sable mouillé et l'écume.
-			for (let i = 0; i < 14; i++) wash(g, r.range(-40, W + 40), r.range(-30, 110), r.range(90, 160), r.range(40, 70), r.pick(['#6FAEC0', '#8FC4CC', '#5FA0B8']), r, { layers: 8, alpha: 0.1, edge: 0 });
-			g.fillStyle = 'rgba(111,174,192,0.55)';
-			g.fillRect(0, -10, W, 120);
-			for (let i = 0; i < 10; i++) wash(g, r.range(0, W), r.range(150, 190), r.range(60, 110), r.range(10, 18), '#CFC09A', r, { layers: 6, alpha: 0.1, edge: 0 });
-			for (const y of [120, 138, 156]) ribbon(g, curve(-10, y + r.gauss() * 4, r.gauss() * 0.04, W + 20, r.gauss() * 0.08, 20), 2.4, 1.6, '#FDFBF3', r, 0.6);
-		}
+		paintTile(g, this.biome, gx, gy, col => this.groundColor(col), this.season);
 		this.bgs.set(key, c);
 		return c;
 	}
@@ -498,7 +470,7 @@ export class Garden {
 	spawn(pid, type, growth = 0, pos = this.place_(pid, type), ci = 0) {
 		const p = {
 			id: uid(), type, x: Math.round(pos.x), y: Math.round(pos.y), growth, ...(ci ? { c: ci } : {}),
-			seed: Math.floor(Math.random() * 2147483647), variant: newVariant(type, pid, this.state.species), born: Date.now(),
+			seed: Math.floor(Math.random() * 2147483647), variant: newVariant(type, pid, this.state.species, zoneOf(pid, ci)?.favor), born: Date.now(),
 		};
 		this.state.places[pid].plants.push(p);
 		return p;
@@ -514,7 +486,7 @@ export class Garden {
 		let p = place.plants.find(q => q.type === type && q.growth < 1);
 		while (amount > 1e-6) {
 			if (!p) {
-				const ci = pid === this.biome ? this.active : Math.floor(Math.random() * cellsOpen(place));
+				const ci = this.cellFor(pid, type);
 				p = this.spawn(pid, type, 0, this.place_(pid, type, ci), ci);
 				events.push({ kind: 'seed', plant: p, pid });
 			}
@@ -525,6 +497,25 @@ export class Garden {
 			if (p.growth >= 1) { events.push({ kind: 'mature', plant: p, pid }); p = null; }
 		}
 		return events;
+	}
+
+	/**
+	 * Parcelle où planter la prochaine graine d'un type : celle qui en manque le plus, pour que toutes se remplissent
+	 * en gardant leurs proportions ; un coin accueille plus volontiers son type favori, la parcelle regardée passe un peu devant.
+	 */
+	cellFor(pid, type) {
+		const place = this.state.places[pid];
+		const n = cellsOpen(place);
+		const want = { herbe: 14, fleur: 10, buisson: 4, arbre: 2.5 }[type];
+		let best = 0, bestScore = Infinity;
+		for (let ci = 0; ci < n; ci++) {
+			const have = place.plants.filter(q => cellOf(q) === ci && q.type === type).length;
+			const zone = zoneOf(pid, ci);
+			const likes = zone && zone.start.some(([t]) => t === type) ? 1.6 : 1;
+			const score = have / (want * likes) - (pid === this.biome && ci === this.active ? 0.15 : 0) + Math.random() * 0.05;
+			if (score < bestScore) { bestScore = score; best = ci; }
+		}
+		return best;
 	}
 
 	/** Fait pousser un lieu, affiché ou non, sans déplacer la plante suivie à l'écran. */
@@ -1222,11 +1213,11 @@ export class Garden {
 
 		// Le sol continue partout ; hors des clairières ouvertes, une prairie sauvage voilée de brume.
 		world();
-		const G = GROUND[this.biome];
-		ctx.fillStyle = this.groundColor(G.base);
-		ctx.fillRect(v.x0 - 10, v.y0 - 10, v.w + 20, v.h + 20);
-		const grid = this.visibleCells(40, CELLS.map((_, i) => i));
-		const paintGround = () => { for (const i of grid) { const [ox, oy] = cellOrigin(i); ctx.drawImage(this.bgFor(i), ox, oy, PARCEL_W, PARCEL_H); } };
+		const gx0 = Math.floor((v.x0 - 10) / PARCEL_W), gx1 = Math.floor((v.x0 + v.w + 10) / PARCEL_W);
+		const gy0 = Math.floor((v.y0 - 10) / PARCEL_H), gy1 = Math.floor((v.y0 + v.h + 10) / PARCEL_H);
+		const paintGround = () => {
+			for (let gy = gy0; gy <= gy1; gy++) for (let gx = gx0; gx <= gx1; gx++) ctx.drawImage(this.bgFor(gx, gy), gx * PARCEL_W, gy * PARCEL_H, PARCEL_W, PARCEL_H);
+		};
 		paintGround();
 		ctx.fillStyle = glyph ? 'rgba(232,226,204,0.8)' : 'rgba(236,231,212,0.62)';
 		ctx.fillRect(v.x0 - 10, v.y0 - 10, v.w + 20, v.h + 20);
@@ -1246,7 +1237,6 @@ export class Garden {
 		for (const i of this.openCells()) this.tracePath(ctx, this.blob(i));
 		ctx.clip();
 		paintGround();
-		this.softenSeams(ctx, grid);
 		ctx.restore();
 		this.drawNextOutline(ctx, v);
 		// La clôture suit le bord des clairières ; elle recule à chaque nouvelle parcelle.
@@ -1441,29 +1431,6 @@ export class Garden {
 		if (glyph || this.lockedCells().length) this.drawLabels(ctx, glyph, S, tx, ty);
 	}
 
-	/** Fond les raccords entre les fonds de parcelles voisines dans une nappe de la couleur du sol. */
-	softenSeams(ctx, open = this.openCells()) {
-		if (open.length < 2) return;
-		const set = new Set(open.map(i => CELLS[i].join(',')));
-		const base = this.groundColor(GROUND[this.biome].base);
-		const band = 46;
-		for (const i of open) {
-			const [gx, gy] = CELLS[i], [ox, oy] = cellOrigin(i);
-			if (set.has(`${gx + 1},${gy}`)) {
-				const x = ox + PARCEL_W, g = ctx.createLinearGradient(x - band, 0, x + band, 0);
-				g.addColorStop(0, rgba(base, 0)); g.addColorStop(0.5, rgba(base, 0.75)); g.addColorStop(1, rgba(base, 0));
-				ctx.fillStyle = g;
-				ctx.fillRect(x - band, oy, band * 2, PARCEL_H);
-			}
-			if (set.has(`${gx},${gy + 1}`)) {
-				const y = oy + PARCEL_H, g = ctx.createLinearGradient(0, y - band, 0, y + band);
-				g.addColorStop(0, rgba(base, 0)); g.addColorStop(0.5, rgba(base, 0.75)); g.addColorStop(1, rgba(base, 0));
-				ctx.fillStyle = g;
-				ctx.fillRect(ox, y - band, PARCEL_W, band * 2);
-			}
-		}
-	}
-
 	/** Morceaux du bord d'une clairière qui ne sont pas couverts par une autre clairière ouverte. */
 	outerRuns(i, others) {
 		const pts = this.blob(i).pts;
@@ -1558,16 +1525,29 @@ export class Garden {
 		for (const i of cells) {
 			const [ox, oy] = cellOrigin(i);
 			const isOpen = i < cellsOpen(place);
-			const title = isOpen ? `Parcelle ${i + 1}` : 'Nouvelle parcelle';
+			const title = zoneName(this.biome, i, PLACE_BY_ID[this.biome].name);
 			const left = Math.max(0.1, Math.ceil((CELL_KM[i] - km) * 10) / 10);
 			const sub = isOpen
 				? `${place.plants.filter(p => cellOf(p) === i && p.growth >= 1).length} plantes`
 				: `encore ${left.toLocaleString('fr-FR', { maximumFractionDigits: 1 })} km ici`;
-			ctx.font = `${Math.round((all ? 16 : 20) * dpr)}px Courgette, cursive`;
-			const w = Math.max(ctx.measureText(title).width, (all ? 80 : 130) * dpr) + (all ? 20 : 32) * dpr;
 			// Centre de la parcelle à l'écran ; une parcelle fermée garde son étiquette visible tant qu'on en voit un bout.
 			const cw = this.canvas.width, ch = this.canvas.height;
 			const sx0 = ox * S + tx, sx1 = (ox + PARCEL_W) * S + tx, sy0 = oy * S + ty, sy1 = (oy + PARCEL_H) * S + ty;
+			ctx.font = `${Math.round((all ? 15 : 20) * dpr)}px Courgette, cursive`;
+			// Un nom trop long pour la parcelle passe sur deux lignes.
+			const room = (all ? sx1 - sx0 - 12 * dpr : cw - 40 * dpr);
+			let lines = [title];
+			if (ctx.measureText(title).width > room - 16 * dpr && title.includes(' ')) {
+				const words = title.split(' ');
+				let best = 1, bestW = Infinity;
+				for (let k = 1; k < words.length; k++) {
+					const wk = Math.max(ctx.measureText(words.slice(0, k).join(' ')).width, ctx.measureText(words.slice(k).join(' ')).width);
+					if (wk < bestW) { bestW = wk; best = k; }
+				}
+				lines = [words.slice(0, best).join(' '), words.slice(best).join(' ')];
+			}
+			const lh = (all ? 18 : 23) * dpr, extra = (lines.length - 1) * lh;
+			const w = Math.min(room, Math.max(...lines.map(l => ctx.measureText(l).width), (all ? 70 : 130) * dpr) + (all ? 16 : 32) * dpr);
 			let x = (sx0 + sx1) / 2, y = (sy0 + sy1) / 2;
 			if (!all) {
 				const seenW = Math.min(sx1, cw) - Math.max(sx0, 0), seenH = Math.min(sy1, ch) - Math.max(sy0, 0);
@@ -1581,13 +1561,13 @@ export class Garden {
 			}
 			ctx.fillStyle = isOpen ? 'rgba(253,247,231,0.92)' : 'rgba(243,237,217,0.95)';
 			ctx.beginPath();
-			ctx.roundRect(x - w / 2, y - 34 * dpr, w, 62 * dpr, 16 * dpr);
+			ctx.roundRect(x - w / 2, y - 34 * dpr - extra / 2, w, 62 * dpr + extra, 16 * dpr);
 			ctx.fill();
 			ctx.fillStyle = isOpen ? '#1F6B47' : '#8A846E';
-			ctx.fillText(title, x, y - 4 * dpr);
-			ctx.font = `${Math.round(13 * dpr)}px Nunito, sans-serif`;
+			lines.forEach((l, k) => ctx.fillText(l, x, y - 4 * dpr - extra / 2 + k * lh));
+			ctx.font = `${Math.round((all ? 12 : 13) * dpr)}px Nunito, sans-serif`;
 			ctx.fillStyle = isOpen ? '#5A6B4E' : '#8A846E';
-			ctx.fillText(sub, x, y + 16 * dpr);
+			ctx.fillText(sub, x, y + 16 * dpr + extra / 2);
 		}
 	}
 

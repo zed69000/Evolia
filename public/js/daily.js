@@ -7,6 +7,7 @@ import { dayKey, todayMeters, allPlants } from './state.js';
 import { PLACES, PLACE_BY_ID, SPECIES, SPECIES_BY_ID, placeOpen } from './species.js';
 import { DECOR } from './plants.js';
 import { CELLS, CELL_KM, cellsOpen } from './garden.js';
+import { zoneName } from './zones.js';
 
 export const ACTIVE_M = 500;
 
@@ -140,11 +141,10 @@ export function weekHtml(state) {
 /** Le plus proche objectif, en kilomètres : nouvelle parcelle, décor, nouveau lieu, ou objectif du jour. */
 export function nextGoal(state) {
 	const place = state.places[state.place];
-	const here = PLACE_BY_ID[state.place];
 	const total = state.totals.distance / 1000;
 	const goals = [];
 	const n = cellsOpen(place);
-	if (n < CELLS.length) goals.push({ km: CELL_KM[n] - place.km, text: `pour agrandir ${here.name.toLowerCase()}` });
+	if (n < CELLS.length) goals.push({ km: CELL_KM[n] - place.km, text: `pour ouvrir ${zoneName(state.place, n, 'une parcelle').toLowerCase()}` });
 	for (const [k, d] of Object.entries(DECOR)) {
 		if (d.place === state.place && !d.always && !place.unlocked[k]) goals.push({ km: d.km - place.km, text: `pour ${DECOR_TEASE[k] ?? 'une surprise'}` });
 	}
@@ -179,7 +179,7 @@ export function albumHtml(state, limit = 40) {
 		if (typeof t === 'number') items.push({ t, html: `<li><i class="al-dot big" style="background:${PLACE_BY_ID[id].color}"></i><span><b>${PLACE_BY_ID[id].name}</b></span><small>nouveau lieu</small></li>` });
 	}
 	for (const [pid, pl] of Object.entries(state.places)) {
-		for (const [n, t] of Object.entries(pl.cellDates ?? {})) items.push({ t, html: `<li><i class="al-dot fence"></i><span>Parcelle ${Number(n) + 1} · ${PLACE_BY_ID[pid].name.toLowerCase()}</span><small>clôture agrandie</small></li>` });
+		for (const [n, t] of Object.entries(pl.cellDates ?? {})) items.push({ t, html: `<li><i class="al-dot fence"></i><span>${zoneName(pid, Number(n), 'Parcelle')} · ${PLACE_BY_ID[pid].name.toLowerCase()}</span><small>clôture agrandie</small></li>` });
 		for (const [k, t] of Object.entries(pl.unlocked ?? {})) if (typeof t === 'number' && DECOR[k]) items.push({ t, html: `<li><i class="al-dot" style="background:#5BB5B0"></i><span>${DECOR[k].name}</span><small>décor</small></li>` });
 	}
 	items.sort((a, b) => b.t - a.t);

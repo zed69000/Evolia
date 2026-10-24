@@ -131,13 +131,15 @@ html, body {
 }
 .btn.ghost {
 	width: 100%;
-	padding: 8px;
+	padding: 12px;
 	margin-bottom: 6px;
-	background: none;
-	color: var(--souffle);
-	font-size: 14px;
-	text-decoration: underline;
+	background: #E9F0D6;
+	color: var(--foret);
+	font-size: 15px;
+	box-shadow: 0 3px 0 #C9D6AE;
 }
+.btn.ghost:active { transform: translateY(2px); box-shadow: 0 1px 0 #C9D6AE; }
+.btn.ghost.danger { background: #F6E3DA; color: #A8402A; box-shadow: 0 3px 0 #E4C4B4; }
 
 /* ─── Marche en cours ─── */
 .walk-top { display: flex; justify-content: space-between; align-items: center; }
@@ -570,3 +572,22 @@ html, body {
 .switch input:checked + i::after { transform: translateX(20px); }
 .dev button.danger { color: #C0442F; }
 .dev-label { margin-top: 10px; }
+
+/* Fenêtres longues : le contenu défile, le bouton principal reste visible en bas. */
+.modal-card { max-height: calc(100% - 8px); display: flex; flex-direction: column; overflow: hidden; }
+.modal-body { overflow-y: auto; min-height: 0; margin: 0 -4px; padding: 0 4px; }
+.modal-foot { flex: none; padding-top: 12px; }
+.modal-foot .btn { margin: 0; }
+.gift { display: flex; align-items: center; gap: 12px; text-align: left; padding: 10px 12px; }
+.gift p { margin: 0 0 6px; font-size: 14px; }
+.gift .chip { margin: 0 4px 0 0; }
+.gift-box { font-size: 34px; flex: none; }
+.week-dots { margin: 2px 0 10px; }
+.week-dots .wk i { width: 18px; height: 18px; }
+.ch-title { margin: 12px 0 2px; font-size: 15px; color: var(--foret); text-align: left; }
+.challenges .ch { padding: 7px 0; }
+.challenges .ch-ico { font-size: 18px; width: 24px; }
+.challenges .ch-body b { font-size: 13px; }
+.next-line { font-size: 13px; margin: 8px 0 4px; }
+.away { text-align: left; margin-top: 6px; font-size: 14px; color: var(--doux); }
+.away summary { cursor: pointer; font-weight: 800; color: var(--foret); padding: 6px 0; }

@@ -18,9 +18,12 @@ const FOLIAGE = ['#2A6034', '#3E7A3C', '#6E9E46'];
 const CANOPY = ['#1C5A35', '#326832', '#5F933E'];
 
 /** Tire l'espèce d'une nouvelle plante parmi celles du lieu. Les espèces encore inconnues sortent plus souvent. */
-export function newVariant(type, place, known = {}) {
+/** Espèce d'une nouvelle plante : souvent une pas encore découverte ; dans un coin, souvent une de ses favorites. */
+export function newVariant(type, place, known = {}, favor = []) {
 	const list = speciesIn(place, type);
 	if (!list.length) return { species: speciesIn('prairie', type)[0].id };
+	const liked = list.filter(x => favor.includes(x.id));
+	if (liked.length && Math.random() < 0.7) return { species: liked[Math.floor(Math.random() * liked.length)].id };
 	const fresh = list.filter(x => !known[x.id]);
 	const pool = fresh.length && Math.random() < 0.6 ? fresh : list;
 	return { species: pool[Math.floor(Math.random() * pool.length)].id };

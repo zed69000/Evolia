@@ -2,6 +2,7 @@
 
 import { load, save, reset, newPlace, allPlants, ACTIVITIES, ACTIVITY_BY_ID, MAX_SPEED_KMH, activityFor, effortFor, dayKey, todayMeters, addDistance, STEP_LENGTH_M } from './state.js';
 import { Garden, CELLS, CELL_KM, cellsOpen } from './garden.js';
+import { zoneName } from './zones.js';
 import { PlacesMap } from './map.js';
 import { PLANT_TYPES, DECOR, plantName } from './plants.js';
 import { GpsTracker, MotionTracker, SimTracker } from './tracker.js';
@@ -57,8 +58,10 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 const here = () => state.places[state.place];
 
 let saveTimer = 0;
+let resetting = false; // pendant « Recommencer », plus rien n'est réenregistré avant le rechargement
 function persist(now = false) {
 	clearTimeout(saveTimer);
+	if (resetting) return;
 	if (now) save(state);
 	else saveTimer = setTimeout(() => save(state), 3000);
 }
@@ -159,7 +162,7 @@ garden.onTap = hit => {
 	if (hit.critter) return tapCritter(hit, card);
 	if (hit.cell != null) {
 		if (hit.open) garden.flyToCell(hit.cell);
-		else toast(`Nouvelle parcelle : encore ${fmt(Math.max(0.1, Math.ceil((CELL_KM[hit.cell] - here().km) * 10) / 10), 1)} km dans ${PLACE_BY_ID[state.place].name.toLowerCase()}`, '#9A7448');
+		else toast(`${zoneName(state.place, hit.cell, 'Nouvelle parcelle')} : encore ${fmt(Math.max(0.1, Math.ceil((CELL_KM[hit.cell] - here().km) * 10) / 10), 1)} km dans ${PLACE_BY_ID[state.place].name.toLowerCase()}`, '#9A7448');
 		return;
 	}
 	const p = hit.plant;
@@ -260,7 +263,7 @@ function checkUnlocks(events) {
 		garden.openCell(n);
 		(pl.cellDates ??= {})[n] = Date.now();
 		garden.flyToCell(n);
-		toast('La clôture recule : une nouvelle parcelle !', '#9A7448');
+		toast(`La clôture recule : ${zoneName(state.place, n, 'une nouvelle parcelle').toLowerCase()} !`, '#9A7448');
 		events?.push({ kind: 'cell', n });
 	}
 	for (const [key, d] of Object.entries(DECOR)) {
@@ -441,20 +444,21 @@ function renderDaily() {
 function showDaily(gift = false) {
 	const d = state.daily;
 	const g = giftFor(state);
-	const top = giftReady(state)
-		? `<div class="gift"><div class="gift-box" aria-hidden="true">🎁</div>
-			<p>${d.streak > 1 ? `<b>${d.streak} jours actifs de suite.</b> ` : ''}Ton jardin t'a gardé un cadeau :</p>
-			<div class="chips"><span class="chip gold">+${g.nectar} nectar</span>${g.boost ? `<span class="chip">élan ×3 · ${g.boost} min</span>` : ''}</div>
-			<button class="btn primary" id="btn-gift">Ouvrir</button></div>`
-		: `<p class="streak">${d.streak > 0 ? `Série : <b>${d.streak} jour${d.streak > 1 ? 's' : ''} actif${d.streak > 1 ? 's' : ''}</b>` : 'Bouge 500 m pour lancer ta série'}${d.best > d.streak ? ` · record ${d.best}` : ''}</p>`;
-	const note = gift && idleNote ? `<h3>Pendant ton absence</h3>${idleNote}` : '';
+	const ready = giftReady(state);
+	const streak = d.streak > 0 ? `<b>${d.streak} jour${d.streak > 1 ? 's' : ''} actif${d.streak > 1 ? 's' : ''}</b> de suite${d.best > d.streak ? ` · record ${d.best}` : ''}` : 'Bouge 500 m pour lancer ta série';
+	const top = ready
+		? `<div class="gift"><span class="gift-box" aria-hidden="true">🎁</span><div><p>${streak}. Ton jardin t'a gardé un cadeau :</p>
+			<span class="chip gold">+${g.nectar} nectar</span>${g.boost ? `<span class="chip">élan ×3 · ${g.boost} min</span>` : ''}</div></div>`
+		: `<p class="streak">${streak}</p>`;
+	// Le bilan de l'absence reste replié : la fenêtre tient sur l'écran.
+	const note = gift && idleNote ? `<details class="away"><summary>Pendant ton absence</summary>${idleNote}</details>` : '';
 	if (gift) idleNote = '';
 	const goal = nextGoal(state);
-	showModal(`<h2>${gift ? 'Bonjour !' : "Aujourd'hui"}</h2>
+	showModal(`<div class="modal-body"><h2>${gift ? 'Bonjour !' : "Aujourd'hui"}</h2>
 		${weekHtml(state)}${top}
-		<h3>Défis du jour</h3>${challengesHtml(state)}
-		${goal ? `<p class="next-line">${goal}</p>` : ''}${note}
-		<button class="btn ghost wide" data-close>Voir mon jardin</button>`);
+		<h3 class="ch-title">Défis du jour</h3>${challengesHtml(state)}
+		${goal ? `<p class="next-line">${goal}</p>` : ''}${note}</div>
+		<div class="modal-foot">${ready ? '<button class="btn primary" id="btn-gift">Ouvrir le cadeau</button>' : '<button class="btn primary" data-close>Voir mon jardin</button>'}</div>`);
 	$('#btn-gift')?.addEventListener('click', () => {
 		const got = claimGift(state);
 		state.nectar = (state.nectar ?? 0) + got.nectar;
@@ -510,7 +514,7 @@ function growthChips(matured, touched) {
 function showRecap(w, duration, matured) {
 	const chips = growthChips(matured, w.touched);
 	for (const ev of w.events) if (ev.kind === 'decor') chips.push(`<span class="chip gold">${DECOR[ev.key].name}</span>`);
-	if (w.events.some(ev => ev.kind === 'cell')) chips.push('<span class="chip gold">Nouvelle parcelle</span>');
+	for (const ev of w.events) if (ev.kind === 'cell') chips.push(`<span class="chip gold">${zoneName(state.place, ev.n, 'Nouvelle parcelle')}</span>`);
 	const title = w.distance > 3000 ? 'Quelle balade !' : 'Belle balade !';
 	let ecoLine = '';
 	if (w.distance > 50) {
@@ -606,8 +610,8 @@ setInterval(() => { if (!document.hidden) runIdle(); }, 5000);
 
 function showIdleRecap() {
 	if (!idleNote || !$('#modal').hidden || !$('#coach').hidden) return;
-	showModal(`<h2>Pendant ton absence</h2><p>Tes animaux ont continué de travailler. Bouge pour tripler leur production.</p>
-		${idleNote}<button class="btn primary" data-close>Voir mon jardin</button>`);
+	showModal(`<div class="modal-body"><h2>Pendant ton absence</h2><p>Tes animaux ont continué de travailler. Bouge pour tripler leur production.</p>
+		${idleNote}</div><div class="modal-foot"><button class="btn primary" data-close>Voir mon jardin</button></div>`);
 	idleNote = '';
 }
 
@@ -734,6 +738,9 @@ function renderOptions() {
 		<h3>Aide</h3>
 		<button class="btn ghost wide" id="opt-coach">Revoir le tutoriel</button>
 		<a class="btn ghost wide opt-link" href="privacy.html" target="_blank" rel="noopener">Confidentialité</a>
+		<h3>Recommencer</h3>
+		<p class="empty">Efface ton jardin, tes lieux, tes espèces et tes balades sur ce téléphone, pour repartir d'une prairie neuve.</p>
+		<button class="btn ghost wide danger" id="opt-reset">Recommencer à zéro</button>
 		<h3>Mode test</h3>
 		<label class="switch"><input type="checkbox" id="opt-dev" ${DEV ? 'checked' : ''}><i></i><span>Outils de test et raccourcis (pour essayer le jeu sans marcher)</span></label>
 		${DEV ? `<div class="dev">Heure du jardin <b id="dev-h">${garden.hourOverride ?? 'réelle'}</b>
@@ -799,7 +806,12 @@ $('#options').addEventListener('click', async e => {
 		closeOptions();
 		showDaily(true);
 	}
-	if (id === 'dev-reset' && confirm('Effacer tout le jardin ?')) { reset(); location.reload(); }
+	if ((id === 'dev-reset' || id === 'opt-reset') && confirm('Recommencer à zéro ? Ton jardin, tes lieux, tes espèces et tes balades seront effacés.')) {
+		clearTimeout(saveTimer);
+		resetting = true;
+		reset();
+		location.reload();
+	}
 });
 $('#options').addEventListener('change', e => {
 	if (e.target.id !== 'opt-dev') return;

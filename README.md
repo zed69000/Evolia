@@ -40,6 +40,7 @@ arrondie à 0,1° (environ 10 km), seulement si la personne a autorisé sa posit
 - `js/tracker.js` : GPS et simulation.
 - `js/state.js` : activités (reprises du prototype Unity), effort, sauvegarde locale.
 - `js/main.js` : interface (bandeau, suivi automatique, récap, carnet, tutoriel).
+- `js/zones.js` : le sol sans raccord et les coins de chaque lieu (champ de coquelicots, verger, roselière…).
 - `js/daily.js` : revenir chaque jour (cadeau, série de jours actifs, trois défis, prochain objectif, album).
 
 - `js/harvest.js` : récolte des pas comptés appli fermée (Santé / Health Connect, podomètre), allure déduite de la cadence.
