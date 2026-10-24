@@ -5,6 +5,8 @@
 //   - une petite cloche douce, en gamme pentatonique, quand quelque chose de beau arrive.
 // Tout reste bas et lent : c'est un paysage sonore, pas une musique de jeu.
 
+import { riverDistance } from './zones.js';
+
 const NOTES = [523.25, 587.33, 659.25, 783.99, 880, 1046.5]; // do ré mi sol la do : pentatonique, jamais de fausse note
 
 export class Soundscape {
@@ -18,11 +20,21 @@ export class Soundscape {
 
 	get settings() { return (this.state.sound ??= { on: true, vol: 0.7 }); }
 
-	/** Le navigateur n'autorise le son qu'après un geste : on démarre au premier toucher. */
+	/**
+	 * Le téléphone n'autorise le son qu'après un vrai geste : le doigt qui se relève (pas celui qui se pose),
+	 * un clic ou une touche. On démarre là, avec un court silence joué tout de suite (nécessaire sur iPhone).
+	 */
 	unlock() {
 		if (!this.settings.on) return;
 		if (!this.ctx) this.build();
-		if (this.ctx.state === 'suspended') this.ctx.resume();
+		if (this.ctx.state !== 'running') this.ctx.resume();
+		if (!this.primed) {
+			this.primed = true;
+			const src = this.ctx.createBufferSource();
+			src.buffer = this.ctx.createBuffer(1, 1, 22050);
+			src.connect(this.ctx.destination);
+			src.start(0);
+		}
 	}
 
 	setOn(on) {
@@ -33,7 +45,7 @@ export class Soundscape {
 
 	setVolume(v) {
 		this.settings.vol = v;
-		if (this.master) this.master.gain.setTargetAtTime(v * 0.9, this.ctx.currentTime, 0.2);
+		if (this.master) this.master.gain.setTargetAtTime(v * 1.3, this.ctx.currentTime, 0.2);
 	}
 
 	pause() { this.ctx?.suspend(); }
@@ -46,7 +58,7 @@ export class Soundscape {
 		comp.ratio.value = 3;
 		comp.connect(ctx.destination);
 		this.master = ctx.createGain();
-		this.master.gain.value = this.settings.vol * 0.9;
+		this.master.gain.value = this.settings.vol * 1.3;
 		this.master.connect(comp);
 		// Un peu d'écho de sous-bois pour les cris : ils semblent venir de plus loin, plus doux.
 		this.verb = ctx.createConvolver();
@@ -61,11 +73,14 @@ export class Soundscape {
 		let b = 0;
 		for (let i = 0; i < len; i++) { const w = Math.random() * 2 - 1; b = 0.97 * b + 0.03 * w; d[i] = w * 0.5 + b * 3; }
 
-		this.wind = this.bed({ type: 'bandpass', freq: 380, q: 0.5 }, 0.12);
+		this.wind = this.bed({ type: 'bandpass', freq: 380, q: 0.5 }, 0);
 		this.rain = this.bed({ type: 'highpass', freq: 900, q: 0.3 }, 0, { type: 'lowpass', freq: 7000 });
 		this.rainBody = this.bed({ type: 'lowpass', freq: 500, q: 0.4 }, 0);
 		this.sea = this.bed({ type: 'lowpass', freq: 520, q: 0.5 }, 0, null, 0.11);
-		this.water = this.bed({ type: 'bandpass', freq: 1800, q: 0.7 }, 0, null, 0.9);
+		// La rivière : un petit clapotis clair qui ondule (pas de grondement : ce n'est pas une cascade).
+		this.riverHi = this.bed({ type: 'bandpass', freq: 2600, q: 1.2 }, 0, null, 1.7);
+		// Les feuilles qui bruissent, plus fort avec le vent.
+		this.leaves = this.bed({ type: 'highpass', freq: 3200, q: 0.3 }, 0, null, 0.07);
 		this.loop = setInterval(() => this.tick(), 250);
 	}
 
@@ -118,12 +133,30 @@ export class Soundscape {
 		const rain = { drizzle: 0.35, rain: 0.8, storm: 1, snow: 0 }[k] ?? 0;
 		const night = g.night();
 		const biome = g.biome;
-		this.set(this.wind, 0.05 + wind / 40 * (biome === 'montagne' ? 0.22 : 0.14) + (k === 'storm' ? 0.12 : 0) + (k === 'snow' ? 0.05 : 0));
-		this.wind.filt.frequency.setTargetAtTime(280 + wind * 9 + Math.sin(ctx.currentTime * 0.13) * 60, ctx.currentTime, 2);
-		this.set(this.rain, rain * 0.16);
-		this.set(this.rainBody, rain * 0.22);
-		this.set(this.sea, biome === 'littoral' ? 0.32 : 0);
-		this.set(this.water, biome === 'marais' ? 0.018 : 0);
+		// Pas de souffle permanent : le vent n'arrive que par rafales, quand il y a vraiment du vent,
+		// et les feuilles ne bruissent que pendant ces rafales.
+		const now = ctx.currentTime;
+		const windy = Math.max(0, (wind - 12) / 28) + (k === 'storm' ? 0.6 : 0);
+		if (windy > 0 && now > (this.nextGust ?? 0)) {
+			this.nextGust = now + 9 + Math.random() * 14 / (0.5 + windy);
+			const peak = Math.min(0.09, 0.03 + windy * 0.05) * (biome === 'montagne' ? 1.3 : 1);
+			for (const [bed, k2] of [[this.wind, 1], [this.leaves, biome === 'littoral' ? 0 : 0.35]]) {
+				const gg = bed.gain.gain;
+				gg.cancelScheduledValues(now);
+				gg.setValueAtTime(gg.value, now);
+				gg.linearRampToValueAtTime(peak * k2, now + 2.5 + Math.random() * 1.5);
+				gg.linearRampToValueAtTime(0, now + 7 + Math.random() * 3);
+			}
+			this.wind.filt.frequency.setTargetAtTime(300 + wind * 8, now, 2);
+		}
+		if (!windy) { this.set(this.wind, 0, 2); this.set(this.leaves, 0, 2); }
+		this.set(this.rain, rain * 0.12);
+		this.set(this.rainBody, rain * 0.08);
+		this.set(this.sea, biome === 'littoral' ? 0.16 : 0);
+		// Un filet d'eau, seulement tout près de la rivière.
+		const v0 = g.view(), d = riverDistance(biome, v0.x0 + v0.w / 2, v0.y0 + v0.h / 2);
+		const byRiver = Math.max(0, 1 - d / 420) ** 2;
+		this.set(this.riverHi, byRiver * 0.025, 0.8);
 
 		// Orage : le tonnerre suit l'éclair, avec un peu de retard (il est loin).
 		if (g.flash > 0.9 && performance.now() - this.lastFlash > 3000) {
@@ -135,10 +168,10 @@ export class Soundscape {
 		const winter = g.season?.winter ?? 0;
 		if (night > 0.4 && !rain && winter < 0.6 && Math.random() < 0.35) this.cricket();
 		// Le jour, des oiseaux au loin, très bas : le jardin n'est jamais silencieux, même au tout début.
-		if (night < 0.2 && rain < 0.5 && Math.random() < 0.05) this.distant();
+		if (night < 0.2 && rain < 0.5 && winter < 0.8 && Math.random() < 0.08) this.distant();
 
 		if (g.glyph) return; // en vue d'ensemble, on n'entend plus les animaux un par un
-		const v = g.view(), now = ctx.currentTime;
+		const v = g.view();
 		const seen = g.insects.filter(b => !b.leaving && b.x > v.x0 && b.x < v.x0 + v.w && b.y > v.y0 && b.y < v.y0 + v.h);
 		const near = Math.min(1, g.cam.z / 1.2);
 		// Bourdonnement continu, selon les abeilles et bourdons proches du centre.
@@ -280,9 +313,19 @@ export class Soundscape {
 
 	/** Un oiseau lointain, à peine audible, noyé dans l'écho. */
 	distant() {
-		const out = this.voice(Math.random() * 1.4 - 0.7, 0.25), t = this.ctx.currentTime + 0.05;
-		const f = 2600 + Math.random() * 1800;
-		for (let i = 0, n = 2 + Math.floor(Math.random() * 4); i < n; i++) this.note(out, t + i * 0.14, f * (1 + (Math.random() - 0.5) * 0.2), f * 0.9, 0.09, 0.03);
+		const out = this.voice(Math.random() * 1.4 - 0.7, 0.35), t = this.ctx.currentTime + 0.05;
+		const f = 2400 + Math.random() * 2000, kind = Math.random();
+		if (kind < 0.4) {
+			// Quelques notes qui sautillent.
+			for (let i = 0, n = 2 + Math.floor(Math.random() * 4); i < n; i++) this.note(out, t + i * 0.14, f * (1 + (Math.random() - 0.5) * 0.2), f * 0.9, 0.09, 0.03);
+		} else if (kind < 0.75) {
+			// Un trille rapide.
+			for (let i = 0; i < 9; i++) this.note(out, t + i * 0.055, f * (i % 2 ? 1.08 : 1), f, 0.045, 0.022);
+		} else {
+			// Un appel en deux notes, la seconde plus basse.
+			this.note(out, t, f, f * 1.05, 0.18, 0.03);
+			this.note(out, t + 0.28, f * 0.78, f * 0.74, 0.22, 0.03);
+		}
 	}
 
 	cricket() {

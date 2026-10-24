@@ -36,7 +36,7 @@ if (params.has('date')) garden.dateOverride = params.get('date');
 const sky = new Sky(state, garden, () => renderHud());
 // Sons de la nature : ils démarrent au premier toucher (règle des navigateurs).
 const sound = new Soundscape(garden, state);
-document.addEventListener('pointerdown', () => sound.unlock(), { passive: true });
+for (const ev of ['pointerup', 'touchend', 'click', 'keydown']) document.addEventListener(ev, () => sound.unlock(), { passive: true });
 if (params.has('weather')) { sky.override = params.get('weather'); sky.apply(false); }
 if (DEV) window.evolia = { garden, state, sky, sound };
 

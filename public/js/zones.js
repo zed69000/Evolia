@@ -315,7 +315,7 @@ function longFeatures(biome) {
 			if (m === 'brook') {
 				// Une rivière : verticale, sauf si elle devait traverser le cœur du lieu (alors elle passe de côté, à l'horizontale).
 				const pts = meander(r, cx, cy, orient(gx !== 0, cx, cy), 110);
-				list.push(longItem(pts, 30, (g, rr) => {
+				list.push(longItem(pts, 30, 'river', (g, rr) => {
 					ribbon(g, pts, 48, 48, '#7FAA48', rr, 0.3);
 					ribbon(g, pts, 24, 24, '#7FB8C8', rr, 0.75);
 					ribbon(g, pts.map(([x, y]) => [x - 3, y - 2]), 5, 5, '#E8F4F4', rr, 0.45);
@@ -323,7 +323,7 @@ function longFeatures(biome) {
 			}
 			if (m === 'path') {
 				const pts = meander(r, cx, cy, orient(gx !== 0, cx, cy), 70);
-				list.push(longItem(pts, 16, (g, rr) => {
+				list.push(longItem(pts, 16, 'path', (g, rr) => {
 					ribbon(g, pts, 24, 24, '#CDB98A', rr, 0.42);
 					ribbon(g, pts, 11, 11, '#D8C8A0', rr, 0.32);
 				}, hash(biome, 'path', zi)));
@@ -334,9 +334,9 @@ function longFeatures(biome) {
 	return list;
 }
 
-function longItem(pts, r, paint, seed) {
+function longItem(pts, r, kind, paint, seed) {
 	const xs = pts.map(p => p[0]), ys = pts.map(p => p[1]);
-	return { pts, r, paint, seed, x0: Math.min(...xs) - 30, x1: Math.max(...xs) + 30, y0: Math.min(...ys) - 30, y1: Math.max(...ys) + 30 };
+	return { pts, r, kind, paint, seed, x0: Math.min(...xs) - 30, x1: Math.max(...xs) + 30, y0: Math.min(...ys) - 30, y1: Math.max(...ys) + 30 };
 }
 
 /** Distance d'un point à une ligne brisée, avec un rejet rapide par boîte. */
@@ -362,6 +362,16 @@ function featuresOf(biome, gx, gy) {
 	let f = featureCache.get(key);
 	if (!f) featureCache.set(key, (f = tileFeatures(biome, gx, gy)));
 	return f;
+}
+
+/** Distance (monde) du point à la rivière la plus proche du lieu, pour l'entendre couler quand on s'en approche. */
+export function riverDistance(biome, x, y) {
+	let best = Infinity;
+	for (const a of longFeatures(biome)) {
+		if (a.kind !== 'river') continue;
+		for (let k = 0; k < a.pts.length; k += 4) best = Math.min(best, Math.hypot(a.pts[k][0] - x, a.pts[k][1] - y));
+	}
+	return best;
 }
 
 /** Le point (monde) tombe-t-il sur une rivière, une flaque ou un sentier ? */
