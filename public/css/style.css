@@ -542,23 +542,6 @@ html, body {
 .al-dot.fence { border-radius: 2px; background: repeating-linear-gradient(90deg, #8A6238 0 3px, transparent 3px 6px); border-bottom: 2px solid #9A7448; }
 
 /* ─── Options ─── */
-.options-chip {
-	position: absolute;
-	top: calc(env(safe-area-inset-top, 0px) + 92px);
-	right: 98px;
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	width: 38px;
-	height: 38px;
-	padding: 0;
-	border: none;
-	border-radius: 16px;
-	color: var(--doux);
-	cursor: pointer;
-	transition: opacity .3s ease, transform .4s cubic-bezier(.2, .8, .2, 1);
-}
-.peek .options-chip { opacity: 0; transform: translateY(-16px); pointer-events: none; }
 .opt-version { display: flex; align-items: center; gap: 12px; padding: 12px; border-radius: 18px; background: var(--papier-2); }
 .opt-version img { width: 54px; height: 54px; border-radius: 14px; object-fit: cover; }
 .opt-version b { display: block; font: 400 22px Courgette, cursive; color: var(--foret); }
@@ -619,7 +602,7 @@ html, body {
 .placing-actions { display: flex; gap: 8px; margin-top: 8px; }
 .placing-actions .btn { flex: 1; margin: 0; }
 .placing-actions .btn.primary:disabled { opacity: .5; }
-.placing #home, .placing #daily, .placing #btn-options, .placing #quest { opacity: 0; pointer-events: none; }
+.placing #home, .placing #daily, .placing #quest { opacity: 0; pointer-events: none; }
 .item-actions { display: flex; gap: 6px; margin-top: 8px; }
 .item-actions .btn { padding: 8px; font-size: 13px; margin: 0; }
 .bubble.actions { pointer-events: auto; }

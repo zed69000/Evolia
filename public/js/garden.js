@@ -1542,9 +1542,9 @@ export class Garden {
 			if (!s) {
 				// Pas encore peinte : une tache douce à sa couleur, le temps d'une ou deux images.
 				world();
-				ctx.fillStyle = rgba(this.glyphColor(p), 0.35);
+				ctx.fillStyle = rgba(this.glyphColor(p), 0.18);
 				ctx.beginPath();
-				ctx.ellipse(e.x, e.y - box.ay * 0.35, box.w * 0.18, box.ay * 0.3, 0, 0, Math.PI * 2);
+				ctx.ellipse(e.x, e.y - box.ay * 0.2, box.w * 0.14, box.ay * 0.16, 0, 0, Math.PI * 2);
 				ctx.fill();
 				continue;
 			}
