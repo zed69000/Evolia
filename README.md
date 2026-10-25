@@ -3,7 +3,9 @@
 Marche, cours : ton jardin aquarelle pousse à chaque pas.
 
 Site statique (HTML, CSS, JavaScript sans étape de build) dans `public/`, servi par Cloudflare (`wrangler.jsonc`).
-Plus tard : emballé avec Capacitor pour Android et iOS.
+Chaque push sur `master` redéploie le site (https://evolia.sebastienalzamora.workers.dev) : le Worker « evolia » est
+relié au dépôt par l'application GitHub « Cloudflare Workers and Pages », qui doit avoir accès à ce dépôt.
+L'appli Android (Capacitor) embarque ses propres fichiers : elle ne dépend pas du site.
 
 ## Lancer en local
 
