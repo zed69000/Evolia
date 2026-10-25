@@ -13,7 +13,7 @@ import { Sky, WEATHER_LABEL } from './weather.js';
 import { EcoPanel, tick, summaryHtml, addBoost, boostLeft, visualExtra, rates, GUILDS, BOOST_MULT, BOOST_PER_MIN } from './idle.js';
 import { paperTexture } from './watercolor.js';
 import { Soundscape } from './audio.js';
-import { ITEMS, ITEM_ORDER } from './deco.js';
+import { ITEMS, ITEM_ORDER, itemHelp } from './deco.js';
 import { VERSION } from './version.js';
 import { rollDay, markActive, giftReady, giftFor, claimGift, claim, toClaim, noteTap, noteQuest, challengesHtml, weekHtml, nextGoal, albumHtml, collection } from './daily.js';
 
@@ -816,11 +816,11 @@ function renderDeco() {
 			const action = locked ? `<span class="deco-lock">dès ${it.km} km parcourus</span>`
 				: `<button class="btn primary small" data-buy="${k}" ${poor ? 'disabled' : ''}>${poor ? `il manque ${fmtInt(it.cost - nectar)}` : 'Installer'}</button>`;
 			return `<div class="deco-card${locked ? ' locked' : ''}"><div class="deco-art" data-art="${k}"></div>
-				<div class="deco-body"><h3>${it.name}</h3><p>${it.text}</p>
+				<div class="deco-body"><h3>${it.name}</h3><p>${it.text}</p>${itemHelp(k) ? `<span class="deco-help">${itemHelp(k)}</span>` : ''}
 				<div class="deco-row"><span class="nectar">${it.cost}</span>${n ? `<small>${n} ici</small>` : ''}${action}</div></div></div>`;
 		}).join('')}</div>`;
 	for (const el of $('#deco').querySelectorAll('[data-art]')) {
-		const sp = garden.itemSprite(el.dataset.art), c = document.createElement('canvas');
+		const sp = garden.itemSprite(el.dataset.art, 315), c = document.createElement('canvas');
 		c.width = sp.canvas.width; c.height = sp.canvas.height;
 		c.getContext('2d').drawImage(sp.canvas, 0, 0);
 		el.appendChild(c);
@@ -846,7 +846,8 @@ function startPlacing(kind, item = null) {
 	placing = { kind, item };
 	garden.lifted = item;
 	const [cx, cy] = item ? [item.x, item.y] : garden.toWorld(garden.canvas.clientWidth / 2, garden.canvas.clientHeight * 0.45);
-	garden.ghost = { kind, x: cx, y: cy };
+	garden.ghost = { kind, x: cx, y: cy, rot: item?.rot ?? 0 };
+	$('#btn-place-turn').hidden = !ITEMS[kind].turn;
 	snapPlacing();
 	$('#placing-name').textContent = item ? `Déplacer : ${ITEMS[kind].name.toLowerCase()}` : ITEMS[kind].name;
 	$('#app').classList.add('placing');
@@ -869,7 +870,7 @@ function renderPlacing() {
 function movePlacing(hit) {
 	if (!hit) return;
 	const [wx, wy] = garden.toWorld(hit.x, hit.y);
-	garden.ghost = { kind: placing.kind, x: wx, y: wy };
+	Object.assign(garden.ghost, { x: wx, y: wy });
 	snapPlacing();
 	renderPlacing();
 }
@@ -893,18 +894,18 @@ function endPlacing() {
 }
 
 $('#btn-place').addEventListener('click', () => {
-	const { kind, item } = placing, { x, y } = garden.ghost;
+	const { kind, item } = placing, { x, y, rot } = garden.ghost;
 	if (!garden.canPlace(kind, x, y, item)) return;
 	if (item) {
-		item.x = Math.round(x); item.y = Math.round(y);
+		item.x = Math.round(x); item.y = Math.round(y); item.rot = rot;
 		garden.clearUnder(item);
 		garden.popItem(item);
 	} else {
 		if ((state.nectar ?? 0) < ITEMS[kind].cost) { toast('Pas assez de nectar', '#C0442F'); return endPlacing(); }
 		state.nectar -= ITEMS[kind].cost;
-		garden.placeItem(kind, x, y);
-		const team = Object.values(GUILDS).find(g => g.items.includes(kind));
-		toast(`${ITEMS[kind].name} : installé${/^Une /.test(ITEMS[kind].name) ? 'e' : ''}${team ? ` · ${team.name.toLowerCase()} +1` : ''}`, '#9A7448');
+		garden.placeItem(kind, x, y, rot);
+		const help = itemHelp(kind);
+		toast(`${ITEMS[kind].name} : installé${/^Une /.test(ITEMS[kind].name) ? 'e' : ''}${help ? ` · ${help}` : ''}`, '#9A7448');
 	}
 	sound.chime(2);
 	endPlacing();
@@ -912,14 +913,27 @@ $('#btn-place').addEventListener('click', () => {
 	persist(true);
 });
 $('#btn-place-cancel').addEventListener('click', endPlacing);
+$('#btn-place-turn').addEventListener('click', () => {
+	if (!placing) return;
+	garden.ghost.rot = ((garden.ghost.rot ?? 0) + 45) % 360;
+	renderPlacing();
+});
 
 function tapItem(hit, card) {
 	const it = hit.item, def = ITEMS[it.kind];
 	card.innerHTML = `<b>${def.name}</b>${def.text}<small class="item-tip">Astuce : un appui long dessus le soulève directement.</small>
-		<div class="item-actions"><button class="btn ghost" data-move>Déplacer</button><button class="btn ghost" data-store>Ranger (+${def.cost})</button></div>`;
+		<div class="item-actions">${def.turn ? '<button class="btn ghost" data-turn>Tourner</button>' : ''}<button class="btn ghost" data-move>Déplacer</button><button class="btn ghost" data-store>Ranger (+${def.cost})</button></div>`;
 	card.classList.remove('link');
 	card.classList.add('actions');
 	card.onclick = e => {
+		if (e.target.closest('[data-turn]')) {
+			it.rot = ((it.rot ?? 0) + 45) % 360;
+			garden.popItem(it);
+			persist(true);
+			clearTimeout(cardTimer);
+			cardTimer = setTimeout(() => { card.hidden = true; }, 6000);
+			return;
+		}
 		if (e.target.closest('[data-move]')) { card.hidden = true; startPlacing(it.kind, it); }
 		if (e.target.closest('[data-store]')) {
 			card.hidden = true;

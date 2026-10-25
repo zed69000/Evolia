@@ -646,8 +646,11 @@ export class Garden {
 
 	get items() { return (this.place.items ??= []); }
 
-	itemSprite(kind) {
-		let s = this.itemSprites.get(kind);
+	/** Image d'un objet, pour une rotation donnée (en degrés, par pas de 45° ; seuls certains objets tournent). */
+	itemSprite(kind, rot = 0) {
+		rot = ITEMS[kind].turn ? ((rot % 360) + 360) % 360 : 0;
+		const key = `${kind}:${rot}`;
+		let s = this.itemSprites.get(key);
 		if (!s) {
 			const box = ITEMS[kind].box, D = this.density * 1.4;
 			const c = document.createElement('canvas');
@@ -655,9 +658,9 @@ export class Garden {
 			c.height = Math.ceil(box.h * D);
 			const g = c.getContext('2d');
 			g.setTransform(D, 0, 0, D, box.ax * D, box.ay * D);
-			const meta = ITEM_PAINTERS[kind](g);
+			const meta = ITEM_PAINTERS[kind](g, (rot * Math.PI) / 180);
 			s = { canvas: c, ...meta };
-			this.itemSprites.set(kind, s);
+			this.itemSprites.set(key, s);
 		}
 		return s;
 	}
@@ -675,8 +678,8 @@ export class Garden {
 		return !this.items.some(it => it !== except && Math.hypot(it.x - x, (it.y - y) * 1.3) < r + ITEMS[it.kind].box.w * 0.35);
 	}
 
-	placeItem(kind, x, y) {
-		const it = { id: uid(), kind, x: Math.round(x), y: Math.round(y), at: Date.now() };
+	placeItem(kind, x, y, rot = 0) {
+		const it = { id: uid(), kind, x: Math.round(x), y: Math.round(y), rot, at: Date.now() };
 		this.items.push(it);
 		this.clearUnder(it);
 		this.popItem(it);
@@ -950,7 +953,7 @@ export class Garden {
 		if (this.glyph) return null;
 		// Les objets d'abord : posés au bord de la clairière, ils peuvent déborder sur une parcelle encore fermée.
 		for (const it of [...this.items].sort((a, b) => b.y - a.y)) {
-			const box = ITEMS[it.kind].box, top = this.itemSprite(it.kind).top;
+			const box = ITEMS[it.kind].box, top = this.itemSprite(it.kind, it.rot).top;
 			if (Math.abs(wx - it.x) < Math.max(18, box.w * 0.4) && wy > it.y + top && wy < it.y + 10) return { item: it, x: sx, y: sy };
 		}
 		if (ci >= 0 && !open) return { cell: ci, open, x: sx, y: sy };
@@ -1102,6 +1105,95 @@ export class Garden {
 				if (b) this.insects.push(b);
 			}
 			for (let k = active.length; k > want; k--) active[k - 1].leaving = true;
+		}
+		// La petite vie sans nom ne se redistribue que si la vue ou le moment changent (ou de temps en temps).
+		const key = `${visible.join(',')}|${night}|${dusk}|${wet}`;
+		if (key !== this.ambientKey || this.t > (this.ambientUntil ?? 0)) {
+			this.ambientKey = key;
+			this.ambientUntil = this.t + 40;
+			this.populateAmbient(visible, night, dusk, wet);
+		}
+	}
+
+	/**
+	 * Petite vie sans nom, toujours là même avant les découvertes : nuées de moucherons qui dansent au soleil
+	 * au-dessus des fleurs et des arbustes, moustiques au-dessus de l'eau du soir à la nuit. Rien sous la pluie.
+	 */
+	populateAmbient(visible, night, dusk, wet) {
+		this.ambient = [];
+		if (wet || this.glyph) return;
+		for (const ci of visible) {
+			const P = this.pdata[ci], w = this.water(ci), spots = [];
+			if (w) for (let k = 0; k < 2; k++) spots.push({ x: w.x + (Math.random() - 0.5) * w.rx, y: w.y + (Math.random() - 0.5) * w.ry * 0.5, water: true });
+			for (const it of this.items) if (it.kind === 'mare' && this.cellAt(it.x, it.y) === ci) spots.push({ x: it.x, y: it.y, water: true });
+			const green = [...P.bushes, ...P.flowers].sort(() => Math.random() - 0.5).slice(0, 2 + Math.floor(Math.random() * 2));
+			for (const p of green) spots.push({ x: P.ox + p.x + (Math.random() - 0.5) * 30, y: P.oy + p.y });
+			if (!green.length && !spots.length) {
+				const x = P.ox + PARCEL_W * (0.3 + Math.random() * 0.4), y = P.oy + PARCEL_H * (0.3 + Math.random() * 0.4);
+				if (this.inOpen(x, y)) spots.push({ x, y });
+			}
+			for (const s of spots) {
+				const mosq = s.water && (dusk || night);
+				if (night && !mosq) continue;
+				this.ambient.push({ x: s.x, y: s.y, kind: mosq ? 'mosq' : 'gnat', n: mosq ? 4 + Math.floor(Math.random() * 4) : 7 + Math.floor(Math.random() * 9), r: mosq ? 24 : 16, ph: Math.random() * 100 });
+			}
+		}
+	}
+
+	drawAmbient(ctx, v) {
+		const t = this.t;
+		for (const s of this.ambient ?? []) {
+			if (s.x < v.x0 - 60 || s.x > v.x0 + v.w + 60 || s.y < v.y0 - 20 || s.y > v.y0 + v.h + 80) continue;
+			for (let i = 0; i < s.n; i++) {
+				const a = s.ph + i * 2.4;
+				const x = s.x + Math.sin(t * (1.1 + (i % 5) * 0.33) + a) * s.r + Math.sin(t * 0.21 + a) * 7;
+				const y = s.y - 36 + Math.cos(t * (1.6 + (i % 3) * 0.45) + a * 1.3) * s.r * 0.55 + Math.sin(t * 0.6 + i) * 5;
+				if (s.kind === 'gnat') {
+					ctx.fillStyle = 'rgba(46,40,30,0.55)';
+					ctx.fillRect(x - 0.65, y - 0.65, 1.3, 1.3);
+				} else {
+					// Moustique : un corps fin, de longues pattes à peine visibles, des ailes qui vibrent.
+					const dir = Math.cos(t * 1.1 + a) > 0 ? 1 : -1;
+					ctx.strokeStyle = 'rgba(40,34,28,0.75)';
+					ctx.lineWidth = 0.55;
+					ctx.beginPath(); ctx.moveTo(x - 1.8 * dir, y + 0.5); ctx.lineTo(x + 1.6 * dir, y - 0.4); ctx.stroke();
+					ctx.strokeStyle = 'rgba(40,34,28,0.3)';
+					ctx.lineWidth = 0.3;
+					ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x - 1.5, y + 2.4); ctx.moveTo(x, y); ctx.lineTo(x + 1.4, y + 2.4); ctx.stroke();
+					ctx.fillStyle = `rgba(225,232,240,${0.35 + 0.3 * Math.abs(Math.sin(t * 40 + i))})`;
+					ctx.beginPath(); ctx.ellipse(x - 0.2 * dir, y - 1.2, 1.4, 0.6, -0.5 * dir, 0, Math.PI * 2); ctx.fill();
+				}
+			}
+		}
+	}
+
+	/** De temps en temps, un vol d'oiseaux traverse le ciel au loin (le jour, hors pluie). */
+	drawFlock(ctx, cw, ch) {
+		const day = this.night() < 0.3 && !this.precip() && !this.glyph;
+		if (!this.flock) {
+			if (day && this.t > (this.nextFlock ??= this.t + 15 + Math.random() * 30)) {
+				const dir = Math.random() < 0.5 ? 1 : -1;
+				this.flock = { t0: this.t, dir, y: 0.12 + Math.random() * 0.3, n: 5 + Math.floor(Math.random() * 5), dur: 14 + Math.random() * 6, size: 0.8 + Math.random() * 0.5 };
+			}
+			return;
+		}
+		const f = this.flock, k = (this.t - f.t0) / f.dur;
+		if (k > 1) { this.flock = null; this.nextFlock = this.t + 40 + Math.random() * 60; return; }
+		const px = cw / this.canvas.clientWidth, s = 5 * px * f.size;
+		const lead = f.dir > 0 ? -0.1 + k * 1.2 : 1.1 - k * 1.2;
+		ctx.setTransform(1, 0, 0, 1, 0, 0);
+		ctx.strokeStyle = 'rgba(46,52,44,0.6)';
+		ctx.lineWidth = 1.1 * px;
+		ctx.lineCap = 'round';
+		for (let i = 0; i < f.n; i++) {
+			const row = Math.ceil(i / 2), side = i % 2 ? 1 : -1;
+			const x = lead * cw - f.dir * row * 14 * px * f.size, y = f.y * ch + side * row * 8 * px * f.size + Math.sin(this.t * 1.5 + i) * 2 * px;
+			const flap = Math.sin(this.t * 9 + i * 1.7) * 0.6;
+			ctx.beginPath();
+			ctx.moveTo(x - s, y - s * flap);
+			ctx.quadraticCurveTo(x - s * 0.4, y - s * 0.5, x, y);
+			ctx.quadraticCurveTo(x + s * 0.4, y - s * 0.5, x + s, y - s * flap);
+			ctx.stroke();
 		}
 	}
 
@@ -1576,7 +1668,7 @@ export class Garden {
 				const k = age < 0.6 ? 0.7 + 0.3 * Math.min(1, age / 0.35) + 0.08 * Math.sin(Math.min(1, age / 0.6) * Math.PI) : 1;
 				ctx.translate(e.x, e.y);
 				ctx.scale(k, k);
-				ctx.drawImage(this.itemSprite(it.kind).canvas, -box.ax, -box.ay, box.w, box.h);
+				ctx.drawImage(this.itemSprite(it.kind, it.rot).canvas, -box.ax, -box.ay, box.w, box.h);
 				continue;
 			}
 			if (e.decor) {
@@ -1677,12 +1769,14 @@ export class Garden {
 			ctx.fillRect(0, 0, cw, ch);
 		}
 
+		if (!glyph) { world(); this.drawAmbient(ctx, v); this.drawFlock(ctx, cw, ch); }
+
 		// La nuit, les lanternes et la fenêtre de la cabane s'allument.
 		if (!glyph && night > 0.05) {
 			ctx.globalCompositeOperation = 'lighter';
 			const n = this.glow.width;
 			for (const it of this.items) {
-				const sp = this.itemSprite(it.kind);
+				const sp = this.itemSprite(it.kind, it.rot);
 				if (sp.glow == null) continue;
 				const x = (it.x + (sp.glowX ?? 0)) * S + tx, y = (it.y + sp.glow) * S + ty;
 				if (x < -200 || x > cw + 200 || y < -200 || y > ch + 200) continue;
@@ -1710,7 +1804,7 @@ export class Garden {
 			const { kind, x, y } = this.ghost, box = ITEMS[kind].box, ok = this.canPlace(kind, x, y, this.lifted);
 			world();
 			ctx.globalAlpha = 0.6;
-			ctx.drawImage(this.itemSprite(kind).canvas, x - box.ax, y - box.ay, box.w, box.h);
+			ctx.drawImage(this.itemSprite(kind, this.ghost.rot).canvas, x - box.ax, y - box.ay, box.w, box.h);
 			ctx.globalAlpha = 1;
 			ctx.strokeStyle = ok ? 'rgba(95,147,62,0.9)' : 'rgba(192,68,47,0.9)';
 			ctx.lineWidth = 2.5 / this.cam.z;

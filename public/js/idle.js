@@ -12,25 +12,21 @@ export const GUILDS = {
 	pollinisateur: {
 		name: 'Pollinisateurs', does: 'font pousser les fleurs', grow: { fleur: 3 }, nectar: 4, bonus: 0,
 		members: ['abeille', 'bourdon', 'syrphe', 'bombyle', 'petite-tortue', 'paon-du-jour', 'azure', 'citron', 'apollon'],
-		items: ['hotel', 'ruche', 'arche'],
 		upgrade: { id: 'hotel', name: 'Hôtel à insectes', cost: 40, real: 'Un fagot de tiges creuses ou des bûches percées, au soleil, accueillent les abeilles solitaires.' },
 	},
 	semeur: {
 		name: 'Semeurs', does: 'sèment arbustes et arbres', grow: { buisson: 2, arbre: 1.5 }, nectar: 1, bonus: 0,
 		members: ['merle', 'geai', 'cassenoix', 'colvert', 'ecureuil'],
-		items: ['nichoir'],
 		upgrade: { id: 'nichoir', name: 'Nichoir', cost: 60, real: "Un nichoir posé avant février, à l'abri du soleil de midi et hors de portée des chats." },
 	},
 	sol: {
 		name: 'Vie du sol', does: 'font pousser les herbes et enrichissent le sol', grow: { herbe: 2.5 }, nectar: 0.5, bonus: 0.03,
 		members: ['lombric', 'fourmi', 'escargot', 'gendarme', 'lucane', 'marmotte', 'crabe', 'goeland'],
-		items: ['bois'],
 		upgrade: { id: 'compost', name: 'Compost', cost: 50, real: 'Un tas de compost et de feuilles mortes nourrit vers de terre, cloportes et champignons.' },
 	},
 	regulateur: {
 		name: 'Prédateurs utiles', does: 'protègent le jardin des ravageurs', grow: {}, nectar: 0.5, bonus: 0.05,
 		members: ['coccinelle', 'epeire', 'sauterelle', 'mesange', 'herisson', 'lezard', 'ver-luisant', 'sympetrum', 'demoiselle', 'grenouille', 'triton', 'heron', 'martin-pecheur', 'pic', 'hulotte', 'salamandre', 'aigle', 'gravelot'],
-		items: ['pierres', 'bois'],
 		upgrade: { id: 'sauvage', name: 'Coin sauvage', cost: 80, real: "Un coin d'herbes hautes, de ronces et de pierres abrite hérissons, lézards et coccinelles." },
 	},
 };
@@ -51,7 +47,7 @@ export function guildMembers(state, placeId, gid) {
 	const g = GUILDS[gid], place = state.places[placeId];
 	const list = SPECIES.filter(s => s.place === placeId && s.kind === 'animal' && g.members.includes(s.id) && state.species[s.id])
 		.map(sp => ({ sp, n: Math.max(1, sp.critter.count?.(state) ?? 1) }));
-	const items = (place?.items ?? []).filter(it => g.items.includes(it.kind)).length;
+	const items = (place?.items ?? []).reduce((a, it) => a + (ITEMS[it.kind]?.team === gid ? ITEMS[it.kind].power : 0), 0);
 	const level = (place?.upgrades?.[g.upgrade.id] ?? 0) + items;
 	const extra = list.length ? level : 0;
 	return { list, level, extra, total: list.reduce((a, m) => a + m.n, 0) + extra };
@@ -246,13 +242,16 @@ export class EcoPanel {
 				...Object.keys(g.grow).map(t => TYPE_PLURAL[t]),
 				g.bonus ? `+${Math.round(g.bonus * m.total * 100)} % à tout` : '',
 			].filter(Boolean).join(' · ') : 'personne pour l\'instant';
-			const item = g.items.map(k => ITEMS[k]).find(it => it.km <= (st.totals?.distance ?? 0) / 1000) ?? ITEMS[g.items[0]];
-			const kind = Object.keys(ITEMS).find(k => ITEMS[k] === item);
-			const placed = (place.items ?? []).filter(it => g.items.includes(it.kind)).length;
+			// L'objet proposé : le plus utile qu'on peut déjà construire pour cette équipe.
+			const kinds = Object.keys(ITEMS).filter(k => ITEMS[k].team === gid);
+			const km = (st.totals?.distance ?? 0) / 1000;
+			const kind = kinds.filter(k => ITEMS[k].km <= km).sort((a, b) => ITEMS[b].power - ITEMS[a].power || ITEMS[a].cost - ITEMS[b].cost)[0] ?? kinds[0];
+			const item = ITEMS[kind];
+			const placed = (place.items ?? []).filter(it => ITEMS[it.kind]?.team === gid).length;
 			const names = m.list.map(({ sp, n }) => `${sp.name}${n > 1 ? ` ×${n}` : ''}`).join(', ');
 			const detail = opened ? `<div class="eco-team-more">
 				<p>${on ? `<b>${g.does[0].toUpperCase() + g.does.slice(1)}.</b> ${names}${m.extra ? `, et ${m.extra} de plus grâce à tes aménagements` : ''}.` : `Découvre une de ces espèces dans ${placeName.toLowerCase()} pour lancer l'équipe : ${g.members.map(id => SPECIES.find(sp => sp.id === id)).filter(sp => sp?.place === placeId).slice(0, 3).map(sp => sp.name.toLowerCase()).join(', ') || 'elle vit dans un autre lieu'}.`}</p>
-				${on ? `<button class="btn primary small" data-place="${kind}">${placed ? 'En ajouter' : 'Aider'} : ${item.name.toLowerCase()}</button><small>Chaque objet posé fait venir un membre de plus${placed ? ` (déjà ${placed} ici)` : ''}.</small>` : ''}
+				${on ? `<button class="btn primary small" data-place="${kind}">${placed ? 'En ajouter' : 'Aider'} : ${item.name.toLowerCase()}</button><small>${item.power > 1 ? `Il fait venir ${item.power} membres de plus` : 'Chaque objet posé fait venir un membre de plus'}${placed ? ` (déjà ${placed} ici)` : ''}. Tous les abris sont dans Aménager.</small>` : ''}
 				<p class="eco-real"><b>Dans la vraie vie :</b> ${g.upgrade.real}</p>
 			</div>` : '';
 			return `<li class="eco-team${on ? '' : ' off'}${opened ? ' open' : ''}">

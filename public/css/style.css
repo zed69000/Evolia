@@ -686,3 +686,5 @@ html, body {
 .eco-team-more > small { display: block; color: var(--doux); margin-bottom: 8px; }
 .eco-real { color: var(--doux); font-size: 12.5px; }
 .eco-note { font-size: 12.5px; color: var(--doux); text-align: center; margin: 14px 0 6px; }
+
+.deco-help { display: inline-block; margin-top: 4px; font-size: 11.5px; font-weight: 800; color: #8A5A10; background: #FBEBC2; border-radius: 8px; padding: 1px 7px; }
