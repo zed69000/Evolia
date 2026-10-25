@@ -813,11 +813,26 @@ export class Garden {
 				const [a, b] = [...this.pointers.values()];
 				pinch = { dist: Math.hypot(a[0] - b[0], a[1] - b[1]), z: this.cam.z, mid: [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2] };
 				pinch.world = this.toWorld(...pinch.mid);
+				if (drag) clearTimeout(drag.hold);
 				drag = null;
+				this.ghostFinger = null;
 				this.onPeek?.(true);
 			} else {
 				const [x, y] = local(e);
 				drag = { x, y, lx: x, ly: y, lt: performance.now(), moved: false };
+				if (this.ghost) this.grabGhost(drag, x, y);
+				else {
+					// Appui long sur un objet : on le soulève et il suit le doigt, sans passer par un menu.
+					drag.hold = setTimeout(() => {
+						if (!drag || drag.moved || this.pointers.size !== 1) return;
+						const hit = this.pick(x, y);
+						if (hit?.item && this.onLongPress?.(hit)) {
+							this.grabGhost(drag, x, y);
+							drag.held = true;
+							navigator.vibrate?.(15);
+						}
+					}, 420);
+				}
 			}
 		});
 		c.addEventListener('pointermove', e => {
@@ -835,7 +850,13 @@ export class Garden {
 			}
 			if (!drag) return;
 			const [x, y] = local(e);
+			if (drag.ghost) {
+				if (Math.hypot(x - drag.x, y - drag.y) > 6) drag.moved = true;
+				this.moveGhostTo(drag, x, y);
+				return;
+			}
 			if (!drag.moved && Math.hypot(x - drag.x, y - drag.y) > 6) {
+				clearTimeout(drag.hold);
 				drag.moved = true;
 				this.dragging = true;
 				this.onPeek?.(true);
@@ -855,7 +876,16 @@ export class Garden {
 				return;
 			}
 			if (!drag) return;
+			clearTimeout(drag.hold);
 			const [x, y] = local(e);
+			if (drag.ghost) {
+				// Objet lâché : il se range de lui-même sur la place libre la plus proche.
+				this.ghostFinger = null;
+				if (drag.moved || drag.held) this.onGhostDrop?.();
+				else this.onTap?.(this.pick(x, y));
+				drag = null;
+				return;
+			}
 			if (!drag.moved) {
 				const now = performance.now();
 				// Double toucher : zoomer d'un cran (ou revenir au zoom normal de très près).
@@ -879,19 +909,53 @@ export class Garden {
 		}, { passive: false });
 	}
 
+	/** Le doigt prend l'objet à poser : s'il touche l'objet, il le tient par là ; sinon l'objet saute sous le doigt. */
+	grabGhost(drag, x, y) {
+		const [wx, wy] = this.toWorld(x, y), g = this.ghost, box = ITEMS[g.kind].box;
+		const on = wx > g.x - box.w * 0.6 && wx < g.x + box.w * 0.6 && wy > g.y - box.ay - 10 && wy < g.y + 30;
+		drag.ghost = true;
+		drag.off = on ? [g.x - wx, g.y - wy] : [0, 0];
+		this.vel = { x: 0, y: 0 };
+		this.moveGhostTo(drag, x, y);
+	}
+
+	moveGhostTo(drag, x, y) {
+		const [wx, wy] = this.toWorld(x, y);
+		this.ghost.x = wx + drag.off[0];
+		this.ghost.y = wy + drag.off[1];
+		this.ghostFinger = [x, y];
+		this.ghostDrag = drag;
+		this.onGhostMove?.();
+	}
+
+	/** La place libre la plus proche pour cet objet (en tournant autour du point voulu), ou null. */
+	nearestPlace(kind, x, y, except = null) {
+		if (this.canPlace(kind, x, y, except)) return [x, y];
+		for (let r = 12; r <= 600; r += 12) {
+			const n = Math.max(8, Math.round(r / 6));
+			for (let i = 0; i < n; i++) {
+				const a = (i / n) * Math.PI * 2, px = x + Math.cos(a) * r, py = y + Math.sin(a) * r * 0.75;
+				if (this.canPlace(kind, px, py, except)) return [px, py];
+			}
+		}
+		return null;
+	}
+
 	/** Ce qui se trouve sous le doigt : un animal, une plante, ou une parcelle (fermée, ou en vue d'ensemble). */
 	pick(sx, sy) {
 		const [wx, wy] = this.toWorld(sx, sy);
 		const ci = this.cellAt(wx, wy);
 		const open = ci >= 0 && ci < cellsOpen(this.place);
-		if (ci >= 0 && (this.glyph || !open)) return { cell: ci, open, x: sx, y: sy };
+		if (ci >= 0 && this.glyph) return { cell: ci, open, x: sx, y: sy };
 		if (this.glyph) return null;
-		const critter = this.critterAt(wx, wy);
-		if (critter) return { critter, x: sx, y: sy };
+		// Les objets d'abord : posés au bord de la clairière, ils peuvent déborder sur une parcelle encore fermée.
 		for (const it of [...this.items].sort((a, b) => b.y - a.y)) {
 			const box = ITEMS[it.kind].box, top = this.itemSprite(it.kind).top;
 			if (Math.abs(wx - it.x) < Math.max(18, box.w * 0.4) && wy > it.y + top && wy < it.y + 10) return { item: it, x: sx, y: sy };
 		}
+		if (ci >= 0 && !open) return { cell: ci, open, x: sx, y: sy };
+		const critter = this.critterAt(wx, wy);
+		if (critter) return { critter, x: sx, y: sy };
 		if (!open) return null;
 		const [ox, oy] = cellOrigin(ci);
 		const lx = wx - ox, ly = wy - oy;
@@ -921,6 +985,19 @@ export class Garden {
 	};
 
 	update(dt, now) {
+		// Un objet tenu près du bord fait glisser la vue doucement, pour l'emmener plus loin.
+		if (this.ghost && this.ghostFinger) {
+			const [fx, fy] = this.ghostFinger, w = this.canvas.clientWidth, h = this.canvas.clientHeight, m = 56;
+			const ex = fx < m ? -(m - fx) / m : fx > w - m ? (fx - (w - m)) / m : 0;
+			const ey = fy < m + 60 ? -(m + 60 - fy) / m : fy > h - m - 140 ? (fy - (h - m - 140)) / m : 0;
+			if (ex || ey) {
+				const k = (420 * dt) / (this.base * this.cam.z);
+				this.cam.cx += Math.max(-1, Math.min(1, ex)) * k;
+				this.cam.cy += Math.max(-1, Math.min(1, ey)) * k;
+				this.clampCam();
+				this.moveGhostTo(this.ghostDrag, fx, fy);
+			}
+		}
 		if (this.following && this.current && now > (this.followPausedUntil ?? 0) && !this.dragging && this.pointers.size === 0) {
 			const [hx, hy] = this.headOf(this.current);
 			this.camTarget = { cx: hx, cy: hy + 40, z: Math.max(1, this.cam.z) };
@@ -1642,6 +1719,8 @@ export class Garden {
 			ctx.ellipse(x, y, box.w * 0.42, box.w * 0.14, 0, 0, Math.PI * 2);
 			ctx.stroke();
 			ctx.setLineDash([]);
+			ctx.fillStyle = ok ? 'rgba(95,147,62,0.18)' : 'rgba(192,68,47,0.14)';
+			ctx.fill();
 		}
 
 		world();

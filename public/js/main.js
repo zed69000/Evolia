@@ -833,22 +833,32 @@ function closeDeco() {
 	$('#deco').setAttribute('aria-hidden', 'true');
 }
 
-/** Choisir la place d'un objet : un fantôme suit le doigt, vert si la place convient ; « Installer ici » confirme. */
+/**
+ * Choisir la place d'un objet : on le fait glisser avec le doigt (la vue ne bouge pas, sauf près du bord),
+ * ou on touche l'endroit voulu. Lâché sur une place prise, il file vers la place libre la plus proche.
+ */
 function startPlacing(kind, item = null) {
 	closeDeco();
 	placing = { kind, item };
 	garden.lifted = item;
 	const [cx, cy] = item ? [item.x, item.y] : garden.toWorld(garden.canvas.clientWidth / 2, garden.canvas.clientHeight * 0.45);
 	garden.ghost = { kind, x: cx, y: cy };
-	$('#placing-name').textContent = ITEMS[kind].name;
+	snapPlacing();
+	$('#placing-name').textContent = item ? `Déplacer : ${ITEMS[kind].name.toLowerCase()}` : ITEMS[kind].name;
 	$('#app').classList.add('placing');
 	$('#placing').hidden = false;
 	renderPlacing();
 }
 
+/** Ramène l'objet sur la place libre la plus proche, s'il en existe une. */
+function snapPlacing() {
+	const g = garden.ghost, spot = garden.nearestPlace(g.kind, g.x, g.y, placing.item);
+	if (spot) [g.x, g.y] = spot;
+}
+
 function renderPlacing() {
 	const ok = garden.canPlace(placing.kind, garden.ghost.x, garden.ghost.y, placing.item);
-	$('#placing-hint').textContent = ok ? 'Bonne place. Touche ailleurs pour la changer.' : 'Touche le jardin, à l’intérieur de la clôture.';
+	$('#placing-hint').textContent = ok ? 'Fais-le glisser avec le doigt, puis pose-le.' : 'Place prise : lâche-le, il trouvera une place libre à côté.';
 	$('#btn-place').disabled = !ok;
 }
 
@@ -856,8 +866,19 @@ function movePlacing(hit) {
 	if (!hit) return;
 	const [wx, wy] = garden.toWorld(hit.x, hit.y);
 	garden.ghost = { kind: placing.kind, x: wx, y: wy };
+	snapPlacing();
 	renderPlacing();
 }
+
+garden.onGhostMove = () => placing && renderPlacing();
+garden.onGhostDrop = () => { if (!placing) return; snapPlacing(); renderPlacing(); };
+garden.onLongPress = hit => {
+	if (placing || !$('#modal').hidden) return false;
+	clearTimeout(cardTimer);
+	$('#plant-card').hidden = true;
+	startPlacing(hit.item.kind, hit.item);
+	return true;
+};
 
 function endPlacing() {
 	placing = null;
@@ -889,7 +910,7 @@ $('#btn-place-cancel').addEventListener('click', endPlacing);
 
 function tapItem(hit, card) {
 	const it = hit.item, def = ITEMS[it.kind];
-	card.innerHTML = `<b>${def.name}</b>${def.text}
+	card.innerHTML = `<b>${def.name}</b>${def.text}<small class="item-tip">Astuce : un appui long dessus le soulève directement.</small>
 		<div class="item-actions"><button class="btn ghost" data-move>Déplacer</button><button class="btn ghost" data-store>Ranger (+${def.cost})</button></div>`;
 	card.classList.remove('link');
 	card.classList.add('actions');
