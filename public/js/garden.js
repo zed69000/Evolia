@@ -67,6 +67,7 @@ export function nightAt(h, sun = DEFAULT_SUN) {
 }
 
 // Part de soleil direct selon la météo : elle règle la netteté des ombres.
+const CLOUD_X = 2080, CLOUD_Y = 1720;
 const SUNNY = { clear: 1, clouds: 0.6, overcast: 0.15, fog: 0.05, drizzle: 0.2, rain: 0.1, storm: 0.05, snow: 0.2 };
 
 /** Animaux au sol : triés avec les plantes, pour passer devant ou derrière elles. */
@@ -1587,11 +1588,13 @@ export class Garden {
 		if (day > 0) {
 			ctx.globalCompositeOperation = 'multiply';
 			ctx.globalAlpha = Math.min(0.85, 0.32 * day * cloudy);
+			// Les nuages sont posés sur le monde (un motif qui se répète tous les CLOUD_X × CLOUD_Y) et ne bougent
+			// qu'avec le vent : zoomer ou glisser la vue ne les déplace pas.
 			for (const cl of this.clouds) {
-				const spanX = v.w + cl.w * 2, spanY = v.h + cl.h * 2;
-				const x = v.x0 - cl.w + ((((cl.x + this.t * cl.speed * (0.5 + (this.weather.wind ?? 10) / 20)) - v.x0) % spanX) + spanX) % spanX;
-				const y = v.y0 - cl.h + (((cl.y - v.y0) % spanY) + spanY) % spanY;
-				ctx.drawImage(cl.canvas, x, y, cl.w, cl.h);
+				const cx = cl.x + this.t * cl.speed * (0.5 + (this.weather.wind ?? 10) / 20);
+				const i0 = Math.floor((v.x0 - cl.w - cx) / CLOUD_X) + 1, i1 = Math.floor((v.x0 + v.w - cx) / CLOUD_X);
+				const j0 = Math.floor((v.y0 - cl.h - cl.y) / CLOUD_Y) + 1, j1 = Math.floor((v.y0 + v.h - cl.y) / CLOUD_Y);
+				for (let i = i0; i <= i1; i++) for (let j = j0; j <= j1; j++) ctx.drawImage(cl.canvas, cx + i * CLOUD_X, cl.y + j * CLOUD_Y, cl.w, cl.h);
 			}
 			ctx.globalCompositeOperation = 'source-over';
 			ctx.globalAlpha = 1;
