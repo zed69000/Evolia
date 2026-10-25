@@ -644,3 +644,45 @@ html, body {
 .zoom-btn .nectar::before { width: 14px; height: 16px; margin: 0; }
 .zoom-btn.on { box-shadow: 0 0 0 2px var(--soleil), var(--ombre); }
 .peek .zoom-btn { opacity: 0; pointer-events: none; }
+
+/* Barre du bas : chaque bouton dit ce qu'il ouvre. */
+#home .status-row .btn.round { height: 56px; flex-direction: column; gap: 2px; padding: 4px 2px; }
+#home .status-row .btn.round svg { width: 22px; height: 22px; }
+.btn.round .lbl { font: 700 10.5px Nunito, sans-serif; letter-spacing: -.1px; white-space: nowrap; }
+#status { cursor: pointer; border-radius: 12px; }
+#status:active { background: #EEF3E0; }
+
+/* Page Écosystème */
+.eco-hero { text-align: center; background: #FBF1D6; border-radius: 20px; padding: 14px 12px 12px; margin-bottom: 10px; }
+.eco-label { display: block; font-size: 12px; font-weight: 800; color: #8A5A10; text-transform: uppercase; letter-spacing: .6px; }
+.eco-hero b { display: block; font: 400 38px Courgette, cursive; color: var(--foret); line-height: 1.2; font-variant-numeric: tabular-nums; }
+.eco-hero b.nectar::before { width: 18px; height: 20px; vertical-align: 2px; margin-right: 8px; }
+.eco-rate { font-size: 14px; color: var(--doux); font-weight: 700; }
+.eco-elan { display: flex; gap: 10px; align-items: center; background: var(--papier-2); border-radius: 16px; padding: 10px 12px; font-size: 13.5px; color: var(--doux); line-height: 1.35; }
+.eco-elan > b { flex: none; font: 400 17px Courgette, cursive; color: var(--foret); }
+.eco-elan.on { background: #FCE6D2; color: #8A4A14; }
+.eco-elan.on > b { color: var(--elan); }
+.eco-h { margin: 18px 0 8px; font-size: 15px; color: var(--foret); }
+.eco-h small { font-weight: 600; color: var(--doux); font-size: 12px; margin-left: 4px; }
+.eco-grow { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.eco-grow li { display: flex; gap: 10px; align-items: center; background: var(--papier-2); border-radius: 14px; padding: 8px 12px; font-size: 14px; font-weight: 700; color: var(--foret); }
+.eco-grow i { font-style: normal; font-size: 18px; }
+.eco-last { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-weight: 800; color: #8A5A10; }
+.eco-last .nectar { margin-right: 4px; }
+.eco-teams { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.eco-team { background: var(--papier-2); border-radius: 18px; overflow: hidden; }
+.eco-team-head { all: unset; box-sizing: border-box; width: 100%; display: flex; gap: 10px; align-items: center; padding: 8px 12px 8px 8px; cursor: pointer; }
+.eco-team.off .eco-team-head { opacity: .65; }
+.eco-team .eco-thumb { width: 44px; height: 44px; }
+.eco-team-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.eco-team-txt b { font-size: 15px; color: var(--foret); }
+.eco-team-txt small { font-size: 12.5px; color: var(--doux); }
+.eco-count { font: 400 20px Courgette, cursive; color: var(--foret); }
+.eco-team-head::after { content: '›'; font-size: 20px; color: var(--doux); transition: transform .2s; }
+.eco-team.open .eco-team-head::after { transform: rotate(90deg); }
+.eco-team-more { padding: 0 12px 12px; font-size: 13px; color: var(--encre); line-height: 1.4; }
+.eco-team-more p { margin: 0 0 8px; }
+.eco-team-more .btn { margin: 0 0 4px; }
+.eco-team-more > small { display: block; color: var(--doux); margin-bottom: 8px; }
+.eco-real { color: var(--doux); font-size: 12.5px; }
+.eco-note { font-size: 12.5px; color: var(--doux); text-align: center; margin: 14px 0 6px; }

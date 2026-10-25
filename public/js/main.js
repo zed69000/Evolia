@@ -73,11 +73,11 @@ function persist(now = false) {
 
 const species = new Encyclopedia($('#species'), state, () => { persist(); updateSpeciesDot(); });
 const places = new PlacesMap($('#map'), state, travel);
-const eco = new EcoPanel($('#eco'), state, gid => {
-	toast(`${GUILDS[gid].upgrade.name} amélioré : de nouveaux animaux arrivent`, '#F4C23E');
-	garden.nextPopulate = 0;
-	renderHud();
-	persist(true);
+// Aider une équipe de l'écosystème, c'est poser l'objet qui l'attire (s'il est débloqué et payable), sinon voir la liste.
+const eco = new EcoPanel($('#eco'), state, kind => {
+	const it = ITEMS[kind];
+	if (state.totals.distance / 1000 >= it.km && (state.nectar ?? 0) >= it.cost) startPlacing(kind);
+	else openDeco();
 });
 
 // ─── Bandeau ──────────────────────────────────────────────────
@@ -85,8 +85,8 @@ const eco = new EcoPanel($('#eco'), state, gid => {
 function renderHud() {
 	const km = todayMeters(state) / 1000;
 	$('#hud-day').textContent = PLACE_BY_ID[state.place].name;
-	$('#hud-km').textContent = `${fmt(km, km < 10 ? 2 : 1)} / ${state.goalKm} km`;
-	$('#hud-steps').innerHTML = `${sky.label()} · <span class="nectar${boostLeft(state) ? ' boost' : ''}">${fmtInt(state.nectar ?? 0)}</span>`;
+	$('#hud-km').textContent = `${fmt(km, km < 10 ? 1 : 0)} / ${state.goalKm} km aujourd'hui`;
+	$('#hud-steps').innerHTML = `<span class="nectar${boostLeft(state) ? ' boost' : ''}">${fmtInt(state.nectar ?? 0)}</span>`;
 	const k = Math.min(1, km / state.goalKm);
 	$('#ring-fg').style.strokeDashoffset = String(113.1 * (1 - k));
 }
@@ -101,8 +101,14 @@ function toast(text, color = '#F4C23E', onClick = null) {
 	if (onClick) { el.classList.add('link'); el.addEventListener('click', onClick); }
 	const box = $('#toasts');
 	box.appendChild(el);
-	while (box.children.length > 3) box.firstChild.remove();
+	while (box.children.length > 2) box.firstChild.remove();
 	setTimeout(() => { el.classList.add('out'); setTimeout(() => el.remove(), 400); }, onClick ? 5000 : 3200);
+}
+
+/** Lance `fn` dès qu'aucune page (écosystème, espèces, carnet…) n'est ouverte par-dessus le jardin. */
+function whenFree(fn) {
+	if (!document.querySelector('.panel.open') && $('#coach').hidden && !placing) return fn();
+	setTimeout(() => whenFree(fn), 1000);
 }
 
 function showModal(html) {
@@ -441,9 +447,7 @@ function renderStatus() {
 	const x = boostLeft(state) ? BOOST_MULT : 1;
 	dot.className = `status-dot${state.tracking ? ' idle' : ''}`;
 	title.textContent = state.tracking ? 'Au repos' : 'Suivi en pause';
-	sub.textContent = state.tracking
-		? `Ton écosystème travaille · +${fmtInt(r.nectar * x)} nectar/h${x > 1 ? ` · élan ×${x}` : ''}`
-		: 'Active le suivi : tes pas feront pousser le jardin';
+	sub.textContent = `Écosystème : +${fmtInt(r.nectar * x)} nectar/h${x > 1 ? ` · élan ×${x}` : ''} ›`;
 	renderDaily();
 }
 
@@ -665,8 +669,8 @@ document.addEventListener('visibilitychange', async () => {
 	sound.resume();
 	runIdle(true);
 	if (Date.now() - state.lastHarvest > 5 * 60000) await maybeHarvest();
-	if (newDay() && $('#modal').hidden) showDaily(true);
-	else showIdleRecap();
+	if (newDay()) whenFree(() => $('#modal').hidden && showDaily(true));
+	else whenFree(showIdleRecap);
 	sky.refresh();
 });
 
@@ -899,7 +903,8 @@ $('#btn-place').addEventListener('click', () => {
 		if ((state.nectar ?? 0) < ITEMS[kind].cost) { toast('Pas assez de nectar', '#C0442F'); return endPlacing(); }
 		state.nectar -= ITEMS[kind].cost;
 		garden.placeItem(kind, x, y);
-		toast(`${ITEMS[kind].name} : installé${/^Une /.test(ITEMS[kind].name) ? 'e' : ''} !`, '#9A7448');
+		const team = Object.values(GUILDS).find(g => g.items.includes(kind));
+		toast(`${ITEMS[kind].name} : installé${/^Une /.test(ITEMS[kind].name) ? 'e' : ''}${team ? ` · ${team.name.toLowerCase()} +1` : ''}`, '#9A7448');
 	}
 	sound.chime(2);
 	endPlacing();
@@ -1069,6 +1074,7 @@ $('#btn-journal').addEventListener('click', openJournal);
 $('#btn-options').addEventListener('click', openOptions);
 $('#btn-species').addEventListener('click', () => species.open());
 $('#btn-eco').addEventListener('click', () => eco.open());
+$('#status').addEventListener('click', () => { if (!session) eco.open(); });
 $('#hud').addEventListener('click', () => places.open());
 $('#modal').addEventListener('click', e => {
 	const sp = e.target.closest('[data-open-sp]');
@@ -1136,5 +1142,5 @@ if (firstRun) {
 	setTimeout(() => coach(0), 1600);
 } else {
 	runIdle(true);
-	maybeHarvest().then(() => (newDay() ? setTimeout(() => showDaily(true), 300) : showIdleRecap()));
+	maybeHarvest().then(() => (newDay() ? setTimeout(() => whenFree(() => showDaily(true)), 300) : whenFree(showIdleRecap)));
 }
