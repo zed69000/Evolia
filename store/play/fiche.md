@@ -2,7 +2,7 @@
 
 Identifiant de l'appli : `com.zed69000.evolia` (définitif dès le premier envoi).
 
-**État** : appli créée dans le compte Play Console « Musclor-Zed » ; version 0.6.15 (615) publiée en **tests internes**
+**État** : appli créée dans le compte Play Console « Musclor-Zed » ; version 0.6.17 (617) publiée en **tests internes**
 le 24 octobre 2026, liste « Amis testeurs ». Lien pour les testeurs : https://play.google.com/apps/internaltest/4701100888817147702
 Pour la production, Google exige d'abord un test fermé avec au moins 12 testeurs pendant 14 jours.
 
