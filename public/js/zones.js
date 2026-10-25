@@ -5,7 +5,7 @@
 // jamais de raccord, chaque tache, touffe ou caillou est défini en coordonnées du monde et peint, à
 // l'identique et dans le même ordre, dans toutes les cases qu'il touche.
 
-import { rng, wash, leaf, ribbon, curve } from './watercolor.js';
+import { rng, wash, leaf, ribbon, curve, rgba } from './watercolor.js';
 
 export const PARCEL_W = 420;
 export const PARCEL_H = 1200;
@@ -20,7 +20,7 @@ export const GROUND = {
 	prairie: { base: '#B5C565', washes: ['#9AB450', '#A3BD57', '#CDC88D', '#B9C668', '#7FAA48', '#B9C668'], sprigs: ['#5F933E', '#7FAA48', '#488641'], stones: '#C9B48A' },
 	marais: { base: '#A6C27A', washes: ['#8FB98A', '#9AC08A', '#B9CC8A', '#7FAA6A', '#C8D0A0'], sprigs: ['#4E7A4A', '#6E9A5A'], stones: '#A8B898' },
 	foret: { base: '#7E9A55', washes: ['#6E8A4A', '#5F7F45', '#8AA060', '#9A9A60', '#7A7A48'], sprigs: ['#3E6A35', '#4E7A3E'], stones: '#9A8A6A', leaves: ['#A8783A', '#C8903A', '#8A5A2A', '#B8A050'], sun: '#E8E0A0' },
-	montagne: { base: '#B9C98E', washes: ['#A8BC80', '#C8D3A0', '#9FB878', '#D0D8B0'], sprigs: ['#6E8F6A', '#7FA08A'], stones: '#A8A8A0', rocks: true },
+	montagne: { base: '#AEB894', washes: ['#A2AE86', '#BCC2A6', '#98A880', '#C6C8B8', '#B0B0A4', '#8FA27A'], sprigs: ['#5E7F5A', '#6F8F7A', '#7A8A6A'], stones: '#A0A098', rocks: true },
 	littoral: { base: '#E9DAB4', washes: ['#DCCB9E', '#F0E4C4', '#E4D2A8', '#D2C090'], sprigs: ['#9DB08A', '#A8B488'], stones: '#C8C0B0', sea: true },
 };
 
@@ -108,7 +108,7 @@ function tileFeatures(biome, gx, gy) {
 	// Grandes nappes du fond.
 	for (let i = 0; i < 46; i++) washAt(0, ox + r.range(0, W), oy + r.range(0, H), r.range(70, 150), r.range(50, 120), r.pick(G.washes), { layers: 8, alpha: 0.06, edge: 0, variance: 0.25 });
 	if (G.sun) for (let i = 0; i < 8; i++) washAt(0, ox + r.range(20, W - 20), oy + r.range(20, H), r.range(30, 60), r.range(18, 34), G.sun, { layers: 5, alpha: 0.035, edge: 0 });
-	if (G.rocks) for (let i = 0; i < 13; i++) { const s = r.range(6, 16); washAt(3, ox + r.range(0, W), oy + r.range(20, H), s, s * 0.6, r.pick(['#A8A498', '#BCB8AC', '#9A968A']), { layers: 7, alpha: 0.16, edge: 0.4 }); }
+	if (G.rocks) for (let i = 0; i < 34; i++) { const s = r.range(6, 22); washAt(3, ox + r.range(0, W), oy + r.range(20, H), s, s * 0.6, r.pick(['#A8A498', '#BCB8AC', '#9A968A']), { layers: 7, alpha: 0.16, edge: 0.4 }); }
 
 	// La mer, en haut de la première rangée du littoral.
 	if (sea) {
@@ -257,7 +257,27 @@ function marks(kind, add, washAt, r, ox, oy, W, H, top, avoid) {
 function wild(biome, add, washAt, r, ox, oy, W, H, top) {
 	const dark = { prairie: '#4E7A3A', marais: '#4E7A5A', foret: '#2E5A30', montagne: '#4E6A4A', littoral: '#7A8A5A' }[biome];
 	const light = { prairie: '#7FAA48', marais: '#7FAA6A', foret: '#4E7A3E', montagne: '#7F9A6A', littoral: '#A8B488' }[biome];
-	const trees = biome === 'littoral' ? 2 : biome === 'foret' ? 7 : 4;
+	const trees = biome === 'littoral' ? 2 : biome === 'foret' ? 7 : biome === 'montagne' ? 0 : 4;
+	// En montagne, des sapins serrés et de gros blocs de rocher plutôt que des arbres ronds.
+	if (biome === 'montagne') {
+		for (let i = 0; i < 26; i++) {
+			const x = ox + r.range(20, W - 20), y = oy + r.range(top + 60, H - 20), s = r.range(14, 26);
+			washAt(3, x + s * 0.5, y + 2, s * 0.9, s * 0.25, '#2E4A22', { layers: 4, alpha: 0.08, edge: 0 });
+			add(3, x, y, s * 2.2, (g, rr, tone) => {
+				for (let k = 0; k < 3; k++) {
+					const w = s * (0.9 - k * 0.22), yy = y - k * s * 0.55;
+					g.fillStyle = rgba(tone(k ? '#3A6A40' : '#2A5232'), 0.85);
+					g.beginPath(); g.moveTo(x, yy - s * 0.95); g.lineTo(x + w, yy); g.lineTo(x - w, yy); g.closePath(); g.fill();
+				}
+			});
+		}
+		for (let i = 0; i < 4; i++) {
+			const x = ox + r.range(40, W - 40), y = oy + r.range(top + 80, H - 40), s = r.range(26, 48);
+			washAt(3, x + s * 0.3, y + s * 0.2, s * 1.1, s * 0.35, '#3A3A30', { layers: 5, alpha: 0.1, edge: 0 });
+			washAt(3, x, y - s * 0.3, s, s * 0.6, '#9A968C', { layers: 9, alpha: 0.24, edge: 0.45 });
+			washAt(3, x - s * 0.3, y - s * 0.5, s * 0.5, s * 0.25, '#E4E0D6', { layers: 4, alpha: 0.25, edge: 0 });
+		}
+	}
 	for (let i = 0; i < trees; i++) {
 		const x = ox + r.range(40, W - 40), y = oy + r.range(top + 80, H - 40), s = r.range(50, 85);
 		washAt(3, x + s * 0.3, y + s * 0.15, s * 0.9, s * 0.35, '#2E4A22', { layers: 5, alpha: 0.06, edge: 0 });
@@ -275,6 +295,120 @@ function wild(biome, add, washAt, r, ox, oy, W, H, top) {
 			add(3, px, y, L, (g, rr, tone) => leaf(g, px, y, L, 2, a, tone(light), rr, 0.55));
 		}
 	}
+}
+
+// ─── Le relief ─────────────────────────────────────────────────
+// Une altitude continue sur tout le monde de chaque lieu : les cases se raccordent sans couture. Elle ne change
+// rien au jeu (on plante et on pose partout pareil), mais elle se voit : ombres des pentes, corniches rocheuses
+// et neige en montagne, rides des dunes au littoral, creux moussus en forêt, bas-fonds humides au marais.
+
+const RELIEF = {
+	prairie: { amp: 0.45, scale: 950, light: 0.5 },
+	marais: { amp: 0.25, scale: 800, light: 0.25, damp: true },
+	foret: { amp: 0.7, scale: 700, light: 0.65, moss: true },
+	montagne: { amp: 2.2, scale: 560, light: 1.3, slope: 1 / 1300, ledges: 0.75, snow: 2.2 },
+	littoral: { amp: 0.55, scale: 240, light: 0.75, dunes: 0.3 },
+};
+
+export function heightAt(biome, x, y) {
+	const R = RELIEF[biome], s = R.scale;
+	let h = Math.sin(x / s + 1.3) * Math.cos(y / (s * 1.25) + 0.4)
+		+ 0.5 * Math.sin((x * 0.6 + y * 0.8) / (s * 0.45) + 2.1)
+		+ 0.22 * Math.sin((x * -0.7 + y * 0.5) / (s * 0.2) + 4.2);
+	h *= R.amp;
+	// En montagne, le terrain monte vers le haut de l'écran : on grimpe en ouvrant les parcelles du haut.
+	if (R.slope) h -= y * R.slope;
+	return h;
+}
+
+/** Ombrage des pentes (lumière venue d'en haut à gauche), en une petite image lissée posée sur la case. */
+function reliefSteps(biome, ox, oy, W, H, tone) {
+	// La grille déborde d'un pas tout autour : le lissage ne voit jamais le bord de la case (pas de couture).
+	const R = RELIEF[biome], step = 12, nx = Math.ceil(W / step) + 3, ny = Math.ceil(H / step) + 3, gx0 = ox - step, gy0 = oy - step;
+	const hs = new Float32Array(nx * ny);
+	for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) hs[j * nx + i] = heightAt(biome, gx0 + i * step, gy0 + j * step);
+	const at = (i, j) => hs[Math.max(0, Math.min(ny - 1, j)) * nx + Math.max(0, Math.min(nx - 1, i))];
+	const steps = [];
+	steps.push(g => {
+		const c = document.createElement('canvas');
+		c.width = nx; c.height = ny;
+		const img = c.getContext('2d').createImageData(nx, ny);
+		for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
+			const dx = (at(i + 1, j) - at(i - 1, j)) / (2 * step), dy = (at(i, j + 1) - at(i, j - 1)) / (2 * step);
+			// Pente éclairée (face au nord-ouest) : plus claire ; pente à l'ombre : plus sombre.
+			const s = Math.max(-1, Math.min(1, (dx * 0.7 + dy * 0.7) * -420 * R.light));
+			const k = (j * nx + i) * 4, h = hs[j * nx + i];
+			let r = 255, gg = 250, b = 228, a = s > 0 ? s * 85 : 0;
+			if (s < 0) { r = 30; gg = 44; b = 40; a = -s * 150; }
+			if (R.moss && h < -0.35) { r = 40; gg = 72; b = 38; a = Math.max(a, Math.min(70, (-0.35 - h) * 160)); }
+			if (R.damp && h < -0.12) { r = 60; gg = 96; b = 84; a = Math.max(a, Math.min(60, (-0.12 - h) * 300)); }
+			// Montagne : juste sous chaque palier, une bande de roche grise, plus marquée là où ça monte fort.
+			if (R.ledges) {
+				const f = (((h / R.ledges) % 1) + 1) % 1, steep = Math.min(1, Math.hypot(dx, dy) * 260);
+				const rock = f > 0.72 ? ((f - 0.72) / 0.28) * (0.45 + 0.55 * steep) : 0;
+				if (rock * 170 > a) { r = 112; gg = 106; b = 96; a = rock * 170; }
+			}
+			img.data[k] = r; img.data[k + 1] = gg; img.data[k + 2] = b; img.data[k + 3] = a;
+		}
+		c.getContext('2d').putImageData(img, 0, 0);
+		g.save();
+		g.imageSmoothingEnabled = true;
+		g.imageSmoothingQuality = 'high';
+		g.drawImage(c, 0, 0, nx, ny, gx0 - step / 2, gy0 - step / 2, nx * step, ny * step);
+		g.restore();
+	});
+	// Corniches (montagne) ou rides de sable (dunes) : lignes de niveau, une ombre dessous, un liseré clair dessus.
+	const gap = R.ledges ?? R.dunes;
+	if (gap) steps.push(g => {
+		const segs = [];
+		for (let j = 0; j < ny - 1; j++) for (let i = 0; i < nx - 1; i++) {
+			const a = hs[j * nx + i], b = hs[j * nx + i + 1], c = hs[(j + 1) * nx + i + 1], d = hs[(j + 1) * nx + i];
+			const lo = Math.min(a, b, c, d), hi = Math.max(a, b, c, d);
+			for (let lv = Math.ceil(lo / gap) * gap; lv <= hi; lv += gap) {
+				const pts = [];
+				const edge = (h0, h1, x0, y0, x1, y1) => { if ((h0 < lv) !== (h1 < lv)) { const t = (lv - h0) / (h1 - h0); pts.push([gx0 + (x0 + (x1 - x0) * t) * step, gy0 + (y0 + (y1 - y0) * t) * step]); } };
+				edge(a, b, i, j, i + 1, j); edge(b, c, i + 1, j, i + 1, j + 1); edge(c, d, i + 1, j + 1, i, j + 1); edge(d, a, i, j + 1, i, j);
+				if (pts.length >= 2) segs.push([pts[0], pts[1], lv]);
+			}
+		}
+		g.save();
+		g.lineCap = 'round';
+		const dune = !R.ledges;
+		if (dune) {
+			for (const [p, q] of segs) { g.strokeStyle = 'rgba(150,120,70,0.28)'; g.lineWidth = 2; g.beginPath(); g.moveTo(p[0], p[1] + 2.5); g.lineTo(q[0], q[1] + 2.5); g.stroke(); }
+			for (const [p, q] of segs) { g.strokeStyle = 'rgba(255,248,226,0.55)'; g.lineWidth = 1.6; g.beginPath(); g.moveTo(p[0], p[1]); g.lineTo(q[0], q[1]); g.stroke(); }
+		} else {
+			// Arête claire en haut de chaque bande de roche, et quelques pierres éboulées au pied.
+			// Tout dépend de la position : sans couture d'une case à l'autre.
+			g.strokeStyle = 'rgba(240,236,226,0.55)'; g.lineWidth = 1.4;
+			g.beginPath();
+			for (const [p, q] of segs) { g.moveTo(p[0], p[1]); g.lineTo(q[0], q[1]); }
+			g.stroke();
+			for (const [p, q] of segs) {
+				const mx = (p[0] + q[0]) / 2, my = (p[1] + q[1]) / 2, tall = 8;
+				const k = Math.abs(Math.sin(mx * 12.9898 + my * 78.233)) % 1;
+				if (k < 0.3) {
+					g.fillStyle = k < 0.15 ? 'rgba(150,146,136,0.8)' : 'rgba(176,172,162,0.75)';
+					g.beginPath(); g.ellipse(mx + (k - 0.17) * 30, my + tall + 5 + k * 10, 2 + k * 8, 1.4 + k * 5, 0, 0, 6.28); g.fill();
+				}
+			}
+		}
+		g.restore();
+	});
+	// Neige d'altitude : des plaques douces, plus nombreuses à mesure qu'on monte.
+	// Chaque case peint aussi les plaques de ses voisines qui débordent chez elle : pas de neige coupée net.
+	if (R.snow) steps.push(g => {
+		for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+			const nx0 = ox + dx * W, ny0 = oy + dy * H, r = rng(hash(biome, 'snow', nx0, ny0));
+			for (let k = 0; k < 70; k++) {
+				const x = nx0 + r.range(0, W), y = ny0 + r.range(0, H), h = heightAt(biome, x, y);
+				const keep = h >= R.snow + r.range(-0.3, 0.3), rx = r.range(20, 50), ry = r.range(10, 22), seed = r() * 1e9;
+				if (!keep || x + rx * 1.3 < ox || x - rx * 1.3 > ox + W || y + ry * 1.3 < oy || y - ry * 1.3 > oy + H) continue;
+				wash(g, x, y, rx, ry, '#F8FAFC', rng(seed), { layers: 6, alpha: 0.22, edge: 0.3 });
+			}
+		}
+	});
+	return steps;
 }
 
 // ─── Rivières et sentiers au long cours ────────────────────────
@@ -397,6 +531,7 @@ export function tileSteps(biome, gx, gy, tone, season) {
 	all.sort((a, b) => a.layer - b.layer);
 	for (const f of all) if (f.layer < 2) steps.push(g => f.paint(g, rng(f.seed), tone, season));
 	for (const f of longFeatures(biome)) if (f.x1 > ox && f.x0 < ox + W && f.y1 > oy && f.y0 < oy + H) steps.push(g => f.paint(g, rng(f.seed)));
+	steps.push(...reliefSteps(biome, ox, oy, W, H, tone));
 	for (const f of all) if (f.layer >= 2) steps.push(g => f.paint(g, rng(f.seed), tone, season));
 	steps.push(g => g.restore());
 	return steps;

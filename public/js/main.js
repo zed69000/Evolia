@@ -360,12 +360,14 @@ function onSample(s) {
 	let act;
 	if (s.motion) {
 		if (session) session.steps += s.steps;
+		if (s.steps > 0) tracking.lastStep = now;
 		// Dehors, le GPS a la priorité ; l'accéléromètre prend le relais quand il ne voit plus de déplacement.
 		if (now - tracking.lastGpsMove < 15000) { renderStatus(); return; }
 		act = s.act ? ACTIVITY_BY_ID[s.act] : null;
 	} else {
 		if (s.dist > 0 && !s.sim) tracking.lastGpsMove = now;
-		act = activityFor(s.speedKmh);
+		// Le téléphone sent des pas depuis peu : on court ; s'il n'en sent aucun à cette allure, on pédale.
+		act = activityFor(s.speedKmh, !!tracking.motion && now - (tracking.lastStep ?? 0) > 20000);
 	}
 	if (!act || !(s.dist > 0)) {
 		if (session) { session.speed = s.speedKmh ?? 0; session.act = null; if (s.sim) session.simTime += s.dt; }
@@ -378,7 +380,8 @@ function onSample(s) {
 	session.speed = s.speedKmh;
 	session.act = act;
 	session.distance += s.dist;
-	addMeters(s.dist);
+	if (act.bike) session.bike = (session.bike ?? 0) + s.dist;
+	addMeters(s.dist * (act.counts ?? 1));
 	const effort = effortFor(s.dist, s.speedKmh, act);
 	session.effort += effort;
 	state.totals.effort += effort;
@@ -411,7 +414,8 @@ function endSession() {
 		state.totals.walks += 1;
 		state.totals.steps += w.steps;
 		const grown = Object.entries(matured).map(([t, n]) => `+${n} ${plural(n, t)}`).join(', ');
-		toast(`Balade finie : ${fmt(w.distance / 1000)} km${grown ? ` · ${grown}` : ''}`, '#F08A3C', () => showRecap(w, duration, matured));
+		const bike = (w.bike ?? 0) > w.distance / 2;
+		toast(`${bike ? 'Sortie à vélo' : 'Balade finie'} : ${fmt(w.distance / 1000)} km${bike ? ` (comptés ${fmt((w.distance - w.bike * 0.6) / 1000)} km)` : ''}${grown ? ` · ${grown}` : ''}`, '#F08A3C', () => showRecap(w, duration, matured));
 	}
 	persist(true);
 	renderHud();
@@ -964,8 +968,8 @@ function renderOptions() {
 	$('#options').innerHTML = `
 		<div class="panel-head"><h2>Options</h2><button class="close" data-close-options aria-label="Fermer">×</button></div>
 		<div class="opt-version"><img src="assets/logo.png" alt=""><div><b>Evolia v${VERSION}</b><span>${isApp() ? 'Appli Android' : 'Version web'} · données gardées sur ce téléphone</span></div></div>
-		<h3>Objectif du jour</h3>
-		<div class="seg" id="goal-seg">${[2, 3, 5, 8].map(g => `<button data-goal="${g}" class="${g === state.goalKm ? 'on' : ''}">${g} km</button>`).join('')}</div>
+		<h3>Objectif du jour : ${fmt(state.goalKm, state.goalKm % 1 ? 1 : 0)} km</h3>
+		<p class="empty">Le jeu le fixe chaque matin d'après ta semaine passée, un peu au-dessus de ta moyenne, pour avancer sans forcer. À vélo, un kilomètre compte pour 0,4 km.</p>
 		<h3>Suivi de tes pas</h3>
 		<p class="empty">${state.tracking ? "Actif : dès que tu bouges appli ouverte, une balade démarre toute seule et s'arrête après une minute d'immobilité." : 'En pause.'}
 			${src ? ` Pas relus appli fermée avec ${src.label} ; dernière récolte : ${new Date(state.lastHarvest).toLocaleString('fr-FR', { weekday: 'short', hour: '2-digit', minute: '2-digit' })}.` : isApp() ? '' : " Dans l'appli mobile, les pas faits appli fermée sont aussi relus."}</p>
@@ -1018,8 +1022,6 @@ function closeOptions() {
 
 $('#options').addEventListener('click', async e => {
 	if (e.target.closest('[data-close-options]')) return closeOptions();
-	const g = e.target.closest('[data-goal]');
-	if (g) { state.goalKm = Number(g.dataset.goal); persist(true); renderHud(); renderDaily(); renderOptions(); }
 	const w = e.target.closest('[data-w]');
 	if (w) { sky.override = w.dataset.w === 'réelle' ? null : w.dataset.w; sky.apply(); renderOptions(); }
 	const ts = e.target.closest('[data-ts]');

@@ -688,3 +688,22 @@ html, body {
 .eco-note { font-size: 12.5px; color: var(--doux); text-align: center; margin: 14px 0 6px; }
 
 .deco-help { display: inline-block; margin-top: 4px; font-size: 11.5px; font-weight: 800; color: #8A5A10; background: #FBEBC2; border-radius: 8px; padding: 1px 7px; }
+
+/* Carte du monde */
+.wm { position: relative; width: 100%; border-radius: 20px; overflow: hidden; box-shadow: inset 0 0 0 2px #E2D6B4; margin-top: 4px; }
+.wm canvas { display: block; width: 100%; height: 100%; }
+.wm-nodes { position: absolute; inset: 0; }
+.wm-node { position: absolute; transform: translate(-50%, -50%); display: flex; flex-direction: column; align-items: center; gap: 1px; padding: 6px 12px; border: none; border-radius: 14px; background: rgba(253, 247, 231, .92); box-shadow: 0 2px 0 rgba(90, 70, 40, .25); font: 700 14px Nunito, sans-serif; color: var(--foret); cursor: pointer; }
+.wm-node b { font: 400 17px Courgette, cursive; }
+.wm-node small { font-size: 11px; font-weight: 800; color: var(--doux); }
+.wm-node.locked { background: rgba(240, 236, 226, .85); color: var(--doux); }
+.wm-node.locked b::before { content: '🔒 '; font-size: 12px; }
+.wm-node.sel { outline: 3px solid var(--pc); outline-offset: 2px; }
+.wm-pin { position: absolute; top: -26px; width: 18px; height: 18px; border-radius: 50% 50% 50% 0; transform: rotate(-45deg); background: var(--elan); box-shadow: 0 0 0 3px #fff; animation: wm-bob 1.6s ease-in-out infinite; }
+@keyframes wm-bob { 50% { top: -31px; } }
+.wm-card { margin-top: 12px; padding: 14px; border-radius: 20px; }
+.wm-card-head { display: flex; align-items: center; gap: 8px; }
+.wm-card-head i { width: 14px; height: 14px; border-radius: 50%; background: var(--pc); flex: none; }
+.wm-card-head h3 { margin: 0; flex: 1; font: 400 22px Courgette, cursive; color: var(--foret); }
+.wm-card-head small { color: var(--doux); font-weight: 700; }
+.wm-card p { font-size: 14px; color: var(--encre); line-height: 1.45; margin: 8px 0 10px; }

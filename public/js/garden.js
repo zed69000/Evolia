@@ -1230,7 +1230,7 @@ export class Garden {
 			}
 			case 'walk':
 			case 'hop': {
-				const home = this.homeFor(c.home, P);
+				const home = this.shelterFor(c.kind, P) ?? this.homeFor(c.home, P);
 				if (!home) return null;
 				return { ...base, x: home.x + (Math.random() - 0.5) * 60, y: home.y + 10, mode: 'walk', ang: Math.random() * 6.28, home };
 			}
@@ -1258,6 +1258,43 @@ export class Garden {
 		return DECOR[key] && P.ci === 0 && this.decorVisible(key) ? { x: DECOR[key].x, y: DECOR[key].y } : null;
 	}
 
+	// ─── Ce que les bêtes font pour le jardin ─────────────────────
+	// Elles vivent comme dans la nature, et ça se voit dans le jeu : les butineurs pollinisent les fleurs en
+	// train de pousser, les oiseaux sèment en picorant, les libellules mangent les moustiques, et chacun
+	// rentre dans l'abri qu'on lui a construit.
+
+	/** Objets posés dans une parcelle, parmi `kinds`. */
+	itemsIn(ci, kinds) {
+		return this.items.filter(it => kinds.includes(it.kind) && this.cellAt(it.x, it.y) === ci);
+	}
+
+	/** Coup de pouce à une plante qui pousse (sans la finir : c'est la marche ou l'écosystème qui la termine). */
+	nurture(p, amount) {
+		if (!p || p.growth >= 0.99) return false;
+		p.growth = Math.min(0.99, p.growth + amount / PLANT_TYPES[p.type].cost);
+		const [hx, hy] = this.headOf(p);
+		if (amount >= 1 || Math.random() < 0.4) this.burst(hx, hy, 3, p.type === 'fleur' ? '#F4C23E' : '#9AC86A');
+		return true;
+	}
+
+	/** Une plante de ce type qui pousse encore dans la parcelle, de préférence près de (x, y). */
+	growingNear(P, type, x, y) {
+		let best = null, bd = Infinity;
+		for (const p of this.place.plants) {
+			if (p.type !== type || p.growth >= 0.99 || p.growth <= 0 || cellOf(p) !== P.ci) continue;
+			const d = Math.hypot(P.ox + p.x - x, P.oy + p.y - y);
+			if (d < bd) { bd = d; best = p; }
+		}
+		return bd < 260 ? best : null;
+	}
+
+	/** Le refuge d'un animal qui marche : l'abri qu'on lui a posé dans sa parcelle, s'il y en a un. */
+	shelterFor(kind, P) {
+		const kinds = { hedgehog: ['abri', 'bois'], lizard: ['pierres'], snail: ['compost', 'bois'], beetle: ['bois', 'compost'], firebug: ['bois', 'pierres'] }[kind];
+		const it = kinds && pick(this.itemsIn(P.ci, kinds));
+		return it && { x: it.x + (Math.random() - 0.5) * 30, y: it.y + 6, item: it };
+	}
+
 	updateInsect(b, dt) {
 		b.t += dt;
 		const P = this.pdata[b.ci];
@@ -1282,12 +1319,34 @@ export class Garden {
 		switch (b.behavior) {
 			case 'flower': {
 				if (b.leaving) return flyAway();
+				if (b.mode === 'home') {
+					// Retour à la ruche ou à l'hôtel : on entre, on reste un peu à l'abri, on ressort.
+					const it = b.homeItem;
+					if (!this.items.includes(it)) { b.mode = 'seek'; b.hidden = false; return; }
+					if (b.hidden) {
+						b.timer -= dt;
+						if (b.timer <= 0) { b.hidden = false; b.mode = 'seek'; b.visits = 0; b.target = null; }
+						return;
+					}
+					if (flyTo(it.x, it.y - (it.kind === 'ruche' ? 16 : 60), 60, 15) < 4) { b.hidden = true; b.timer = 4 + Math.random() * 5; }
+					return;
+				}
 				if (b.mode === 'hover' && b.target && has(b.target)) {
 					b.timer -= dt;
 					const [hx, hy] = head(b.target);
 					b.x = hx + Math.cos(b.t * 3) * 5;
 					b.y = hy - 4 + Math.sin(b.t * 5) * 2;
-					if (b.timer <= 0) { this.nectarFrom(hx, hy - 4); b.mode = 'seek'; b.target = null; }
+					if (b.timer <= 0) {
+						this.nectarFrom(hx, hy - 4);
+						// Pollinisation : le pollen porté d'une fleur à l'autre aide une fleur qui pousse, tout près.
+						if (Math.random() < 0.35) this.nurture(this.growingNear(P, 'fleur', hx, hy), 0.2);
+						b.mode = 'seek'; b.target = null;
+						b.visits = (b.visits ?? 0) + 1;
+						if (b.kind === 'bee' && b.visits >= 4 + Math.random() * 4) {
+							const homes = this.itemsIn(b.ci, ['ruche', 'hotel']);
+							if (homes.length) { b.mode = 'home'; b.homeItem = pick(homes); }
+						}
+					}
 					return;
 				}
 				if (!b.target || !has(b.target)) b.target = P.flowers.length ? pick(P.flowers) : null;
@@ -1337,10 +1396,20 @@ export class Garden {
 					b.timer -= dt;
 					b.x += Math.sin(b.t * 13) * 3 * dt;
 					b.y += Math.cos(b.t * 11) * 3 * dt;
-					if (b.timer <= 0) { b.mode = 'dart'; b.tx = w.x + (Math.random() - 0.5) * w.rx * 2.6; b.ty = w.y - 30 + (Math.random() - 0.5) * w.ry * 2.4; }
+					if (b.timer <= 0) {
+						b.mode = 'dart';
+						// Une nuée de moucherons ou de moustiques à portée : la libellule fond dessus.
+						const prey = (this.ambient ?? []).find(s => s.n > 0 && Math.hypot(s.x - b.x, s.y - 36 - b.y) < 220);
+						b.prey = prey && Math.random() < 0.7 ? prey : null;
+						if (b.prey) { b.tx = b.prey.x + (Math.random() - 0.5) * 20; b.ty = b.prey.y - 36; }
+						else { b.tx = w.x + (Math.random() - 0.5) * w.rx * 2.6; b.ty = w.y - 30 + (Math.random() - 0.5) * w.ry * 2.4; }
+					}
 					return;
 				}
-				if (flyTo(b.tx, b.ty, 220, 0) < 3) { b.mode = 'hover'; b.timer = 0.6 + Math.random(); }
+				if (flyTo(b.tx, b.ty, 220, 0) < 3) {
+					if (b.prey) { b.prey.n = Math.max(0, b.prey.n - 1); b.prey = null; }
+					b.mode = 'hover'; b.timer = 0.6 + Math.random();
+				}
 				return;
 			}
 			case 'pond': {
@@ -1404,14 +1473,47 @@ export class Garden {
 				const [hx, hy] = head(b.target);
 				// Le pic se pose sur le tronc, les autres oiseaux dans le feuillage.
 				const ty = b.p.trunk ? P.oy + b.target.y - 45 : hy + b.oy;
+				if (b.mode === 'visit') {
+					// Sur la mangeoire, le bain ou le nichoir : on s'y pose un moment, puis on repart.
+					const it = b.visitItem;
+					if (!this.items.includes(it)) { b.mode = 'seek'; return; }
+					const top = this.itemSprite(it.kind, it.rot).top;
+					const vx = it.x + (it.kind === 'nichoir' ? 0 : b.vox), vy = it.y + (it.kind === 'nichoir' ? top * 0.68 : it.kind === 'bain' ? top * 0.82 : top * 0.62);
+					if (b.vk !== 'sit') { if (flyTo(vx, vy, 110, 10) < 3) { b.vk = 'sit'; b.timer = 4 + Math.random() * 5; } return; }
+					b.x = vx; b.y = vy + Math.sin(b.t * 9) * (it.kind === 'mangeoire' ? 0.8 : 0.3);
+					b.timer -= dt;
+					if (b.timer <= 0) { b.mode = 'seek'; b.vk = null; }
+					return;
+				}
+				if (b.mode === 'ground') {
+					// Au sol : quelques sautillements, des coups de bec. En picorant, les oiseaux sèment.
+					if (b.gk !== 'peck') { if (flyTo(b.gx, b.gy, 110, 10) < 3) { b.gk = 'peck'; b.timer = 3 + Math.random() * 3; } return; }
+					b.timer -= dt;
+					b.y = b.gy + Math.max(0, Math.sin(b.t * 7)) * 1.5;
+					if (Math.random() < dt * 0.6) { b.gx += (Math.random() - 0.5) * 16; b.x = b.gx; b.dir = Math.random() < 0.5 ? 1 : -1; }
+					if (b.timer <= 0) {
+						if (Math.random() < 0.5) this.nurture(this.growingNear(P, Math.random() < 0.6 ? 'buisson' : 'arbre', b.x, b.y), 2);
+						b.mode = 'seek'; b.gk = null;
+					}
+					return;
+				}
 				if (b.mode === 'perch') {
 					b.x = hx + b.ox;
 					b.y = ty + (b.p.trunk ? Math.sin(b.t * 0.6) * 6 : 0);
 					b.timer -= dt;
 					if (b.timer <= 0) {
-						b.mode = 'seek';
-						b.target = pick(b.p.on === 'buisson' ? P.bushes : P.trees) ?? b.target;
-						b.ox = b.p.trunk ? 6 : (Math.random() - 0.5) * (b.p.on === 'buisson' ? 30 : 60);
+						const visits = b.p.trunk ? [] : this.itemsIn(b.ci, b.sp === 'mesange' ? ['nichoir', 'mangeoire', 'bain'] : ['mangeoire', 'bain']);
+						const roll = Math.random();
+						if (visits.length && roll < 0.35) {
+							b.mode = 'visit'; b.visitItem = pick(visits); b.vox = (Math.random() - 0.5) * 18; b.vk = null;
+						} else if (!b.p.trunk && roll < 0.6) {
+							b.mode = 'ground'; b.gk = null;
+							b.gx = P.ox + b.target.x + (Math.random() - 0.5) * 70; b.gy = P.oy + b.target.y + 8 + Math.random() * 30;
+						} else {
+							b.mode = 'seek';
+							b.target = pick(b.p.on === 'buisson' ? P.bushes : P.trees) ?? b.target;
+							b.ox = b.p.trunk ? 6 : (Math.random() - 0.5) * (b.p.on === 'buisson' ? 30 : 60);
+						}
 					}
 					return;
 				}
@@ -2058,6 +2160,7 @@ export class Garden {
 	}
 
 	drawInsect(ctx, b) {
+		if (b.hidden) return;
 		if (b.behavior === 'trail') return this.drawTrail(ctx, b);
 		ctx.save();
 		ctx.translate(b.x, b.y);

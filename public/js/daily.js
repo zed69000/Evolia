@@ -3,7 +3,7 @@
 // Une journée « active » : au moins ACTIVE_M mètres. Rater un jour ne remet pas la série à zéro,
 // elle est seulement divisée par deux : on encourage, on ne punit pas.
 
-import { dayKey, todayMeters, allPlants } from './state.js';
+import { dayKey, todayMeters, allPlants, autoGoal } from './state.js';
 import { PLACES, PLACE_BY_ID, SPECIES, SPECIES_BY_ID, placeOpen } from './species.js';
 import { DECOR } from './plants.js';
 import { CELLS, CELL_KM, cellsOpen } from './garden.js';
@@ -43,6 +43,7 @@ export function rollDay(state) {
 	if (d.day === key) return false;
 	if (d.lastActive && d.lastActive !== yesterday() && d.lastActive !== key) d.streak = Math.floor(d.streak / 2);
 	d.day = key;
+	state.goalKm = autoGoal(state);
 	d.challenges = makeChallenges(state, key);
 	d.claimed = {};
 	d.quests = 0;
