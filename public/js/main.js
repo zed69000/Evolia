@@ -409,7 +409,7 @@ function endSession() {
 	if (w.distance > 50) addBoost(state, (duration / 60) * BOOST_PER_MIN);
 	if (w.distance > 10) {
 		// `end` sert à ne pas recompter ces pas lors de la prochaine récolte.
-		state.walks.unshift({ start: w.start, end: w.sim ? undefined : Date.now(), duration, distance: w.distance, effort: w.effort, matured, place: state.place });
+		state.walks.unshift({ start: w.start, end: w.sim ? undefined : w.lastMove, duration, distance: w.distance, effort: w.effort, matured, place: state.place });
 		state.walks.length = Math.min(state.walks.length, 100);
 		state.totals.walks += 1;
 		state.totals.steps += w.steps;
@@ -417,6 +417,8 @@ function endSession() {
 		const bike = (w.bike ?? 0) > w.distance / 2;
 		toast(`${bike ? 'Sortie à vélo' : 'Balade finie'} : ${fmt(w.distance / 1000)} km${bike ? ` (comptés ${fmt((w.distance - w.bike * 0.6) / 1000)} km)` : ''}${grown ? ` · ${grown}` : ''}`, '#F08A3C', () => showRecap(w, duration, matured));
 	}
+	// La relecture des pas attendait la fin de la balade : elle rattrape maintenant ce qui s'est fait autour.
+	if (!w.sim && Date.now() - state.lastHarvest > 2 * 60000) setTimeout(() => maybeHarvest(), 1500);
 	persist(true);
 	renderHud();
 	renderStatus();
@@ -575,10 +577,18 @@ async function maybeHarvest(source = SOURCES[state.harvestSource], since = state
 		const skip = state.walks.filter(w => w.end).map(w => [w.start, w.end]);
 		const res = await harvest(source, since, skip);
 		if (source.id !== 'mock') state.lastHarvest = Date.now();
+		state.harvestInfo = { at: Date.now(), from: res?.from ?? since, steps: Math.round(res?.steps ?? 0), source: source.label };
 		persist(true);
 		if (res && res.steps >= 30) await playHarvest(res, source);
+		else if (res && res.to - res.from > 30 * 60000) {
+			// Rien trouvé après une vraie absence : on le dit, pour qu'on sache où chercher.
+			toast(`${source.label} n'a aucun pas depuis ${new Date(res.from).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })} · voir Options`, '#C0442F', () => openOptions());
+		}
 	} catch (e) {
 		console.warn('Récolte impossible', e);
+		state.harvestInfo = { at: Date.now(), from: since, steps: 0, source: source.label, error: String(e?.message ?? e).slice(0, 120) };
+		persist(true);
+		toast(`Impossible de lire tes pas dans ${source.label} · voir Options`, '#C0442F', () => openOptions());
 	}
 	harvesting = false;
 }
@@ -612,7 +622,10 @@ async function playHarvest(res, source) {
 	garden.setFollow(false);
 	checkUnlocks(events);
 	persist(true);
-	const decor = events.map(ev => `<span class="chip gold">${DECOR[ev.key].name}</span>`).join('');
+	// Ce que la sortie a ouvert : nouvelles parcelles et nouveaux décors.
+	const decor = events.map(ev => ev.kind === 'cell'
+		? `<span class="chip gold">Nouvelle parcelle : ${zoneName(state.place, ev.n, 'un nouveau coin').toLowerCase()}</span>`
+		: `<span class="chip gold">${DECOR[ev.key]?.name ?? ''}</span>`).join('');
 	showModal(`
 		<h2>Pendant ton absence</h2>
 		<p>${fmtInt(res.steps)} pas · ${fmt(res.distance / 1000)} km, comptés par ${source.label}. Même le ménage fait pousser ton jardin.</p>
@@ -672,7 +685,11 @@ document.addEventListener('visibilitychange', async () => {
 	if (document.hidden) { persist(true); sound.pause(); return; }
 	sound.resume();
 	runIdle(true);
-	if (Date.now() - state.lastHarvest > 5 * 60000) await maybeHarvest();
+	// Une balade restée ouverte pendant que le téléphone dormait se termine là où on a cessé de bouger,
+	// pour que la relecture des pas puisse compter tout le reste de la sortie.
+	if (session && Date.now() - session.lastMove > STOP_AFTER) endSession();
+	if (Date.now() - state.lastHarvest > 2 * 60000) await maybeHarvest();
+	else if (!state.harvestSource) whenFree(() => $('#modal').hidden && offerHarvest());
 	if (newDay()) whenFree(() => $('#modal').hidden && showDaily(true));
 	else whenFree(showIdleRecap);
 	sky.refresh();
@@ -963,6 +980,17 @@ $('#btn-deco').addEventListener('click', openDeco);
 
 const isApp = () => !!window.Capacitor?.isNativePlatform?.();
 
+/** Ce que la dernière relecture des pas a trouvé, et quoi faire si elle ne trouve rien. */
+function harvestHtml(src) {
+	const h = state.harvestInfo, when = t => new Date(t).toLocaleString('fr-FR', { weekday: 'short', hour: '2-digit', minute: '2-digit' });
+	const last = h ? `Dernière relecture ${when(h.at)} : ${h.error ? `erreur (${h.error})` : `${fmtInt(h.steps)} pas trouvés depuis ${when(h.from)}`}.` : `Dernière relecture ${when(state.lastHarvest)}.`;
+	const help = h && !h.error && h.steps < 30 && src.id === 'health'
+		? '<br>Health Connect ne reçoit des pas que si une appli les y enregistre : ouvre Health Connect › Autorisations des applis et vérifie que Google Fit, Samsung Health ou ton appli de pas a le droit d\'écrire les pas.'
+		: '';
+	return `<div class="harvest-info"><b>Pas relus appli fermée avec ${src.label}.</b> ${last}${help}</div>
+		<button class="btn ghost wide" id="opt-harvest-now">Relire mes pas maintenant</button>`;
+}
+
 function renderOptions() {
 	const src = SOURCES[state.harvestSource];
 	$('#options').innerHTML = `
@@ -972,7 +1000,8 @@ function renderOptions() {
 		<p class="empty">Le jeu le fixe chaque matin d'après ta semaine passée, un peu au-dessus de ta moyenne, pour avancer sans forcer. À vélo, un kilomètre compte pour 0,4 km.</p>
 		<h3>Suivi de tes pas</h3>
 		<p class="empty">${state.tracking ? "Actif : dès que tu bouges appli ouverte, une balade démarre toute seule et s'arrête après une minute d'immobilité." : 'En pause.'}
-			${src ? ` Pas relus appli fermée avec ${src.label} ; dernière récolte : ${new Date(state.lastHarvest).toLocaleString('fr-FR', { weekday: 'short', hour: '2-digit', minute: '2-digit' })}.` : isApp() ? '' : " Dans l'appli mobile, les pas faits appli fermée sont aussi relus."}</p>
+			${src ? '' : isApp() ? ' Les pas faits appli fermée ne sont pas relus : autorise-le ci-dessous.' : " Dans l'appli mobile, les pas faits appli fermée sont aussi relus."}</p>
+		${src ? harvestHtml(src) : ''}
 		${state.tracking ? '' : '<button class="btn ghost wide" id="btn-track-2">Activer le suivi</button>'}
 		${isApp() && !src ? '<button class="btn ghost wide" id="opt-harvest">Relire les pas faits appli fermée</button>' : ''}
 		<h3>Le ciel</h3>
@@ -1030,6 +1059,7 @@ $('#options').addEventListener('click', async e => {
 	if (id === 'btn-sky') { await sky.locate(true); persist(true); renderOptions(); }
 	if (id === 'btn-track-2') { enableTracking(true); sky.locate(true); renderOptions(); }
 	if (id === 'opt-harvest') { state.harvestDeclined = false; closeOptions(); offerHarvest(); }
+	if (id === 'opt-harvest-now') { closeOptions(); maybeHarvest(); }
 	if (id === 'opt-coach') { closeOptions(); coach(0); }
 	if (id === 'dev-hour-real') { garden.hourOverride = null; renderOptions(); }
 	if (id === 'dev-sim') {
@@ -1159,4 +1189,5 @@ if (firstRun) {
 } else {
 	runIdle(true);
 	maybeHarvest().then(() => (newDay() ? setTimeout(() => whenFree(() => showDaily(true)), 300) : whenFree(showIdleRecap)));
+	if (!state.harvestSource) setTimeout(() => whenFree(() => $('#modal').hidden && offerHarvest()), 2500);
 }

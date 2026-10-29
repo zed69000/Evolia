@@ -39,6 +39,9 @@ export class GpsTracker {
 		if (!this.last) { this.last = { coords: c, t: pos.timestamp }; return; }
 		const dist = haversine(this.last.coords, c);
 		const dt = (pos.timestamp - this.last.t) / 1000;
+		// Après une longue pause (appli en arrière-plan, téléphone en poche), le saut de position ne dit rien de
+		// l'allure : on repart de là, et ce sont les pas comptés par le téléphone qui rattrapent la sortie.
+		if (dt > 90) { this.last = { coords: c, t: pos.timestamp }; this.speed = 0; return; }
 		// En dessous de quelques mètres, c'est le bruit du GPS, pas un déplacement.
 		if (dist < Math.max(3, c.accuracy * 0.25) || dt <= 0) return;
 		const measured = c.speed != null && c.speed >= 0 ? c.speed * 3.6 : (dist / dt) * 3.6;

@@ -707,3 +707,6 @@ html, body {
 .wm-card-head h3 { margin: 0; flex: 1; font: 400 22px Courgette, cursive; color: var(--foret); }
 .wm-card-head small { color: var(--doux); font-weight: 700; }
 .wm-card p { font-size: 14px; color: var(--encre); line-height: 1.45; margin: 8px 0 10px; }
+
+.harvest-info { background: var(--papier-2); border-radius: 14px; padding: 10px 12px; font-size: 13px; color: var(--doux); line-height: 1.45; margin-top: 8px; }
+.harvest-info b { color: var(--foret); }

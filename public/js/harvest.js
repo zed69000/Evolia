@@ -78,9 +78,16 @@ const health = {
 		try { return (await H.isAvailable()).available; } catch (e) { return false; }
 	},
 	async authorize() {
-		const r = await plugin('Health').requestAuthorization({ read: ['steps'], write: [] });
-		// iOS ne dit jamais si la lecture est autorisée : on essaiera de lire.
-		return cap().getPlatform() === 'ios' || r.readAuthorized?.includes('steps');
+		const H = plugin('Health');
+		const r = await H.requestAuthorization({ read: ['steps'], write: [] });
+		// iOS ne dit jamais si la lecture est autorisée ; ailleurs la réponse varie selon les versions :
+		// le plus sûr est d'essayer de lire la dernière heure.
+		if (cap().getPlatform() === 'ios' || r?.readAuthorized?.includes?.('steps')) return true;
+		try {
+			const now = Date.now();
+			await H.readSamples({ dataType: 'steps', startDate: new Date(now - 3600000).toISOString(), endDate: new Date(now).toISOString(), limit: 1 });
+			return true;
+		} catch (e) { return false; }
 	},
 	async read(from, to) {
 		const H = plugin('Health');
