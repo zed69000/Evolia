@@ -9,8 +9,8 @@ import { SPECIES_BY_ID, speciesIn, speciesOf } from './species.js';
 export const PLANT_TYPES = {
 	herbe: { name: 'Herbe folle', plural: 'herbes folles', cost: 15, spacing: 16, box: { w: 72, h: 76, ax: 36, ay: 62 } },
 	fleur: { name: 'Fleur', plural: 'fleurs', cost: 60, spacing: 24, box: { w: 90, h: 140, ax: 45, ay: 126 } },
-	buisson: { name: 'Arbuste', plural: 'arbustes', cost: 150, spacing: 48, box: { w: 150, h: 130, ax: 75, ay: 112 } },
-	arbre: { name: 'Arbre', plural: 'arbres', cost: 400, spacing: 82, box: { w: 290, h: 310, ax: 145, ay: 292 } },
+	buisson: { name: 'Arbuste', plural: 'arbustes', cost: 150, spacing: 48, box: { w: 200, h: 145, ax: 100, ay: 125 } },
+	arbre: { name: 'Arbre', plural: 'arbres', cost: 400, spacing: 82, box: { w: 340, h: 315, ax: 170, ay: 297 } },
 };
 
 const GREENS = ['#326832', '#488641', '#5F933E', '#7FAA48'];
@@ -291,7 +291,7 @@ function head(ctx, L, stem, tip, b, s, rot, d) {
 	}
 }
 
-function paintFleur(ctx, g, seed, L, env = {}) {
+function paintFleurOne(ctx, g, seed, L, env = {}) {
 	const r = rng(seed);
 	const [h0, h1] = L.h ?? [48, 72];
 	const H = r.range(h0, h1), lean = r.gauss() * 0.1, bend = r.gauss() * 0.15;
@@ -440,7 +440,7 @@ function paintBuisson(ctx, g, seed, L, env = {}) {
 	const caneTips = [];
 
 	if (shape === 'upright' || (leafless && shape !== 'arching')) {
-		for (const st of stems) ribbon(ctx, curve(st.x, 0, st.a, R * 1.35 * sy * st.len, st.bend, 6), 2.4, 0.5, '#6B4A2B', d, 0.85);
+		for (const st of stems) ribbon(ctx, curve(st.x, 0, st.a, R * (leafless ? 1.35 : 0.9) * sy * st.len, st.bend, 6), 2.4, 0.5, '#6B4A2B', d, 0.85);
 	}
 	if (shape === 'arching') {
 		canes.forEach((cn, i) => {
@@ -456,25 +456,18 @@ function paintBuisson(ctx, g, seed, L, env = {}) {
 		});
 	}
 	if (!leafless) {
-		const list = shape === 'arching' ? blobs.slice(0, 6) : blobs;
-		list.forEach((b, i) => {
-			const k = shape === 'arching' ? 0.6 : 1;
-			wash(ctx, b.x * R * sx, b.y * R * sy, b.s * R * 1.1 * k * (sx > 1 ? 1.15 : 1), b.s * R * k * (sy > 1 ? 1.1 : 1), seasonal(b.c, L, env, i), d, { layers: 10, alpha: shape === 'arching' ? 0.08 : 0.1 });
-		});
-		if (shape !== 'arching') {
-			ticks.forEach((t, i) => {
-				const x = Math.cos(t.a) * R * 0.95 * t.k * sx, y = -0.55 * R * sy + Math.sin(t.a) * R * 0.8 * t.k * sy;
-				leaf(ctx, x, y, 3 + R * 0.08, 1.2 + R * 0.03, t.a, seasonal(mix(f[0], '#102818', 0.3), L, env, i + 20), d, 0.55);
+		if (shape === 'arching') {
+			blobs.slice(0, 6).forEach((b, i) => wash(ctx, b.x * R * sx, b.y * R * sy, b.s * R * 0.66, b.s * R * 0.6, seasonal(b.c, L, env, i), d, { layers: 10, alpha: 0.08 }));
+		} else {
+			// Un buisson se peint comme une petite couronne posée au sol : bouquets éclairés en haut à gauche, ombre froide dessous.
+			const lobes = crownLobes(r, 0, -0.62 * R * sy, R * sx * 0.95, R * 0.62 * sy, 6, 0.48);
+			for (const l of lobes) l.y = Math.min(l.y, -l.r * 0.55);
+			const pal = [f[0], f[1], f[2] ?? f[1]];
+			foliage(ctx, lobes, pal, L, env, d, {
+				midY: -0.55 * R * sy, leaf: 3 + R * 0.08, detail: env.detail,
+				core: { x: R * 0.1, y: -R * 0.28, rx: R * 0.8 * sx, ry: R * 0.22 },
 			});
-		}
-		if (L.gloss) for (const b of blobs.slice(10)) wash(ctx, b.x * R * sx - 2, b.y * R * sy - 2, 2, 1.2, '#FDF7E7', d, { layers: 3, alpha: 0.35, edge: 0 });
-		if (env.detail) {
-			// De près : le feuillage se lit feuille à feuille.
-			const dd = rng(seed ^ 0x51aa);
-			for (let i = 0; i < 28; i++) {
-				const a = Math.PI + dd() * Math.PI, k = Math.sqrt(dd());
-				leaf(ctx, Math.cos(a) * R * 0.85 * k * sx, -0.5 * R * sy + Math.sin(a) * R * 0.75 * k * sy, 3 + R * 0.05, 1.2 + R * 0.02, dd() * 6.28, seasonal(f[i % 3], L, env, i + 40), dd, 0.6);
-			}
+			if (L.gloss) for (const l of lobes.slice(0, 4)) wash(ctx, l.x - l.r * 0.35, l.y - l.r * 0.35, 2.4, 1.3, '#FDF7E7', d, { layers: 3, alpha: 0.4, edge: 0 });
 		}
 	}
 	const spots = shape === 'arching' ? caneTips.map(([x, y]) => ({ x: x / R, y: y / R })) : dots.map(p => ({ x: p.x * sx, y: p.y * sy }));
@@ -548,150 +541,210 @@ function paintConifere(ctx, g, r, d, L, lean, env) {
 	return { top: -T - Hc, r: W * 0.5 };
 }
 
+// ─── Feuillages à l'aquarelle ─────────────────────────────────
+// Comme on peint un arbre au pinceau, lumière venue d'en haut à gauche : un lavis pâle et chaud sur toute la masse,
+// des tons moyens décalés vers le bas, un croissant d'ombre froide sous chaque bouquet, des touches sombres
+// entre les bouquets (peinture en négatif), des feuilles nettes sur les bords, puis quelques rehauts clairs.
+
+/**
+ * Masse de feuillage faite de bouquets ronds `lobes` ({ x, y, r }). `pal` : [sombre, moyen, clair].
+ * `o.midY` : sous cette hauteur, on est dans le dessous ombré ; `o.core` : l'ombre propre sous la masse.
+ */
+function foliage(ctx, lobes, pal, L, env, d, o = {}) {
+	const tone = (c, i) => seasonal(c, L, env, i);
+	const warm = mix(pal[2], '#E2D676', 0.4);
+	const cool = mix(pal[0], '#22385A', 0.28);
+	const deep = mix(cool, '#0E1A1A', 0.35);
+	const midY = o.midY ?? 0;
+	lobes.forEach((l, i) => wash(ctx, l.x, l.y, l.r * 1.06, l.r * 0.9, tone(warm, i), d, { layers: 6, alpha: 0.14, edge: 0.1, variance: 0.25 }));
+	lobes.forEach((l, i) => wash(ctx, l.x + l.r * 0.12, l.y + l.r * 0.16, l.r * 0.84, l.r * 0.7, tone(pal[1], i + 7), d, { layers: 7, alpha: 0.13, edge: 0.16 }));
+	lobes.forEach((l, i) => wash(ctx, l.x + l.r * 0.28, l.y + l.r * 0.36, l.r * 0.62, l.r * 0.42, tone(cool, i + 13), d, { layers: 6, alpha: 0.15, edge: 0.08 }));
+	if (o.core) wash(ctx, o.core.x, o.core.y, o.core.rx, o.core.ry, tone(deep, 3), d, { layers: 7, alpha: 0.13, edge: 0 });
+	// Les creux entre deux bouquets voisins, dans le bas de la masse, restent sombres.
+	for (let i = 0; i < lobes.length; i++) for (let j = i + 1; j < lobes.length; j++) {
+		const a = lobes[i], b = lobes[j], m = Math.min(a.r, b.r);
+		if (Math.hypot(a.x - b.x, a.y - b.y) > (a.r + b.r) * 0.95 || (a.y + b.y) / 2 < midY) continue;
+		wash(ctx, (a.x + b.x) / 2 + d.gauss() * 2, (a.y + b.y) / 2 + m * 0.25, m * 0.3, m * 0.2, tone(deep, i + j), d, { layers: 4, alpha: 0.2, edge: 0 });
+	}
+	// Bords : des feuilles nettes, claires du côté du soleil, froides dessous.
+	const size = o.leaf ?? 6, n = o.detail ? 11 : 7;
+	lobes.forEach((l, i) => {
+		for (let q = 0; q < n; q++) {
+			const a = Math.PI * 0.85 + (q / (n - 1)) * Math.PI * 1.25 + d.gauss() * 0.12;
+			const lit = Math.cos(a - 3.93);
+			leaf(ctx, l.x + Math.cos(a) * l.r * 0.92, l.y + Math.sin(a) * l.r * 0.78, size * d.range(0.8, 1.2), size * 0.42, a + d.gauss() * 0.5, tone(lit > 0.3 ? warm : pal[1], i * 11 + q), d, 0.6);
+		}
+		for (let q = 0; q < 3; q++) {
+			const a = Math.PI * 0.15 + q * 0.35 + d.gauss() * 0.1;
+			leaf(ctx, l.x + Math.cos(a) * l.r * 0.85, l.y + Math.sin(a) * l.r * 0.7, size * 0.9, size * 0.4, a, tone(cool, i * 5 + q), d, 0.5);
+		}
+	});
+	if (o.detail) {
+		for (let i = 0; i < lobes.length * 5; i++) {
+			const l = lobes[i % lobes.length], a = d() * 6.28, k = Math.sqrt(d());
+			const x = l.x + Math.cos(a) * l.r * 0.75 * k, y = l.y + Math.sin(a) * l.r * 0.6 * k;
+			const lit = (l.x - x) + (l.y - y) > 0 ? warm : y > midY ? cool : pal[1];
+			leaf(ctx, x, y, size * 0.8, size * 0.36, d() * 6.28, tone(lit, i + 60), d, 0.45);
+		}
+	}
+	lobes.filter(l => l.y < midY).forEach((l, i) => wash(ctx, l.x - l.r * 0.3, l.y - l.r * 0.32, l.r * 0.3, l.r * 0.2, tone(mix(warm, '#FFF6C8', 0.35), i + 40), d, { layers: 4, alpha: 0.12, edge: 0 }));
+}
+
+/** Bouquets d'une couronne ovale : une couronne de bouquets autour, deux ou trois au cœur, le bas un peu aplati. */
+function crownLobes(r, cx, cy, rx, ry, n, size = 0.42) {
+	const lobes = [];
+	const off = r() * 6.28;
+	for (let i = 0; i < n; i++) {
+		const a = off + (i / n) * Math.PI * 2 + r.gauss() * 0.15;
+		const low = Math.sin(a) > 0;
+		lobes.push({ x: cx + Math.cos(a) * rx * 0.62, y: cy + Math.sin(a) * ry * (low ? 0.45 : 0.62), r: rx * size * r.range(0.85, 1.12) * (low ? 0.9 : 1) });
+	}
+	for (let i = 0; i < Math.max(2, Math.round(n / 3)); i++) lobes.push({ x: cx + r.gauss() * rx * 0.2, y: cy - ry * 0.15 + r.gauss() * ry * 0.15, r: rx * size * r.range(0.9, 1.1) });
+	return lobes.sort((a, b) => a.y - b.y);
+}
+
+/** Tronc effilé, évasé au pied, ombré du côté opposé au soleil. Renvoie les points de son axe. */
+function trunkPaint(ctx, d, len, wb, wt, lean, bend, birch, detail) {
+	const spine = curve(0, 0, -Math.PI / 2 + lean, len, bend, 12);
+	const width = t => (wb + (wt - wb) * t) * (t < 0.12 ? 1 + ((0.12 - t) / 0.12) * 0.75 : 1);
+	const left = [], right = [];
+	spine.forEach((p, i) => {
+		const t = i / (spine.length - 1), q = spine[Math.min(i + 1, spine.length - 1)], pr = spine[Math.max(i - 1, 0)];
+		const ang = Math.atan2(q[1] - pr[1], q[0] - pr[0]) + Math.PI / 2, w = width(t) / 2;
+		left.push([p[0] - Math.cos(ang) * w, p[1] - Math.sin(ang) * w]);
+		right.push([p[0] + Math.cos(ang) * w, p[1] + Math.sin(ang) * w]);
+	});
+	const bark = birch ? '#EEE9DC' : '#8A6040', dark = birch ? '#A8A090' : '#4A3020', lite = birch ? '#FFFFFF' : '#B88E62';
+	const poly = (pts, color, a) => {
+		ctx.fillStyle = rgba(color, a);
+		ctx.beginPath();
+		pts.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
+		ctx.closePath();
+		ctx.fill();
+	};
+	poly([...left, ...right.slice().reverse()], bark, 0.96);
+	// Côté ombre (le soleil vient de gauche), puis un rehaut clair du côté éclairé.
+	poly([...spine.map((p, i) => [p[0] + (right[i][0] - p[0]) * 0.1, p[1]]), ...right.slice().reverse()], dark, birch ? 0.45 : 0.5);
+	ribbon(ctx, left.map((p, i) => [p[0] * 0.75 + spine[i][0] * 0.25, p[1]]), Math.max(1, wb * 0.16), 0.6, lite, d, birch ? 0.6 : 0.35);
+	// Racines : deux bosses au pied, dans l'herbe.
+	for (const s of [-1, 1]) wash(ctx, s * wb * 0.7, -1, wb * 0.45, wb * 0.18, dark, d, { layers: 4, alpha: 0.25, edge: 0 });
+	if (birch) {
+		for (let i = 0; i < 12; i++) {
+			const t = d.range(0.05, 0.85), p = pointAt(spine, t), w = width(t);
+			wash(ctx, p[0] + d.range(-0.2, 0.25) * w, p[1], w * d.range(0.15, 0.4), 0.9, '#2A2420', d, { layers: 3, alpha: 0.55, edge: 0 });
+		}
+	} else if (detail) {
+		for (let i = 0; i < 8; i++) {
+			const x0 = d.range(-0.3, 0.3), t0 = d.range(0, 0.6);
+			ribbon(ctx, spine.slice(Math.floor(t0 * 12), Math.floor(t0 * 12) + 4).map((p, k) => [p[0] + x0 * width(t0 + k / 12), p[1]]), 0.8, 0.3, '#3A2414', d, 0.45);
+		}
+	}
+	return spine;
+}
+
+/** Branches nues, qui se divisent jusqu'aux rameaux (l'hiver). */
+function twigs(ctx, x, y, ang, len, w, depth, d, col) {
+	const pts = curve(x, y, ang, len, d.gauss() * 0.25, 4);
+	ribbon(ctx, pts, w, Math.max(0.4, w * 0.6), col, d, 0.85);
+	if (depth <= 0) return;
+	const [ex, ey] = pts[pts.length - 1];
+	const n = 2 + (d() < 0.4 ? 1 : 0);
+	for (let k = 0; k < n; k++) twigs(ctx, ex, ey, ang + (k - (n - 1) / 2) * 0.55 + d.gauss() * 0.15, len * 0.68, w * 0.62, depth - 1, d, col);
+}
+
+const CROWNS = {
+	feuillu: { h: 1, rx: 0.42, ry: 0.32, fork: 0.55, n: 7, lobe: 0.42 },
+	bouleau: { h: 1.08, rx: 0.3, ry: 0.36, fork: 0.75, n: 8, lobe: 0.42 },
+	saule: { h: 0.85, rx: 0.48, ry: 0.28, fork: 0.5, n: 7, lobe: 0.42 },
+	colonne: { h: 1.1, rx: 0.17, ry: 0.42, fork: 0.85, n: 7, lobe: 0.62 },
+	parasol: { h: 1.08, rx: 0.42, ry: 0.13, fork: 0.2, n: 8, lobe: 0.3 },
+};
+const CROWN_PAL = {
+	bouleau: ['#4E7A3A', '#7AA04E', '#B4CC72'],
+	saule: ['#4E7A3A', '#7AA04E', '#B8CC78'],
+	parasol: ['#1E3A2A', '#2E5238', '#5A7A4E'],
+	feuillu: ['#1E5030', '#3A7438', '#7FA848'],
+};
+
+/** Feuillus : chêne, tilleul, hêtre, bouleau, saule pleureur, peuplier, pin parasol… */
+function paintBroadleaf(ctx, g, r, d, seed, L, env, form, lean) {
+	const k = ease((g - 0.2) / 0.8);
+	const leafless = bare(L, env);
+	const pal = L.canopy ?? CROWN_PAL[form] ?? CROWN_PAL.feuillu;
+	const shape = CROWNS[form] ?? CROWNS.feuillu;
+	const H = Math.min(280, (70 + 190 * k) * shape.h);
+	const rx = H * shape.rx * (form === 'feuillu' ? (L.spread ?? 1) : 1), ry = H * shape.ry;
+	const crownY = -H + ry;
+	const wb = (4 + 16 * k) * (form === 'bouleau' ? 0.65 : form === 'saule' ? 1.2 : 1);
+	const forkY = crownY + ry * shape.fork;
+	const bend = r.gauss() * 0.12 + (form === 'parasol' ? 0.25 * Math.sign(r.gauss()) : 0);
+	const spine = trunkPaint(ctx, d, -forkY, wb, wb * 0.5, lean, bend, form === 'bouleau', env.detail);
+	const [fx, fy] = spine[spine.length - 1];
+	const lobes = crownLobes(r, fx, crownY, rx, ry, shape.n, shape.lobe);
+	const limb = form === 'bouleau' ? '#5A4A3A' : '#5A3A22';
+	// Charpentières : du haut du tronc vers les bouquets du bas et des côtés (le feuillage les recouvre en partie).
+	const limbs = lobes.filter(l => l.y > crownY - ry * 0.3).slice(0, 4);
+	for (const l of limbs) ribbon(ctx, [[fx, fy + 4], [(fx + l.x) / 2, (fy + l.y) / 2 + 4], [l.x, l.y]], wb * 0.45, 1.2, limb, d, 0.9);
+	if (g <= 0.3 || leafless) {
+		if (leafless) for (const l of lobes.slice(0, 5)) twigs(ctx, fx, fy, Math.atan2(l.y - fy, l.x - fx), Math.hypot(l.x - fx, l.y - fy) * 0.55, wb * 0.4, 3, d, limb);
+		return { top: crownY - ry, r: rx };
+	}
+	foliage(ctx, lobes, pal, L, env, d, {
+		midY: crownY + ry * 0.1, leaf: 4 + H * 0.022, detail: env.detail,
+		core: { x: fx + rx * 0.1, y: crownY + ry * 0.55, rx: rx * 0.7, ry: ry * 0.32 },
+	});
+	if (form === 'saule') {
+		// Rideaux de branches qui pendent presque jusqu'au sol, feuilles fines le long de chacune.
+		const dd = rng(seed ^ 0x5a1e);
+		for (let i = 0; i < 26; i++) {
+			const t = i / 25, x0 = fx + (t - 0.5) * rx * 2.1 + dd.gauss() * 4;
+			const y0 = crownY + ry * (0.2 + Math.abs(t - 0.5) * 0.6) + dd.gauss() * 3;
+			const pts = curve(x0, y0, Math.PI / 2 + (t - 0.5) * 0.25, -y0 * dd.range(0.5, 0.78), (t - 0.5) * -0.2, 7);
+			const col = seasonal(dd.pick([pal[1], pal[2], mix(pal[2], '#E2D676', 0.3)]), L, env, i);
+			// Un rideau : une coulée de vert le long de la branche, puis des feuilles qui en débordent.
+			for (let q = 1; q < pts.length; q++) wash(ctx, pts[q][0], pts[q][1], 3.2 - q * 0.25, 5, col, dd, { layers: 3, alpha: 0.16, edge: 0 });
+			for (let q = 1; q < pts.length; q++) leaf(ctx, pts[q][0] + (q % 2 ? 2 : -2), pts[q][1], 9, 2.6, Math.PI / 2 + (q % 2 ? -0.5 : 0.5), seasonal(dd.pick([pal[1], pal[2]]), L, env, i * 9 + q), dd, 0.6);
+		}
+	}
+	const inLobe = q => { const l = lobes[Math.floor(q() * lobes.length)]; return [l.x + q.gauss() * l.r * 0.4, l.y + q.gauss() * l.r * 0.3]; };
+	if (blooming(L, env)) {
+		const dd = rng(seed ^ 0x2121);
+		for (let i = 0; i < 30; i++) { const [x, y] = inLobe(dd); wash(ctx, x, y, 2, 1.8, L.blossom, dd, { layers: 3, alpha: 0.5 * env.season.spring, edge: 0.1 }); }
+	} else if (g >= 1 && L.fruit) {
+		const dd = rng(seed ^ 0x3131);
+		for (let i = 0; i < 10; i++) { const [x, y] = inLobe(dd); wash(ctx, x, y, 2, 2, L.fruit, dd, { layers: 4, alpha: 0.42, edge: 0.25 }); }
+	}
+	return { top: crownY - ry * 1.05, r: rx };
+}
+
 function paintArbre(ctx, g, seed, L, env = {}) {
 	const r = rng(seed);
 	const form = L.form ?? 'feuillu';
 	const lean = r.gauss() * 0.05, tBend = r.gauss() * 0.1;
-	const branches = Array.from({ length: 5 }, (_, i) => ({
-		t: r.range(0.5, 0.95), side: i % 2 ? 1 : -1, ang: r.range(0.35, 0.95), len: r.range(0.3, 0.55), bend: r.gauss() * 0.3, sub: r.range(0.4, 0.7),
-	}));
-	const pal = L.canopy ?? (form === 'bouleau' ? ['#4E7A3A', '#6E9A48', '#9AB860'] : form === 'saule' ? ['#5A8A40', '#7AA04E', '#A0BC68'] : form === 'parasol' ? ['#24402E', '#2E5238', '#46684A'] : CANOPY);
-	const blobs = Array.from({ length: 24 }, (_, i) => {
-		const layer = i < 9 ? 0 : i < 18 ? 1 : 2;
-		const a = r() * Math.PI * 2;
-		const rad = Math.sqrt(r()) * (layer === 2 ? 0.55 : 0.8);
-		return {
-			x: Math.cos(a) * rad * 0.95 - (layer === 2 ? 0.2 : 0) + (layer === 0 ? 0.08 : 0),
-			y: Math.sin(a) * rad * 0.6 - (layer === 2 ? 0.22 : 0) + (layer === 0 ? 0.12 : 0),
-			s: layer === 2 ? r.range(0.16, 0.24) : r.range(0.26, 0.38),
-			c: layer === 0 ? r.pick([mix(pal[0], '#0E2A18', 0.15), pal[0]]) : layer === 1 ? r.pick([pal[0], pal[1]]) : r.pick([pal[1], pal[2]]),
-		};
-	});
-	const ticks = Array.from({ length: 22 }, () => ({ a: r() * Math.PI * 2, k: r.range(0.85, 1.05) }));
-	const strands = Array.from({ length: 26 }, () => ({ a: r.range(-0.1, Math.PI + 0.1), len: r.range(0.8, 1.3), c: r.pick(['#8AAE5A', '#A8C070', '#7A9E4E']) }));
-	const marks = Array.from({ length: 10 }, () => ({ t: r.range(0.05, 0.9), w: r.range(0.4, 0.9) }));
-	const fruits = Array.from({ length: 9 }, () => ({ x: r.gauss() * 0.45, y: r.gauss() * 0.3 }));
-	// Couronne en bouquets : chaque bouquet est porté par sa branche, avec des trous de ciel entre eux.
-	const nC = L.clumps ?? 5, spread = L.spread ?? 1;
-	const clump = (x, y, s) => ({ x, y, s, blobs: Array.from({ length: 5 }, () => ({ x: r.gauss() * 0.38, y: r.gauss() * 0.26, s: r.range(0.55, 0.9), shade: r() })) });
-	const clumps = Array.from({ length: nC }, (_, i) => {
-		const a = Math.PI + ((i + 0.5) / nC) * Math.PI + r.gauss() * 0.12;
-		const rad = r.range(0.45, 0.68);
-		return clump(Math.cos(a) * rad, Math.sin(a) * rad * 0.75, r.range(0.3, 0.4));
-	});
-	const heart = clump(0, -0.05, 0.46);
 	const d = rng(seed ^ 0x7a11);
-
 	if (form === 'conifere' || form === 'meleze') return paintConifere(ctx, g, r, d, L, lean, env);
 	if (g < 0.2) return sapling(ctx, g, r, d, lean, tBend);
+	return paintBroadleaf(ctx, g, r, d, seed, L, env, form, lean);
+}
 
-	const leafless = bare(L, env);
-	const k = ease((g - 0.2) / 0.8);
-	const tall = form === 'parasol' ? 1.35 : form === 'saule' ? 0.65 : form === 'colonne' ? 0.9 : form === 'bouleau' ? 1.1 : 1;
-	const T = (30 + 90 * k) * tall, tw = (3 + 11 * k) * (form === 'bouleau' ? 0.6 : form === 'saule' ? 1.25 : 1);
-	const c = g > 0.3 ? ease((g - 0.3) / 0.7) : 0;
-	const C = form === 'feuillu' ? 16 + 74 * c : (18 + 87 * c) * (form === 'bouleau' ? 0.78 : 1);
-	shadow(ctx, 16 + C * 1.0, 5 + C * 0.25, d);
-
-	const bark = form === 'bouleau' ? '#EDE8DA' : form === 'parasol' ? '#6B4A32' : '#7A5130';
-	const dark = mix(bark, '#5A3A22', form === 'bouleau' ? 0.5 : 0.2);
-	const trunk = curve(0, 0, -Math.PI / 2 + lean * (form === 'parasol' ? 3 : 1), T, tBend * (form === 'parasol' ? 2 : 1), 10);
-	for (const s of [-1, 1]) ribbon(ctx, curve(0, -tw * 0.5, s > 0 ? 0.45 : Math.PI - 0.45, tw * 0.9, s * 0.3, 4), tw * 0.5, 0.6, mix(bark, '#3A2A1A', 0.2), d);
-	ribbon(ctx, trunk, tw, tw * 0.45, bark, d, 0.95);
-	ribbon(ctx, trunk.map(p => [p[0] + tw * 0.22, p[1]]), tw * 0.45, tw * 0.2, form === 'bouleau' ? '#B8B0A0' : '#4A2E1A', d, 0.5);
-	if (form === 'bouleau') for (const m of marks) { const p = pointAt(trunk, m.t); wash(ctx, p[0], p[1], tw * 0.5 * m.w, 0.9, '#2A2420', d, { layers: 3, alpha: 0.45, edge: 0 }); }
-	if (env.detail && form !== 'bouleau') {
-		// De près : l'écorce se creuse de fines crevasses.
-		const dd = rng(seed ^ 0x3c3c);
-		for (let i = 0; i < 7; i++) {
-			const x0 = (dd() - 0.5) * tw * 0.7, t0 = dd() * 0.5;
-			ribbon(ctx, trunk.slice(Math.floor(t0 * 10), Math.floor(t0 * 10) + 4).map(p => [p[0] + x0, p[1]]), 0.7, 0.3, '#3A2414', dd, 0.5);
-		}
+/**
+ * Une fleur des champs pousse en touffe : plusieurs tiges d'âges différents, serrées autour de la première.
+ * Les petites fleurs (pâquerettes, violettes…) forment des touffes plus fournies.
+ */
+function paintFleur(ctx, g, seed, L, env = {}) {
+	const r = rng(seed ^ 0x40f1);
+	const small = (L.h?.[1] ?? 60) < 40;
+	const n = g < 0.35 ? 1 : (small ? 4 : 2) + Math.floor(r() * (small ? 3 : 2)) - (g < 0.7 ? 1 : 0);
+	const stems = Array.from({ length: n - 1 }, (_, i) => ({ x: (i % 2 ? 1 : -1) * r.range(5, small ? 14 : 16), y: r.range(-2, 3), k: r.range(0.72, 0.92), g: Math.min(1, g * r.range(0.75, 1)) }));
+	stems.sort((a, b) => a.y - b.y);
+	for (const [i, st] of stems.entries()) {
+		ctx.save();
+		ctx.translate(st.x, st.y);
+		ctx.scale(st.k, st.k);
+		paintFleurOne(ctx, st.g, seed + (i + 1) * 7919, L, env);
+		ctx.restore();
 	}
-	const top = trunk[trunk.length - 1];
-
-	if (form === 'feuillu') {
-		const cx = top[0], cy = top[1] - C * 0.25;
-		const at = cl => [cx + cl.x * C * spread, cy + cl.y * C];
-		// Charpentières : du sommet du tronc vers chaque bouquet.
-		for (const cl of clumps) {
-			const [x, y] = at(cl);
-			ribbon(ctx, [[cx, top[1] + C * 0.15], [(cx + x) / 2, (top[1] + y) / 2 + C * 0.05], [x, y]], tw * 0.5, 1.2, dark, d, 0.9);
-			if (leafless) for (const s of [-0.6, 0, 0.6]) ribbon(ctx, curve(x, y, Math.atan2(y - top[1], x - cx) + s, C * 0.28, s * 0.4, 4), 1, 0.3, dark, d, 0.7);
-		}
-		if (g <= 0.3) return { top: top[1], r: 14 };
-		if (!leafless) {
-			const all = [heart, ...clumps].sort((a, b) => a.y - b.y);
-			all.forEach((cl, ci) => {
-				const [x0, y0] = at(cl);
-				cl.blobs.forEach((b, bi) => {
-					const shade = b.shade + (b.y > 0 ? -0.3 : 0.2) + (b.x < 0 ? 0.1 : -0.1) + (cl.y < -0.3 ? 0.15 : 0);
-					const col = shade < 0.35 ? pal[0] : shade < 0.7 ? pal[1] : pal[2];
-					wash(ctx, x0 + b.x * cl.s * C, y0 + b.y * cl.s * C, b.s * cl.s * C * 1.15, b.s * cl.s * C, seasonal(col, L, env, ci * 7 + bi), d, { layers: 9, alpha: 0.12, sides: 9 });
-				});
-				for (let q = 0; q < 4; q++) {
-					const a = ((q + ci) / 4) * Math.PI * 2;
-					leaf(ctx, x0 + Math.cos(a) * cl.s * C * 0.95, y0 + Math.sin(a) * cl.s * C * 0.7, 3 + C * 0.06, 1.3 + C * 0.02, a, seasonal(mix(pal[0], '#0E2A18', 0.3), L, env, ci * 4 + q + 50), d, 0.5);
-				}
-			});
-			if (env.detail) {
-				const dd = rng(seed ^ 0x6d6d);
-				for (let i = 0; i < 46; i++) {
-					const cl = i % 5 === 0 ? heart : clumps[i % clumps.length];
-					const [x0, y0] = at(cl);
-					leaf(ctx, x0 + dd.gauss() * cl.s * C * 0.45, y0 + dd.gauss() * cl.s * C * 0.32, 2.4 + C * 0.035, 1 + C * 0.012, dd() * 6.28, seasonal(dd.pick(pal), L, env, i + 80), dd, 0.55);
-				}
-			}
-			if (blooming(L, env)) {
-				const dd = rng(seed ^ 0x2121);
-				for (let i = 0; i < 26; i++) {
-					const cl = clumps[i % clumps.length];
-					const [x0, y0] = at(cl);
-					wash(ctx, x0 + dd.gauss() * cl.s * C * 0.45, y0 + dd.gauss() * cl.s * C * 0.3, 1.8, 1.6, L.blossom, dd, { layers: 3, alpha: 0.5 * env.season.spring, edge: 0.1 });
-				}
-			} else if (g >= 1 && L.fruit) {
-				for (const f of fruits) wash(ctx, cx + f.x * C * spread, cy + f.y * C - C * 0.1, 1.9, 1.9, L.fruit, d, { layers: 4, alpha: 0.4, edge: 0.2 });
-			}
-		}
-		return { top: cy - C * 1.1, r: C * spread * 0.9 };
-	}
-
-	const branchList = form === 'parasol' ? branches.map(b => ({ ...b, t: 0.8 + b.t * 0.2, ang: b.ang + 0.4 })) : branches;
-	for (const b of branchList) {
-		const p = pointAt(trunk, b.t);
-		const ang = -Math.PI / 2 + b.side * b.ang;
-		const pts = curve(p[0], p[1], ang, b.len * T * (form === 'colonne' ? 0.5 : 1), b.bend, 6);
-		ribbon(ctx, pts, tw * 0.45 * (1 - b.t * 0.4), 0.8, dark, d);
-		const q = pointAt(pts, b.sub);
-		ribbon(ctx, curve(q[0], q[1], ang - b.side * 0.5, b.len * T * 0.45, 0, 4), 1.6, 0.5, '#6B4A2B', d);
-	}
-
-	if (g <= 0.3) return { top: top[1], r: 14 };
-	const sx = form === 'colonne' ? 0.45 : form === 'parasol' ? 1.25 : 1;
-	const sy = form === 'colonne' ? 1.7 : form === 'parasol' ? 0.38 : 1;
-	const cx = top[0], cy = top[1] - C * (form === 'colonne' ? 0.75 : form === 'parasol' ? 0.08 : 0.3);
-	if (leafless) {
-		for (const t of ticks.slice(0, 12)) ribbon(ctx, curve(cx, cy + C * 0.2, -Math.PI / 2 + Math.cos(t.a) * 0.9, C * 0.6 * t.k * sy, Math.sin(t.a) * 0.4, 5), 1.1, 0.3, dark, d, 0.7);
-		return { top: cy - C * 0.75 * sy, r: C * sx * 0.8 };
-	}
-	const alpha = form === 'bouleau' ? 0.09 : 0.11;
-	blobs.slice(0, form === 'bouleau' ? 18 : 24).forEach((b, i) => wash(ctx, cx + b.x * C * sx, cy + b.y * C * sy, b.s * C * 1.15 * (sx < 1 ? 0.7 : 1), b.s * C * (sy < 1 ? 0.6 : 1), seasonal(b.c, L, env, i), d, { layers: 10, alpha, sides: 9 }));
-	if (form === 'saule') {
-		strands.forEach((st, i) => {
-			const x0 = cx + Math.cos(st.a) * C * 0.85, y0 = cy - Math.sin(st.a) * C * 0.3 + C * 0.15;
-			ribbon(ctx, curve(x0, y0, Math.PI / 2 + (x0 - cx) * 0.004, C * st.len, (x0 > cx ? -1 : 1) * 0.15, 6), 2.2, 0.4, seasonal(st.c, L, env, i), d, 0.7);
-		});
-	} else {
-		ticks.forEach((t, i) => {
-			const x = cx + Math.cos(t.a) * C * 0.92 * t.k * sx, y = cy + Math.sin(t.a) * C * 0.62 * t.k * sy;
-			leaf(ctx, x, y, 3 + C * 0.07, 1.4 + C * 0.025, t.a, seasonal(mix(pal[0], '#0E2A18', 0.3), L, env, i + 30), d, 0.5);
-		});
-	}
-	if (form === 'bouleau') {
-		for (const b of branches.slice(0, 2)) ribbon(ctx, curve(cx, cy + C * 0.35, -Math.PI / 2 + b.side * b.ang, C * 0.35, b.bend, 4), 2.2, 0.6, '#D8D0C0', d, 0.45);
-	}
-	if (g >= 1 && L.fruit) for (const f of fruits) wash(ctx, cx + f.x * C * sx, cy + f.y * C * sy, 1.9, 1.9, L.fruit, d, { layers: 4, alpha: 0.4, edge: 0.2 });
-	return { top: cy - C * 0.75 * sy, r: C * sx * 0.85 };
+	return paintFleurOne(ctx, g, seed, L, env);
 }
 
 const PAINTERS = { herbe: paintHerbe, fleur: paintFleur, buisson: paintBuisson, arbre: paintArbre };

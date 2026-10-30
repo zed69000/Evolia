@@ -85,7 +85,11 @@ const eco = new EcoPanel($('#eco'), state, kind => {
 function renderHud() {
 	const km = todayMeters(state) / 1000;
 	$('#hud-day').textContent = PLACE_BY_ID[state.place].name;
-	$('#hud-km').textContent = `${fmt(km, km < 10 ? 1 : 0)} / ${state.goalKm} km aujourd'hui`;
+	// En toutes lettres : ce qu'on a fait aujourd'hui, puis l'objectif du jour (ou qu'il est atteint).
+	const goal = fmt(state.goalKm, state.goalKm % 1 ? 1 : 0);
+	$('#hud-km').textContent = km >= state.goalKm
+		? `${fmt(km, km < 10 ? 1 : 0)} km aujourd'hui ✓`
+		: `${fmt(km, 1)} km sur ${goal} aujourd'hui`;
 	$('#hud-steps').innerHTML = `<span class="nectar${boostLeft(state) ? ' boost' : ''}">${fmtInt(state.nectar ?? 0)}</span>`;
 	const k = Math.min(1, km / state.goalKm);
 	$('#ring-fg').style.strokeDashoffset = String(113.1 * (1 - k));

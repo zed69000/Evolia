@@ -503,22 +503,89 @@ export class Garden {
 		m.globalAlpha = 0.55;
 		for (const i of this.lockedCells()) { m.beginPath(); this.tracePath(m, this.blob(i)); m.fill(); }
 		m.globalAlpha = 1;
-		m.beginPath();
-		for (const i of this.openCells()) this.tracePath(m, this.blob(i));
-		m.fill();
-		// Bord fondu : quelques traits de plus en plus larges et légers font s'effacer la brume à l'orée des clairières.
-		if (!this.glyph) {
-			m.lineJoin = 'round';
-			for (const [w, a] of [[10, 0.35], [24, 0.22], [44, 0.12]]) {
-				m.globalAlpha = a;
-				m.lineWidth = w;
-				m.stroke();
-			}
-			m.globalAlpha = 1;
+		if (this.glyph) {
+			m.beginPath();
+			for (const i of this.openCells()) this.tracePath(m, this.blob(i));
+			m.fill();
+		} else {
+			// Tout l'intérieur du jardin, poches entre les clairières comprises, au bord déjà fondu.
+			const mk = this.gardenMask();
+			m.drawImage(mk.canvas, mk.x0, mk.y0, mk.canvas.width / mk.k, mk.canvas.height / mk.k);
 		}
 		ctx.setTransform(1, 0, 0, 1, 0, 0);
 		ctx.drawImage(this.mist, 0, 0);
 		world();
+	}
+
+	/**
+	 * Forme du jardin ouvert, en basse résolution : les clairières, plus les poches qu'elles enferment entre elles
+	 * (sinon la brume s'y déposait en bandes pâles au milieu du jardin). Calculée une fois par ensemble de clairières.
+	 */
+	gardenMask() {
+		const open = this.openCells();
+		const key = `${this.biome}:${open.join(',')}`;
+		if (this.maskCache?.key === key) return this.maskCache;
+		const k = 1 / 8, pad = 160;
+		let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+		for (const i of open) for (const [x, y] of this.blob(i).pts) { x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x); y1 = Math.max(y1, y); }
+		x0 -= pad; y0 -= pad; x1 += pad; y1 += pad;
+		const W = Math.ceil((x1 - x0) * k), H = Math.ceil((y1 - y0) * k);
+		const c = document.createElement('canvas');
+		c.width = W; c.height = H;
+		const g = c.getContext('2d');
+		g.setTransform(k, 0, 0, k, -x0 * k, -y0 * k);
+		g.fillStyle = g.strokeStyle = '#000';
+		g.lineWidth = 40;
+		g.lineJoin = 'round';
+		for (const i of open) { g.beginPath(); this.tracePath(g, this.blob(i)); g.fill(); g.stroke(); }
+		// Tout ce qu'on n'atteint pas depuis le bord sans traverser une clairière est dans le jardin.
+		const img = g.getImageData(0, 0, W, H), px = img.data;
+		const outside = new Uint8Array(W * H), stack = [];
+		const push = j => { if (!outside[j] && px[j * 4 + 3] < 128) { outside[j] = 1; stack.push(j); } };
+		for (let x = 0; x < W; x++) { push(x); push((H - 1) * W + x); }
+		for (let y = 0; y < H; y++) { push(y * W); push(y * W + W - 1); }
+		while (stack.length) {
+			const j = stack.pop(), x = j % W;
+			if (x > 0) push(j - 1);
+			if (x < W - 1) push(j + 1);
+			if (j >= W) push(j - W);
+			if (j < W * (H - 1)) push(j + W);
+		}
+		for (let j = 0; j < W * H; j++) { px[j * 4] = px[j * 4 + 1] = px[j * 4 + 2] = 0; px[j * 4 + 3] = outside[j] ? 0 : 255; }
+		g.setTransform(1, 0, 0, 1, 0, 0);
+		g.putImageData(img, 0, 0);
+		// Bord fondu : la forme est adoucie avant d'être agrandie.
+		const soft = document.createElement('canvas');
+		soft.width = W; soft.height = H;
+		const sg = soft.getContext('2d');
+		sg.filter = 'blur(3px)';
+		sg.drawImage(c, 0, 0);
+		return (this.maskCache = { key, canvas: soft, x0, y0, k });
+	}
+
+	/** Calque des ombres portées, à la taille de l'écran. */
+	shadowLayer(cw, ch) {
+		if (!this.shadowCanvas || this.shadowCanvas.width !== cw || this.shadowCanvas.height !== ch) {
+			this.shadowCanvas = document.createElement('canvas');
+			this.shadowCanvas.width = cw;
+			this.shadowCanvas.height = ch;
+		}
+		return this.shadowCanvas;
+	}
+
+	/** Tache ronde et douce (opaque au centre, fondue au bord), base de toutes les ombres. */
+	softDot() {
+		if (this.dotCanvas) return this.dotCanvas;
+		const c = document.createElement('canvas');
+		c.width = c.height = 64;
+		const g = c.getContext('2d');
+		const grd = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+		grd.addColorStop(0, 'rgba(0,0,0,1)');
+		grd.addColorStop(0.55, 'rgba(0,0,0,0.85)');
+		grd.addColorStop(1, 'rgba(0,0,0,0)');
+		g.fillStyle = grd;
+		g.fillRect(0, 0, 64, 64);
+		return (this.dotCanvas = c);
 	}
 
 	/** Texture de brume : de grandes taches douces, raccordées sur les bords pour se répéter sans couture. */
@@ -1979,20 +2046,48 @@ export class Garden {
 		if (!glyph && sun && sun.alt > 1 && sunny > 0.02) {
 			const dir = ((sun.az + 180) * Math.PI) / 180;
 			const dx = Math.sin(dir), dy = -Math.cos(dir);
-			const len = Math.min(4, 1 / Math.tan((sun.alt * Math.PI) / 180)) * 0.45;
-			const ang = Math.atan2(dy, dx);
-			ctx.fillStyle = `rgba(25,45,20,${(0.16 * sunny * Math.min(1, sun.alt / 8)).toFixed(3)})`;
+			// Une ombre courte et douce, à la forme de la couronne, reliée au pied par l'ombre du tronc.
+			const len = Math.min(1.8, 1 / Math.tan((sun.alt * Math.PI) / 180)) * 0.5;
+			const layer = this.shadowLayer(cw, ch), s = layer.getContext('2d');
+			s.setTransform(1, 0, 0, 1, 0, 0);
+			s.globalCompositeOperation = 'source-over';
+			s.clearRect(0, 0, cw, ch);
+			s.setTransform(ctx.getTransform());
+			const dot = this.softDot();
+			s.strokeStyle = '#000';
+			s.lineCap = 'round';
 			for (const p of place.plants) {
 				const m = this.meta.get(p.id);
 				if (!m) continue;
 				const [x, y] = plantPos(p);
-				if (x < v.x0 - 200 || x > v.x0 + v.w + 200 || y < v.y0 - 50 || y > v.y0 + v.h + 300) continue;
-				const L = Math.max(2, -m.top * len);
-				const r = Math.max(2, m.r);
-				ctx.beginPath();
-				ctx.ellipse(x + dx * L * 0.5, y + dy * L * 0.5, L * 0.5 + r * 0.5, r * 0.5, ang, 0, Math.PI * 2);
-				ctx.fill();
+				if (x < v.x0 - 250 || x > v.x0 + v.w + 250 || y < v.y0 - 80 || y > v.y0 + v.h + 300) continue;
+				const r = Math.max(3, m.r);
+				if (p.type === 'herbe' || p.type === 'fleur') {
+					s.drawImage(dot, x + dx * 3 - r * 0.7, y + dy * 2 - r * 0.25, r * 1.4, r * 0.5);
+					continue;
+				}
+				// Le centre de la couronne est à environ 60 % de la hauteur ; son ombre tombe à l'opposé du soleil.
+				const h = -m.top * (p.type === 'arbre' ? 0.62 : 0.5) * len;
+				const sx = x + dx * h, sy = y + dy * h * 0.7;
+				if (p.type === 'arbre') {
+					s.lineWidth = Math.max(2, r * 0.12);
+					s.globalAlpha = 0.7;
+					s.beginPath(); s.moveTo(x, y); s.lineTo(sx - dx * r * 0.4, sy - dy * r * 0.25); s.stroke();
+					s.globalAlpha = 1;
+				}
+				s.drawImage(dot, sx - r * 1.15, sy - r * 0.6, r * 2.3, r * 1.2);
+				s.drawImage(dot, x - r * 0.6, y - r * 0.2, r * 1.2, r * 0.4);
 			}
+			// Une seule teinte froide, un peu bleutée, posée d'un coup : les ombres qui se croisent ne s'assombrissent pas.
+			s.setTransform(1, 0, 0, 1, 0, 0);
+			s.globalCompositeOperation = 'source-in';
+			s.fillStyle = '#2A3E5A';
+			s.fillRect(0, 0, cw, ch);
+			ctx.save();
+			ctx.setTransform(1, 0, 0, 1, 0, 0);
+			ctx.globalAlpha = 0.22 * sunny * Math.min(1, sun.alt / 8);
+			ctx.drawImage(layer, 0, 0);
+			ctx.restore();
 		}
 
 		// Ombres des animaux au sol

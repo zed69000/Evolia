@@ -306,15 +306,16 @@ const RELIEF = {
 	prairie: { amp: 0.45, scale: 950, light: 0.5 },
 	marais: { amp: 0.25, scale: 800, light: 0.25, damp: true },
 	foret: { amp: 0.7, scale: 700, light: 0.65, moss: true },
-	montagne: { amp: 2.2, scale: 560, light: 1.3, slope: 1 / 1300, ledges: 0.75, snow: 2.2 },
-	littoral: { amp: 0.55, scale: 240, light: 0.75, dunes: 0.3 },
+	montagne: { amp: 2.2, scale: 560, light: 1.3, fine: 0.22, slope: 1 / 1300, ledges: 0.75, snow: 2.2 },
+	littoral: { amp: 0.55, scale: 240, light: 0.75, dunes: 0.3, fine: 0.22 },
 };
 
 export function heightAt(biome, x, y) {
 	const R = RELIEF[biome], s = R.scale;
 	let h = Math.sin(x / s + 1.3) * Math.cos(y / (s * 1.25) + 0.4)
 		+ 0.5 * Math.sin((x * 0.6 + y * 0.8) / (s * 0.45) + 2.1)
-		+ 0.22 * Math.sin((x * -0.7 + y * 0.5) / (s * 0.2) + 4.2);
+		// Ondulation fine : seulement pour la montagne et les dunes ; ailleurs elle dessinait des rayures dans le pré.
+		+ (R.fine ?? 0) * Math.sin((x * -0.7 + y * 0.5) / (s * 0.2) + 4.2);
 	h *= R.amp;
 	// En montagne, le terrain monte vers le haut de l'écran : on grimpe en ouvrant les parcelles du haut.
 	if (R.slope) h -= y * R.slope;
@@ -458,8 +459,22 @@ function longFeatures(biome) {
 			if (m === 'path') {
 				const pts = meander(r, cx, cy, orient(gx !== 0, cx, cy), 70);
 				list.push(longItem(pts, 16, 'path', (g, rr) => {
-					ribbon(g, pts, 24, 24, '#CDB98A', rr, 0.42);
-					ribbon(g, pts, 11, 11, '#D8C8A0', rr, 0.32);
+					// Un chemin de terre battue : des taches de terre qui se chevauchent (largeur inégale, bords doux),
+					// une bande d'herbe au milieu là où on ne marche pas, des cailloux, et l'herbe qui déborde sur les bords.
+					for (let i = 0; i < pts.length - 1; i++) {
+						const [x0, y0] = pts[i], [x1, y1] = pts[i + 1];
+						const n = Math.max(1, Math.round(Math.hypot(x1 - x0, y1 - y0) / 9));
+						for (let k = 0; k < n; k++) {
+							const t = k / n, x = x0 + (x1 - x0) * t, y = y0 + (y1 - y0) * t;
+							wash(g, x + rr.gauss() * 1.5, y + rr.gauss() * 1.5, rr.range(10, 15), rr.range(6, 9), '#C2A878', rr, { layers: 3, alpha: 0.13, edge: 0 });
+						}
+					}
+					ribbon(g, pts, 5, 5, '#8EA850', rr, 0.22);
+					for (let i = 1; i < pts.length; i += 1) {
+						const [x, y] = pts[i];
+						if (rr() < 0.5) wash(g, x + rr.gauss() * 7, y + rr.gauss() * 4, rr.range(1.2, 2.4), rr.range(0.9, 1.6), rr.pick(['#9A8A70', '#B8A888', '#7A6A58']), rr, { layers: 2, alpha: 0.5, edge: 0.3 });
+						for (const side of [-1, 1]) if (rr() < 0.6) wash(g, x + side * rr.range(11, 15), y + rr.gauss() * 4, rr.range(4, 8), rr.range(2, 3), '#6E9A42', rr, { layers: 3, alpha: 0.18, edge: 0 });
+					}
 				}, hash(biome, 'path', zi)));
 			}
 		}
