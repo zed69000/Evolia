@@ -10,7 +10,7 @@ import { SOURCES, bestSource, harvest, classifyCadence } from './harvest.js';
 import { PLACES, PLACE_BY_ID, SPECIES_BY_ID, checkSpecies, placeOpen, speciesOf } from './species.js';
 import { Encyclopedia, thumbCopy } from './encyclopedia.js';
 import { Sky, WEATHER_LABEL } from './weather.js';
-import { EcoPanel, tick, summaryHtml, addBoost, boostLeft, visualExtra, rates, GUILDS, BOOST_MULT, BOOST_PER_MIN } from './idle.js';
+import { EcoPanel, tick, summaryHtml, addBoost, boostLeft, visualExtra, rates, GUILDS, BOOST_MULT, BOOST_PER_MIN, nectarCapacity, hasCollector, COLLECTOR_CAP, COLLECTOR_UPGRADE } from './idle.js';
 import { paperTexture } from './watercolor.js';
 import { Soundscape } from './audio.js';
 import { ITEMS, ITEM_ORDER, itemHelp } from './deco.js';
@@ -74,6 +74,23 @@ function persist(now = false) {
 const species = new Encyclopedia($('#species'), state, () => { persist(); updateSpeciesDot(); });
 const places = new PlacesMap($('#map'), state, travel);
 // Aider une équipe de l'écosystème, c'est poser l'objet qui l'attire (s'il est débloqué et payable), sinon voir la liste.
+// La récolte en attente : sans collecteur, elle perle sur les fleurs ; avec, elle remplit les jarres.
+garden.dewAmount = () => (hasCollector(state) ? 0 : state.pending ?? 0);
+garden.nectarFill = () => (state.pending ?? 0) / Math.max(1, nectarCapacity(state));
+
+/** Faire passer de la récolte en attente au compteur. */
+function collect(amount) {
+	const v = Math.max(0, Math.min(state.pending ?? 0, amount));
+	if (v <= 0) return 0;
+	state.pending -= v;
+	state.nectar = (state.nectar ?? 0) + v;
+	sound.chime(1);
+	renderHud();
+	renderStatus();
+	persist();
+	return v;
+}
+
 // Le jardinier récolte une parcelle mûre : un panier de légumes, en nectar.
 garden.onHarvest = () => {
 	state.nectar = (state.nectar ?? 0) + 60;
@@ -185,6 +202,7 @@ garden.onTap = hit => {
 	clearTimeout(cardTimer);
 	if (placing) return movePlacing(hit);
 	if (!hit) { card.hidden = true; return; }
+	if (hit.dew) { const v = collect(garden.takeDew(hit.dew)); if (v >= 1) toast(`+${fmtInt(v)} nectar cueilli`, '#E3A33A'); return; }
 	if (hit.item) return tapItem(hit, card);
 	if (hit.critter) return tapCritter(hit, card);
 	if (hit.cell != null) {
@@ -471,7 +489,10 @@ function renderStatus() {
 	const x = boostLeft(state) ? BOOST_MULT : 1;
 	dot.className = `status-dot${state.tracking ? ' idle' : ''}`;
 	title.textContent = state.tracking ? 'Au repos' : 'Suivi en pause';
-	sub.textContent = `Écosystème : +${fmtInt(r.nectar * x)} nectar/h${x > 1 ? ` · élan ×${x}` : ''} ›`;
+	// La récolte qui attend : dans les fleurs (à cueillir) ou dans les collecteurs (à vider d'un geste).
+	const pend = Math.floor(state.pending ?? 0), cap = nectarCapacity(state);
+	const wait = pend >= cap ? ' · réserve pleine, récolte !' : pend >= 1 ? ` · ${fmtInt(pend)} à récolter` : '';
+	sub.textContent = `Écosystème : +${fmtInt(r.nectar * x)} nectar/h${x > 1 ? ` · élan ×${x}` : ''}${wait} ›`;
 	renderDaily();
 }
 
@@ -816,12 +837,13 @@ function renderZoomInfo() {
 	const x = boostLeft(state) ? BOOST_MULT : 1;
 	const r = rates(state, state.place);
 	// Le total avance en direct entre deux passages de l'écosystème (toutes les 5 s).
-	const live = (state.nectar ?? 0) + nectarPerHour() * (Date.now() - (state.lastIdle ?? Date.now())) / 3600000;
+	// La récolte qui attend avance en direct, jusqu'à la limite de la réserve.
+	const live = Math.min(nectarCapacity(state), (state.pending ?? 0) + nectarPerHour() * (Date.now() - (state.lastIdle ?? Date.now())) / 3600000);
 	const rows = Object.entries(GUILDS).filter(([gid]) => r.members[gid] > 0).map(([gid, g]) =>
 		`<li><span>${g.name} <small>×${r.members[gid]}</small></span><b>+${fmt(g.nectar * r.members[gid] * r.mult * x, 1)}/h</b></li>`).join('');
 	const growing = garden.current && garden.current.growth < 1 ? garden.current : null;
 	card.innerHTML = `<div class="zi-head"><b>Récolte du nectar</b>${x > 1 ? `<span class="zi-boost">élan ×${x} · ${fmtMin(boostLeft(state) / 60000)}</span>` : ''}</div>
-		<div class="zi-total"><span class="nectar">${live.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span><small>+${fmt(r.nectar * x, 1)}/h ici</small></div>
+		<div class="zi-total"><span class="nectar">${live.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span><small>à récolter · +${fmt(r.nectar * x, 1)}/h ici</small></div>
 		${rows ? `<ul>${rows}</ul>` : '<p>Découvre des pollinisateurs : ils récoltent le nectar pour toi.</p>'}
 		<p class="zi-move">En marchant : +1 nectar tous les 5 m${x === 1 ? ', et la récolte triple ensuite' : ''}.</p>
 		${growing ? `<p class="zi-grow">${plantName(growing)} · ${Math.floor(growing.growth * 100)} %</p>` : ''}`;
@@ -971,8 +993,16 @@ $('#btn-place-turn').addEventListener('click', () => {
 
 function tapItem(hit, card) {
 	const it = hit.item, def = ITEMS[it.kind];
-	card.innerHTML = `<b>${def.name}</b>${def.text}<small class="item-tip">Astuce : un appui long dessus le soulève directement.</small>
-		<div class="item-actions">${def.turn ? '<button class="btn ghost" data-turn>Tourner</button>' : ''}<button class="btn ghost" data-move>Déplacer</button><button class="btn ghost" data-store>Ranger (+${def.cost})</button></div>`;
+	// Un collecteur plein (même un peu) se vide d'un seul geste.
+	if (it.kind === 'collecteur' && (state.pending ?? 0) >= 1) {
+		garden.pourFrom(it);
+		toast(`+${fmtInt(collect(state.pending))} nectar récolté`, '#E3A33A');
+		return;
+	}
+	const lv = it.level ?? 1, up = it.kind === 'collecteur' && lv < 3 ? COLLECTOR_UPGRADE[lv + 1] : 0;
+	const info = it.kind === 'collecteur' ? `<small class="item-tip">Niveau ${lv} · garde ${COLLECTOR_CAP[lv]} nectar${up ? ` (niveau ${lv + 1} : ${COLLECTOR_CAP[lv + 1]})` : ''}. Réserve totale : ${fmtInt(nectarCapacity(state))}.</small>` : '';
+	card.innerHTML = `<b>${def.name}</b>${def.text}${info}<small class="item-tip">Astuce : un appui long dessus le soulève directement.</small>
+		<div class="item-actions">${up ? `<button class="btn primary" data-upgrade ${(state.nectar ?? 0) < up ? 'disabled' : ''}>Améliorer (${up})</button>` : ''}${def.turn ? '<button class="btn ghost" data-turn>Tourner</button>' : ''}<button class="btn ghost" data-move>Déplacer</button><button class="btn ghost" data-store>Ranger (+${def.cost})</button></div>`;
 	card.classList.remove('link');
 	card.classList.add('actions');
 	card.onclick = e => {
@@ -984,11 +1014,26 @@ function tapItem(hit, card) {
 			cardTimer = setTimeout(() => { card.hidden = true; }, 6000);
 			return;
 		}
+		if (e.target.closest('[data-upgrade]') && up && (state.nectar ?? 0) >= up) {
+			state.nectar -= up;
+			it.level = lv + 1;
+			garden.popItem(it);
+			card.hidden = true;
+			toast(`Collecteur niveau ${it.level} : il garde ${COLLECTOR_CAP[it.level]} nectar`, '#E3A33A');
+			sound.chime(2);
+			renderHud();
+			renderStatus();
+			persist(true);
+			return;
+		}
 		if (e.target.closest('[data-move]')) { card.hidden = true; startPlacing(it.kind, it); }
 		if (e.target.closest('[data-store]')) {
 			card.hidden = true;
 			garden.items.splice(garden.items.indexOf(it), 1);
 			state.nectar = (state.nectar ?? 0) + def.cost;
+			// Un collecteur rangé emporte sa réserve : ce qui dépasse revient tout de suite à la bourse.
+			const over = (state.pending ?? 0) - nectarCapacity(state);
+			if (over > 0) { state.pending -= over; state.nectar += over; }
 			garden.nextPopulate = 0;
 			toast(`${def.name} rangé${/^Une /.test(def.name) ? 'e' : ''} : +${def.cost} nectar`, '#9A7448');
 			renderHud();
@@ -1198,10 +1243,19 @@ setTimeout(() => {
 }, 1000);
 
 // Glisser dans le jardin efface l'interface pour le voir en entier ; relâcher la fait revenir.
+// Le petit œil garde l'interface effacée tant qu'on ne le touche pas de nouveau : on explore le jardin seul.
+let peekLock = false;
 garden.onPeek = on => {
-	$('#app').classList.toggle('peek', on);
+	$('#app').classList.toggle('peek', on || peekLock);
 	if (on) $('#plant-card').hidden = true;
 };
+$('#btn-peek').addEventListener('click', () => {
+	peekLock = !peekLock;
+	$('#btn-peek').classList.toggle('on', peekLock);
+	$('#btn-peek').setAttribute('aria-pressed', String(peekLock));
+	garden.onPeek(peekLock);
+	if (peekLock) toast('Touche l’œil pour retrouver tes boutons', '#5F933E');
+});
 
 renderHud();
 renderStatus();

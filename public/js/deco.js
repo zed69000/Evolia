@@ -9,6 +9,7 @@ import { rng, wash, ribbon, curve, leaf, rgba } from './watercolor.js';
 // km : kilomètres au total pour pouvoir le construire ; team : équipe de l'écosystème renforcée (power membres) ;
 // attracts : espèce dont il ajoute un individu visible ; turn : se tourne par pas de 45°.
 export const ITEMS = {
+	collecteur: { name: 'Un collecteur de nectar', cost: 60, km: 0, text: 'Une jarre où tes butineurs déposent leur récolte : elle garde le nectar pour toi. Touche-la pour tout récupérer, et améliore-la pour qu’elle en garde plus.', box: { w: 100, h: 150, ax: 50, ay: 134 } },
 	banc: { name: 'Un banc', cost: 40, km: 0, turn: true, text: 'Pour s’asseoir et regarder le jardin vivre.', box: { w: 130, h: 104, ax: 65, ay: 78 } },
 	massif: { name: 'Un massif mellifère', cost: 25, km: 0, team: 'pollinisateur', power: 1, attracts: 'bourdon', text: 'Lavande, bourrache et thym : un buffet pour les butineurs.', box: { w: 110, h: 70, ax: 55, ay: 56 } },
 	bois: { name: 'Un tas de bois', cost: 30, km: 0, team: 'sol', power: 1, attracts: 'herisson', text: 'Carabes, cloportes et champignons y décomposent le bois.', box: { w: 110, h: 70, ax: 55, ay: 56 } },
@@ -26,7 +27,7 @@ export const ITEMS = {
 	potager: { name: 'Un carré de potager', cost: 90, km: 5, needs: 'cabane', team: 'semeur', power: 2, attracts: ['lapin', 'lievre'], text: 'Le jardinier de la cabane y cultive salades, choux et tomates : de quoi nourrir oiseaux, lapins et butineurs. Pose-en côte à côte : les parcelles se soudent en un grand potager, et les légumes poussent à mesure que tu marches.', box: { w: 150, h: 100, ax: 75, ay: 64 } },
 	arche: { name: 'Une arche de roses', cost: 120, km: 20, turn: true, team: 'pollinisateur', power: 1, attracts: 'paon-du-jour', text: 'Un passage fleuri pour les papillons.', box: { w: 170, h: 190, ax: 85, ay: 172 } },
 };
-export const ITEM_ORDER = ['banc', 'massif', 'bois', 'pierres', 'mangeoire', 'nichoir', 'lanterne', 'compost', 'hotel', 'mare', 'cabane', 'potager', 'abri', 'ruche', 'bain', 'arche'];
+export const ITEM_ORDER = ['collecteur', 'banc', 'massif', 'bois', 'pierres', 'mangeoire', 'nichoir', 'lanterne', 'compost', 'hotel', 'mare', 'cabane', 'potager', 'abri', 'ruche', 'bain', 'arche'];
 
 const shade = (g, d, rx, ry = rx * 0.3) => wash(g, rx * 0.12, 2, rx, ry, '#2E4A22', d, { layers: 5, alpha: 0.07, edge: 0 });
 
@@ -499,10 +500,54 @@ function paintPotager(g, rot, stage = 1, soil = true, seed = 88) {
 	return { top: -34 * k };
 }
 
+/**
+ * Collecteur de nectar : une jarre en verre sur un petit pied de bois, coiffée d'un toit de chaume.
+ * `fill` (0 → 1) : le niveau doré dans la jarre ; `level` (1 → 3) : plus grande et cerclée de cuivre en montant.
+ */
+function paintCollecteur(g, rot, fill = 0.5, level = 1) {
+	const d = rng(61);
+	shade(g, d, 34, 9);
+	g.save();
+	g.scale(1.4, 1.4);
+	const k = 0.85 + level * 0.12;
+	// Pied en bois.
+	plank(g, -3, -26, 6, 26, '#7A5130', d);
+	plank(g, -14, -6, 28, 5, '#8A6040', d);
+	// Jarre : verre clair, nectar doré jusqu'au niveau, reflets.
+	const jw = 15 * k, jh = 30 * k, jy = -28;
+	g.save();
+	g.beginPath();
+	g.ellipse(0, jy - jh / 2, jw, jh / 2, 0, 0, Math.PI * 2);
+	g.fillStyle = rgba('#E8F0EC', 0.55);
+	g.fill();
+	g.clip();
+	const top = jy - jh * Math.max(0.04, fill);
+	const grd = g.createLinearGradient(0, top, 0, jy);
+	grd.addColorStop(0, '#F8D24A');
+	grd.addColorStop(1, '#E09A22');
+	g.fillStyle = grd;
+	g.fillRect(-jw, top, jw * 2, jy - top);
+	g.fillStyle = rgba('#FFF4C0', 0.6);
+	g.fillRect(-jw, top, jw * 2, 1.4);
+	g.restore();
+	g.strokeStyle = rgba('#6A7A70', 0.7);
+	g.lineWidth = 1.2;
+	g.beginPath(); g.ellipse(0, jy - jh / 2, jw, jh / 2, 0, 0, Math.PI * 2); g.stroke();
+	g.fillStyle = rgba('#FFFFFF', 0.55);
+	g.beginPath(); g.ellipse(-jw * 0.45, jy - jh * 0.62, jw * 0.14, jh * 0.22, -0.2, 0, Math.PI * 2); g.fill();
+	if (level >= 2) for (const y of [jy - jh * 0.25, jy - jh * 0.75]) { g.strokeStyle = rgba(level >= 3 ? '#C8862E' : '#9A7A50', 0.9); g.lineWidth = 1.6; g.beginPath(); g.ellipse(0, y, jw * 0.97, 1.6, 0, 0, Math.PI * 2); g.stroke(); }
+	// Toit de chaume au-dessus, et une abeille posée.
+	const ry = jy - jh - 2;
+	wash(g, 0, ry, jw + 7, 6, '#C8A45A', d, { layers: 6, alpha: 0.4, edge: 0.3 });
+	for (let i = 0; i < 9; i++) { g.strokeStyle = rgba('#9A7A3A', 0.5); g.lineWidth = 0.8; const x = -jw - 4 + i * ((jw * 2 + 8) / 8); g.beginPath(); g.moveTo(x, ry - 4); g.lineTo(x + 1, ry + 5); g.stroke(); }
+	g.restore();
+	return { top: (ry - 8) * 1.4 };
+}
+
 /** Peintres : (contexte, rotation en radians) → { top, glow?, glowX?, water? }. */
 export const ITEM_PAINTERS = {
 	banc: paintBanc, massif: paintMassif, bois: paintBois, pierres: paintPierres, mangeoire: paintMangeoire, nichoir: paintNichoir,
-	lanterne: paintLanterne, compost: paintCompost, hotel: paintHotel, mare: paintMare, cabane: paintCabane, potager: paintPotager, abri: paintAbri,
+	lanterne: paintLanterne, compost: paintCompost, hotel: paintHotel, mare: paintMare, cabane: paintCabane, potager: paintPotager, collecteur: paintCollecteur, abri: paintAbri,
 	ruche: paintRuche, bain: paintBain, arche: paintArche,
 };
 

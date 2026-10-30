@@ -91,6 +91,24 @@ export function rates(state, placeId) {
  * Fait travailler l'écosystème depuis la dernière fois (12 h au plus), dans tous les lieux.
  * Renvoie un bilan par lieu : plantes arrivées à maturité, nectar produit.
  */
+/**
+ * Le nectar que produit l'écosystème ne tombe pas tout seul dans la bourse : il attend d'être récolté.
+ * Les fleurs en gardent un peu (on le cueille goutte à goutte, à la main) ; chaque collecteur en stocke bien plus,
+ * selon son niveau. Au-delà de la réserve, la production est perdue.
+ */
+export const HAND_CAP = 30;
+export const COLLECTOR_CAP = [0, 150, 400, 1000];
+export const COLLECTOR_UPGRADE = [0, 0, 200, 500];
+
+/** Réserve totale : ce que gardent les fleurs, plus tous les collecteurs posés, dans tous les lieux. */
+export function nectarCapacity(state) {
+	let cap = HAND_CAP;
+	for (const place of Object.values(state.places)) for (const it of place.items ?? []) if (it.kind === 'collecteur') cap += COLLECTOR_CAP[it.level ?? 1];
+	return cap;
+}
+
+export const hasCollector = state => Object.values(state.places).some(p => (p.items ?? []).some(it => it.kind === 'collecteur'));
+
 export function tick(state, garden, now = Date.now()) {
 	const last = state.lastIdle ?? now;
 	state.lastIdle = now;
@@ -113,12 +131,19 @@ export function tick(state, garden, now = Date.now()) {
 		summary.nectar += out.nectar;
 		summary.places[placeId] = out;
 	}
-	state.nectar = (state.nectar ?? 0) + summary.nectar;
+	// La récolte attend dans les fleurs et les collecteurs, jusqu'à la limite de la réserve.
+	const room = Math.max(0, nectarCapacity(state) - (state.pending ?? 0));
+	const kept = Math.min(room, summary.nectar);
+	summary.lost = summary.nectar - kept;
+	const k = summary.nectar > 0 ? kept / summary.nectar : 0;
+	for (const out of Object.values(summary.places)) out.nectar *= k;
+	summary.nectar = kept;
+	state.pending = (state.pending ?? 0) + kept;
 	// Le bilan de la dernière vraie absence reste lisible sur la page Écosystème.
 	if (hours > 10 / 60) {
 		const matured = {};
 		for (const out of Object.values(summary.places)) for (const [t, n] of Object.entries(out.matured)) matured[t] = (matured[t] ?? 0) + n;
-		state.idleLast = { at: now, hours, nectar: summary.nectar, matured, boosted };
+		state.idleLast = { at: now, hours, nectar: summary.nectar, lost: summary.lost, matured, boosted };
 	}
 	return summary;
 }
@@ -129,9 +154,10 @@ export function summaryHtml(summary) {
 	const rows = Object.entries(summary.places).map(([id, out]) => {
 		const chips = Object.entries(out.matured).map(([t, n]) => `<span class="chip">+${n} ${n > 1 ? TYPE_PLURAL[t] : TYPE_PLURAL[t].slice(0, -1)}</span>`).join('');
 		if (!chips && out.nectar < 1) return '';
-		return `<li><b>${PLACE_BY_ID[id].name}</b> · ${Math.round(out.nectar).toLocaleString('fr-FR')} nectar<br>${chips}</li>`;
+		return `<li><b>${PLACE_BY_ID[id].name}</b> · ${Math.round(out.nectar).toLocaleString('fr-FR')} nectar à récolter<br>${chips}</li>`;
 	}).filter(Boolean);
-	return rows.length ? `<ul class="harvest-rows">${rows.join('')}</ul>` : '';
+	const lost = summary.lost >= 1 ? `<p class="eco-lost">Réserve pleine : ${Math.round(summary.lost).toLocaleString('fr-FR')} nectar perdus. Récolte plus souvent, ou installe un collecteur de plus.</p>` : '';
+	return rows.length || lost ? `<ul class="harvest-rows">${rows.join('')}</ul>${lost}` : '';
 }
 
 /** Membres affichés en plus dans le jardin grâce aux aménagements (sur la première espèce de la guilde). */
@@ -195,8 +221,9 @@ export class EcoPanel {
 		const n = this.panel.querySelector('#eco-nectar');
 		if (!n) return;
 		const st = this.state;
-		const live = (st.nectar ?? 0) + this.totalPerHour() * (Date.now() - (st.lastIdle ?? Date.now())) / 3600000;
-		n.textContent = live.toLocaleString('fr-FR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+		const cap = nectarCapacity(st);
+		const live = Math.min(cap, (st.pending ?? 0) + this.totalPerHour() * (Date.now() - (st.lastIdle ?? Date.now())) / 3600000);
+		n.textContent = `${live.toLocaleString('fr-FR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} / ${fmt(cap)}`;
 		const b = this.panel.querySelector('#eco-boost-left');
 		if (b) b.textContent = fmtDur(boostLeft(st));
 	}
@@ -211,9 +238,10 @@ export class EcoPanel {
 
 		// 1. Le nectar, en direct, et ce qu'il rapporte.
 		const hero = `<div class="eco-hero">
-			<span class="eco-label">Ton nectar</span>
-			<b class="nectar" id="eco-nectar">${fmt(st.nectar ?? 0)}</b>
-			<span class="eco-rate">${working ? `+${fmt(this.totalPerHour())} par heure, même appli fermée` : 'Découvre des animaux : ils récolteront pour toi'}</span>
+			<span class="eco-label">À récolter</span>
+			<b class="nectar" id="eco-nectar">${fmt(st.pending ?? 0)} / ${fmt(nectarCapacity(st))}</b>
+			<span class="eco-rate">${working ? `+${fmt(this.totalPerHour())} par heure, même appli fermée · ${hasCollector(st) ? 'touche ton collecteur pour tout récupérer' : 'cueille les gouttes sur les fleurs, ou installe un collecteur'}` : 'Découvre des animaux : ils récolteront pour toi'}</span>
+			<span class="eco-rate">Dans ta bourse : <b>${fmt(st.nectar ?? 0)}</b> nectar</span>
 		</div>`;
 
 		// 2. L'élan : le lien entre le sport et l'idle, dit simplement.

@@ -713,3 +713,12 @@ html, body {
 
 .harvest-info { background: var(--papier-2); border-radius: 14px; padding: 10px 12px; font-size: 13px; color: var(--doux); line-height: 1.45; margin-top: 8px; }
 .harvest-info b { color: var(--foret); }
+.eco-lost { background: #FBEBEB; border-radius: 12px; padding: 8px 10px; color: #8A3A2A !important; font-size: 13px; text-align: left; margin-top: 6px; }
+
+/* Le petit œil : voir seulement le jardin. Il reste visible quand l'interface s'efface. */
+.peek-btn {
+	position: absolute; z-index: 6; right: 12px; top: calc(env(safe-area-inset-top, 0px) + 140px);
+	width: 40px; height: 40px; border: none; border-radius: 14px; padding: 0;
+	display: grid; place-items: center; cursor: pointer; color: var(--foret); transition: background .2s ease;
+}
+.peek-btn.on { background: var(--foret); color: #FDF7E7; }

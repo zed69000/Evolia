@@ -870,7 +870,9 @@ export class Garden {
 		rot = ITEMS[kind].turn ? ((rot % 360) + 360) % 360 : 0;
 		// Au jardin, une parcelle de potager se peint sans sa terre (posée au sol), et ses légumes suivent leur pousse.
 		const bed = kind === 'potager' && it ? { stage: Math.floor(this.bedStage(it) * 6) / 6, seed: plotSeed(it) } : null;
-		const key = bed ? `${kind}:${bed.seed}:${bed.stage}` : `${kind}:${rot}`;
+		// Le collecteur montre son niveau de nectar (par dixièmes) et son niveau d'amélioration.
+		const jar = kind === 'collecteur' && it ? { fill: Math.round(Math.min(1, this.nectarFill?.() ?? 0) * 10) / 10, level: it.level ?? 1 } : null;
+		const key = bed ? `${kind}:${bed.seed}:${bed.stage}` : jar ? `${kind}:${jar.level}:${jar.fill}` : `${kind}:${rot}`;
 		let s = this.itemSprites.get(key);
 		if (!s) {
 			const box = ITEMS[kind].box, D = this.density * 1.4;
@@ -879,7 +881,7 @@ export class Garden {
 			c.height = Math.ceil(box.h * D);
 			const g = c.getContext('2d');
 			g.setTransform(D, 0, 0, D, box.ax * D, box.ay * D);
-			const meta = bed ? ITEM_PAINTERS[kind](g, 0, bed.stage, false, bed.seed) : ITEM_PAINTERS[kind](g, (rot * Math.PI) / 180);
+			const meta = bed ? ITEM_PAINTERS[kind](g, 0, bed.stage, false, bed.seed) : jar ? ITEM_PAINTERS[kind](g, 0, jar.fill, jar.level) : ITEM_PAINTERS[kind](g, (rot * Math.PI) / 180);
 			s = { canvas: c, ...meta };
 			this.itemSprites.set(key, s);
 		}
@@ -987,6 +989,70 @@ export class Garden {
 		if (x < v.x0 || x > v.x0 + v.w || y < v.y0 || y > v.y0 + v.h) return;
 		this.lastDrop = this.t;
 		this.nectarDrops.push({ x, y, t: 0, dur: 1.1 + Math.random() * 0.4, wob: Math.random() * 6.28 });
+	}
+
+	// ─── Gouttes de nectar à cueillir à la main ────────────────────
+	// Sans collecteur, la récolte des butineurs perle sur les fleurs : une goutte pour quelques nectar.
+
+	updateDew() {
+		const amount = this.glyph ? 0 : (this.dewAmount?.() ?? 0);
+		const want = amount >= 1 ? Math.min(10, Math.ceil(amount / 3)) : 0;
+		this.dew ??= [];
+		while (this.dew.length > want) this.dew.pop();
+		if (this.dew.length >= want) return;
+		const flowers = [];
+		for (const P of Object.values(this.pdata)) for (const p of P.flowers) flowers.push(p);
+		for (let i = this.dew.length; i < want && flowers.length; i++) {
+			const p = pick(flowers);
+			const [x, y] = this.headOf(p);
+			this.dew.push({ x: x + (Math.random() - 0.5) * 6, y: y + 4, ph: Math.random() * 6.28, born: this.t });
+		}
+	}
+
+	/** Cueillir une goutte : elle file vers le compteur, avec sa part de la récolte. */
+	takeDew(d) {
+		const i = this.dew.indexOf(d);
+		if (i < 0) return 0;
+		const share = (this.dewAmount?.() ?? 0) / this.dew.length;
+		this.dew.splice(i, 1);
+		for (let k = 0; k < 3; k++) this.nectarDrops.push({ x: d.x + (Math.random() - 0.5) * 8, y: d.y, t: -k * 0.08, dur: 1 + Math.random() * 0.3, wob: Math.random() * 6.28 });
+		this.burst(d.x, d.y, 6, '#F4C23E');
+		return share;
+	}
+
+	drawDew(ctx) {
+		// Assez grosses pour se voir et se toucher, quel que soit le zoom.
+		const z = Math.max(1, 1.3 / this.cam.z);
+		for (const d of this.dew) {
+			const a = Math.min(1, (this.t - d.born) * 2), bob = Math.sin(this.t * 2.4 + d.ph) * 1.5 * z;
+			const pulse = 0.75 + 0.25 * Math.sin(this.t * 3 + d.ph);
+			ctx.save();
+			ctx.translate(d.x, d.y + bob);
+			ctx.scale(z * 1.8, z * 1.8);
+			ctx.globalAlpha = a * 0.4 * pulse;
+			ctx.fillStyle = '#FFE680';
+			ctx.beginPath(); ctx.arc(0, -3, 8, 0, Math.PI * 2); ctx.fill();
+			ctx.globalAlpha = a;
+			ctx.fillStyle = '#F2B62E';
+			ctx.beginPath();
+			ctx.moveTo(0, -9);
+			ctx.quadraticCurveTo(4.8, -2, 0, 1.2);
+			ctx.quadraticCurveTo(-4.8, -2, 0, -9);
+			ctx.fill();
+			ctx.strokeStyle = 'rgba(160,100,20,0.55)';
+			ctx.lineWidth = 0.6;
+			ctx.stroke();
+			ctx.fillStyle = 'rgba(255,250,220,0.9)';
+			ctx.beginPath(); ctx.arc(-1.3, -3.6, 1.2, 0, Math.PI * 2); ctx.fill();
+			ctx.restore();
+		}
+		ctx.globalAlpha = 1;
+	}
+
+	/** Vider un collecteur : le nectar en sort en gouttes qui filent au compteur. */
+	pourFrom(it) {
+		for (let k = 0; k < 8; k++) this.nectarDrops.push({ x: it.x + (Math.random() - 0.5) * 16, y: it.y - 40, t: -k * 0.07, dur: 1 + Math.random() * 0.4, wob: Math.random() * 6.28 });
+		this.burst(it.x, it.y - 50, 14, '#F4C23E');
 	}
 
 	burst(x, y, n, color) {
@@ -1190,6 +1256,10 @@ export class Garden {
 		const open = ci >= 0 && ci < cellsOpen(this.place);
 		if (ci >= 0 && this.glyph) return { cell: ci, open, x: sx, y: sy };
 		if (this.glyph) return null;
+		// Une goutte de nectar à cueillir, avant tout le reste (elle est petite et posée sur une fleur).
+		let dew = null, dd = 22 / Math.min(1.4, this.cam.z);
+		for (const d of this.dew ?? []) { const k = Math.hypot(d.x - wx, d.y - wy); if (k < dd) { dd = k; dew = d; } }
+		if (dew) return { dew, x: sx, y: sy };
 		// Les objets d'abord : posés au bord de la clairière, ils peuvent déborder sur une parcelle encore fermée.
 		for (const it of [...this.items].sort((a, b) => b.y - a.y)) {
 			const box = ITEMS[it.kind].box, top = this.itemSprite(it.kind, it.rot).top;
@@ -1264,7 +1334,7 @@ export class Garden {
 		const ci = this.cellAt(this.cam.cx, this.cam.cy);
 		if (ci >= 0 && ci < cellsOpen(this.place)) this.active = ci;
 
-		if (this.t > this.nextPopulate) { this.populate(); this.nextPopulate = this.t + 1; }
+		if (this.t > this.nextPopulate) { this.populate(); this.updateDew(); this.nextPopulate = this.t + 1; }
 		for (const i of this.insects) this.updateInsect(i, dt);
 		this.insects = this.insects.filter(i => !i.gone);
 		this.updateFarmer(dt);
@@ -2366,6 +2436,8 @@ export class Garden {
 			ctx.globalAlpha = 1;
 			ctx.globalCompositeOperation = 'source-over';
 		}
+
+		if (!glyph && this.dew?.length) { world(); this.drawDew(ctx); }
 
 		if (this.ghost) {
 			const { kind, x, y } = this.ghost, box = ITEMS[kind].box, ok = this.canPlace(kind, x, y, this.lifted);
