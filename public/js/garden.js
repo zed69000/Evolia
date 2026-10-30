@@ -11,7 +11,7 @@ import { GAIT } from './beasts.js';
 import { SPECIES, PLACE_BY_ID } from './species.js';
 import { PARCEL_W, PARCEL_H, CELLS, CELL_KM, GROUND, zoneOf, zoneName, tileSteps, keepOut } from './zones.js';
 import { newPlace } from './state.js';
-import { ITEMS, ITEM_PAINTERS, attracted } from './deco.js';
+import { ITEMS, ITEM_PAINTERS, attracted, paintSoil, PLOT } from './deco.js';
 
 export { PARCEL_W, PARCEL_H, CELLS, CELL_KM };
 export const cellsOpen = place => Math.min(CELLS.length, place?.cells ?? 1);
@@ -74,6 +74,8 @@ const SUNNY = { clear: 1, clouds: 0.6, overcast: 0.15, fog: 0.05, drizzle: 0.2, 
 /** Animaux au sol : triés avec les plantes, pour passer devant ou derrière elles. */
 const onGround = b => (b.behavior === 'walk' || b.behavior === 'bound' || b.behavior === 'roam' || b.behavior === 'trail' || (b.behavior === 'hop' && b.mode !== 'hop') || b.kind === 'heron' || b.kind === 'frog') && !b.p.swim;
 
+/** Graine d'une parcelle de potager, tirée de son identifiant (ses cultures et sa terre restent les mêmes). */
+const plotSeed = it => { let h = 7; for (const ch of String(it.id)) h = (h * 31 + ch.charCodeAt(0)) >>> 0; return h % 997; };
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
 const pick = arr => arr[Math.floor(Math.random() * arr.length)];
 
@@ -478,7 +480,9 @@ export class Garden {
 	 * La brume au-delà des clairières, en une seule couche : on la remplit, puis on y découpe les clairières
 	 * ouvertes (et, à moitié, la prochaine). Le sol n'est ainsi peint qu'une fois par image.
 	 */
-	drawMist(ctx, world, cw, ch) {
+	drawMist(ctx, world, sw, sh) {
+		// La brume est floue : on la peint à demi-résolution (quatre fois moins de pixels), puis on l'agrandit.
+		const cw = Math.ceil(sw / 2), ch = Math.ceil(sh / 2);
 		if (!this.mist || this.mist.width !== cw || this.mist.height !== ch) {
 			this.mist = document.createElement('canvas');
 			this.mist.width = cw; this.mist.height = ch;
@@ -488,7 +492,7 @@ export class Garden {
 		m.globalCompositeOperation = 'source-over';
 		m.globalAlpha = 1;
 		m.clearRect(0, 0, cw, ch);
-		const S = this.scale;
+		const S = this.scale / 2;
 		if (this.glyph) {
 			m.fillStyle = 'rgba(232,226,204,0.72)';
 			m.fillRect(0, 0, cw, ch);
@@ -513,7 +517,7 @@ export class Garden {
 			m.drawImage(mk.canvas, mk.x0, mk.y0, mk.canvas.width / mk.k, mk.canvas.height / mk.k);
 		}
 		ctx.setTransform(1, 0, 0, 1, 0, 0);
-		ctx.drawImage(this.mist, 0, 0);
+		ctx.drawImage(this.mist, 0, 0, sw, sh);
 		world();
 	}
 
@@ -791,8 +795,8 @@ export class Garden {
 		const key = detail ? `${p.id}:d` : p.id;
 		let s = this.sprites.get(key);
 		// Au-delà du temps de peinture de l'image, on garde l'ancien stade, ou on attend l'image suivante.
-		// Les images détaillées pèsent lourd : au plus 40 à la fois, les autres plantes gardent leur image normale.
-		if (detail && !s && (this.detailCount ?? 0) >= 40) return null;
+		// Les images détaillées pèsent lourd : au plus une vingtaine à la fois, les autres plantes gardent leur image normale.
+		if (detail && !s && (this.detailCount ?? 0) >= (p.type === 'arbre' ? 10 : 24)) return null;
 		if ((!s || s.stage !== stage) && performance.now() > (this.paintUntil ?? Infinity)) {
 			if (s) s.used = this.t;
 			return s ?? null;
@@ -821,6 +825,24 @@ export class Garden {
 		return s;
 	}
 
+	/** La terre d'une parcelle de potager (une image par parcelle, peinte une fois). */
+	soilSprite(seed) {
+		const key = `soil:${seed}`;
+		let c = this.sprites.get(key)?.canvas;
+		if (!c) {
+			const D = this.density, m = 12;
+			c = document.createElement('canvas');
+			c.width = Math.ceil((PLOT.w + m * 2) * D);
+			c.height = Math.ceil((PLOT.h + m * 2) * D);
+			const g = c.getContext('2d');
+			g.setTransform(D, 0, 0, D, (PLOT.w / 2 + m) * D, (PLOT.h / 2 + m) * D);
+			paintSoil(g, seed);
+			this.sprites.set(key, { canvas: c, stage: 0, used: this.t });
+		}
+		this.sprites.get(key).used = this.t;
+		return c;
+	}
+
 	/** Morceau de pelouse (5 variantes par palette et par saison), posé au sol sous les touffes d'herbe. */
 	turfSprite(n, palette) {
 		const key = `turf:${n}:${palette?.join() ?? ''}:${this.seasonKey}`;
@@ -844,9 +866,11 @@ export class Garden {
 	get items() { return (this.place.items ??= []); }
 
 	/** Image d'un objet, pour une rotation donnée (en degrés, par pas de 45° ; seuls certains objets tournent). */
-	itemSprite(kind, rot = 0) {
+	itemSprite(kind, rot = 0, it = null) {
 		rot = ITEMS[kind].turn ? ((rot % 360) + 360) % 360 : 0;
-		const key = `${kind}:${rot}`;
+		// Au jardin, une parcelle de potager se peint sans sa terre (posée au sol), et ses légumes suivent leur pousse.
+		const bed = kind === 'potager' && it ? { stage: Math.floor(this.bedStage(it) * 6) / 6, seed: plotSeed(it) } : null;
+		const key = bed ? `${kind}:${bed.seed}:${bed.stage}` : `${kind}:${rot}`;
 		let s = this.itemSprites.get(key);
 		if (!s) {
 			const box = ITEMS[kind].box, D = this.density * 1.4;
@@ -855,7 +879,7 @@ export class Garden {
 			c.height = Math.ceil(box.h * D);
 			const g = c.getContext('2d');
 			g.setTransform(D, 0, 0, D, box.ax * D, box.ay * D);
-			const meta = ITEM_PAINTERS[kind](g, (rot * Math.PI) / 180);
+			const meta = bed ? ITEM_PAINTERS[kind](g, 0, bed.stage, false, bed.seed) : ITEM_PAINTERS[kind](g, (rot * Math.PI) / 180);
 			s = { canvas: c, ...meta };
 			this.itemSprites.set(key, s);
 		}
@@ -872,11 +896,28 @@ export class Garden {
 			const [ox, oy] = cellOrigin(cellOf(p));
 			if (Math.hypot(ox + p.x - x, (oy + p.y - y) * 1.3) < r + PLANT_TYPES[p.type].spacing * 0.6) return false;
 		}
-		return !this.items.some(it => it !== except && Math.hypot(it.x - x, (it.y - y) * 1.3) < r + ITEMS[it.kind].box.w * 0.35);
+		return !this.items.some(it => {
+			if (it === except) return false;
+			// Deux parcelles de potager se touchent (c'est ainsi qu'on agrandit le potager), sans se superposer.
+			if (kind === 'potager' && it.kind === 'potager') return Math.abs(it.x - x) < PLOT.w * 0.9 && Math.abs(it.y - y) < PLOT.h * 0.9;
+			return Math.hypot(it.x - x, (it.y - y) * 1.3) < r + ITEMS[it.kind].box.w * 0.35;
+		});
+	}
+
+	/** Une parcelle de potager s'aligne sur la grille des parcelles déjà posées, pour s'y souder. */
+	snapPlot(kind, x, y, except) {
+		const first = kind === 'potager' && this.items.find(it => it.kind === 'potager' && it !== except);
+		if (!first) return [x, y];
+		return [first.x + Math.round((x - first.x) / PLOT.w) * PLOT.w, first.y + Math.round((y - first.y) / PLOT.h) * PLOT.h];
+	}
+
+	/** Pousse des légumes d'une parcelle (0 → 1) : ils mûrissent en 2,5 km parcourus. */
+	bedStage(it) {
+		return Math.max(0, Math.min(1, (this.state.totals.distance / 1000 - (it.km0 ?? 0)) / 2.5));
 	}
 
 	placeItem(kind, x, y, rot = 0) {
-		const it = { id: uid(), kind, x: Math.round(x), y: Math.round(y), rot, at: Date.now() };
+		const it = { id: uid(), kind, x: Math.round(x), y: Math.round(y), rot, at: Date.now(), ...(kind === 'potager' ? { km0: this.state.totals.distance / 1000 } : {}) };
 		this.items.push(it);
 		this.clearUnder(it);
 		this.popItem(it);
@@ -1130,11 +1171,12 @@ export class Garden {
 
 	/** La place libre la plus proche pour cet objet (en tournant autour du point voulu), ou null. */
 	nearestPlace(kind, x, y, except = null) {
+		[x, y] = this.snapPlot(kind, x, y, except);
 		if (this.canPlace(kind, x, y, except)) return [x, y];
 		for (let r = 12; r <= 600; r += 12) {
 			const n = Math.max(8, Math.round(r / 6));
 			for (let i = 0; i < n; i++) {
-				const a = (i / n) * Math.PI * 2, px = x + Math.cos(a) * r, py = y + Math.sin(a) * r * 0.75;
+				const a = (i / n) * Math.PI * 2, [px, py] = this.snapPlot(kind, x + Math.cos(a) * r, y + Math.sin(a) * r * 0.75, except);
 				if (this.canPlace(kind, px, py, except)) return [px, py];
 			}
 		}
@@ -1519,6 +1561,8 @@ export class Garden {
 		f.t += dt;
 		const home = this.night() > 0.45 || this.precip() > 0.5;
 		if (home && !f.goal && f.hidden) return;
+		// Il se repose un moment à la cabane entre deux séries de travaux.
+		if (f.hidden && !f.goal && f.t < (f.restUntil ?? 0)) return;
 		if (home && f.goal?.task !== 'in') f.goal = { x: door.x, y: door.y, task: 'in' };
 		if (f.goal) {
 			const dx = f.goal.x - f.x, dy = f.goal.y - f.y, d = Math.hypot(dx, dy);
@@ -1527,7 +1571,8 @@ export class Garden {
 				const task = f.goal.task;
 				f.goal = null;
 				f.carry = task === 'fetch' ? !f.carry : f.carry;
-				if (task === 'in') { f.hidden = true; f.mode = 'stand'; f.timer = 2; return; }
+				if (task === 'in') { f.hidden = true; f.mode = 'stand'; f.timer = 2; if (!home) f.restUntil = f.t + 40 + Math.random() * 70; return; }
+				if (task === 'harvest') { f.mode = 'rake'; f.harvesting = f.bed; f.dir = f.face ?? f.dir; f.timer = 4.5; return; }
 				if (task === 'fetch') { f.mode = 'stand'; f.timer = 1.2; return; }
 				f.mode = task;
 				f.dir = f.face ?? f.dir;
@@ -1555,8 +1600,35 @@ export class Garden {
 		}
 		f.timer -= dt;
 		if (f.timer > 0) return;
+		// Récolte finie : la parcelle est ressemée, et le panier rapporte du nectar.
+		if (f.harvesting) {
+			const bed = f.harvesting;
+			f.harvesting = null;
+			if (this.items.includes(bed)) {
+				bed.km0 = this.state.totals.distance / 1000;
+				this.burst(bed.x, bed.y - 10, 14, '#E8762E');
+				this.onHarvest?.(bed);
+			}
+		}
+		if (!f.hidden) {
+			f.done = (f.done ?? 0) + 1;
+			if (f.done >= (f.shift ??= 3 + Math.floor(Math.random() * 3))) {
+				f.done = 0;
+				f.shift = 3 + Math.floor(Math.random() * 3);
+				f.goal = { x: door.x, y: door.y, task: 'in' };
+				return;
+			}
+		}
 		f.hidden = false;
 		const beds = this.items.filter(it => it.kind === 'potager');
+		const ripe = beds.find(b => this.bedStage(b) >= 1);
+		if (ripe && !f.carry) {
+			const side = Math.random() < 0.5 ? -1 : 1;
+			f.goal = { x: ripe.x + side * (PLOT.w / 2 - 15), y: ripe.y + PLOT.h / 2 + 6, task: 'harvest' };
+			f.bed = ripe;
+			f.face = -side;
+			return;
+		}
 		// Brouette : un aller-retour au tas de compost (ou à la cabane) de temps en temps, puis il repart au potager.
 		const compost = this.items.find(it => it.kind === 'compost');
 		if (beds.length && (f.carry || Math.random() < 0.22)) {
@@ -1566,7 +1638,7 @@ export class Garden {
 		}
 		if (beds.length) {
 			const bed = pick(beds), side = Math.random() < 0.5 ? -1 : 1;
-			f.goal = { x: bed.x + side * (40 + Math.random() * 30), y: bed.y + 16 + Math.random() * 10, task: Math.random() < 0.55 ? 'rake' : 'water' };
+			f.goal = { x: bed.x + side * (20 + Math.random() * 40), y: bed.y + PLOT.h / 2 + 4 + Math.random() * 6, task: Math.random() < 0.55 ? 'rake' : 'water' };
 			f.face = -side;
 			return;
 		}
@@ -1753,7 +1825,10 @@ export class Garden {
 				}
 				const [hx, hy] = head(b.target);
 				// Le pic se pose sur le tronc, les autres oiseaux dans le feuillage.
-				const ty = b.p.trunk ? P.oy + b.target.y - 45 : hy + b.oy;
+				// Le feuillage est un dôme : plus on s'écarte du milieu, plus sa surface descend. L'oiseau s'y pose
+				// un peu enfoncé dans les feuilles, au lieu de flotter à la hauteur du sommet.
+				const crown = Math.max(10, this.meta.get(b.target.id)?.r ?? 30), u = Math.min(0.92, Math.abs(b.ox) / crown);
+				const ty = b.p.trunk ? P.oy + b.target.y - 45 : hy + crown * 0.7 * (1 - Math.sqrt(1 - u * u)) + 8 + b.oy;
 				if (b.mode === 'visit') {
 					// Sur la mangeoire, le bain ou le nichoir : on s'y pose un moment, puis on repart.
 					const it = b.visitItem;
@@ -2027,6 +2102,13 @@ export class Garden {
 			ctx.globalAlpha = 1;
 		}
 
+		// La terre des potagers, à même le sol : les parcelles voisines se soudent en un seul champ.
+		if (!glyph) for (const it of this.items) {
+			if (it.kind !== 'potager' || it === this.lifted) continue;
+			const c = this.soilSprite(plotSeed(it)), m = 12;
+			ctx.drawImage(c, it.x - PLOT.w / 2 - m, it.y - PLOT.h / 2 - m, PLOT.w + m * 2, PLOT.h + m * 2);
+		}
+
 		// Tapis d'herbe : sous les touffes de graminées, une pelouse peinte au sol qui se referme à mesure qu'elles poussent.
 		if (!glyph) {
 			for (const p of place.plants) {
@@ -2048,11 +2130,14 @@ export class Garden {
 			const dx = Math.sin(dir), dy = -Math.cos(dir);
 			// Une ombre courte et douce, à la forme de la couronne, reliée au pied par l'ombre du tronc.
 			const len = Math.min(1.8, 1 / Math.tan((sun.alt * Math.PI) / 180)) * 0.5;
-			const layer = this.shadowLayer(cw, ch), s = layer.getContext('2d');
+			// Calque à demi-résolution : les ombres sont douces, ça ne se voit pas, et c'est bien plus léger.
+			const lw = Math.ceil(cw / 2), lh = Math.ceil(ch / 2);
+			const layer = this.shadowLayer(lw, lh), s = layer.getContext('2d');
 			s.setTransform(1, 0, 0, 1, 0, 0);
 			s.globalCompositeOperation = 'source-over';
-			s.clearRect(0, 0, cw, ch);
-			s.setTransform(ctx.getTransform());
+			s.clearRect(0, 0, lw, lh);
+			const T = ctx.getTransform();
+			s.setTransform(T.a / 2, T.b / 2, T.c / 2, T.d / 2, T.e / 2, T.f / 2);
 			const dot = this.softDot();
 			s.strokeStyle = '#000';
 			s.lineCap = 'round';
@@ -2082,11 +2167,11 @@ export class Garden {
 			s.setTransform(1, 0, 0, 1, 0, 0);
 			s.globalCompositeOperation = 'source-in';
 			s.fillStyle = '#2A3E5A';
-			s.fillRect(0, 0, cw, ch);
+			s.fillRect(0, 0, lw, lh);
 			ctx.save();
 			ctx.setTransform(1, 0, 0, 1, 0, 0);
 			ctx.globalAlpha = 0.22 * sunny * Math.min(1, sun.alt / 8);
-			ctx.drawImage(layer, 0, 0);
+			ctx.drawImage(layer, 0, 0, cw, ch);
 			ctx.restore();
 		}
 
@@ -2140,7 +2225,7 @@ export class Garden {
 				const k = age < 0.6 ? 0.7 + 0.3 * Math.min(1, age / 0.35) + 0.08 * Math.sin(Math.min(1, age / 0.6) * Math.PI) : 1;
 				ctx.translate(e.x, e.y);
 				ctx.scale(k, k);
-				ctx.drawImage(this.itemSprite(it.kind, it.rot).canvas, -box.ax, -box.ay, box.w, box.h);
+				ctx.drawImage(this.itemSprite(it.kind, it.rot, it).canvas, -box.ax, -box.ay, box.w, box.h);
 				continue;
 			}
 			if (e.decor) {

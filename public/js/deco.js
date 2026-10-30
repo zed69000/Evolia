@@ -23,7 +23,7 @@ export const ITEMS = {
 	abri: { name: 'Un abri à hérisson', cost: 70, km: 6, turn: true, team: 'regulateur', power: 1, attracts: 'herisson', text: 'Une petite maison sous les feuilles, où il passe l’hiver.', box: { w: 90, h: 70, ax: 45, ay: 50 } },
 	ruche: { name: 'Une ruche en paille', cost: 120, km: 6, team: 'pollinisateur', power: 2, attracts: 'abeille', text: 'Toute une colonie d’abeilles pour polliniser tes fleurs.', box: { w: 80, h: 90, ax: 40, ay: 78 } },
 	bain: { name: 'Un bain d’oiseaux', cost: 100, km: 8, team: 'semeur', power: 1, attracts: 'merle', text: 'De l’eau fraîche : les oiseaux reviennent, et sèment autour.', box: { w: 80, h: 90, ax: 40, ay: 80 } },
-	potager: { name: 'Un carré de potager', cost: 90, km: 5, turn: true, needs: 'cabane', team: 'semeur', power: 2, attracts: ['lapin', 'lievre'], text: 'Le jardinier de la cabane y cultive salades, choux et tomates : de quoi nourrir oiseaux, lapins et butineurs. Pose-en plusieurs pour l’agrandir.', box: { w: 170, h: 120, ax: 85, ay: 72 } },
+	potager: { name: 'Un carré de potager', cost: 90, km: 5, needs: 'cabane', team: 'semeur', power: 2, attracts: ['lapin', 'lievre'], text: 'Le jardinier de la cabane y cultive salades, choux et tomates : de quoi nourrir oiseaux, lapins et butineurs. Pose-en côte à côte : les parcelles se soudent en un grand potager, et les légumes poussent à mesure que tu marches.', box: { w: 150, h: 100, ax: 75, ay: 64 } },
 	arche: { name: 'Une arche de roses', cost: 120, km: 20, turn: true, team: 'pollinisateur', power: 1, attracts: 'paon-du-jour', text: 'Un passage fleuri pour les papillons.', box: { w: 170, h: 190, ax: 85, ay: 172 } },
 };
 export const ITEM_ORDER = ['banc', 'massif', 'bois', 'pierres', 'mangeoire', 'nichoir', 'lanterne', 'compost', 'hotel', 'mare', 'cabane', 'potager', 'abri', 'ruche', 'bain', 'arche'];
@@ -433,25 +433,70 @@ const VEG = {
 	},
 };
 
-function paintPotager(g, rot) {
-	const d = rng(88);
-	shade(g, d, 80, 22);
-	const soil = (g2, d2) => {
-		g2.fillStyle = rgba('#5A3E26', 0.96); g2.fillRect(0, -76, 130, 76);
-		// Sillons ratissés.
-		g2.strokeStyle = rgba('#3E2A18', 0.45); g2.lineWidth = 1.4;
-		for (let y = -10; y > -76; y -= 7) { g2.beginPath(); g2.moveTo(3, y); g2.lineTo(127, y + d2.gauss() * 0.6); g2.stroke(); }
-		for (let i = 0; i < 14; i++) wash(g2, d2.range(6, 124), d2.range(-72, -4), 3, 1.6, '#7A5A3A', d2, { layers: 2, alpha: 0.35, edge: 0 });
-	};
-	const V = build(g, d, rot, [box(0, 0, 0, 130, 76, 9, '#9A6A40', { front: planksH(130, 9, 9, '#5A3A20'), back: planksH(130, 9, 9, '#5A3A20'), left: planksH(76, 9, 9, '#5A3A20'), right: planksH(76, 9, 9, '#5A3A20'), top: soil, topColor: '#5A3E26' })]);
-	// Trois rangs : tomates au fond, choux et salades, carottes et une courge devant.
-	const rows = [['tomate', -24, 4], ['chou', -4, 5], ['salade', 9, 6], ['carotte', 22, 6]];
-	const plants = [];
-	for (const [kind, y, n] of rows) for (let i = 0; i < n; i++) plants.push({ kind, p: [-52 + (i + 0.5) * (104 / n) + d.gauss() * 1.5, y, 9] });
-	plants.push({ kind: 'courge', p: [44, 24, 9] });
-	plants.sort((a, b) => V.depth(a.p) - V.depth(b.p));
-	for (const { kind, p } of plants) { const [x, y] = V.at(p); VEG[kind](g, x, y, d); }
-	return { top: -48 };
+/** Taille d'une parcelle de potager au sol (largeur, profondeur à l'écran) : les parcelles s'alignent sur cette grille. */
+export const PLOT = { w: 130, h: 44 };
+
+/**
+ * La terre d'une parcelle, à même le sol : un cœur opaque qui déborde un peu de la case (deux parcelles voisines
+ * se soudent sans couture), un bord fondu, des sillons qui se prolongent d'une parcelle à l'autre.
+ */
+export function paintSoil(g, seed) {
+	const d = rng(seed);
+	const W = PLOT.w, H = PLOT.h;
+	g.save();
+	g.filter = 'blur(3px)';
+	g.fillStyle = rgba('#6A4A2E', 0.95);
+	g.beginPath();
+	g.roundRect(-W / 2 - 6, -H / 2 - 5, W + 12, H + 10, 10);
+	g.fill();
+	g.restore();
+	for (let i = 0; i < 10; i++) wash(g, d.range(-W / 2 + 6, W / 2 - 6), d.range(-H / 2 + 3, H / 2 - 3), d.range(8, 18), d.range(3, 6), d.pick(['#7E5A38', '#5A3E26', '#8A6644']), d, { layers: 3, alpha: 0.25, edge: 0 });
+	// Sillons, tous les 11 : ils tombent au même endroit d'une parcelle à l'autre.
+	g.strokeStyle = rgba('#3E2A18', 0.42);
+	g.lineWidth = 1.5;
+	for (let y = -H / 2 + 5.5; y < H / 2; y += 11) {
+		g.beginPath();
+		g.moveTo(-W / 2 - 4, y);
+		for (let x = -W / 2; x <= W / 2 + 4; x += 13) g.lineTo(x, y + d.gauss() * 0.5);
+		g.stroke();
+		g.strokeStyle = rgba('#9A7650', 0.3);
+		g.beginPath(); g.moveTo(-W / 2 - 4, y - 2); g.lineTo(W / 2 + 4, y - 2); g.stroke();
+		g.strokeStyle = rgba('#3E2A18', 0.42);
+	}
+	for (let i = 0; i < 18; i++) { g.fillStyle = rgba(d.pick(['#4A3220', '#9A7A58']), 0.6); g.beginPath(); g.arc(d.range(-W / 2, W / 2), d.range(-H / 2, H / 2), d.range(0.6, 1.4), 0, 6.28); g.fill(); }
+}
+
+/** Ce qui pousse dans une parcelle : deux cultures par parcelle, selon la parcelle. */
+const CROPS = [['salade', 'carotte'], ['chou', 'salade'], ['tomate', 'courge'], ['carotte', 'chou'], ['tomate', 'salade']];
+
+/**
+ * Un carré de potager à même la terre. `stage` (0 → 1) : les légumes poussent avec les kilomètres ;
+ * `soil` : peindre aussi la terre (aperçu dans la liste et pendant qu'on le place ; au jardin, la terre est peinte au sol).
+ */
+function paintPotager(g, rot, stage = 1, soil = true, seed = 88) {
+	const d = rng(seed);
+	if (soil) paintSoil(g, seed);
+	const crops = CROPS[seed % CROPS.length];
+	const k = 0.25 + 0.75 * stage;
+	// Quatre rangs dans les sillons, du fond vers l'avant.
+	for (let r = 0; r < 4; r++) {
+		const y = -PLOT.h / 2 + 5.5 + r * 11, kind = crops[r % 2];
+		const n = kind === 'tomate' || kind === 'courge' ? 4 : 6;
+		for (let i = 0; i < n; i++) {
+			const x = -PLOT.w / 2 + (i + 0.5) * (PLOT.w / n) + d.gauss() * 1.5;
+			if (stage < 0.12) {
+				// Semis : deux petites feuilles qui pointent.
+				for (const a of [-0.6, 0.6]) leaf(g, x, y, 3.5, 1.5, -Math.PI / 2 + a, '#7FB04A', d, 0.85);
+				continue;
+			}
+			g.save();
+			g.translate(x, y);
+			g.scale(k, k);
+			VEG[kind](g, 0, 0, d);
+			g.restore();
+		}
+	}
+	return { top: -34 * k };
 }
 
 /** Peintres : (contexte, rotation en radians) → { top, glow?, glowX?, water? }. */

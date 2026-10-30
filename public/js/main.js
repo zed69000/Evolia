@@ -74,6 +74,14 @@ function persist(now = false) {
 const species = new Encyclopedia($('#species'), state, () => { persist(); updateSpeciesDot(); });
 const places = new PlacesMap($('#map'), state, travel);
 // Aider une équipe de l'écosystème, c'est poser l'objet qui l'attire (s'il est débloqué et payable), sinon voir la liste.
+// Le jardinier récolte une parcelle mûre : un panier de légumes, en nectar.
+garden.onHarvest = () => {
+	state.nectar = (state.nectar ?? 0) + 60;
+	toast('Le jardinier a récolté ses légumes · +60 nectar', '#5F933E');
+	renderHud();
+	persist();
+};
+
 const eco = new EcoPanel($('#eco'), state, kind => {
 	const it = ITEMS[kind];
 	if (state.totals.distance / 1000 >= it.km && !needsFirst(kind) && (state.nectar ?? 0) >= it.cost) startPlacing(kind);

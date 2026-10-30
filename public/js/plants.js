@@ -556,38 +556,38 @@ function foliage(ctx, lobes, pal, L, env, d, o = {}) {
 	const cool = mix(pal[0], '#22385A', 0.28);
 	const deep = mix(cool, '#0E1A1A', 0.35);
 	const midY = o.midY ?? 0;
-	lobes.forEach((l, i) => wash(ctx, l.x, l.y, l.r * 1.06, l.r * 0.9, tone(warm, i), d, { layers: 6, alpha: 0.14, edge: 0.1, variance: 0.25 }));
-	lobes.forEach((l, i) => wash(ctx, l.x + l.r * 0.12, l.y + l.r * 0.16, l.r * 0.84, l.r * 0.7, tone(pal[1], i + 7), d, { layers: 7, alpha: 0.13, edge: 0.16 }));
-	lobes.forEach((l, i) => wash(ctx, l.x + l.r * 0.28, l.y + l.r * 0.36, l.r * 0.62, l.r * 0.42, tone(cool, i + 13), d, { layers: 6, alpha: 0.15, edge: 0.08 }));
-	if (o.core) wash(ctx, o.core.x, o.core.y, o.core.rx, o.core.ry, tone(deep, 3), d, { layers: 7, alpha: 0.13, edge: 0 });
+	lobes.forEach((l, i) => wash(ctx, l.x, l.y, l.r * 1.06, l.r * 0.9, tone(warm, i), d, { layers: 3, alpha: 0.26, edge: 0.1, variance: 0.25 }));
+	lobes.forEach((l, i) => wash(ctx, l.x + l.r * 0.12, l.y + l.r * 0.16, l.r * 0.84, l.r * 0.7, tone(pal[1], i + 7), d, { layers: 4, alpha: 0.22, edge: 0.16 }));
+	lobes.forEach((l, i) => wash(ctx, l.x + l.r * 0.28, l.y + l.r * 0.36, l.r * 0.62, l.r * 0.42, tone(cool, i + 13), d, { layers: 3, alpha: 0.27, edge: 0.08 }));
+	if (o.core) wash(ctx, o.core.x, o.core.y, o.core.rx, o.core.ry, tone(deep, 3), d, { layers: 4, alpha: 0.22, edge: 0 });
 	// Les creux entre deux bouquets voisins, dans le bas de la masse, restent sombres.
 	for (let i = 0; i < lobes.length; i++) for (let j = i + 1; j < lobes.length; j++) {
 		const a = lobes[i], b = lobes[j], m = Math.min(a.r, b.r);
 		if (Math.hypot(a.x - b.x, a.y - b.y) > (a.r + b.r) * 0.95 || (a.y + b.y) / 2 < midY) continue;
-		wash(ctx, (a.x + b.x) / 2 + d.gauss() * 2, (a.y + b.y) / 2 + m * 0.25, m * 0.3, m * 0.2, tone(deep, i + j), d, { layers: 4, alpha: 0.2, edge: 0 });
+		wash(ctx, (a.x + b.x) / 2 + d.gauss() * 2, (a.y + b.y) / 2 + m * 0.25, m * 0.3, m * 0.2, tone(deep, i + j), d, { layers: 2, alpha: 0.36, edge: 0 });
 	}
 	// Bords : des feuilles nettes, claires du côté du soleil, froides dessous.
-	const size = o.leaf ?? 6, n = o.detail ? 11 : 7;
+	const size = o.leaf ?? 6, n = o.detail ? 8 : 5;
 	lobes.forEach((l, i) => {
 		for (let q = 0; q < n; q++) {
 			const a = Math.PI * 0.85 + (q / (n - 1)) * Math.PI * 1.25 + d.gauss() * 0.12;
 			const lit = Math.cos(a - 3.93);
 			leaf(ctx, l.x + Math.cos(a) * l.r * 0.92, l.y + Math.sin(a) * l.r * 0.78, size * d.range(0.8, 1.2), size * 0.42, a + d.gauss() * 0.5, tone(lit > 0.3 ? warm : pal[1], i * 11 + q), d, 0.6);
 		}
-		for (let q = 0; q < 3; q++) {
-			const a = Math.PI * 0.15 + q * 0.35 + d.gauss() * 0.1;
+		for (let q = 0; q < 2; q++) {
+			const a = Math.PI * 0.2 + q * 0.45 + d.gauss() * 0.1;
 			leaf(ctx, l.x + Math.cos(a) * l.r * 0.85, l.y + Math.sin(a) * l.r * 0.7, size * 0.9, size * 0.4, a, tone(cool, i * 5 + q), d, 0.5);
 		}
 	});
 	if (o.detail) {
-		for (let i = 0; i < lobes.length * 5; i++) {
+		for (let i = 0; i < lobes.length * 3; i++) {
 			const l = lobes[i % lobes.length], a = d() * 6.28, k = Math.sqrt(d());
 			const x = l.x + Math.cos(a) * l.r * 0.75 * k, y = l.y + Math.sin(a) * l.r * 0.6 * k;
 			const lit = (l.x - x) + (l.y - y) > 0 ? warm : y > midY ? cool : pal[1];
 			leaf(ctx, x, y, size * 0.8, size * 0.36, d() * 6.28, tone(lit, i + 60), d, 0.45);
 		}
 	}
-	lobes.filter(l => l.y < midY).forEach((l, i) => wash(ctx, l.x - l.r * 0.3, l.y - l.r * 0.32, l.r * 0.3, l.r * 0.2, tone(mix(warm, '#FFF6C8', 0.35), i + 40), d, { layers: 4, alpha: 0.12, edge: 0 }));
+	lobes.filter(l => l.y < midY).forEach((l, i) => wash(ctx, l.x - l.r * 0.3, l.y - l.r * 0.32, l.r * 0.3, l.r * 0.2, tone(mix(warm, '#FFF6C8', 0.35), i + 40), d, { layers: 2, alpha: 0.22, edge: 0 }));
 }
 
 /** Bouquets d'une couronne ovale : une couronne de bouquets autour, deux ou trois au cœur, le bas un peu aplati. */

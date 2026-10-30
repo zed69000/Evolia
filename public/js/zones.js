@@ -30,7 +30,7 @@ export const GROUND = {
 export const ZONES = {
 	prairie: [
 		{ name: 'Le champ de coquelicots', favor: ['coquelicot', 'bleuet', 'marguerite'], start: [['fleur', 6, 1], ['herbe', 4, 1], ['fleur', 2, 0.4]], marks: ['carpet:#D8443A', 'carpet:#5B7FD0'], tint: '#C8C478' },
-		{ name: 'Le verger', favor: ['merisier', 'sureau', 'trefle-violet'], start: [['arbre', 2, 0.35], ['herbe', 6, 1], ['fleur', 2, 1]], marks: ['mown', 'path'], tint: '#9DBA5A' },
+		{ name: 'Le verger', favor: ['pommier', 'poirier', 'merisier', 'sureau'], start: [['arbre', 2, 0.35], ['herbe', 6, 1], ['fleur', 2, 1]], marks: ['mown', 'path'], tint: '#9DBA5A' },
 		{ name: 'La haie bocagère', favor: ['aubepine', 'prunellier', 'eglantier'], start: [['buisson', 3, 0.7], ['herbe', 5, 1], ['fleur', 2, 1]], marks: ['path'], tint: '#8EAE4E' },
 		{ name: 'Le ruisseau', favor: ['bouton-or', 'geranium', 'campanule'], start: [['herbe', 6, 1], ['fleur', 3, 1]], marks: ['brook'], tint: '#9CC070' },
 		{ name: 'La prairie de fauche', favor: ['sauge-des-pres', 'trefle-violet', 'carotte-sauvage', 'marguerite'], start: [['fleur', 5, 1], ['herbe', 4, 1]], marks: ['hay'], tint: '#D4C88A' },
