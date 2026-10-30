@@ -233,7 +233,8 @@ html, body {
 /* ─── Récap et accueil ─── */
 .modal {
 	position: absolute;
-	z-index: 20;
+	/* Au-dessus du tutoriel (30) : une fenêtre ouverte doit toujours pouvoir se fermer. */
+	z-index: 40;
 	inset: 0;
 	background: rgba(30, 45, 25, .38);
 	display: flex;
@@ -557,7 +558,9 @@ html, body {
 .dev-label { margin-top: 10px; }
 
 /* Fenêtres longues : le contenu défile, le bouton principal reste visible en bas. */
-.modal-card { max-height: calc(100% - 8px); display: flex; flex-direction: column; overflow: hidden; }
+.modal-card { max-height: calc(100% - 8px); display: flex; flex-direction: column; overflow-y: auto; position: relative; }
+.modal-card:has(> .modal-body) { overflow-y: hidden; }
+.modal-x { position: absolute; top: 10px; right: 12px; width: 34px; height: 34px; border: 0; border-radius: 50%; background: rgba(46, 74, 34, .08); color: var(--doux); font-size: 22px; line-height: 34px; padding: 0; cursor: pointer; z-index: 1; }
 .modal-body { overflow-y: auto; min-height: 0; margin: 0 -4px; padding: 0 4px; }
 .modal-foot { flex: none; padding-top: 12px; }
 .modal-foot .btn { margin: 0; }

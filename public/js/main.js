@@ -112,7 +112,8 @@ function whenFree(fn) {
 }
 
 function showModal(html) {
-	$('#modal-card').innerHTML = html;
+	// Toujours une croix pour fermer, et le contenu défile si la fenêtre est plus haute que l'écran.
+	$('#modal-card').innerHTML = `<button class="modal-x" data-close aria-label="Fermer">×</button>${html}`;
 	$('#modal').hidden = false;
 }
 function closeModal() { $('#modal').hidden = true; }
@@ -632,12 +633,12 @@ async function playHarvest(res, source) {
 	const decor = events.map(ev => ev.kind === 'cell'
 		? `<span class="chip gold">Nouvelle parcelle : ${zoneName(state.place, ev.n, 'un nouveau coin').toLowerCase()}</span>`
 		: `<span class="chip gold">${DECOR[ev.key]?.name ?? ''}</span>`).join('');
-	showModal(`
+	showModal(`<div class="modal-body">
 		<h2>Pendant ton absence</h2>
 		<p>${fmtInt(res.steps)} pas · ${fmt(res.distance / 1000)} km, comptés par ${source.label}. Même le ménage fait pousser ton jardin.</p>
 		<ul class="harvest-rows">${rows.join('')}</ul>${decor ? `<div class="chips">${decor}</div>` : ''}
-		${idleNote ? `<p>Et ton écosystème a travaillé :</p>${idleNote}` : ''}
-		<button class="btn primary" data-close>Voir mon jardin</button>`);
+		${idleNote ? `<p>Et ton écosystème a travaillé :</p>${idleNote}` : ''}</div>
+		<div class="modal-foot"><button class="btn primary" data-close>Voir mon jardin</button></div>`);
 	idleNote = '';
 	announceSpecies();
 }

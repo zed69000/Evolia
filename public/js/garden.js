@@ -488,9 +488,16 @@ export class Garden {
 		m.globalCompositeOperation = 'source-over';
 		m.globalAlpha = 1;
 		m.clearRect(0, 0, cw, ch);
-		m.fillStyle = this.glyph ? 'rgba(232,226,204,0.72)' : 'rgba(236,231,212,0.5)';
-		m.fillRect(0, 0, cw, ch);
 		const S = this.scale;
+		if (this.glyph) {
+			m.fillStyle = 'rgba(232,226,204,0.72)';
+			m.fillRect(0, 0, cw, ch);
+		} else {
+			// Un voile léger, puis des bancs de brume peints qui dérivent lentement, accrochés au monde.
+			m.fillStyle = 'rgba(238,234,218,0.3)';
+			m.fillRect(0, 0, cw, ch);
+			this.fogLayer(m, cw, ch, S, 0.85, 1, 0);
+		}
 		m.setTransform(S, 0, 0, S, cw / 2 - this.cam.cx * S, ch / 2 - this.cam.cy * S);
 		m.globalCompositeOperation = 'destination-out';
 		m.globalAlpha = 0.55;
@@ -499,12 +506,66 @@ export class Garden {
 		m.beginPath();
 		for (const i of this.openCells()) this.tracePath(m, this.blob(i));
 		m.fill();
+		// Bord fondu : quelques traits de plus en plus larges et légers font s'effacer la brume à l'orée des clairières.
+		if (!this.glyph) {
+			m.lineJoin = 'round';
+			for (const [w, a] of [[10, 0.35], [24, 0.22], [44, 0.12]]) {
+				m.globalAlpha = a;
+				m.lineWidth = w;
+				m.stroke();
+			}
+			m.globalAlpha = 1;
+		}
 		ctx.setTransform(1, 0, 0, 1, 0, 0);
 		ctx.drawImage(this.mist, 0, 0);
 		world();
 	}
 
-	// ─── Plantes	// ─── Plantes ───────────────────────────────────────────────────
+	/** Texture de brume : de grandes taches douces, raccordées sur les bords pour se répéter sans couture. */
+	fogTexture() {
+		if (this.fogTex) return this.fogTex;
+		const N = 512, c = document.createElement('canvas');
+		c.width = c.height = N;
+		const g = c.getContext('2d'), r = rng(4242);
+		for (let i = 0; i < 46; i++) {
+			const x = r() * N, y = r() * N, rad = 50 + r() * 120, a = 0.05 + r() * 0.1;
+			const sy = 0.45 + r() * 0.3;
+			for (const ox of [-N, 0, N]) for (const oy of [-N, 0, N]) {
+				g.save();
+				g.translate(x + ox, y + oy);
+				g.scale(1, sy);
+				const grd = g.createRadialGradient(0, 0, 0, 0, 0, rad);
+				grd.addColorStop(0, `rgba(250,250,246,${a})`);
+				grd.addColorStop(0.6, `rgba(246,246,240,${a * 0.55})`);
+				grd.addColorStop(1, 'rgba(246,246,240,0)');
+				g.fillStyle = grd;
+				g.fillRect(-rad, -rad, rad * 2, rad * 2);
+				g.restore();
+			}
+		}
+		return (this.fogTex = c);
+	}
+
+	/**
+	 * Une couche de bancs de brume sur tout l'écran. `k` : échelle des bancs ; `drift` : vitesse de dérive ;
+	 * `screen` : 0 = accrochée au monde (bouge avec la caméra), 1 = posée sur l'écran.
+	 */
+	fogLayer(ctx, cw, ch, S, alpha, k, screen, drift = 6) {
+		const tex = this.fogTexture();
+		const pat = ctx.createPattern(tex, 'repeat');
+		const z = screen ? k : S * k * 1.6;
+		const ox = screen ? this.t * drift : (cw / 2 - this.cam.cx * S) + this.t * drift * S;
+		const oy = screen ? this.t * drift * 0.3 : (ch / 2 - this.cam.cy * S) + this.t * drift * 0.3 * S;
+		pat.setTransform(new DOMMatrix().translateSelf(ox, oy).scaleSelf(z, z * 0.8));
+		ctx.save();
+		ctx.setTransform(1, 0, 0, 1, 0, 0);
+		ctx.globalAlpha = alpha;
+		ctx.fillStyle = pat;
+		ctx.fillRect(0, 0, cw, ch);
+		ctx.restore();
+	}
+
+	// ─── Plantes ───────────────────────────────────────────────────
 
 	/** Un premier jardin composé à la main pour chaque lieu, pour ne pas arriver sur un terrain vide. */
 	seedStarterGarden(pid) {
@@ -1869,9 +1930,11 @@ export class Garden {
 		const gx0 = Math.floor((v.x0 - 10) / PARCEL_W), gx1 = Math.floor((v.x0 + v.w + 10) / PARCEL_W);
 		const gy0 = Math.floor((v.y0 - 10) / PARCEL_H), gy1 = Math.floor((v.y0 + v.h + 10) / PARCEL_H);
 		world();
+		// Chaque tuile déborde d'un pixel d'écran sur la suivante : sans ça, un fin trait clair apparaît aux raccords.
+		const seam = 1.5 / this.scale;
 		for (let gy = gy0; gy <= gy1; gy++) for (let gx = gx0; gx <= gx1; gx++) {
 			const tile = this.tileFor(gx, gy, lo);
-			if (tile) ctx.drawImage(tile, gx * PARCEL_W, gy * PARCEL_H, PARCEL_W, PARCEL_H);
+			if (tile) ctx.drawImage(tile, gx * PARCEL_W, gy * PARCEL_H, PARCEL_W + seam, PARCEL_H + seam);
 			else { ctx.fillStyle = this.groundColor(GROUND[this.biome].base); ctx.fillRect(gx * PARCEL_W, gy * PARCEL_H, PARCEL_W, PARCEL_H); }
 		}
 		this.drawMist(ctx, world, cw, ch);
@@ -2076,11 +2139,15 @@ export class Garden {
 			ctx.fillRect(0, 0, cw, ch);
 		}
 		if (wk === 'fog') {
+			// Brouillard : un voile plus dense au loin (haut de l'écran), et deux couches de bancs qui glissent
+			// à des vitesses différentes, pour qu'on sente la profondeur et que le jardin apparaisse par endroits.
 			const g = ctx.createLinearGradient(0, 0, 0, ch);
-			g.addColorStop(0, 'rgba(236,238,236,0.55)');
-			g.addColorStop(1, 'rgba(236,238,236,0.3)');
+			g.addColorStop(0, 'rgba(236,238,236,0.42)');
+			g.addColorStop(1, 'rgba(236,238,236,0.12)');
 			ctx.fillStyle = g;
 			ctx.fillRect(0, 0, cw, ch);
+			this.fogLayer(ctx, cw, ch, S, 0.9, 1.1, 0, 5);
+			this.fogLayer(ctx, cw, ch, S, 0.7, 2.2, 1, 9);
 		}
 
 		if (!glyph) { world(); this.drawAmbient(ctx, v); this.drawFlock(ctx, cw, ch); }
