@@ -13,7 +13,7 @@ import { Sky, WEATHER_LABEL } from './weather.js';
 import { EcoPanel, tick, summaryHtml, addBoost, boostLeft, visualExtra, rates, GUILDS, BOOST_MULT, BOOST_PER_MIN, nectarCapacity, hasCollector, COLLECTOR_CAP, COLLECTOR_UPGRADE } from './idle.js';
 import { paperTexture } from './watercolor.js';
 import { Soundscape } from './audio.js';
-import { ITEMS, ITEM_ORDER, itemHelp } from './deco.js';
+import { ITEMS, ITEM_ORDER, itemHelp, itemCost } from './deco.js';
 import { VERSION } from './version.js';
 import { rollDay, markActive, giftReady, giftFor, claimGift, claim, toClaim, noteTap, noteQuest, challengesHtml, weekHtml, nextGoal, albumHtml, collection } from './daily.js';
 
@@ -102,7 +102,7 @@ garden.onHarvest = () => {
 
 const eco = new EcoPanel($('#eco'), state, kind => {
 	const it = ITEMS[kind];
-	if (state.totals.distance / 1000 >= it.km && !needsFirst(kind) && (state.nectar ?? 0) >= it.cost) startPlacing(kind);
+	if (state.totals.distance / 1000 >= it.km && !needsFirst(kind) && (state.nectar ?? 0) >= priceOf(kind)) startPlacing(kind);
 	else openDeco();
 });
 
@@ -558,7 +558,7 @@ function renderStatus() {
 	title.textContent = state.tracking ? 'Au repos' : 'Suivi en pause';
 	// La récolte qui attend : dans les fleurs (à cueillir) ou dans les collecteurs (à vider d'un geste).
 	const pend = Math.floor(state.pending ?? 0), cap = nectarCapacity(state);
-	const wait = pend >= cap ? ' · réserve pleine, récolte !' : pend >= 1 ? ` · ${fmtInt(pend)} à récolter` : '';
+	const wait = pend >= cap ? ' · réserve pleine, récolte !' : pend >= 1 ? ` · ${fmtInt(pend)} à récolter` : r.capped && x === 1 ? ' · à plein : bouge pour plus' : '';
 	sub.textContent = `Écosystème : +${fmtInt(r.nectar * x)} nectar/h${x > 1 ? ` · élan ×${x}` : ''}${wait} ›`;
 	renderDaily();
 }
@@ -940,6 +940,10 @@ function needsFirst(kind) {
 	return need && !garden.items.some(x => x.kind === need) ? need : null;
 }
 
+/** Combien d'exemplaires de cet objet sont posés, dans tous les lieux, et donc son prix du moment. */
+const ownedCount = kind => Object.values(state.places).reduce((a, p) => a + (p.items ?? []).filter(i => i.kind === kind).length, 0);
+const priceOf = kind => itemCost(kind, ownedCount(kind));
+
 function renderDeco() {
 	const km = state.totals.distance / 1000;
 	const nectar = state.nectar ?? 0;
@@ -948,13 +952,13 @@ function renderDeco() {
 		<div class="panel-head"><h2>Aménager</h2><button class="close" data-close-deco aria-label="Fermer">×</button></div>
 		<p class="sp-intro">Installe de quoi rendre ton jardin accueillant, pour toi et pour les animaux. Tout se paie en nectar, et se range quand tu veux (le nectar t'est rendu).</p>
 		<div class="deco-list">${ITEM_ORDER.map(k => {
-			const it = ITEMS[k], need = needsFirst(k), locked = km < it.km || !!need, poor = nectar < it.cost, n = here_.filter(x => x.kind === k).length;
+			const it = ITEMS[k], cost = priceOf(k), need = needsFirst(k), locked = km < it.km || !!need, poor = nectar < cost, n = here_.filter(x => x.kind === k).length;
 			const action = km < it.km ? `<span class="deco-lock">dès ${it.km} km parcourus</span>`
 				: need ? `<span class="deco-lock">après avoir posé ${ITEMS[need].name.toLowerCase()}</span>`
-				: `<button class="btn primary small" data-buy="${k}" ${poor ? 'disabled' : ''}>${poor ? `il manque ${fmtInt(it.cost - nectar)}` : 'Installer'}</button>`;
+				: `<button class="btn primary small" data-buy="${k}" ${poor ? 'disabled' : ''}>${poor ? `il manque ${fmtInt(cost - nectar)}` : 'Installer'}</button>`;
 			return `<div class="deco-card${locked ? ' locked' : ''}"><div class="deco-art" data-art="${k}"></div>
 				<div class="deco-body"><h3>${it.name}</h3><p>${it.text}</p>${itemHelp(k) ? `<span class="deco-help">${itemHelp(k)}</span>` : ''}
-				<div class="deco-row"><span class="nectar">${it.cost}</span>${n ? `<small>${n} ici</small>` : ''}${action}</div></div></div>`;
+				<div class="deco-row"><span class="nectar">${fmtInt(cost)}</span>${n ? `<small>${n} ici</small>` : ''}${action}</div></div></div>`;
 		}).join('')}</div>`;
 	for (const el of $('#deco').querySelectorAll('[data-art]')) {
 		const sp = garden.itemSprite(el.dataset.art, 315), c = document.createElement('canvas');
@@ -1038,9 +1042,10 @@ $('#btn-place').addEventListener('click', () => {
 		garden.clearUnder(item);
 		garden.popItem(item);
 	} else {
-		if ((state.nectar ?? 0) < ITEMS[kind].cost) { toast('Pas assez de nectar', '#C0442F'); return endPlacing(); }
-		state.nectar -= ITEMS[kind].cost;
-		garden.placeItem(kind, x, y, rot);
+		const cost = priceOf(kind);
+		if ((state.nectar ?? 0) < cost) { toast('Pas assez de nectar', '#C0442F'); return endPlacing(); }
+		state.nectar -= cost;
+		garden.placeItem(kind, x, y, rot).paid = cost;
 		const help = itemHelp(kind);
 		toast(`${ITEMS[kind].name} : installé${/^Une /.test(ITEMS[kind].name) ? 'e' : ''}${help ? ` · ${help}` : ''}`, '#9A7448');
 		if (kind === 'cabane' && garden.items.filter(x => x.kind === 'cabane').length === 1) {
@@ -1070,7 +1075,7 @@ function tapItem(hit, card) {
 	const lv = it.level ?? 1, up = it.kind === 'collecteur' && lv < 3 ? COLLECTOR_UPGRADE[lv + 1] : 0;
 	const info = it.kind === 'collecteur' ? `<small class="item-tip">Niveau ${lv} · garde ${COLLECTOR_CAP[lv]} nectar${up ? ` (niveau ${lv + 1} : ${COLLECTOR_CAP[lv + 1]})` : ''}. Réserve totale : ${fmtInt(nectarCapacity(state))}.</small>` : '';
 	card.innerHTML = `<b>${def.name}</b>${def.text}${info}<small class="item-tip">Astuce : un appui long dessus le soulève directement.</small>
-		<div class="item-actions">${up ? `<button class="btn primary" data-upgrade ${(state.nectar ?? 0) < up ? 'disabled' : ''}>Améliorer (${up})</button>` : ''}${def.turn ? '<button class="btn ghost" data-turn>Tourner</button>' : ''}<button class="btn ghost" data-move>Déplacer</button><button class="btn ghost" data-store>Ranger (+${def.cost})</button></div>`;
+		<div class="item-actions">${up ? `<button class="btn primary" data-upgrade ${(state.nectar ?? 0) < up ? 'disabled' : ''}>Améliorer (${up})</button>` : ''}${def.turn ? '<button class="btn ghost" data-turn>Tourner</button>' : ''}<button class="btn ghost" data-move>Déplacer</button><button class="btn ghost" data-store>Ranger (+${fmtInt(it.paid ?? def.cost)})</button></div>`;
 	card.classList.remove('link');
 	card.classList.add('actions');
 	card.onclick = e => {
@@ -1098,12 +1103,12 @@ function tapItem(hit, card) {
 		if (e.target.closest('[data-store]')) {
 			card.hidden = true;
 			garden.items.splice(garden.items.indexOf(it), 1);
-			state.nectar = (state.nectar ?? 0) + def.cost;
+			state.nectar = (state.nectar ?? 0) + (it.paid ?? def.cost);
 			// Un collecteur rangé emporte sa réserve : ce qui dépasse revient tout de suite à la bourse.
 			const over = (state.pending ?? 0) - nectarCapacity(state);
 			if (over > 0) { state.pending -= over; state.nectar += over; }
 			garden.nextPopulate = 0;
-			toast(`${def.name} rangé${/^Une /.test(def.name) ? 'e' : ''} : +${def.cost} nectar`, '#9A7448');
+			toast(`${def.name} rangé${/^Une /.test(def.name) ? 'e' : ''} : +${fmtInt(it.paid ?? def.cost)} nectar`, '#9A7448');
 			renderHud();
 			persist(true);
 		}

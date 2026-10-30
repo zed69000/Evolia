@@ -8,19 +8,19 @@ export const PLACES = [
 		intro: "Une prairie fleurie nourrit des centaines d'espèces. En France, la plupart ont disparu en un siècle, labourées ou tondues trop souvent.",
 	},
 	{
-		id: 'marais', name: 'Le marais', short: 'Marais', km: 8, found: 10, color: '#5BB5B0',
+		id: 'marais', name: 'Le marais', short: 'Marais', km: 12, found: 10, color: '#5BB5B0',
 		intro: "Les zones humides filtrent l'eau, retiennent les crues et abritent une vie foisonnante. La moitié a disparu en France en trente ans.",
 	},
 	{
-		id: 'foret', name: 'La forêt', short: 'Forêt', km: 20, found: 24, color: '#326832',
+		id: 'foret', name: 'La forêt', short: 'Forêt', km: 35, found: 24, color: '#326832',
 		intro: "Sous les arbres, une forêt ancienne cache fleurs de printemps, champignons et animaux de la nuit. Elle met des siècles à se construire.",
 	},
 	{
-		id: 'montagne', name: 'La montagne', short: 'Montagne', km: 40, found: 40, color: '#8FA8C8',
+		id: 'montagne', name: 'La montagne', short: 'Montagne', km: 80, found: 40, color: '#8FA8C8',
 		intro: "En altitude, la vie s'adapte au froid, au vent et à un été très court. Ces espèces fragiles reculent avec le réchauffement.",
 	},
 	{
-		id: 'littoral', name: 'Le littoral', short: 'Littoral', km: 60, found: 55, color: '#E3C88A',
+		id: 'littoral', name: 'Le littoral', short: 'Littoral', km: 140, found: 55, color: '#E3C88A',
 		intro: "Les dunes protègent la côte de la mer. Leurs plantes retiennent le sable, à condition qu'on ne les piétine pas.",
 	},
 ];

@@ -587,6 +587,14 @@ export const ITEM_PAINTERS = {
 	ruche: paintRuche, bain: paintBain, arche: paintArche,
 };
 
+/**
+ * Prix d'un objet : chaque exemplaire déjà posé (tous lieux confondus) le rend 1,4 fois plus cher.
+ * Le premier de chaque reste bon marché ; garnir tout un monde devient un vrai projet.
+ */
+export function itemCost(kind, owned = 0) {
+	return Math.round((ITEMS[kind].cost * Math.pow(1.4, owned)) / 5) * 5;
+}
+
 /** Combien d'individus de plus d'une espèce les objets posés dans ce lieu attirent. */
 export function attracted(place, spId) {
 	let n = 0;

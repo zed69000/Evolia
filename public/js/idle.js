@@ -6,6 +6,7 @@ import { SPECIES, PLACE_BY_ID, PLACE_IN } from './species.js';
 import { thumbCopy } from './encyclopedia.js';
 import { PLANT_TYPES } from './plants.js';
 import { ITEMS } from './deco.js';
+import { dayKey } from './state.js';
 
 // Production par membre et par heure (effort par type de plante, nectar), et bonus sur toute la production.
 export const GUILDS = {
@@ -70,8 +71,24 @@ export function addBoost(state, minutes) {
 	state.boostUntil = Math.min(now + MAX_BOOST_MS, Math.max(now, state.boostUntil ?? 0) + minutes * 60000);
 }
 
-/** Production par heure d'un lieu (sans l'élan, appliqué à part). */
-export function rates(state, placeId) {
+/**
+ * L'écosystème entretient, le sport fait grandir : ce que les bêtes produisent seules est plafonné par ce que
+ * la personne a bougé ces 7 derniers jours. Par jour, au plus la moitié de l'effort de sa marche moyenne en
+ * croissance, et autant de nectar que sa marche moyenne ; un petit plancher pour qui ne bouge pas encore.
+ * L'élan triple ensuite le tout, comme avant.
+ */
+export function activityBudget(state, now = Date.now()) {
+	let sum = 0;
+	const age = Math.max(1, Math.min(7, Math.ceil((now - (state.createdAt ?? now)) / 86400000)));
+	for (let i = 0; i < age; i++) {
+		sum += state.days?.[dayKey(new Date(now - i * 86400000))] ?? 0;
+	}
+	const meters = sum / age;
+	return { grow: Math.max(60, (meters / 10) * 0.5) / 24, nectar: Math.max(120, meters / 5) / 24 };
+}
+
+/** Production brute d'un lieu, avant le plafond d'activité. */
+function rawRates(state, placeId) {
 	const members = {}, grow = {};
 	let nectar = 0, bonus = 0;
 	for (const gid of Object.keys(GUILDS)) {
@@ -84,6 +101,23 @@ export function rates(state, placeId) {
 		nectar += g.nectar * members[gid] * mult;
 	}
 	return { members, grow, nectar, mult };
+}
+
+/** Production par heure d'un lieu (sans l'élan, appliqué à part), ramenée au plafond fixé par l'activité. */
+export function rates(state, placeId, now = Date.now()) {
+	const r = rawRates(state, placeId);
+	let growAll = 0, nectarAll = 0;
+	for (const id of Object.keys(state.places)) {
+		const x = id === placeId ? r : rawRates(state, id);
+		growAll += Object.values(x.grow).reduce((a, v) => a + v, 0);
+		nectarAll += x.nectar;
+	}
+	const b = activityBudget(state, now);
+	const kg = growAll > b.grow ? b.grow / growAll : 1, kn = nectarAll > b.nectar ? b.nectar / nectarAll : 1;
+	for (const t of Object.keys(r.grow)) r.grow[t] *= kg;
+	r.nectar *= kn;
+	r.capped = kg < 1 || kn < 1;
+	return r;
 }
 
 
@@ -119,7 +153,7 @@ export function tick(state, garden, now = Date.now()) {
 	const eff = hours + boosted * (BOOST_MULT - 1);
 	const summary = { hours, nectar: 0, places: {} };
 	for (const placeId of Object.keys(state.places)) {
-		const r = rates(state, placeId);
+		const r = rates(state, placeId, now);
 		const place = state.places[placeId];
 		const out = { matured: {}, nectar: r.nectar * eff };
 		for (const [type, perH] of Object.entries(r.grow)) {
