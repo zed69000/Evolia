@@ -2334,6 +2334,8 @@ export class Garden {
 
 		// La nuit, les lanternes et la fenêtre de la cabane s'allument.
 		if (!glyph && night > 0.05) {
+			// Les lueurs se placent en pixels d'écran : on quitte le repère du monde (laissé par les moucherons).
+			ctx.setTransform(1, 0, 0, 1, 0, 0);
 			ctx.globalCompositeOperation = 'lighter';
 			const n = this.glow.width;
 			for (const it of this.items) {
@@ -2341,9 +2343,13 @@ export class Garden {
 				if (sp.glow == null) continue;
 				const x = (it.x + (sp.glowX ?? 0)) * S + tx, y = (it.y + sp.glow) * S + ty;
 				if (x < -200 || x > cw + 200 || y < -200 || y > ch + 200) continue;
-				const size = n * this.cam.z * 3.2;
-				ctx.globalAlpha = Math.min(1, night * 1.2) * (0.85 + 0.15 * Math.sin(this.t * 1.7 + it.x));
+				const size = n * this.cam.z * 3.2, flicker = 0.85 + 0.15 * Math.sin(this.t * 1.7 + it.x);
+				ctx.globalAlpha = Math.min(1, night * 1.2) * flicker;
 				ctx.drawImage(this.glow, x - size / 2, y - size / 2, size, size);
+				// Une flaque de lumière chaude sur l'herbe, au pied de la lanterne ou devant la fenêtre.
+				const gx = x, gy = it.y * S + ty + 6 * S, w = size * 1.9, h = size * 0.6;
+				ctx.globalAlpha = Math.min(1, night * 1.2) * flicker * 0.7;
+				ctx.drawImage(this.glow, gx - w / 2, gy - h / 2, w, h);
 			}
 			ctx.globalAlpha = 1;
 			ctx.globalCompositeOperation = 'source-over';
