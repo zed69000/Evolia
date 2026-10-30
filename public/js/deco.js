@@ -23,9 +23,10 @@ export const ITEMS = {
 	abri: { name: 'Un abri à hérisson', cost: 70, km: 6, turn: true, team: 'regulateur', power: 1, attracts: 'herisson', text: 'Une petite maison sous les feuilles, où il passe l’hiver.', box: { w: 90, h: 70, ax: 45, ay: 50 } },
 	ruche: { name: 'Une ruche en paille', cost: 120, km: 6, team: 'pollinisateur', power: 2, attracts: 'abeille', text: 'Toute une colonie d’abeilles pour polliniser tes fleurs.', box: { w: 80, h: 90, ax: 40, ay: 78 } },
 	bain: { name: 'Un bain d’oiseaux', cost: 100, km: 8, team: 'semeur', power: 1, attracts: 'merle', text: 'De l’eau fraîche : les oiseaux reviennent, et sèment autour.', box: { w: 80, h: 90, ax: 40, ay: 80 } },
+	potager: { name: 'Un carré de potager', cost: 90, km: 5, turn: true, needs: 'cabane', team: 'semeur', power: 2, attracts: ['lapin', 'lievre'], text: 'Le jardinier de la cabane y cultive salades, choux et tomates : de quoi nourrir oiseaux, lapins et butineurs. Pose-en plusieurs pour l’agrandir.', box: { w: 170, h: 120, ax: 85, ay: 72 } },
 	arche: { name: 'Une arche de roses', cost: 120, km: 20, turn: true, team: 'pollinisateur', power: 1, attracts: 'paon-du-jour', text: 'Un passage fleuri pour les papillons.', box: { w: 170, h: 190, ax: 85, ay: 172 } },
 };
-export const ITEM_ORDER = ['banc', 'massif', 'bois', 'pierres', 'mangeoire', 'nichoir', 'lanterne', 'compost', 'hotel', 'mare', 'cabane', 'abri', 'ruche', 'bain', 'arche'];
+export const ITEM_ORDER = ['banc', 'massif', 'bois', 'pierres', 'mangeoire', 'nichoir', 'lanterne', 'compost', 'hotel', 'mare', 'cabane', 'potager', 'abri', 'ruche', 'bain', 'arche'];
 
 const shade = (g, d, rx, ry = rx * 0.3) => wash(g, rx * 0.12, 2, rx, ry, '#2E4A22', d, { layers: 5, alpha: 0.07, edge: 0 });
 
@@ -403,17 +404,67 @@ function paintArche(g, rot) {
 	return { top: -156 };
 }
 
+/** Légumes debout dans le potager, peints à leur place une fois le carré tourné (du fond vers l'avant). */
+const VEG = {
+	salade(g, x, y, d) {
+		for (let i = 0; i < 7; i++) leaf(g, x, y - 2, 8, 5, -Math.PI / 2 + (i - 3) * 0.45, d.pick(['#8ACB5A', '#A8D86A', '#7AB84A']), d, 0.9);
+		wash(g, x, y - 4, 4, 3, '#C8E890', d, { layers: 3, alpha: 0.5, edge: 0 });
+	},
+	chou(g, x, y, d) {
+		for (let i = 0; i < 6; i++) leaf(g, x, y - 1, 10, 6, -Math.PI / 2 + (i - 2.5) * 0.55, '#6A9A8A', d, 0.85);
+		wash(g, x, y - 6, 6, 5.5, '#A8C8B0', d, { layers: 4, alpha: 0.6, edge: 0.3 });
+	},
+	carotte(g, x, y, d) {
+		g.fillStyle = rgba('#E8762E', 0.95);
+		g.beginPath(); g.ellipse(x, y - 1, 2.2, 1.4, 0, 0, 6.28); g.fill();
+		for (let i = 0; i < 5; i++) ribbon(g, curve(x, y - 2, -Math.PI / 2 + (i - 2) * 0.35, 9 + d() * 4, d.gauss() * 0.4, 5), 1.2, 0.2, '#5F933E', d, 0.9);
+	},
+	tomate(g, x, y, d) {
+		g.strokeStyle = rgba('#8A6A44', 0.9); g.lineWidth = 1.4;
+		g.beginPath(); g.moveTo(x, y); g.lineTo(x, y - 30); g.stroke();
+		for (let i = 0; i < 6; i++) leaf(g, x + d.gauss() * 2, y - 6 - i * 4, 7, 4, -Math.PI / 2 + (i % 2 ? 1 : -1) * 0.9, '#4E8A3E', d, 0.85);
+		for (let i = 0; i < 4; i++) { g.fillStyle = rgba(d.pick(['#D8402A', '#E8622E', '#C8302A']), 0.95); g.beginPath(); g.arc(x + d.range(-4, 4), y - d.range(8, 24), 2.2, 0, 6.28); g.fill(); }
+	},
+	courge(g, x, y, d) {
+		for (let i = 0; i < 4; i++) leaf(g, x + d.gauss() * 4, y - 2, 11, 8, -Math.PI / 2 + (i - 1.5) * 0.8, '#5F933E', d, 0.85);
+		wash(g, x + 3, y - 3, 6.5, 4.8, '#E8902E', d, { layers: 5, alpha: 0.6, edge: 0.3 });
+		g.strokeStyle = rgba('#B8641E', 0.6); g.lineWidth = 0.8;
+		for (const k of [-2.5, 0, 2.5]) { g.beginPath(); g.moveTo(x + 3 + k, y - 7.5); g.quadraticCurveTo(x + 3 + k * 1.4, y - 3, x + 3 + k, y + 1.5); g.stroke(); }
+	},
+};
+
+function paintPotager(g, rot) {
+	const d = rng(88);
+	shade(g, d, 80, 22);
+	const soil = (g2, d2) => {
+		g2.fillStyle = rgba('#5A3E26', 0.96); g2.fillRect(0, -76, 130, 76);
+		// Sillons ratissés.
+		g2.strokeStyle = rgba('#3E2A18', 0.45); g2.lineWidth = 1.4;
+		for (let y = -10; y > -76; y -= 7) { g2.beginPath(); g2.moveTo(3, y); g2.lineTo(127, y + d2.gauss() * 0.6); g2.stroke(); }
+		for (let i = 0; i < 14; i++) wash(g2, d2.range(6, 124), d2.range(-72, -4), 3, 1.6, '#7A5A3A', d2, { layers: 2, alpha: 0.35, edge: 0 });
+	};
+	const V = build(g, d, rot, [box(0, 0, 0, 130, 76, 9, '#9A6A40', { front: planksH(130, 9, 9, '#5A3A20'), back: planksH(130, 9, 9, '#5A3A20'), left: planksH(76, 9, 9, '#5A3A20'), right: planksH(76, 9, 9, '#5A3A20'), top: soil, topColor: '#5A3E26' })]);
+	// Trois rangs : tomates au fond, choux et salades, carottes et une courge devant.
+	const rows = [['tomate', -24, 4], ['chou', -4, 5], ['salade', 9, 6], ['carotte', 22, 6]];
+	const plants = [];
+	for (const [kind, y, n] of rows) for (let i = 0; i < n; i++) plants.push({ kind, p: [-52 + (i + 0.5) * (104 / n) + d.gauss() * 1.5, y, 9] });
+	plants.push({ kind: 'courge', p: [44, 24, 9] });
+	plants.sort((a, b) => V.depth(a.p) - V.depth(b.p));
+	for (const { kind, p } of plants) { const [x, y] = V.at(p); VEG[kind](g, x, y, d); }
+	return { top: -48 };
+}
+
 /** Peintres : (contexte, rotation en radians) → { top, glow?, glowX?, water? }. */
 export const ITEM_PAINTERS = {
 	banc: paintBanc, massif: paintMassif, bois: paintBois, pierres: paintPierres, mangeoire: paintMangeoire, nichoir: paintNichoir,
-	lanterne: paintLanterne, compost: paintCompost, hotel: paintHotel, mare: paintMare, cabane: paintCabane, abri: paintAbri,
+	lanterne: paintLanterne, compost: paintCompost, hotel: paintHotel, mare: paintMare, cabane: paintCabane, potager: paintPotager, abri: paintAbri,
 	ruche: paintRuche, bain: paintBain, arche: paintArche,
 };
 
 /** Combien d'individus de plus d'une espèce les objets posés dans ce lieu attirent. */
 export function attracted(place, spId) {
 	let n = 0;
-	for (const it of place?.items ?? []) if (ITEMS[it.kind]?.attracts === spId) n++;
+	for (const it of place?.items ?? []) if ([].concat(ITEMS[it.kind]?.attracts ?? []).includes(spId)) n++;
 	return n;
 }
 

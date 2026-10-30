@@ -245,7 +245,7 @@ export class EcoPanel {
 			// L'objet proposé : le plus utile qu'on peut déjà construire pour cette équipe.
 			const kinds = Object.keys(ITEMS).filter(k => ITEMS[k].team === gid);
 			const km = (st.totals?.distance ?? 0) / 1000;
-			const kind = kinds.filter(k => ITEMS[k].km <= km).sort((a, b) => ITEMS[b].power - ITEMS[a].power || ITEMS[a].cost - ITEMS[b].cost)[0] ?? kinds[0];
+			const kind = kinds.filter(k => ITEMS[k].km <= km && (!ITEMS[k].needs || (place.items ?? []).some(it => it.kind === ITEMS[k].needs))).sort((a, b) => ITEMS[b].power - ITEMS[a].power || ITEMS[a].cost - ITEMS[b].cost)[0] ?? kinds[0];
 			const item = ITEMS[kind];
 			const placed = (place.items ?? []).filter(it => ITEMS[it.kind]?.team === gid).length;
 			const names = m.list.map(({ sp, n }) => `${sp.name}${n > 1 ? ` ×${n}` : ''}`).join(', ');

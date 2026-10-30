@@ -17,6 +17,10 @@ export class GpsTracker {
 		this.watch = null;
 		this.last = null;
 		this.speed = 0;
+		// Dénivelé : altitude lissée, et un palier de 4 m pour ne pas compter le bruit du GPS comme une montée.
+		this.alt = null;
+		this.altRef = null;
+		this.climbRate = 0;
 	}
 
 	static available() {
@@ -41,13 +45,26 @@ export class GpsTracker {
 		const dt = (pos.timestamp - this.last.t) / 1000;
 		// Après une longue pause (appli en arrière-plan, téléphone en poche), le saut de position ne dit rien de
 		// l'allure : on repart de là, et ce sont les pas comptés par le téléphone qui rattrapent la sortie.
-		if (dt > 90) { this.last = { coords: c, t: pos.timestamp }; this.speed = 0; return; }
+		if (dt > 90) { this.last = { coords: c, t: pos.timestamp }; this.speed = 0; this.altRef = null; return; }
 		// En dessous de quelques mètres, c'est le bruit du GPS, pas un déplacement.
 		if (dist < Math.max(3, c.accuracy * 0.25) || dt <= 0) return;
 		const measured = c.speed != null && c.speed >= 0 ? c.speed * 3.6 : (dist / dt) * 3.6;
 		this.speed = this.speed ? this.speed * 0.6 + measured * 0.4 : measured;
 		this.last = { coords: c, t: pos.timestamp };
-		this.onSample({ dist, dt, speedKmh: this.speed });
+		const climb = this.climb(c);
+		this.climbRate = this.climbRate * 0.8 + (climb / dt) * 0.2;
+		this.onSample({ dist, dt, speedKmh: this.speed, climb, climbRate: this.climbRate });
+	}
+
+	/** Mètres montés depuis l'échantillon précédent (les descentes ne comptent pas). */
+	climb(c) {
+		if (c.altitude == null || (c.altitudeAccuracy != null && c.altitudeAccuracy > 20)) return 0;
+		this.alt = this.alt == null ? c.altitude : this.alt * 0.7 + c.altitude * 0.3;
+		if (this.altRef == null) { this.altRef = this.alt; return 0; }
+		const up = this.alt - this.altRef;
+		if (up > 4) { this.altRef = this.alt; return up; }
+		if (up < -4) this.altRef = this.alt;
+		return 0;
 	}
 
 	stop() {

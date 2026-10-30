@@ -76,7 +76,7 @@ const places = new PlacesMap($('#map'), state, travel);
 // Aider une équipe de l'écosystème, c'est poser l'objet qui l'attire (s'il est débloqué et payable), sinon voir la liste.
 const eco = new EcoPanel($('#eco'), state, kind => {
 	const it = ITEMS[kind];
-	if (state.totals.distance / 1000 >= it.km && (state.nectar ?? 0) >= it.cost) startPlacing(kind);
+	if (state.totals.distance / 1000 >= it.km && !needsFirst(kind) && (state.nectar ?? 0) >= it.cost) startPlacing(kind);
 	else openDeco();
 });
 
@@ -367,7 +367,9 @@ function onSample(s) {
 	} else {
 		if (s.dist > 0 && !s.sim) tracking.lastGpsMove = now;
 		// Le téléphone sent des pas depuis peu : on court ; s'il n'en sent aucun à cette allure, on pédale.
-		act = activityFor(s.speedKmh, !!tracking.motion && now - (tracking.lastStep ?? 0) > 20000);
+		// En montée, l'allure compte double : 100 m de dénivelé valent à peu près un kilomètre à plat.
+		const uphill = Math.min(6, Math.max(0, (s.climbRate ?? 0) * 36));
+		act = activityFor(s.speedKmh + uphill, !!tracking.motion && now - (tracking.lastStep ?? 0) > 20000);
 	}
 	if (!act || !(s.dist > 0)) {
 		if (session) { session.speed = s.speedKmh ?? 0; session.act = null; if (s.sim) session.simTime += s.dt; }
@@ -382,13 +384,16 @@ function onSample(s) {
 	session.distance += s.dist;
 	if (act.bike) session.bike = (session.bike ?? 0) + s.dist;
 	addMeters(s.dist * (act.counts ?? 1));
-	const effort = effortFor(s.dist, s.speedKmh, act);
+	// Chaque mètre gravi vaut une dizaine de mètres à plat.
+	if (s.climb > 0 && !act.bike) session.climb = (session.climb ?? 0) + s.climb;
+	const effort = effortFor(s.dist, s.speedKmh, act) + (s.climb > 0 && !act.bike ? s.climb * act.mult : 0);
 	session.effort += effort;
 	state.totals.effort += effort;
 	addEffortXp(effort);
 	for (const ev of garden.addEffort(act.plant, effort)) {
 		session.events.push(ev);
 		if (ev.kind === 'mature' && ev.plant.type !== 'herbe') { toast(`${plantName(ev.plant)} a fini de pousser`, TYPE_COLOR[ev.plant.type]); sound.chime(1); }
+		if (ev.kind === 'sown') toast(`${ev.by[0].toUpperCase() + ev.by.slice(1)} a semé : ${plantName(ev.plant).toLowerCase()}`, TYPE_COLOR[ev.plant.type]);
 	}
 	if (garden.current) session.touched.add(garden.current);
 	checkUnlocks(session.events);
@@ -409,7 +414,7 @@ function endSession() {
 	if (w.distance > 50) addBoost(state, (duration / 60) * BOOST_PER_MIN);
 	if (w.distance > 10) {
 		// `end` sert à ne pas recompter ces pas lors de la prochaine récolte.
-		state.walks.unshift({ start: w.start, end: w.sim ? undefined : w.lastMove, duration, distance: w.distance, effort: w.effort, matured, place: state.place });
+		state.walks.unshift({ start: w.start, end: w.sim ? undefined : w.lastMove, duration, distance: w.distance, effort: w.effort, matured, place: state.place, ...(w.climb >= 10 ? { climb: Math.round(w.climb) } : {}) });
 		state.walks.length = Math.min(state.walks.length, 100);
 		state.totals.walks += 1;
 		state.totals.steps += w.steps;
@@ -546,6 +551,7 @@ function showRecap(w, duration, matured) {
 	const chips = growthChips(matured, w.touched);
 	for (const ev of w.events) if (ev.kind === 'decor') chips.push(`<span class="chip gold">${DECOR[ev.key].name}</span>`);
 	for (const ev of w.events) if (ev.kind === 'cell') chips.push(`<span class="chip gold">${zoneName(state.place, ev.n, 'Nouvelle parcelle')}</span>`);
+	for (const ev of w.events) if (ev.kind === 'sown') chips.push(`<span class="chip">Semé par ${ev.by} : ${plantName(ev.plant).toLowerCase()}</span>`);
 	const title = w.distance > 3000 ? 'Quelle balade !' : 'Belle balade !';
 	let ecoLine = '';
 	if (w.distance > 50) {
@@ -559,7 +565,7 @@ function showRecap(w, duration, matured) {
 		<div class="walk-stats">
 			<div><b>${fmt(w.distance / 1000)}</b><span>km</span></div>
 			<div><b>${fmtTime(duration)}</b><span>durée</span></div>
-			<div><b>${fmtInt(w.steps || w.distance / STEP_LENGTH_M)}</b><span>pas</span></div>
+			${w.climb >= 10 ? `<div><b>+${fmtInt(w.climb)}</b><span>m de montée</span></div>` : `<div><b>${fmtInt(w.steps || w.distance / STEP_LENGTH_M)}</b><span>pas</span></div>`}
 		</div>
 		<div class="chips">${chips.join('')}</div>
 		${ecoLine}
@@ -825,6 +831,12 @@ setInterval(() => {
 
 let placing = null; // { kind, item? } pendant qu'on choisit la place d'un objet
 
+/** L'objet qu'il faut d'abord poser ici pour pouvoir construire celui-ci (le potager vient avec la cabane), ou null. */
+function needsFirst(kind) {
+	const need = ITEMS[kind].needs;
+	return need && !garden.items.some(x => x.kind === need) ? need : null;
+}
+
 function renderDeco() {
 	const km = state.totals.distance / 1000;
 	const nectar = state.nectar ?? 0;
@@ -833,8 +845,9 @@ function renderDeco() {
 		<div class="panel-head"><h2>Aménager</h2><button class="close" data-close-deco aria-label="Fermer">×</button></div>
 		<p class="sp-intro">Installe de quoi rendre ton jardin accueillant, pour toi et pour les animaux. Tout se paie en nectar, et se range quand tu veux (le nectar t'est rendu).</p>
 		<div class="deco-list">${ITEM_ORDER.map(k => {
-			const it = ITEMS[k], locked = km < it.km, poor = nectar < it.cost, n = here_.filter(x => x.kind === k).length;
-			const action = locked ? `<span class="deco-lock">dès ${it.km} km parcourus</span>`
+			const it = ITEMS[k], need = needsFirst(k), locked = km < it.km || !!need, poor = nectar < it.cost, n = here_.filter(x => x.kind === k).length;
+			const action = km < it.km ? `<span class="deco-lock">dès ${it.km} km parcourus</span>`
+				: need ? `<span class="deco-lock">après ${ITEMS[need].name.replace(/^Une? /, 'la ').toLowerCase()}</span>`
 				: `<button class="btn primary small" data-buy="${k}" ${poor ? 'disabled' : ''}>${poor ? `il manque ${fmtInt(it.cost - nectar)}` : 'Installer'}</button>`;
 			return `<div class="deco-card${locked ? ' locked' : ''}"><div class="deco-art" data-art="${k}"></div>
 				<div class="deco-body"><h3>${it.name}</h3><p>${it.text}</p>${itemHelp(k) ? `<span class="deco-help">${itemHelp(k)}</span>` : ''}
@@ -927,6 +940,9 @@ $('#btn-place').addEventListener('click', () => {
 		garden.placeItem(kind, x, y, rot);
 		const help = itemHelp(kind);
 		toast(`${ITEMS[kind].name} : installé${/^Une /.test(ITEMS[kind].name) ? 'e' : ''}${help ? ` · ${help}` : ''}`, '#9A7448');
+		if (kind === 'cabane' && garden.items.filter(x => x.kind === 'cabane').length === 1) {
+			setTimeout(() => toast('Un jardinier s’installe dans ta cabane : construis-lui un carré de potager', '#5F933E', () => openDeco()), 2600);
+		}
 	}
 	sound.chime(2);
 	endPlacing();

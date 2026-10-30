@@ -111,6 +111,50 @@ function paintHerbe(ctx, g, seed, look, env = {}) {
 	return { top: -30 * k, r: 8 };
 }
 
+/**
+ * Tapis d'herbe peint au sol sous chaque touffe : les touffes voisines se fondent en une pelouse continue.
+ * Origine au centre ; `palette` vient de l'espèce, `season` jaunit en automne. Rayon utile : 64 × 30.
+ */
+export function paintTurf(ctx, seed, palette = GREENS, season) {
+	const r = rng(seed), d = rng(seed ^ 0x51ed);
+	const tone = c => grassTone(c, { season });
+	wash(ctx, 0, 0, 52, 23, tone(palette[1] ?? palette[0]), d, { layers: 7, alpha: 0.07, edge: 0, variance: 0.3 });
+	wash(ctx, r.gauss() * 6, r.gauss() * 2, 36, 16, tone(palette[0]), d, { layers: 6, alpha: 0.07, edge: 0, variance: 0.3 });
+	// Brins courts, plus serrés au centre, couchés dans tous les sens comme une vraie pelouse.
+	for (let i = 0; i < 140; i++) {
+		const a = r() * Math.PI * 2, k = Math.sqrt(r());
+		const x = Math.cos(a) * 52 * k, y = Math.sin(a) * 23 * k;
+		const len = (4 + r() * 7) * (1 - k * 0.45);
+		const lean = r.gauss() * 0.5;
+		ctx.strokeStyle = rgba(tone(r.pick(palette)), 0.55 - k * 0.3);
+		ctx.lineWidth = 1 + r() * 0.8;
+		ctx.lineCap = 'round';
+		ctx.beginPath();
+		ctx.moveTo(x, y);
+		ctx.quadraticCurveTo(x + lean * len * 0.3, y - len * 0.6, x + lean * len, y - len);
+		ctx.stroke();
+	}
+	// Quelques pâquerettes et trèfles perdus dans l'herbe.
+	for (let i = 0; i < 5; i++) {
+		const x = r.gauss() * 26, y = r.gauss() * 11;
+		if (r() < 0.5) { ctx.fillStyle = rgba('#FBF6EC', 0.85); ctx.beginPath(); ctx.arc(x, y, 1.4, 0, Math.PI * 2); ctx.fill(); ctx.fillStyle = '#E8C23A'; ctx.beginPath(); ctx.arc(x, y, 0.6, 0, Math.PI * 2); ctx.fill(); }
+		else wash(ctx, x, y, 2.6, 1.4, tone('#4E8A3E'), d, { layers: 3, alpha: 0.35, edge: 0 });
+	}
+	// Bord fondu : la pelouse se perd dans le sol, sans contour.
+	ctx.save();
+	ctx.setTransform(1, 0, 0, 1, 0, 0);
+	const W = ctx.canvas.width, H = ctx.canvas.height;
+	ctx.translate(W / 2, H / 2);
+	ctx.scale(1, H / W);
+	const fade = ctx.createRadialGradient(0, 0, W * 0.18, 0, 0, W * 0.5);
+	fade.addColorStop(0, 'rgba(0,0,0,1)');
+	fade.addColorStop(1, 'rgba(0,0,0,0)');
+	ctx.globalCompositeOperation = 'destination-in';
+	ctx.fillStyle = fade;
+	ctx.fillRect(-W, -W, W * 2, W * 2);
+	ctx.restore();
+}
+
 // ─── Fleurs ───────────────────────────────────────────────────
 
 function petalRing(ctx, x, y, n, dist, rx, ry, rot, color, d) {

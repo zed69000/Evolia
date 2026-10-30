@@ -1,3 +1,5 @@
+import { BEASTS } from './beasts.js';
+
 // Petites bêtes du jardin, dessinées à chaque image (elles bougent) autour de (0, 0), en unités monde.
 // `t` anime ailes et pattes ; `mode` vaut 'perch' quand l'animal est posé ; `p` porte les couleurs de l'espèce.
 
@@ -15,6 +17,56 @@ const line = (ctx, pts, w, color) => {
 	ctx.moveTo(pts[0][0], pts[0][1]);
 	for (const q of pts.slice(1)) ctx.lineTo(q[0], q[1]);
 	ctx.stroke();
+};
+
+/**
+ * Aile d'oiseau de profil, comme sur une planche d'hirondelle : aile haute, puis vue par la tranche, puis basse,
+ * et elle remonte à demi repliée. `u` : phase du battement (0 → 1) ; l'aile du fond est plus sombre et décalée.
+ */
+function wing(ctx, u, color, tip, far) {
+	u = ((u % 1) + 1) % 1;
+	const sm = x => x * x * (3 - 2 * x);
+	// Abaissée vite (45 % du temps), remontée plus lente.
+	const phi = u < 0.45 ? 0.2 + sm(u / 0.45) * 2.5 : 2.7 - sm((u - 0.45) / 0.55) * 2.5;
+	const fold = u < 0.45 ? 0 : Math.sin(((u - 0.45) / 0.55) * Math.PI) * 0.45;
+	let sy = Math.cos(phi);
+	if (Math.abs(sy) < 0.14) sy = 0.14 * (sy < 0 ? -1 : 1);
+	ctx.save();
+	ctx.translate(far ? 0.8 : -0.4, far ? -2.2 : -1.6);
+	ctx.scale(1, sy * (1 - fold * 0.35));
+	ctx.rotate(-0.25 - fold * 0.5);
+	ctx.fillStyle = color;
+	ctx.beginPath();
+	ctx.moveTo(3, 0);
+	ctx.quadraticCurveTo(3.4, -6, 1.2, -9);
+	ctx.quadraticCurveTo(-1.5, -13.5, -5.5, -15.5);
+	// Rémiges : le bord de fuite festonné.
+	ctx.lineTo(-5.2, -12.6);
+	ctx.lineTo(-6.6, -11.8);
+	ctx.lineTo(-5.6, -9.4);
+	ctx.lineTo(-7, -8.4);
+	ctx.lineTo(-5.6, -6);
+	ctx.lineTo(-6.8, -4.6);
+	ctx.quadraticCurveTo(-5, -1, -3.5, 0.5);
+	ctx.closePath();
+	ctx.fill();
+	ctx.fillStyle = 'rgba(255,255,255,0.16)';
+	ctx.beginPath();
+	ctx.moveTo(3, 0);
+	ctx.quadraticCurveTo(3.4, -6, 1.2, -9);
+	ctx.lineTo(-1, -7);
+	ctx.quadraticCurveTo(0, -3, -1, 0);
+	ctx.closePath();
+	ctx.fill();
+	if (tip) { ctx.fillStyle = tip; ctx.beginPath(); ctx.ellipse(0.4, -6.5, 1.4, 2.6, 0.3, 0, Math.PI * 2); ctx.fill(); }
+	ctx.restore();
+}
+
+/** Teinte plus sombre pour l'aile du fond. */
+const mix2 = hex => {
+	const n = parseInt(hex.slice(1), 16);
+	const f = c => Math.round(c * 0.72).toString(16).padStart(2, '0');
+	return `#${f(n >> 16)}${f((n >> 8) & 255)}${f(n & 255)}`;
 };
 
 const DRAW = {
@@ -256,25 +308,6 @@ const DRAW = {
 		}
 	},
 
-	squirrel(ctx, t, mode) {
-		const hop = mode === 'perch' ? 0 : Math.abs(Math.sin(t * 9)) * 2.5;
-		ctx.save();
-		ctx.translate(0, -hop);
-		ctx.fillStyle = '#B4582A';
-		ell(ctx, -8, -7, 4.5, 8, -0.5);
-		ctx.fillStyle = '#C8683A';
-		ell(ctx, -9, -10, 3, 5.5, -0.5);
-		ctx.fillStyle = '#B4582A';
-		ell(ctx, 0, 0, 6, 4.2);
-		ell(ctx, 5.5, -3, 3.2, 3);
-		ctx.beginPath(); ctx.moveTo(5, -5.5); ctx.lineTo(4.4, -9); ctx.lineTo(6.4, -6); ctx.fill();
-		ctx.fillStyle = '#F4E8D0';
-		ell(ctx, 1.5, 1.8, 3, 1.6);
-		ctx.fillStyle = '#1A1210';
-		ell(ctx, 6.6, -3.6, 0.7, 0.7);
-		ctx.restore();
-	},
-
 	marmot(ctx, t, mode) {
 		const up = Math.sin(t * 0.7) > 0.6;
 		ctx.fillStyle = '#8A6A48';
@@ -294,13 +327,16 @@ const DRAW = {
 	},
 
 	tit(ctx, t, mode) {
-		const flap = mode === 'perch' ? 0 : Math.abs(Math.sin(t * 22));
+		const flying = mode !== 'perch';
+		const flap = 0;
+		if (flying) wing(ctx, t * 3.6 + 0.12, '#3E6E9A', null, true);
 		ctx.fillStyle = '#5E7FA0';
 		ell(ctx, -6, 0.5, 3.6, 1.4, 0.35);
 		ctx.fillStyle = '#F2D04E';
 		ell(ctx, 0, 1, 5, 4);
 		ctx.fillStyle = '#4E86C0';
-		ell(ctx, -1.5, -1 - flap * 3, 4, 2.4 + flap * 1.5, -0.2);
+		if (flying) wing(ctx, t * 3.6, '#4E86C0', '#2E5E8A', false);
+		else ell(ctx, -1.5, -1 - flap * 3, 4, 2.4 + flap * 1.5, -0.2);
 		ctx.fillStyle = '#FDF7E7';
 		ell(ctx, 4, -2.4, 3, 2.6);
 		ctx.fillStyle = '#3E8FD0';
@@ -312,20 +348,25 @@ const DRAW = {
 	},
 
 	bird(ctx, t, mode, p) {
-		const flap = mode === 'perch' || p.walker ? 0 : Math.abs(Math.sin(t * 22));
+		const flying = mode !== 'perch' && !p.walker;
+		const flap = 0;
 		const legs = p.walker ? Math.sin(t * 14) * 1.4 : 0;
 		if (p.walker) {
 			line(ctx, [[0, 3], [-1 - legs, 7]], 0.7, '#3A2A20');
 			line(ctx, [[1, 3], [1 + legs, 7]], 0.7, '#3A2A20');
 		}
+		if (flying) wing(ctx, t * 3.4 + 0.12, mix2(p.body), null, true);
 		ctx.fillStyle = p.body;
 		ell(ctx, -6, 0, 3.4, 1.3, 0.3);
 		ell(ctx, 0, 0.5, 5, 3.6);
 		ctx.fillStyle = p.belly;
 		ell(ctx, 1, 2, 3.6, 1.8);
 		ctx.fillStyle = p.body;
-		ell(ctx, -1.5, -0.8 - flap * 3, 4, 2.2 + flap * 1.5, -0.2);
-		if (p.patch) { ctx.fillStyle = p.patch; ell(ctx, 0.5, -1 - flap * 3, 1.8, 0.9, -0.2); }
+		if (flying) wing(ctx, t * 3.4, p.body, p.patch, false);
+		else {
+			ell(ctx, -1.5, -0.8 - flap * 3, 4, 2.2 + flap * 1.5, -0.2);
+			if (p.patch) { ctx.fillStyle = p.patch; ell(ctx, 0.5, -1 - flap * 3, 1.8, 0.9, -0.2); }
+		}
 		if (p.dots) { ctx.fillStyle = p.dots; for (const [x, y] of [[-1, 1.5], [1.5, 2.2], [3, 0.8], [-3, 0.4], [0.5, -0.2]]) ell(ctx, x, y, 0.55, 0.55); }
 		ctx.fillStyle = p.body;
 		ell(ctx, 4.5, -2.6, 2.8, 2.6);
@@ -470,10 +511,13 @@ DRAW.ants = (ctx, t) => {
 	}
 };
 
-export function drawCritter(ctx, kind, t = 0, mode, params = {}) {
-	DRAW[kind]?.(ctx, t, mode, params);
+Object.assign(DRAW, BEASTS);
+
+/** `s` : l'état complet de la bête (phase du bond ou du pas), pour les mammifères animés par poses-clés. */
+export function drawCritter(ctx, kind, t = 0, mode, params = {}, s = { t, mode, ph: 0 }) {
+	DRAW[kind]?.(ctx, t, mode, params, s);
 }
 
 /** Taille d'affichage dans le jardin, et hauteur de vol (pour placer l'ombre au sol). */
-export const CRITTER_SIZE = { hoverfly: 1.2, beefly: 1.2, ant: 1.9, firebug: 1.3, snail: 1.4, grasshopper: 1.2, spider: 1.2, duck: 1.5, hedgehog: 1.6, frog: 1.4, tit: 1.4, bird: 1.4, ladybug: 1.2, squirrel: 1.5, marmot: 1.6, lizard: 1.2, heron: 1.8, owl: 1.5, eagle: 1.6, gull: 1.3, crab: 1.3, beetle: 1.2 };
-export const FLIGHT = { hoverfly: 24, beefly: 24, firebug: 2, snail: 2, grasshopper: 3, bee: 24, butterfly: 24, dragonfly: 24, frog: 6, hedgehog: 9, squirrel: 8, marmot: 7, lizard: 3, heron: 18, crab: 4, eagle: 160, gull: 110 };
+export const CRITTER_SIZE = { hoverfly: 1.2, beefly: 1.2, ant: 1.9, firebug: 1.3, snail: 1.4, grasshopper: 1.2, spider: 1.2, duck: 1.5, hedgehog: 1.6, frog: 1.4, tit: 1.4, bird: 1.4, ladybug: 1.2, squirrel: 1.3, rabbit: 1.4, hare: 1.5, roe: 2, chamois: 1.9, fox: 1.6, farmer: 2, marmot: 1.6, lizard: 1.2, heron: 1.8, owl: 1.5, eagle: 1.6, gull: 1.3, crab: 1.3, beetle: 1.2 };
+export const FLIGHT = { rabbit: 1, hare: 1, roe: 1, chamois: 1, fox: 1, farmer: 1, hoverfly: 24, beefly: 24, firebug: 2, snail: 2, grasshopper: 3, bee: 24, butterfly: 24, dragonfly: 24, frog: 6, hedgehog: 9, squirrel: 1, marmot: 7, lizard: 3, heron: 18, crab: 4, eagle: 160, gull: 110 };

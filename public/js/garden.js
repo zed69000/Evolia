@@ -5,8 +5,9 @@
 // le monde les décale de l'origine de la parcelle (colonne × PARCEL_W, rangée × PARCEL_H).
 
 import { rng, wash, rgba, mix, paperTexture, lerp } from './watercolor.js';
-import { PLANT_TYPES, DECOR, DECOR_PAINTERS, paintPlant, newVariant, lookOf } from './plants.js';
+import { PLANT_TYPES, DECOR, DECOR_PAINTERS, paintPlant, paintTurf, newVariant, lookOf } from './plants.js';
 import { drawCritter, CRITTER_SIZE, FLIGHT } from './critters.js';
+import { GAIT } from './beasts.js';
 import { SPECIES, PLACE_BY_ID } from './species.js';
 import { PARCEL_W, PARCEL_H, CELLS, CELL_KM, GROUND, zoneOf, zoneName, tileSteps, keepOut } from './zones.js';
 import { newPlace } from './state.js';
@@ -71,10 +72,18 @@ const CLOUD_X = 2080, CLOUD_Y = 1720;
 const SUNNY = { clear: 1, clouds: 0.6, overcast: 0.15, fog: 0.05, drizzle: 0.2, rain: 0.1, storm: 0.05, snow: 0.2 };
 
 /** Animaux au sol : triés avec les plantes, pour passer devant ou derrière elles. */
-const onGround = b => (b.behavior === 'walk' || b.behavior === 'trail' || (b.behavior === 'hop' && b.mode !== 'hop') || b.kind === 'heron' || b.kind === 'frog') && !b.p.swim;
+const onGround = b => (b.behavior === 'walk' || b.behavior === 'bound' || b.behavior === 'roam' || b.behavior === 'trail' || (b.behavior === 'hop' && b.mode !== 'hop') || b.kind === 'heron' || b.kind === 'frog') && !b.p.swim;
 
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
 const pick = arr => arr[Math.floor(Math.random() * arr.length)];
+
+const RANK = { herbe: 0, fleur: 1, buisson: 2, arbre: 3 };
+/** Qui sème quoi, et au bout de combien de plantes mûres de l'étage du dessous. */
+const SUCCESSION = {
+	herbe: { every: 4, type: 'fleur', start: 0.2, by: { default: ['le vent', 'une abeille', 'un bourdon'], littoral: ['le vent'], montagne: ['le vent', 'un bourdon'] } },
+	fleur: { every: 5, type: 'buisson', start: 0.12, by: { default: ['un merle', 'une fauvette', 'une grive'], littoral: ['un goéland', 'le vent'] } },
+	buisson: { every: 4, type: 'arbre', start: 0.06, by: { default: ['un geai', 'un écureuil', 'une sittelle'], montagne: ['un cassenoix', 'un écureuil'], marais: ['un geai', 'le courant'] } },
+};
 
 export class Garden {
 	constructor(canvas, state) {
@@ -514,7 +523,7 @@ export class Garden {
 	}
 
 	/** Trouve une place libre dans une parcelle ; si elle est pleine, on serre un peu les plantes. */
-	place_(pid, type, ci = 0) {
+	place_(pid, type, ci = 0, around = null) {
 		const place = this.state.places[pid];
 		const sp = PLANT_TYPES[type].spacing;
 		const here = place.plants.filter(p => cellOf(p) === ci);
@@ -528,9 +537,16 @@ export class Garden {
 		let best = { x: PARCEL_W / 2, y: H / 2 }, bestScore = -Infinity;
 		for (let i = 0; i < 90; i++) {
 			let x, y, near = false;
-			if (same.length && (type === 'herbe' || type === 'fleur') && Math.random() < 0.6) {
+			// L'herbe s'étend en pelouse depuis ses touffes ; les fleurs se sèment en massifs, près des leurs.
+			if (around && i < 60) {
+				// Semée par une bête : tombe à quelques pas de la plante d'où vient la graine.
+				const a = Math.random() * Math.PI * 2, d = sp * 1.2 + Math.random() * sp * 2.5;
+				x = around.x + Math.cos(a) * d;
+				y = around.y + Math.sin(a) * d;
+				near = true;
+			} else if (same.length && (type === 'herbe' || type === 'fleur') && Math.random() < (type === 'herbe' ? 0.88 : 0.7)) {
 				const o = pick(same);
-				const a = Math.random() * Math.PI * 2, d = sp * 2 + Math.random() * sp * 2.5;
+				const a = Math.random() * Math.PI * 2, d = type === 'herbe' ? sp * 1.6 + Math.random() * sp * 1.6 : sp * 1.4 + Math.random() * sp * 2;
 				x = o.x + Math.cos(a) * d;
 				y = o.y + Math.sin(a) * d;
 				near = true;
@@ -567,6 +583,15 @@ export class Garden {
 		const place = this.state.places[pid];
 		const events = [];
 		const cost = PLANT_TYPES[type].cost;
+		// Une jeune pousse semée par les bêtes, plus grande que ce qu'on fait pousser, profite d'un tiers de l'effort :
+		// même à petits pas, la prairie finit par se couvrir d'arbustes puis d'arbres.
+		const sown = place.plants.find(q => q.sown && q.growth < 1 && RANK[q.type] > RANK[type]);
+		if (sown) {
+			const share = amount / 3, c2 = PLANT_TYPES[sown.type].cost;
+			sown.growth = Math.min(1, sown.growth + share / c2);
+			amount -= share;
+			if (sown.growth >= 1) { events.push({ kind: 'mature', plant: sown, pid }); this.succeed(pid, sown, events); }
+		}
 		let p = place.plants.find(q => q.type === type && q.growth < 1);
 		while (amount > 1e-6) {
 			if (!p) {
@@ -578,9 +603,34 @@ export class Garden {
 			p.growth = Math.min(1, p.growth + used / cost);
 			amount -= used;
 			if (follow) this.current = p;
-			if (p.growth >= 1) { events.push({ kind: 'mature', plant: p, pid }); p = null; }
+			if (p.growth >= 1) { events.push({ kind: 'mature', plant: p, pid }); this.succeed(pid, p, events); p = null; }
 		}
 		return events;
+	}
+
+	/**
+	 * Succession naturelle : toutes les quelques plantes arrivées à maturité, une bête (ou le vent) sème l'étage au-dessus,
+	 * tout près : graines d'herbes portées par le vent et les abeilles, baies semées par les oiseaux, glands cachés par le geai et l'écureuil.
+	 */
+	succeed(pid, parent, events) {
+		const next = SUCCESSION[parent.type];
+		if (!next) return;
+		const place = this.state.places[pid];
+		place.succ ??= {};
+		place.succ[parent.type] = (place.succ[parent.type] ?? 0) + 1;
+		if (place.succ[parent.type] % next.every) return;
+		// Pas plus de deux jeunes pousses semées qui attendent de grandir, par étage.
+		if (place.plants.filter(q => q.sown && q.type === next.type && q.growth < 1).length >= 2) return;
+		const ci = cellOf(parent);
+		const pos = this.place_(pid, next.type, ci, parent);
+		const by = pick(next.by[pid] ?? next.by.default);
+		const p = this.spawn(pid, next.type, next.start, pos, ci);
+		p.sown = by;
+		events.push({ kind: 'sown', plant: p, pid, by });
+		if (pid === this.biome) {
+			const [ox, oy] = cellOrigin(ci);
+			this.burst(ox + p.x, oy + p.y - 6, 8);
+		}
 	}
 
 	/**
@@ -641,6 +691,24 @@ export class Garden {
 		}
 		s.used = this.t;
 		return s;
+	}
+
+	/** Morceau de pelouse (5 variantes par palette et par saison), posé au sol sous les touffes d'herbe. */
+	turfSprite(n, palette) {
+		const key = `turf:${n}:${palette?.join() ?? ''}:${this.seasonKey}`;
+		let c = this.sprites.get(key)?.canvas;
+		if (!c) {
+			const D = this.density;
+			c = document.createElement('canvas');
+			c.width = Math.ceil(128 * D);
+			c.height = Math.ceil(64 * D);
+			const g = c.getContext('2d');
+			g.setTransform(D, 0, 0, D, 64 * D, 32 * D);
+			paintTurf(g, 9001 + n * 7919, palette, this.season);
+			this.sprites.set(key, { canvas: c, stage: 0, used: this.t });
+		}
+		this.sprites.get(key).used = this.t;
+		return c;
 	}
 
 	// ─── Objets posés par la personne (cabane, banc, nichoir…) ─────
@@ -1029,6 +1097,7 @@ export class Garden {
 		if (this.t > this.nextPopulate) { this.populate(); this.nextPopulate = this.t + 1; }
 		for (const i of this.insects) this.updateInsect(i, dt);
 		this.insects = this.insects.filter(i => !i.gone);
+		this.updateFarmer(dt);
 		for (const p of this.particles) {
 			p.x += p.vx * dt; p.y += p.vy * dt; p.vy += 10 * dt; p.vx *= 0.98; p.life -= p.decay * dt;
 		}
@@ -1228,6 +1297,12 @@ export class Garden {
 				const target = pick(c.on === 'buisson' ? P.bushes : P.trees);
 				return target && { ...base, x: side, y: y - 100, target, ox: c.trunk ? 6 : (Math.random() - 0.5) * (c.on === 'buisson' ? 30 : 60), oy: c.trunk ? 0 : 4, mode: 'seek' };
 			}
+			case 'bound':
+			case 'roam': {
+				const home = this.shelterFor(c.kind, P) ?? this.homeFor(c.home, P);
+				if (!home) return null;
+				return { ...base, x: home.x + (Math.random() - 0.5) * 80, y: home.y + 8 + Math.random() * 20, mode: 'sit', ph: 0, alert: 0, timer: 1 + Math.random() * 4, home };
+			}
 			case 'walk':
 			case 'hop': {
 				const home = this.shelterFor(c.kind, P) ?? this.homeFor(c.home, P);
@@ -1290,9 +1365,87 @@ export class Garden {
 
 	/** Le refuge d'un animal qui marche : l'abri qu'on lui a posé dans sa parcelle, s'il y en a un. */
 	shelterFor(kind, P) {
-		const kinds = { hedgehog: ['abri', 'bois'], lizard: ['pierres'], snail: ['compost', 'bois'], beetle: ['bois', 'compost'], firebug: ['bois', 'pierres'] }[kind];
+		const kinds = { hedgehog: ['abri', 'bois'], lizard: ['pierres'], snail: ['compost', 'bois', 'potager'], beetle: ['bois', 'compost'], firebug: ['bois', 'pierres'], rabbit: ['potager'], hare: ['potager'] }[kind];
 		const it = kinds && pick(this.itemsIn(P.ci, kinds));
 		return it && { x: it.x + (Math.random() - 0.5) * 30, y: it.y + 6, item: it };
+	}
+
+	// ─── Le jardinier de la cabane ─────────────────────────────────
+	// Une cabane posée, et un jardinier s'installe : il sort le matin, prépare la terre devant chez lui,
+	// puis bine et arrose les carrés de potager qu'on lui construit, va chercher du compost à la brouette,
+	// et rentre à la nuit tombée. En arrosant, il donne un coup de pouce aux plantes qui poussent autour.
+
+	/** Seuil de la porte de la cabane, une fois tournée (en coordonnées monde). */
+	cabinDoor(it) {
+		const r = ((it.rot ?? 0) * Math.PI) / 180, c = Math.cos(r), s = Math.sin(r);
+		const [x, y] = [-1.5, 56];
+		return { x: it.x + x * c - y * s, y: it.y + (x * s + y * c) * 0.36 };
+	}
+
+	updateFarmer(dt) {
+		const cab = this.glyph ? null : this.items.find(it => it.kind === 'cabane');
+		if (!cab) { this.farmer = null; return; }
+		const door = this.cabinDoor(cab);
+		let f = this.farmer;
+		if (!f || f.cab !== cab.id) f = this.farmer = { kind: 'farmer', p: {}, x: door.x, y: door.y, mode: 'stand', t: 0, ph: 0, dir: 1, timer: 1.5, cab: cab.id, hidden: true };
+		f.t += dt;
+		const home = this.night() > 0.45 || this.precip() > 0.5;
+		if (home && !f.goal && f.hidden) return;
+		if (home && f.goal?.task !== 'in') f.goal = { x: door.x, y: door.y, task: 'in' };
+		if (f.goal) {
+			const dx = f.goal.x - f.x, dy = f.goal.y - f.y, d = Math.hypot(dx, dy);
+			f.hidden = false;
+			if (d < 1.5) {
+				const task = f.goal.task;
+				f.goal = null;
+				f.carry = task === 'fetch' ? !f.carry : f.carry;
+				if (task === 'in') { f.hidden = true; f.mode = 'stand'; f.timer = 2; return; }
+				if (task === 'fetch') { f.mode = 'stand'; f.timer = 1.2; return; }
+				f.mode = task;
+				f.dir = f.face ?? f.dir;
+				f.timer = task === 'rake' ? 6 + Math.random() * 6 : task === 'water' ? 4 + Math.random() * 4 : 2 + Math.random() * 3;
+				return;
+			}
+			const step = Math.min(d, GAIT.farmer.speed * (f.carry ? 0.8 : 1) * dt);
+			f.x += (dx / d) * step;
+			f.y += (dy / d) * step;
+			f.ph += step / GAIT.farmer.stride;
+			f.dist = (f.dist ?? 0) + step;
+			if (Math.abs(dx) > 0.5) f.dir = Math.sign(dx);
+			f.mode = f.carry ? 'barrow' : 'run';
+			return;
+		}
+		// En arrosant, il aide ce qui pousse autour de lui.
+		if (f.mode === 'water' && (f.nurtureAt ?? 0) < f.t) {
+			f.nurtureAt = f.t + 2;
+			const ci = this.cellAt(f.x, f.y);
+			const P = this.pdata[ci];
+			if (P) {
+				const near = this.place.plants.filter(p => cellOf(p) === ci && p.growth < 1 && Math.hypot(P.ox + p.x - f.x, P.oy + p.y - f.y) < 140);
+				if (near.length) this.nurture(pick(near), 4);
+			}
+		}
+		f.timer -= dt;
+		if (f.timer > 0) return;
+		f.hidden = false;
+		const beds = this.items.filter(it => it.kind === 'potager');
+		// Brouette : un aller-retour au tas de compost (ou à la cabane) de temps en temps, puis il repart au potager.
+		const compost = this.items.find(it => it.kind === 'compost');
+		if (beds.length && (f.carry || Math.random() < 0.22)) {
+			const to = f.carry ? pick(beds) : (compost ?? cab);
+			f.goal = { x: to.x + (f.carry ? -60 : 30), y: to.y + 20, task: 'fetch' };
+			return;
+		}
+		if (beds.length) {
+			const bed = pick(beds), side = Math.random() < 0.5 ? -1 : 1;
+			f.goal = { x: bed.x + side * (40 + Math.random() * 30), y: bed.y + 16 + Math.random() * 10, task: Math.random() < 0.55 ? 'rake' : 'water' };
+			f.face = -side;
+			return;
+		}
+		// Pas encore de potager : il bêche devant la cabane, là où il aimerait le faire.
+		const side = Math.random() < 0.5 ? -1 : 1;
+		f.goal = { x: door.x + side * (50 + Math.random() * 50), y: door.y + 25 + Math.random() * 30, task: Math.random() < 0.7 ? 'rake' : 'stand' };
+		f.face = side;
 	}
 
 	updateInsect(b, dt) {
@@ -1541,6 +1694,48 @@ export class Garden {
 				b.dir = Math.cos(b.ang) >= 0 ? 1 : -1;
 				return;
 			}
+			case 'bound':
+			case 'roam': {
+				const g = GAIT[b.kind], home = b.home;
+				if (b.mode === 'run') {
+					const dx = b.tx - b.x, dy = b.ty - b.y, d = Math.hypot(dx, dy);
+					if (b.behavior === 'bound') {
+						// Un bond : lent au sol, rapide en l'air ; arrivé, il finit son bond avant de s'asseoir.
+						const u = b.ph % 1;
+						b.ph += dt / g.hop;
+						if (d < 2) {
+							if (u > 0.88 || u < 0.04) { if (b.leaving) { b.gone = true; return; } Object.assign(b, { mode: 'sit', ph: 0, timer: 2 + Math.random() * 7 }); }
+							return;
+						}
+						const step = Math.min(d, (g.len / g.hop) * (0.35 + 1.3 * Math.sin(Math.PI * u) ** 2) * dt);
+						b.x += (dx / d) * step;
+						b.y += (dy / d) * step;
+					} else {
+						if (d < 2) { if (b.leaving) { b.gone = true; return; } Object.assign(b, { mode: 'sit', timer: 4 + Math.random() * 9 }); return; }
+						const step = Math.min(d, g.speed * (b.leaving ? 1.8 : 1) * dt);
+						b.x += (dx / d) * step;
+						b.y += (dy / d) * step;
+						// Les pattes avancent avec le chemin parcouru : pas de glissade.
+						b.ph = (b.ph ?? 0) + step / g.stride;
+					}
+					if (Math.abs(dx) > 0.5) b.dir = Math.sign(dx);
+					b.dist = (b.dist ?? 0) + Math.abs(dx);
+					return;
+				}
+				// À l'arrêt : il broute, et de temps en temps se dresse pour écouter.
+				const listen = Math.sin(b.t * 0.37 + (b.seed ??= Math.random() * 9)) > 0.82 ? 1 : 0;
+				b.alert += (listen - b.alert) * Math.min(1, dt * 5);
+				b.timer -= dt;
+				if (b.leaving || b.timer < 0) {
+					const far = b.leaving ? 320 : 40 + Math.random() * (b.behavior === 'roam' ? 160 : 90);
+					const a = b.leaving ? (b.x < P.ox + PARCEL_W / 2 ? Math.PI : 0) + (Math.random() - 0.5) : Math.random() * Math.PI * 2;
+					let tx = b.x + Math.cos(a) * far, ty = b.y + Math.sin(a) * far * 0.6;
+					if (!b.leaving && Math.hypot(tx - home.x, ty - home.y) > 170) { tx = home.x + (Math.random() - 0.5) * 60; ty = home.y + 10; }
+					if (!b.leaving) tx = Math.max(P.ox + 20, Math.min(P.ox + PARCEL_W - 20, tx));
+					Object.assign(b, { mode: 'run', tx, ty, ph: b.behavior === 'bound' ? 0 : (b.ph ?? 0), alert: 0 });
+				}
+				return;
+			}
 			case 'hop': {
 				if (b.leaving) { b.gone = true; return; }
 				if (b.mode === 'hop') {
@@ -1702,6 +1897,19 @@ export class Garden {
 			ctx.globalAlpha = 1;
 		}
 
+		// Tapis d'herbe : sous les touffes de graminées, une pelouse peinte au sol qui se referme à mesure qu'elles poussent.
+		if (!glyph) {
+			for (const p of place.plants) {
+				if (p.type !== 'herbe' || p.growth <= 0) continue;
+				const look = lookOf(p);
+				if ((look.form ?? 'graminees') !== 'graminees') continue;
+				const [x, y] = plantPos(p);
+				if (x < v.x0 - 70 || x > v.x0 + v.w + 70 || y < v.y0 - 40 || y > v.y0 + v.h + 40) continue;
+				const k = 0.45 + 0.55 * Math.min(1, p.growth);
+				ctx.drawImage(this.turfSprite(p.seed % 5, look.palette), x - 64 * k, y - 32 * k, 128 * k, 64 * k);
+			}
+		}
+
 		// Ombres portées : direction et longueur d'après la vraie position du soleil, nettes par beau temps.
 		const sun = this.sunPos?.(hour);
 		const sunny = (SUNNY[wk] ?? 1) * day;
@@ -1727,10 +1935,10 @@ export class Garden {
 		// Ombres des animaux au sol
 		if (!glyph) {
 			ctx.fillStyle = 'rgba(30,50,20,0.13)';
-			for (const b of this.insects) {
+			for (const b of this.farmer && !this.farmer.hidden ? [...this.insects, this.farmer] : this.insects) {
 				const h = FLIGHT[b.kind] ?? (b.mode === 'perch' ? null : 24);
 				if (h == null || b.p.swim || b.behavior === 'trail') continue;
-				const big = { hedgehog: 2.6, frog: 1.8, marmot: 2.6, squirrel: 2, heron: 2.4, eagle: 5, gull: 3, crab: 1.8 }[b.kind] ?? 1;
+				const big = { hedgehog: 2.6, frog: 1.8, marmot: 2.6, squirrel: 2, heron: 2.4, eagle: 5, gull: 3, crab: 1.8, rabbit: 3, hare: 3.4, roe: 6, chamois: 5.6, fox: 5, farmer: 3.4 }[b.kind] ?? 1;
 				ctx.beginPath();
 				ctx.ellipse(b.x + h * 0.25, b.y + h, 4 * big, 1.8 * big, 0, 0, Math.PI * 2);
 				ctx.fill();
@@ -1751,6 +1959,7 @@ export class Garden {
 		}
 		for (const it of this.items) if (it !== this.lifted && it.x > v.x0 - 120 && it.x < v.x0 + v.w + 120 && it.y > v.y0 - 40 && it.y < v.y0 + v.h + 200) entities.push({ item: it, x: it.x, y: it.y });
 		if (!glyph) for (const b of this.insects) if (onGround(b)) entities.push({ critter: b, y: b.behavior === 'trail' ? -1e9 : b.y + 2 });
+		if (!glyph && this.farmer && !this.farmer.hidden) entities.push({ critter: this.farmer, y: this.farmer.y + 2 });
 		entities.sort((a, b) => a.y - b.y);
 
 		for (const e of entities) {
@@ -2162,11 +2371,30 @@ export class Garden {
 	drawInsect(ctx, b) {
 		if (b.hidden) return;
 		if (b.behavior === 'trail') return this.drawTrail(ctx, b);
+		// Les butineurs laissent derrière eux un petit sillage en pointillés, qui dit leur vol en zigzag.
+		if ((b.kind === 'bee' || b.kind === 'hoverfly' || b.kind === 'beefly') && b.mode !== 'perch' && b.mode !== 'home') {
+			const tr = (b.trailPts ??= []);
+			const last = tr[tr.length - 1];
+			if (!last || Math.hypot(last[0] - b.x, last[1] - b.y) > 2.5) { tr.push([b.x, b.y]); if (tr.length > 16) tr.shift(); }
+			if (tr.length > 3) {
+				ctx.save();
+				ctx.setLineDash([2.2, 3]);
+				ctx.lineCap = 'round';
+				ctx.lineWidth = 0.9;
+				ctx.strokeStyle = 'rgba(90,80,60,0.22)';
+				ctx.beginPath();
+				ctx.moveTo(tr[0][0], tr[0][1]);
+				for (let i = 1; i < tr.length - 1; i++) ctx.lineTo(tr[i][0], tr[i][1]);
+				ctx.stroke();
+				ctx.restore();
+			}
+		} else if (b.trailPts) b.trailPts.length = 0;
 		ctx.save();
 		ctx.translate(b.x, b.y);
 		const k = CRITTER_SIZE[b.kind] ?? 1;
 		ctx.scale((b.dir || 1) * k, k);
-		drawCritter(ctx, b.kind, b.t, b.mode, b.p);
+		if (b.kind === 'hare') b.winter = (this.season?.winter ?? 0) > 0.5;
+		drawCritter(ctx, b.kind, b.t, b.mode, b.p, b);
 		ctx.restore();
 	}
 
