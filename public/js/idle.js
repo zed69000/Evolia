@@ -2,7 +2,7 @@
 // Ils font pousser le jardin et produisent du nectar ; le sport triple leur travail (élan).
 // Chaque équipe grandit avec les objets posés dans le jardin (hôtel à insectes, nichoir…), achetés dans « Aménager ».
 
-import { SPECIES, PLACE_BY_ID } from './species.js';
+import { SPECIES, PLACE_BY_ID, PLACE_IN } from './species.js';
 import { thumbCopy } from './encyclopedia.js';
 import { PLANT_TYPES } from './plants.js';
 import { ITEMS } from './deco.js';
@@ -278,7 +278,7 @@ export class EcoPanel {
 			const placed = (place.items ?? []).filter(it => ITEMS[it.kind]?.team === gid).length;
 			const names = m.list.map(({ sp, n }) => `${sp.name}${n > 1 ? ` ×${n}` : ''}`).join(', ');
 			const detail = opened ? `<div class="eco-team-more">
-				<p>${on ? `<b>${g.does[0].toUpperCase() + g.does.slice(1)}.</b> ${names}${m.extra ? `, et ${m.extra} de plus grâce à tes aménagements` : ''}.` : `Découvre une de ces espèces dans ${placeName.toLowerCase()} pour lancer l'équipe : ${g.members.map(id => SPECIES.find(sp => sp.id === id)).filter(sp => sp?.place === placeId).slice(0, 3).map(sp => sp.name.toLowerCase()).join(', ') || 'elle vit dans un autre lieu'}.`}</p>
+				<p>${on ? `<b>${g.does[0].toUpperCase() + g.does.slice(1)}.</b> ${names}${m.extra ? `, et ${m.extra} de plus grâce à tes aménagements` : ''}.` : `Découvre une de ces espèces ${PLACE_IN[placeId]} pour lancer l'équipe : ${g.members.map(id => SPECIES.find(sp => sp.id === id)).filter(sp => sp?.place === placeId).slice(0, 3).map(sp => sp.name.toLowerCase()).join(', ') || 'elle vit dans un autre lieu'}.`}</p>
 				${on ? `<button class="btn primary small" data-place="${kind}">${placed ? 'En ajouter' : 'Aider'} : ${item.name.toLowerCase()}</button><small>${item.power > 1 ? `Il fait venir ${item.power} membres de plus` : 'Chaque objet posé fait venir un membre de plus'}${placed ? ` (déjà ${placed} ici)` : ''}. Tous les abris sont dans Aménager.</small>` : ''}
 				<p class="eco-real"><b>Dans la vraie vie :</b> ${g.upgrade.real}</p>
 			</div>` : '';
@@ -296,7 +296,7 @@ export class EcoPanel {
 			${elan}
 			${grow ? `<h3 class="eco-h">Pousse tout seul ${boost ? `<small>avec l'élan</small>` : ''}</h3><ul class="eco-grow">${grow}</ul>` : ''}
 			${lastHtml}
-			<h3 class="eco-h">Tes équipes dans ${placeName.toLowerCase()} <small>touche pour le détail</small></h3>
+			<h3 class="eco-h">Tes équipes ${PLACE_IN[placeId]} <small>touche pour le détail</small></h3>
 			<ul class="eco-teams">${teams}</ul>
 			<h3 class="eco-h">Vitalité du lieu</h3>
 			<div class="eco-vit"><div class="bar"><i style="width:${Math.round(vit.progress * 100)}%"></i></div><span>Niveau ${vit.level}${vit.bonus ? ` : tout pousse ${Math.round(vit.bonus * 100)} % plus vite ici` : ''}. Elle monte avec chaque plante qui pousse.</span></div>

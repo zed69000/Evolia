@@ -1,13 +1,13 @@
 // Interface : bandeau, suivi automatique du mouvement, récolte des pas, récap, carnet, biodiversité, tutoriel.
 
-import { load, save, reset, newPlace, allPlants, ACTIVITIES, ACTIVITY_BY_ID, MAX_SPEED_KMH, activityFor, effortFor, dayKey, todayMeters, addDistance, STEP_LENGTH_M } from './state.js';
+import { load, save, reset, newPlace, allPlants, ACTIVITIES, ACTIVITY_BY_ID, MAX_SPEED_KMH, activityFor, effortFor, dayKey, todayMeters, addDistance, STEP_LENGTH_M, effortMix } from './state.js';
 import { Garden, CELLS, CELL_KM, cellsOpen } from './garden.js';
 import { zoneName } from './zones.js';
 import { PlacesMap } from './map.js';
 import { PLANT_TYPES, DECOR, plantName } from './plants.js';
 import { GpsTracker, MotionTracker, SimTracker } from './tracker.js';
 import { SOURCES, bestSource, harvest, classifyCadence } from './harvest.js';
-import { PLACES, PLACE_BY_ID, SPECIES_BY_ID, checkSpecies, placeOpen, speciesOf } from './species.js';
+import { PLACES, PLACE_BY_ID, SPECIES, SPECIES_BY_ID, checkSpecies, placeOpen, speciesOf } from './species.js';
 import { Encyclopedia, thumbCopy } from './encyclopedia.js';
 import { Sky, WEATHER_LABEL } from './weather.js';
 import { EcoPanel, tick, summaryHtml, addBoost, boostLeft, visualExtra, rates, GUILDS, BOOST_MULT, BOOST_PER_MIN, nectarCapacity, hasCollector, COLLECTOR_CAP, COLLECTOR_UPGRADE } from './idle.js';
@@ -84,6 +84,7 @@ function collect(amount) {
 	if (v <= 0) return 0;
 	state.pending -= v;
 	state.nectar = (state.nectar ?? 0) + v;
+	state.collectedOnce = true;
 	sound.chime(1);
 	renderHud();
 	renderStatus();
@@ -240,8 +241,69 @@ function tapCritter(hit, card) {
 	placeCard(card, hit, 4000);
 }
 
+// ─── Premières missions : apprendre le jeu en le faisant ─────────
+// Trois gestes, un par un : marcher un peu, installer un collecteur, récolter le nectar. Chacune rapporte un peu de nectar.
+
+const MISSIONS = [
+	{ id: 'walk', text: 'Marche 300 m', help: 'Active le suivi et bouge : chaque pas compte, même à la maison.', done: () => state.totals.distance >= 300 },
+	{ id: 'collector', text: 'Installe un collecteur de nectar', help: 'Aménager › Un collecteur de nectar : il garde la récolte de tes butineurs.', done: () => hasCollector(state), go: () => openDeco() },
+	{ id: 'collect', text: 'Récolte ton nectar', help: 'Touche le collecteur (ou les gouttes dorées sur les fleurs) quand il y a du nectar.', done: () => !!state.collectedOnce, go: () => { const it = Object.values(state.places).flatMap(p => p.items ?? []).find(i => i.kind === 'collecteur'); if (it && state.place) garden.focusOn(it.x, it.y); } },
+];
+const MISSION_REWARD = 30;
+
+function currentMission() {
+	if (state.onboarded) return null;
+	return MISSIONS.find(m => !(state.missions ??= {})[m.id]) ?? null;
+}
+
+/** Valide les missions accomplies (dans l'ordre) et affiche la suivante. */
+function renderMission() {
+	let m = currentMission();
+	while (m && m.done()) {
+		state.missions[m.id] = Date.now();
+		state.nectar = (state.nectar ?? 0) + MISSION_REWARD;
+		toast(`Mission réussie : ${m.text.toLowerCase()} · +${MISSION_REWARD} nectar`, '#5F933E');
+		sound.chime(2);
+		m = currentMission();
+		if (!m) { state.onboarded = true; toast('Tu connais l’essentiel : bonne balade !', '#F08A3C'); }
+		persist(true);
+		renderHud();
+	}
+	const el = $('#mission');
+	el.hidden = !m || !$('#coach').hidden;
+	if (!m) return;
+	if (quest) endQuest();
+	$('#mission-step').textContent = `${MISSIONS.indexOf(m) + 1}/${MISSIONS.length}`;
+	$('#mission-text').textContent = m.text;
+}
+setInterval(renderMission, 1500);
+$('#mission').addEventListener('click', () => {
+	const m = currentMission();
+	if (!m) return;
+	toast(m.help, '#5F933E');
+	m.go?.();
+});
+
+/**
+ * Toucher l'objectif : quand il faut des espèces, on dit lesquelles chercher et comment, en commençant par le lieu
+ * où l'on est ; sinon on rappelle simplement l'objectif.
+ */
+$('#next-goal').addEventListener('click', () => {
+	const goal = nextGoal(state);
+	if (!goal) return;
+	if (!/espèce/.test(goal)) { toast(goal, '#9A7448'); return; }
+	const open = PLACES.filter(p => state.places[p.id] || placeOpen(state, p)).map(p => p.id);
+	const todo = SPECIES.filter(s => open.includes(s.place) && !state.species[s.id] && s.hint)
+		.sort((a, b) => (a.place === state.place ? 0 : 1) - (b.place === state.place ? 0 : 1) || (a.kind === 'plante' ? 1 : 0) - (b.kind === 'plante' ? 1 : 0))
+		.slice(0, 6);
+	showModal(`<div class="modal-body"><h2>À découvrir</h2><p>${goal}. Voici des pistes :</p>
+		<ul class="harvest-rows">${todo.map(s => `<li><b>${PLACE_BY_ID[s.place].name}</b> · ${s.hint}</li>`).join('')}</ul></div>
+		<div class="modal-foot"><button class="btn primary" data-close>D'accord</button></div>`);
+});
+
 /** Choisit un animal visible à l'écran à faire trouver. */
 function pickQuest() {
+	if (currentMission()) return;
 	const v = garden.view();
 	const seen = garden.insects.filter(b => !b.leaving && b.x > v.x0 && b.x < v.x0 + v.w && b.y > v.y0 && b.y < v.y0 + v.h);
 	const present = [...new Set(seen.map(b => b.sp))].filter(id => id !== state.lastQuest);
@@ -286,6 +348,11 @@ setInterval(() => {
 // ─── Distance et décor ────────────────────────────────────────
 
 /** Chaque mètre compte pour la journée, pour la parcelle, et rapporte du nectar (1 pour 5 m). */
+/** L'effort d'une sortie, réparti entre la plante de l'allure et les étages du dessous (la dominante en dernier : c'est elle qu'on suit). */
+function growMix(plant, effort) {
+	return effortMix(plant).flatMap(([type, share]) => garden.addEffort(type, effort * share));
+}
+
 function addMeters(m) {
 	const before = state.totals.distance / 1000;
 	addDistance(state, m);
@@ -421,7 +488,7 @@ function onSample(s) {
 	session.effort += effort;
 	state.totals.effort += effort;
 	addEffortXp(effort);
-	for (const ev of garden.addEffort(act.plant, effort)) {
+	for (const ev of growMix(act.plant, effort)) {
 		session.events.push(ev);
 		if (ev.kind === 'mature' && ev.plant.type !== 'herbe') { toast(`${plantName(ev.plant)} a fini de pousser`, TYPE_COLOR[ev.plant.type]); sound.chime(1); }
 		if (ev.kind === 'sown') toast(`${ev.by[0].toUpperCase() + ev.by.slice(1)} a semé : ${plantName(ev.plant).toLowerCase()}`, TYPE_COLOR[ev.plant.type]);
@@ -549,7 +616,7 @@ $('#modal').addEventListener('click', e => {
 	state.nectar = (state.nectar ?? 0) + c.reward;
 	if (c.boost) addBoost(state, c.boost);
 	sound.chime(2);
-	toast(`Défi réussi : +${c.reward} nectar${c.boost ? ` et élan ${c.boost} min` : ''}`, '#F08A3C');
+	toast(`Défi réussi : +${c.reward} nectar${c.boost ? ` et élan ×3 pendant ${c.boost} min` : ''}`, '#F08A3C');
 	persist(true);
 	renderHud();
 	renderDaily();
@@ -640,8 +707,9 @@ async function playHarvest(res, source) {
 	here().km += res.distance / 1000;
 	state.totals.steps += res.steps;
 	state.nectar = (state.nectar ?? 0) + res.distance / 5;
-	// Une minute d'élan par minute active, ménage compris.
-	addBoost(state, res.groups.reduce((n, g) => n + g.minutes, 0));
+	// L'élan des pas relus vaut celui d'une marche suivie en direct : 3 min par minute de vraie marche,
+	// 2 min par minute de petits pas (ménage, marche lente).
+	addBoost(state, res.groups.reduce((n, g) => n + g.minutes * (g.act.id === 'menage' || g.act.id === 'marche-lente' ? 2 : 3), 0));
 	renderHud();
 	closeModal();
 	toast(`${fmtInt(res.steps)} pas récoltés pendant ton absence`, '#A3BD57');
@@ -651,7 +719,7 @@ async function playHarvest(res, source) {
 		const matured = {}, touched = new Set();
 		const chunks = 8;
 		for (let i = 0; i < chunks; i++) {
-			for (const ev of garden.addEffort(g.act.plant, g.effort / chunks)) if (ev.kind === 'mature') matured[ev.plant.type] = (matured[ev.plant.type] ?? 0) + 1;
+			for (const ev of growMix(g.act.plant, g.effort / chunks)) if (ev.kind === 'mature') matured[ev.plant.type] = (matured[ev.plant.type] ?? 0) + 1;
 			if (garden.current) touched.add(garden.current);
 			await sleep(140);
 		}
@@ -882,7 +950,7 @@ function renderDeco() {
 		<div class="deco-list">${ITEM_ORDER.map(k => {
 			const it = ITEMS[k], need = needsFirst(k), locked = km < it.km || !!need, poor = nectar < it.cost, n = here_.filter(x => x.kind === k).length;
 			const action = km < it.km ? `<span class="deco-lock">dès ${it.km} km parcourus</span>`
-				: need ? `<span class="deco-lock">après ${ITEMS[need].name.replace(/^Une? /, 'la ').toLowerCase()}</span>`
+				: need ? `<span class="deco-lock">après avoir posé ${ITEMS[need].name.toLowerCase()}</span>`
 				: `<button class="btn primary small" data-buy="${k}" ${poor ? 'disabled' : ''}>${poor ? `il manque ${fmtInt(it.cost - nectar)}` : 'Installer'}</button>`;
 			return `<div class="deco-card${locked ? ' locked' : ''}"><div class="deco-art" data-art="${k}"></div>
 				<div class="deco-body"><h3>${it.name}</h3><p>${it.text}</p>${itemHelp(k) ? `<span class="deco-help">${itemHelp(k)}</span>` : ''}
@@ -976,7 +1044,7 @@ $('#btn-place').addEventListener('click', () => {
 		const help = itemHelp(kind);
 		toast(`${ITEMS[kind].name} : installé${/^Une /.test(ITEMS[kind].name) ? 'e' : ''}${help ? ` · ${help}` : ''}`, '#9A7448');
 		if (kind === 'cabane' && garden.items.filter(x => x.kind === 'cabane').length === 1) {
-			setTimeout(() => toast('Un jardinier s’installe dans ta cabane : construis-lui un carré de potager', '#5F933E', () => openDeco()), 2600);
+			setTimeout(() => toast('Un jardinier s’installe : construis-lui un potager', '#5F933E', () => openDeco()), 2600);
 		}
 	}
 	sound.chime(2);

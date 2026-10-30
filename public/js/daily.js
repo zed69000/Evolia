@@ -116,13 +116,13 @@ export function challengesHtml(state) {
 	return `<ul class="challenges">${state.daily.challenges.map(c => {
 		const p = progress(state, c), done = p >= c.n, got = state.daily.claimed[c.id];
 		const shown = c.kind === 'move' ? `${fmt(Math.min(p, c.n))} / ${fmt(c.n, c.n % 1 ? 1 : 0)} km` : `${Math.min(p, c.n)} / ${c.n}`;
-		const prize = `+${c.reward} nectar${c.boost ? ` · élan ${c.boost} min` : ''}`;
+		const prize = `+${c.reward} nectar${c.boost ? ` · élan ×3 pendant ${c.boost} min` : ''}`;
 		return `<li class="ch${done ? ' done' : ''}${got ? ' got' : ''}">
 			<span class="ch-ico" aria-hidden="true">${ICON[c.kind]}</span>
 			<div class="ch-body"><b>${LABEL[c.id](c)}</b>
 				<div class="bar"><i style="width:${Math.min(100, (p / c.n) * 100)}%"></i></div>
 				<small>${shown} · ${prize}</small></div>
-			${got ? '<span class="ch-ok">✓</span>' : done ? `<button class="btn primary small" data-claim="${c.id}">Récolter</button>` : ''}
+			${got ? '<span class="ch-ok">✓</span>' : done ? `<button class="btn primary small" data-claim="${c.id}">Prendre</button>` : ''}
 		</li>`;
 	}).join('')}</ul>`;
 }

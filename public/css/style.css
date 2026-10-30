@@ -722,3 +722,7 @@ html, body {
 	display: grid; place-items: center; cursor: pointer; color: var(--foret); transition: background .2s ease;
 }
 .peek-btn.on { background: var(--foret); color: #FDF7E7; }
+
+/* Première mission : même place que « Trouve », un drapeau au lieu d'une loupe. */
+.mission small { color: var(--doux); font-weight: 700; margin-right: 2px; }
+.mission { animation: toast-in .45s cubic-bezier(.2, .8, .2, 1); }

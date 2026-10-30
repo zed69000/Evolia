@@ -92,7 +92,7 @@ export class Encyclopedia {
 		const found = list.filter(s => st.species[s.id]).length;
 		const open = placeOpen(st, place);
 		this.panel.innerHTML = `
-			<div class="panel-head"><h2>Biodiversité</h2><button class="close" data-close-species aria-label="Fermer">×</button></div>
+			<div class="panel-head"><h2>Espèces</h2><button class="close" data-close-species aria-label="Fermer">×</button></div>
 			<div class="sp-progress"><div class="bar"><i style="width:${(foundAll / all) * 100}%"></i></div><span><b>${foundAll}</b> / ${all} espèces</span></div>
 			<div class="seg sp-filters scroll">${PLACES.map(p => `<button data-filter="${p.id}" class="${p.id === this.filter ? 'on' : ''}">${p.short}</button>`).join('')}</div>
 			<p class="sp-intro"><b>${place.name}</b> · ${found} / ${list.length} espèces. ${esc(place.intro)}${open ? '' : ` <i>Lieu à découvrir : ${place.km} km et ${place.found} espèces.</i>`}</p>

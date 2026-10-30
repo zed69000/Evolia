@@ -26,7 +26,10 @@ export const PLACES = [
 ];
 export const PLACE_BY_ID = Object.fromEntries(PLACES.map(p => [p.id, p]));
 
-const ALLURE = { herbe: 'marche lente ou ménage', fleur: 'marche', buisson: 'marche rapide', arbre: 'course' };
+const ALLURE = { herbe: 'quand tu marches lentement ou fais le ménage', fleur: 'quand tu marches', buisson: 'quand tu marches vite', arbre: 'quand tu cours' };
+/** « de la prairie », « du marais »… et « dans la prairie », « sur le littoral »… pour des phrases justes. */
+export const PLACE_DE = { prairie: 'de la prairie', marais: 'du marais', foret: 'de la forêt', montagne: 'de la montagne', littoral: 'du littoral' };
+export const PLACE_IN = { prairie: 'dans la prairie', marais: 'dans le marais', foret: 'dans la forêt', montagne: 'en montagne', littoral: 'sur le littoral' };
 const TYPE_LABEL = { herbe: 'Une herbe', fleur: 'Une fleur', buisson: 'Un arbuste', arbre: 'Un arbre' };
 
 const plant = (place, type, id, name, latin, look, role, help, fact) => ({ id, place, kind: 'plante', type, look, name, latin, role, help, fact });
@@ -73,7 +76,7 @@ export const SPECIES = [
 	plant('prairie', 'fleur', 'tulipe-sauvage', 'Tulipe sauvage', 'Tulipa sylvestris', { shape: 'tulipe', color: '#F4C23E', h: [40, 55], leaf: 'broad' },
 		"Elle fleurit tôt dans les vignes et les vergers et nourrit les premiers insectes du printemps. Elle a beaucoup reculé avec les labours et les désherbants.",
 		'Ne cueille jamais une plante sauvage rare : regarde, photographie, laisse-la en place.',
-		'Elle est protégée en France.'),
+		'Elle est protégée dans plusieurs régions de France.'),
 	plant('prairie', 'fleur', 'bleuet', 'Bleuet', 'Centaurea cyanus', { shape: 'capitule', style: 'frange', color: '#3E6FD0', center: '#2A3A7A', h: [50, 70], leaf: 'fine' },
 		"Autrefois partout dans les champs de blé, il nourrit abeilles et bourdons. Les herbicides et le tri des semences l'ont fait presque disparaître.",
 		'Sème un mélange de fleurs des champs locales dans un coin ensoleillé.',
@@ -202,7 +205,7 @@ export const SPECIES = [
 	animal('prairie', 'gendarme', 'Gendarme', 'Pyrrhocoris apterus', { kind: 'firebug', behavior: 'walk', home: 'buisson', speed: 5, when: 'day', count: () => 3 },
 		s => nMature(s, 'prairie', 'fleur', 'mauve') >= 1 || nMature(s, 'prairie', 'arbre', 'tilleul') >= 1, 'Fais fleurir une mauve ou grandir un tilleul',
 		'Il se nourrit surtout des graines tombées des mauves et des tilleuls, et sert de repas aux oiseaux et aux araignées.',
-		"Il est inoffensif : pas besoin de le chasser, même quand ils sont nombreux.",
+		"Ils sont inoffensifs : pas besoin de les chasser, même quand ils sont nombreux.",
 		'On l\'appelle gendarme à cause de ses couleurs rouge et noir, comme les anciens uniformes.'),
 	animal('prairie', 'escargot', 'Escargot petit-gris', 'Cornu aspersum', { kind: 'snail', behavior: 'walk', home: 'buisson', speed: 1.5, when: 'wet', count: () => 2 },
 		s => !!s.seenRain && nMature(s, 'prairie', 'herbe') >= 5, 'Ouvre ton jardin quand il pleut',
@@ -302,7 +305,7 @@ export const SPECIES = [
 		'Ses graines voyagent au vent dans un duvet blanc comme du coton.'),
 	animal('marais', 'sympetrum', 'Sympétrum sanguin', 'Sympetrum sanguineum', { kind: 'dragonfly', body: '#C8402A', behavior: 'water', when: 'day', count: () => 2 },
 		s => nMature(s, 'marais', 'fleur') >= 1, 'Fais fleurir une fleur au marais',
-		"Cette libellule chasse les moustiques en vol. Sa larve vit sous l'eau et y chasse aussi. Sa présence indique une eau de bonne qualité.",
+		"Cette libellule chasse les moustiques en vol. Sa larve vit sous l'eau et y chasse aussi. Elle aime les eaux calmes et ensoleillées.",
 		"Une petite mare sans produit ni poisson suffit à accueillir des libellules.",
 		'Les libellules existaient déjà avant les dinosaures.'),
 	animal('marais', 'demoiselle', 'Caloptéryx vierge', 'Calopteryx virgo', { kind: 'dragonfly', body: '#2A5DA8', wing: 'rgba(60,80,140,0.45)', slim: true, behavior: 'water', when: 'day', count: () => 2 },
@@ -314,7 +317,7 @@ export const SPECIES = [
 		s => nMature(s, 'marais', 'fleur') >= 3, 'Fais fleurir trois fleurs au marais',
 		'Elle mange limaces, vers et insectes, et sert elle-même de repas aux hérons, aux couleuvres et aux hérissons.',
 		"Ne mets pas de poissons rouges dans une mare : ils dévorent les œufs et les têtards.",
-		'Tous les amphibiens sont protégés en France.'),
+		'Les amphibiens sont protégés en France.'),
 	animal('marais', 'triton', 'Triton palmé', 'Lissotriton helveticus', { kind: 'lizard', body: '#8A6A3A', belly: '#E8A04A', spots: '#3A2A1A', swim: true, behavior: 'pond', when: 'always', count: () => 1 },
 		s => has(s, 'marais', 'nenuphars'), 'Fais apparaître les nénuphars',
 		"Il se reproduit dans les mares au printemps puis vit à terre, caché sous le bois et les pierres. Il mange larves et petits insectes.",
@@ -322,7 +325,7 @@ export const SPECIES = [
 		'Au printemps, le mâle a les pattes arrière palmées, d\'où son nom.'),
 	animal('marais', 'heron', 'Héron cendré', 'Ardea cinerea', { kind: 'heron', behavior: 'pond', when: 'day', count: () => 1 },
 		s => has(s, 'marais', 'roseliere'), 'Fais apparaître la roselière',
-		"Immobile au bord de l'eau, il pêche poissons et grenouilles et chasse aussi les campagnols. C'est un super-prédateur des zones humides.",
+		"Immobile au bord de l'eau, il pêche poissons et grenouilles et chasse aussi les campagnols. C'est un chasseur patient des zones humides.",
 		"Observe-le de loin : un héron dérangé abandonne son poste de pêche.",
 		'Les hérons nichent en colonies, tout en haut des arbres.'),
 	animal('marais', 'martin-pecheur', "Martin-pêcheur", 'Alcedo atthis', { kind: 'bird', body: '#2F8FC0', belly: '#E8762E', cap: '#2F7FB0', beak: 5, behavior: 'perch', on: 'arbre', when: 'day', count: () => 1 },
@@ -381,7 +384,7 @@ export const SPECIES = [
 	plant('foret', 'fleur', 'pervenche', 'Petite pervenche', 'Vinca minor', { shape: 'etoile', color: '#7A86D8', center: '#EEF0FA', h: [15, 22], leaf: 'large', size: 0.9 },
 		"Elle tapisse le sol des bois, le protège de l'érosion et nourrit les premiers bourdons.",
 		'Garde un sol couvert sous les arbres plutôt qu\'une terre nue.',
-		'La couleur « bleu pervenche » porte son nom.'),
+		'Elle a donné son nom à la couleur « bleu pervenche ».'),
 	plant('foret', 'fleur', 'violette', 'Violette des bois', 'Viola riviniana', { shape: 'marguerite', color: '#8A6AC8', center: '#F4EEDA', h: [15, 22], leaf: 'rosette', size: 0.75 },
 		'Ses feuilles nourrissent les chenilles des nacrés, de grands papillons orange. Les fourmis transportent ses graines et les sèment.',
 		'Laisse les violettes dans la pelouse et sous les haies.',
@@ -423,7 +426,7 @@ export const SPECIES = [
 	animal('foret', 'chevreuil', 'Chevreuil', 'Capreolus capreolus', { kind: 'roe', behavior: 'roam', home: 'tree', when: 'day', count: s => Math.min(2, Math.floor(nMature(s, 'foret', 'arbre') / 3)) },
 		s => nMature(s, 'foret', 'arbre') >= 3, 'Fais grandir trois arbres',
 		"Il broute bourgeons, ronces et jeunes pousses en lisière. Il disperse des graines accrochées à son pelage et dans ses crottes.",
-		'En forêt, reste sur les chemins au printemps : la chevrette cache son faon dans les herbes, ne le touche jamais.',
+		'En forêt, reste sur les chemins au printemps : la chevrette cache son faon dans les herbes ; ne le touche jamais.',
 		"Le mâle, le brocard, perd ses bois chaque automne et les refait pendant l'hiver."),
 	animal('foret', 'renard', 'Renard roux', 'Vulpes vulpes', { kind: 'fox', behavior: 'roam', home: 'buisson', when: 'dusk', count: () => 1 },
 		s => nMature(s, 'foret', 'buisson') >= 4 && nMature(s, 'foret', 'arbre') >= 2, 'Quatre arbustes et deux arbres',
@@ -653,8 +656,8 @@ for (const [id, extra] of Object.entries(SILHOUETTE)) Object.assign(SPECIES_BY_I
 export const speciesIn = (place, type) => SPECIES.filter(s => s.place === place && s.kind === 'plante' && s.type === type);
 
 for (const s of SPECIES) {
-	if (s.kind === 'plante' && !s.hint) s.hint = `${TYPE_LABEL[s.type]} de ${PLACE_BY_ID[s.place].name.toLowerCase()}, née en ${ALLURE[s.type]}`;
-	if (s.kind === 'milieu' && !s.hint) s.hint = `Parcours des kilomètres dans ${PLACE_BY_ID[s.place].name.toLowerCase()}`;
+	if (s.kind === 'plante' && !s.hint) s.hint = `${TYPE_LABEL[s.type]} ${PLACE_DE[s.place]}, qui pousse surtout ${ALLURE[s.type]}`;
+	if (s.kind === 'milieu' && !s.hint) s.hint = `Parcours des kilomètres ${PLACE_IN[s.place]}`;
 }
 
 // Anciennes sauvegardes : les plantes n'avaient qu'une couleur et une forme.

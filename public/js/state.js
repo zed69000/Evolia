@@ -39,6 +39,18 @@ export function effortFor(distanceM, speedKmh, act) {
 
 export const STEP_LENGTH_M = 0.75;
 
+/**
+ * Une sortie fait pousser un peu de tout : l'allure choisit la plante dominante, le reste va aux étages du dessous.
+ * Le coureur a ainsi aussi des fleurs (et leurs butineurs), la marcheuse quelques herbes.
+ */
+const MIX = {
+	arbre: [['fleur', 0.15], ['buisson', 0.25], ['arbre', 0.6]],
+	buisson: [['herbe', 0.15], ['fleur', 0.25], ['buisson', 0.6]],
+	fleur: [['herbe', 0.25], ['fleur', 0.75]],
+	herbe: [['herbe', 1]],
+};
+export const effortMix = plant => MIX[plant] ?? [[plant, 1]];
+
 const KEY = 'evolia.v1';
 
 export function dayKey(d = new Date()) {

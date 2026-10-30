@@ -9,7 +9,7 @@ import { rng, wash, ribbon, curve, leaf, rgba } from './watercolor.js';
 // km : kilomètres au total pour pouvoir le construire ; team : équipe de l'écosystème renforcée (power membres) ;
 // attracts : espèce dont il ajoute un individu visible ; turn : se tourne par pas de 45°.
 export const ITEMS = {
-	collecteur: { name: 'Un collecteur de nectar', cost: 60, km: 0, text: 'Une jarre où tes butineurs déposent leur récolte : elle garde le nectar pour toi. Touche-la pour tout récupérer, et améliore-la pour qu’elle en garde plus.', box: { w: 100, h: 150, ax: 50, ay: 134 } },
+	collecteur: { name: 'Un collecteur de nectar', cost: 60, km: 0, text: 'Une jarre où tes butineurs déposent leur récolte : elle garde le nectar pour toi. Touche-la pour tout récupérer, et améliore-la pour qu’elle en garde plus.', box: { w: 110, h: 130, ax: 55, ay: 112 } },
 	banc: { name: 'Un banc', cost: 40, km: 0, turn: true, text: 'Pour s’asseoir et regarder le jardin vivre.', box: { w: 130, h: 104, ax: 65, ay: 78 } },
 	massif: { name: 'Un massif mellifère', cost: 25, km: 0, team: 'pollinisateur', power: 1, attracts: 'bourdon', text: 'Lavande, bourrache et thym : un buffet pour les butineurs.', box: { w: 110, h: 70, ax: 55, ay: 56 } },
 	bois: { name: 'Un tas de bois', cost: 30, km: 0, team: 'sol', power: 1, attracts: 'herisson', text: 'Carabes, cloportes et champignons y décomposent le bois.', box: { w: 110, h: 70, ax: 55, ay: 56 } },
@@ -24,7 +24,7 @@ export const ITEMS = {
 	abri: { name: 'Un abri à hérisson', cost: 70, km: 6, turn: true, team: 'regulateur', power: 1, attracts: 'herisson', text: 'Une petite maison sous les feuilles, où il passe l’hiver.', box: { w: 90, h: 70, ax: 45, ay: 50 } },
 	ruche: { name: 'Une ruche en paille', cost: 120, km: 6, team: 'pollinisateur', power: 2, attracts: 'abeille', text: 'Toute une colonie d’abeilles pour polliniser tes fleurs.', box: { w: 80, h: 90, ax: 40, ay: 78 } },
 	bain: { name: 'Un bain d’oiseaux', cost: 100, km: 8, team: 'semeur', power: 1, attracts: 'merle', text: 'De l’eau fraîche : les oiseaux reviennent, et sèment autour.', box: { w: 80, h: 90, ax: 40, ay: 80 } },
-	potager: { name: 'Un carré de potager', cost: 90, km: 5, needs: 'cabane', team: 'semeur', power: 2, attracts: ['lapin', 'lievre'], text: 'Le jardinier de la cabane y cultive salades, choux et tomates : de quoi nourrir oiseaux, lapins et butineurs. Pose-en côte à côte : les parcelles se soudent en un grand potager, et les légumes poussent à mesure que tu marches.', box: { w: 150, h: 100, ax: 75, ay: 64 } },
+	potager: { name: 'Un carré de potager', cost: 90, km: 5, needs: 'cabane', team: 'semeur', power: 2, attracts: ['lapin', 'lievre'], text: 'Le jardinier y cultive salades, choux et tomates, qui poussent quand tu marches. Pose les carrés côte à côte pour agrandir le potager.', box: { w: 150, h: 100, ax: 75, ay: 64 } },
 	arche: { name: 'Une arche de roses', cost: 120, km: 20, turn: true, team: 'pollinisateur', power: 1, attracts: 'paon-du-jour', text: 'Un passage fleuri pour les papillons.', box: { w: 170, h: 190, ax: 85, ay: 172 } },
 };
 export const ITEM_ORDER = ['collecteur', 'banc', 'massif', 'bois', 'pierres', 'mangeoire', 'nichoir', 'lanterne', 'compost', 'hotel', 'mare', 'cabane', 'potager', 'abri', 'ruche', 'bain', 'arche'];
@@ -500,48 +500,84 @@ function paintPotager(g, rot, stage = 1, soil = true, seed = 88) {
 	return { top: -34 * k };
 }
 
+/** Un pot de nectar en verre, coiffé d'un tissu à carreaux noué, rempli jusqu'à `fill`. Origine au pied du pot. */
+function nectarJar(g, x, y, w, h, fill, d, cloth = '#C8483A') {
+	// Verre : un corps arrondi, un col, des reflets.
+	const body = () => { g.beginPath(); g.moveTo(x - w * 0.42, y - h * 0.82); g.quadraticCurveTo(x - w * 0.56, y - h * 0.5, x - w * 0.46, y - h * 0.08); g.quadraticCurveTo(x, y + h * 0.04, x + w * 0.46, y - h * 0.08); g.quadraticCurveTo(x + w * 0.56, y - h * 0.5, x + w * 0.42, y - h * 0.82); g.closePath(); };
+	g.save();
+	body();
+	g.fillStyle = rgba('#EAF2EE', 0.55);
+	g.fill();
+	g.clip();
+	const top = y - h * 0.08 - (h * 0.72) * Math.max(0.05, Math.min(1, fill));
+	const grd = g.createLinearGradient(x - w / 2, 0, x + w / 2, 0);
+	grd.addColorStop(0, '#E8A02A'); grd.addColorStop(0.45, '#F6C843'); grd.addColorStop(1, '#D8861E');
+	g.fillStyle = grd;
+	g.fillRect(x - w, top, w * 2, y - top + 2);
+	g.fillStyle = rgba('#FFF2B0', 0.75);
+	g.beginPath(); g.ellipse(x, top, w * 0.48, 1.6, 0, 0, Math.PI * 2); g.fill();
+	g.restore();
+	body();
+	g.strokeStyle = rgba('#7A8A84', 0.75); g.lineWidth = 1; g.stroke();
+	g.fillStyle = rgba('#FFFFFF', 0.6);
+	g.beginPath(); g.ellipse(x - w * 0.26, y - h * 0.5, w * 0.07, h * 0.24, -0.1, 0, Math.PI * 2); g.fill();
+	// Couvercle de tissu à carreaux, qui retombe en corolle, noué d'une ficelle.
+	const cy = y - h * 0.86;
+	g.fillStyle = rgba(cloth, 0.95);
+	g.beginPath();
+	g.moveTo(x - w * 0.6, cy + h * 0.12);
+	for (let k = 0; k <= 6; k++) { const t = k / 6; g.lineTo(x - w * 0.6 + t * w * 1.2, cy + h * 0.12 + (k % 2 ? h * 0.05 : 0)); }
+	g.quadraticCurveTo(x + w * 0.5, cy - h * 0.12, x, cy - h * 0.13);
+	g.quadraticCurveTo(x - w * 0.5, cy - h * 0.12, x - w * 0.6, cy + h * 0.12);
+	g.fill();
+	g.strokeStyle = rgba('#FFFFFF', 0.7); g.lineWidth = 0.9;
+	for (let k = -2; k <= 2; k++) { g.beginPath(); g.moveTo(x + k * w * 0.2, cy - h * 0.1); g.lineTo(x + k * w * 0.24, cy + h * 0.13); g.stroke(); }
+	g.beginPath(); g.moveTo(x - w * 0.52, cy + h * 0.02); g.lineTo(x + w * 0.52, cy + h * 0.02); g.stroke();
+	g.strokeStyle = rgba('#8A6A3A', 0.95); g.lineWidth = 1.3;
+	g.beginPath(); g.moveTo(x - w * 0.44, cy + h * 0.07); g.lineTo(x + w * 0.44, cy + h * 0.07); g.stroke();
+	// Petite étiquette.
+	g.fillStyle = rgba('#FBF3DC', 0.95);
+	g.fillRect(x - w * 0.22, y - h * 0.42, w * 0.44, h * 0.16);
+	g.fillStyle = rgba('#E3A33A', 0.95);
+	g.beginPath(); g.ellipse(x, y - h * 0.34, w * 0.07, h * 0.05, 0, 0, Math.PI * 2); g.fill();
+}
+
 /**
- * Collecteur de nectar : une jarre en verre sur un petit pied de bois, coiffée d'un toit de chaume.
- * `fill` (0 → 1) : le niveau doré dans la jarre ; `level` (1 → 3) : plus grande et cerclée de cuivre en montant.
+ * Collecteur de nectar : un petit garde-manger en bois sous un toit de bardeaux, où s'alignent des pots de nectar.
+ * `fill` (0 → 1) : le niveau doré dans les pots ; `level` (1 → 3) : un, deux puis trois pots, et le toit qui s'orne.
  */
 function paintCollecteur(g, rot, fill = 0.5, level = 1) {
 	const d = rng(61);
-	shade(g, d, 34, 9);
-	g.save();
-	g.scale(1.4, 1.4);
-	const k = 0.85 + level * 0.12;
-	// Pied en bois.
-	plank(g, -3, -26, 6, 26, '#7A5130', d);
-	plank(g, -14, -6, 28, 5, '#8A6040', d);
-	// Jarre : verre clair, nectar doré jusqu'au niveau, reflets.
-	const jw = 15 * k, jh = 30 * k, jy = -28;
-	g.save();
-	g.beginPath();
-	g.ellipse(0, jy - jh / 2, jw, jh / 2, 0, 0, Math.PI * 2);
-	g.fillStyle = rgba('#E8F0EC', 0.55);
-	g.fill();
-	g.clip();
-	const top = jy - jh * Math.max(0.04, fill);
-	const grd = g.createLinearGradient(0, top, 0, jy);
-	grd.addColorStop(0, '#F8D24A');
-	grd.addColorStop(1, '#E09A22');
-	g.fillStyle = grd;
-	g.fillRect(-jw, top, jw * 2, jy - top);
-	g.fillStyle = rgba('#FFF4C0', 0.6);
-	g.fillRect(-jw, top, jw * 2, 1.4);
-	g.restore();
-	g.strokeStyle = rgba('#6A7A70', 0.7);
-	g.lineWidth = 1.2;
-	g.beginPath(); g.ellipse(0, jy - jh / 2, jw, jh / 2, 0, 0, Math.PI * 2); g.stroke();
-	g.fillStyle = rgba('#FFFFFF', 0.55);
-	g.beginPath(); g.ellipse(-jw * 0.45, jy - jh * 0.62, jw * 0.14, jh * 0.22, -0.2, 0, Math.PI * 2); g.fill();
-	if (level >= 2) for (const y of [jy - jh * 0.25, jy - jh * 0.75]) { g.strokeStyle = rgba(level >= 3 ? '#C8862E' : '#9A7A50', 0.9); g.lineWidth = 1.6; g.beginPath(); g.ellipse(0, y, jw * 0.97, 1.6, 0, 0, Math.PI * 2); g.stroke(); }
-	// Toit de chaume au-dessus, et une abeille posée.
-	const ry = jy - jh - 2;
-	wash(g, 0, ry, jw + 7, 6, '#C8A45A', d, { layers: 6, alpha: 0.4, edge: 0.3 });
-	for (let i = 0; i < 9; i++) { g.strokeStyle = rgba('#9A7A3A', 0.5); g.lineWidth = 0.8; const x = -jw - 4 + i * ((jw * 2 + 8) / 8); g.beginPath(); g.moveTo(x, ry - 4); g.lineTo(x + 1, ry + 5); g.stroke(); }
-	g.restore();
-	return { top: (ry - 8) * 1.4 };
+	shade(g, d, 40, 11);
+	const wood = '#9A6A40';
+	const shingles = (g2, d2) => {
+		g2.strokeStyle = rgba('#4A2A1E', 0.4); g2.lineWidth = 1;
+		for (let y = -5; y > -26; y -= 5) { g2.beginPath(); g2.moveTo(0, y); g2.lineTo(80, y); g2.stroke(); }
+		if (level >= 3) for (let i = 0; i < 3; i++) wash(g2, d2.range(10, 60), d2.range(-20, -6), 6, 3, '#6E9A4A', d2, { layers: 4, alpha: 0.35, edge: 0 });
+	};
+	const back = (g2, d2) => { for (let i = 0; i < 6; i++) plank(g2, i * 11, -62, 11, 62, i % 2 ? '#A87A4C' : '#946238', d2, 0.95); };
+	const V = build(g, d, 0, [
+		box(0, -12, 0, 66, 4, 62, wood, { front: back }),
+		box(-31, 2, 0, 4, 26, 62, '#8A5A34'),
+		box(31, 2, 0, 4, 26, 62, '#8A5A34'),
+		box(0, 2, 18, 66, 26, 4, '#A87A4C'),
+		roof(0, 0, 62, 66, 30, 16, 6, '#7A4A34', shingles, '#A87A4C'),
+	]);
+	// Les pots, posés sur l'étagère.
+	const n = Math.max(1, Math.min(3, level));
+	const xs = n === 1 ? [0] : n === 2 ? [-14, 14] : [-20, 0, 20];
+	const cloths = ['#C8483A', '#3E7FB0', '#E8A02A'];
+	xs.forEach((x, i) => { const [px, py] = V.at([x, 6, 22]); nectarJar(g, px, py, n === 1 ? 32 : n === 2 ? 24 : 18, n === 1 ? 40 : n === 2 ? 34 : 30, fill, d, cloths[i]); });
+	// Sous l'étagère : une louche en bois et une abeille posée sur le toit.
+	const [lx, ly] = V.at([-14, 8, 2]);
+	g.strokeStyle = rgba('#7A5130', 0.95); g.lineWidth = 2; g.lineCap = 'round';
+	g.beginPath(); g.moveTo(lx, ly - 2); g.lineTo(lx + 16, ly - 9); g.stroke();
+	g.fillStyle = rgba('#8A6040', 0.95); g.beginPath(); g.ellipse(lx - 2, ly - 1, 4, 2.6, 0.2, 0, Math.PI * 2); g.fill();
+	const [bx, by] = V.at([18, 0, 80]);
+	g.fillStyle = '#F2C230'; g.beginPath(); g.ellipse(bx, by, 3.4, 2.4, 0, 0, Math.PI * 2); g.fill();
+	g.fillStyle = '#2A2420'; g.fillRect(bx - 1, by - 2.3, 1.2, 4.6); g.fillRect(bx + 1.4, by - 2.1, 1, 4.2);
+	g.fillStyle = 'rgba(253,247,231,0.8)'; g.beginPath(); g.ellipse(bx - 1, by - 3.2, 2.2, 1.3, -0.5, 0, Math.PI * 2); g.fill();
+	return { top: V.at([0, 0, 80])[1] - 6 };
 }
 
 /** Peintres : (contexte, rotation en radians) → { top, glow?, glowX?, water? }. */
