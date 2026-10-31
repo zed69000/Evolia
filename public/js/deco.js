@@ -7,27 +7,57 @@
 import { rng, wash, ribbon, curve, leaf, rgba } from './watercolor.js';
 
 // km : kilomètres au total pour pouvoir le construire ; team : équipe de l'écosystème renforcée (power membres) ;
-// attracts : espèce dont il ajoute un individu visible ; turn : se tourne par pas de 45°.
+// attracts : espèce dont il ajoute un individu visible ; turn : se tourne par pas de 45° ;
+// cat : onglet d'« Aménager » (habitat : abri pour la faune, qui s'améliore ; recolte : utile ; deco : pour le plaisir).
 export const ITEMS = {
-	collecteur: { name: 'Un collecteur de nectar', cost: 60, km: 0, text: 'Une jarre où tes butineurs déposent leur récolte : elle garde le nectar pour toi. Touche-la pour tout récupérer, et améliore-la pour qu’elle en garde plus.', box: { w: 110, h: 130, ax: 55, ay: 112 } },
-	banc: { name: 'Un banc', cost: 40, km: 0, turn: true, text: 'Pour s’asseoir et regarder le jardin vivre.', box: { w: 130, h: 104, ax: 65, ay: 78 } },
-	massif: { name: 'Un massif mellifère', cost: 25, km: 0, team: 'pollinisateur', power: 1, attracts: 'bourdon', text: 'Lavande, bourrache et thym : un buffet pour les butineurs.', box: { w: 110, h: 70, ax: 55, ay: 56 } },
-	bois: { name: 'Un tas de bois', cost: 30, km: 0, team: 'sol', power: 1, attracts: 'herisson', text: 'Carabes, cloportes et champignons y décomposent le bois.', box: { w: 110, h: 70, ax: 55, ay: 56 } },
-	pierres: { name: 'Un tas de pierres', cost: 30, km: 0, team: 'regulateur', power: 1, attracts: 'lezard', text: 'Les lézards viennent s’y chauffer au soleil.', box: { w: 100, h: 60, ax: 50, ay: 46 } },
-	mangeoire: { name: 'Une mangeoire', cost: 45, km: 1, turn: true, team: 'semeur', power: 1, attracts: 'merle', text: 'Les oiseaux qu’elle nourrit sèment ensuite baies et noisettes.', box: { w: 80, h: 120, ax: 40, ay: 104 } },
-	nichoir: { name: 'Un nichoir', cost: 60, km: 2, turn: true, team: 'regulateur', power: 1, attracts: 'mesange', text: 'Une mésange y élève ses petits… et mange les chenilles.', box: { w: 70, h: 136, ax: 35, ay: 124 } },
-	lanterne: { name: 'Une lanterne', cost: 50, km: 2, text: 'Une lumière douce pour les soirées, tournée vers le sol.', box: { w: 50, h: 110, ax: 25, ay: 104 } },
-	compost: { name: 'Un bac à compost', cost: 60, km: 3, turn: true, team: 'sol', power: 1, attracts: 'lombric', text: 'Épluchures et feuilles mortes deviennent une terre noire pleine de vers.', box: { w: 100, h: 90, ax: 50, ay: 70 } },
-	hotel: { name: 'Un hôtel à insectes', cost: 80, km: 3, turn: true, team: 'pollinisateur', power: 1, attracts: 'abeille', text: 'Abeilles solitaires et coccinelles y passent l’hiver.', box: { w: 110, h: 140, ax: 55, ay: 124 } },
-	mare: { name: 'Une petite mare', cost: 90, km: 4, team: 'regulateur', power: 2, text: 'Libellules et grenouilles chassent les moustiques qui y dansent.', box: { w: 160, h: 80, ax: 80, ay: 40 } },
-	cabane: { name: 'Une petite cabane', cost: 200, km: 5, turn: true, text: 'Ton abri au fond du jardin.', box: { w: 200, h: 215, ax: 100, ay: 175 } },
-	abri: { name: 'Un abri à hérisson', cost: 70, km: 6, turn: true, team: 'regulateur', power: 1, attracts: 'herisson', text: 'Une petite maison sous les feuilles, où il passe l’hiver.', box: { w: 90, h: 70, ax: 45, ay: 50 } },
-	ruche: { name: 'Une ruche en paille', cost: 120, km: 6, team: 'pollinisateur', power: 2, attracts: 'abeille', text: 'Toute une colonie d’abeilles pour polliniser tes fleurs.', box: { w: 80, h: 90, ax: 40, ay: 78 } },
-	bain: { name: 'Un bain d’oiseaux', cost: 100, km: 8, team: 'semeur', power: 1, attracts: 'merle', text: 'De l’eau fraîche : les oiseaux reviennent, et sèment autour.', box: { w: 80, h: 90, ax: 40, ay: 80 } },
-	potager: { name: 'Un carré de potager', cost: 90, km: 5, needs: 'cabane', team: 'semeur', power: 2, attracts: ['lapin', 'lievre'], text: 'Le jardinier y cultive salades, choux et tomates, qui poussent quand tu marches. Pose les carrés côte à côte pour agrandir le potager.', box: { w: 150, h: 100, ax: 75, ay: 64 } },
-	arche: { name: 'Une arche de roses', cost: 120, km: 20, turn: true, team: 'pollinisateur', power: 1, attracts: 'paon-du-jour', text: 'Un passage fleuri pour les papillons.', box: { w: 170, h: 190, ax: 85, ay: 172 } },
+	collecteur: { cat: 'recolte', name: 'Un collecteur de nectar', cost: 60, km: 0, text: 'Une jarre où tes butineurs déposent leur récolte : elle garde le nectar pour toi. Touche-la pour tout récupérer, et améliore-la pour qu’elle en garde plus.', box: { w: 110, h: 130, ax: 55, ay: 112 } },
+	banc: { cat: 'deco', name: 'Un banc', cost: 40, km: 0, turn: true, text: 'Pour s’asseoir et regarder le jardin vivre.', box: { w: 130, h: 104, ax: 65, ay: 78 } },
+	massif: { cat: 'habitat', name: 'Un massif mellifère', cost: 25, km: 0, team: 'pollinisateur', power: 1, attracts: 'bourdon', text: 'Lavande, bourrache et thym : un buffet pour les butineurs.', box: { w: 110, h: 70, ax: 55, ay: 56 } },
+	bois: { cat: 'habitat', name: 'Un tas de bois', cost: 30, km: 0, team: 'sol', power: 1, attracts: 'herisson', text: 'Carabes, cloportes et champignons y décomposent le bois.', box: { w: 110, h: 70, ax: 55, ay: 56 } },
+	pierres: { cat: 'habitat', name: 'Un tas de pierres', cost: 30, km: 0, team: 'regulateur', power: 1, attracts: 'lezard', text: 'Les lézards viennent s’y chauffer au soleil.', box: { w: 100, h: 60, ax: 50, ay: 46 } },
+	mangeoire: { cat: 'habitat', name: 'Une mangeoire', cost: 45, km: 1, turn: true, team: 'semeur', power: 1, attracts: 'merle', text: 'Les oiseaux qu’elle nourrit sèment ensuite baies et noisettes.', box: { w: 80, h: 120, ax: 40, ay: 104 } },
+	nichoir: { cat: 'habitat', name: 'Un nichoir', cost: 60, km: 2, turn: true, team: 'regulateur', power: 1, attracts: 'mesange', text: 'Une mésange y élève ses petits… et mange les chenilles.', box: { w: 70, h: 136, ax: 35, ay: 124 } },
+	lanterne: { cat: 'deco', name: 'Une lanterne', cost: 50, km: 2, text: 'Une lumière douce pour les soirées, tournée vers le sol.', box: { w: 50, h: 110, ax: 25, ay: 104 } },
+	compost: { cat: 'habitat', name: 'Un bac à compost', cost: 60, km: 3, turn: true, team: 'sol', power: 1, attracts: 'lombric', text: 'Épluchures et feuilles mortes deviennent une terre noire pleine de vers.', box: { w: 100, h: 90, ax: 50, ay: 70 } },
+	hotel: { cat: 'habitat', name: 'Un hôtel à insectes', cost: 80, km: 3, turn: true, team: 'pollinisateur', power: 1, attracts: 'abeille', text: 'Abeilles solitaires et coccinelles y passent l’hiver.', box: { w: 110, h: 140, ax: 55, ay: 124 } },
+	mare: { cat: 'habitat', name: 'Une petite mare', cost: 90, km: 4, team: 'regulateur', power: 2, text: 'Libellules et grenouilles chassent les moustiques qui y dansent.', box: { w: 160, h: 80, ax: 80, ay: 40 } },
+	cabane: { cat: 'recolte', name: 'Une petite cabane', cost: 200, km: 5, turn: true, text: 'Ton abri au fond du jardin, et la maison de ton jardinier. Agrandis-la, et choisis sa couleur.', box: { w: 200, h: 215, ax: 100, ay: 175 },
+		levels: { max: 3, cost: [0, 0, 600, 2000], km: [0, 0, 15, 50], name: ['', 'petite cabane', 'cabane à auvent', 'chalet'] },
+		boxes: [null, null, { w: 220, h: 235, ax: 110, ay: 180 }, { w: 340, h: 255, ax: 125, ay: 195 }] },
+	abri: { cat: 'habitat', name: 'Un abri à hérisson', cost: 70, km: 6, turn: true, team: 'regulateur', power: 1, attracts: 'herisson', text: 'Une petite maison sous les feuilles, où il passe l’hiver.', box: { w: 90, h: 70, ax: 45, ay: 50 } },
+	ruche: { cat: 'habitat', name: 'Une ruche en paille', cost: 120, km: 6, team: 'pollinisateur', power: 2, attracts: 'abeille', text: 'Toute une colonie d’abeilles pour polliniser tes fleurs.', box: { w: 80, h: 90, ax: 40, ay: 78 } },
+	bain: { cat: 'habitat', name: 'Un bain d’oiseaux', cost: 100, km: 8, team: 'semeur', power: 1, attracts: 'merle', text: 'De l’eau fraîche : les oiseaux reviennent, et sèment autour.', box: { w: 80, h: 90, ax: 40, ay: 80 } },
+	potager: { cat: 'recolte', name: 'Un carré de potager', cost: 90, km: 5, needs: 'cabane', team: 'semeur', power: 2, attracts: ['lapin', 'lievre'], text: 'Salades, choux et tomates, cultivés par ton fermier ou ta fermière, poussent quand tu marches. Pose les carrés côte à côte pour agrandir le potager.', box: { w: 150, h: 100, ax: 75, ay: 64 } },
+	sandarium: { cat: 'habitat', name: 'Un sandarium', cost: 70, km: 4, team: 'pollinisateur', power: 1, attracts: 'abeille', text: 'Un carré de sable au soleil : les abeilles sauvages qui nichent au sol y creusent leurs terriers.', box: { w: 130, h: 70, ax: 65, ay: 42 } },
+	haie: { cat: 'habitat', name: 'Une haie de bois mort', cost: 110, km: 10, team: 'regulateur', power: 2, attracts: 'herisson', text: 'Des branches empilées entre des piquets : roitelets et hérissons s’y cachent, et elle se tasse en terreau.', box: { w: 190, h: 100, ax: 95, ay: 74 } },
+	muret: { cat: 'habitat', name: 'Un muret de pierres sèches', cost: 140, km: 15, team: 'regulateur', power: 2, attracts: 'lezard', text: 'Des pierres posées sans mortier, qui gardent la chaleur : lézards, orvets et papillons s’y abritent.', box: { w: 190, h: 90, ax: 95, ay: 66 } },
+	pas: { cat: 'deco', name: 'Des pas japonais', cost: 20, km: 0, text: 'Quelques pierres plates dans l’herbe, pour flâner sans tasser le sol.', box: { w: 150, h: 60, ax: 75, ay: 32 } },
+	epouvantail: { cat: 'deco', name: 'Un épouvantail', cost: 80, km: 6, text: 'Chapeau de paille et chemise à carreaux : il veille sur le potager, et les oiseaux s’y posent quand même.', box: { w: 100, h: 160, ax: 50, ay: 148 } },
+	arche: { cat: 'deco', name: 'Une arche de roses', cost: 120, km: 20, turn: true, team: 'pollinisateur', power: 1, attracts: 'paon-du-jour', text: 'Un passage fleuri pour les papillons.', box: { w: 170, h: 190, ax: 85, ay: 172 } },
 };
-export const ITEM_ORDER = ['collecteur', 'banc', 'massif', 'bois', 'pierres', 'mangeoire', 'nichoir', 'lanterne', 'compost', 'hotel', 'mare', 'cabane', 'potager', 'abri', 'ruche', 'bain', 'arche'];
+export const ITEM_ORDER = ['collecteur', 'banc', 'pas', 'massif', 'bois', 'pierres', 'mangeoire', 'nichoir', 'lanterne', 'compost', 'hotel', 'sandarium', 'mare', 'cabane', 'potager', 'abri', 'ruche', 'epouvantail', 'bain', 'haie', 'muret', 'arche'];
+
+/** Les onglets d'« Aménager ». */
+export const CATS = [
+	{ id: 'habitat', name: 'Habitats', intro: 'Des abris pour la faune : chacun renforce une équipe de l’écosystème. Plutôt que d’en poser partout, améliore-les : un abri soigné accueille plus de monde.' },
+	{ id: 'recolte', name: 'Récolte', intro: 'De quoi garder ton nectar, loger un fermier ou une fermière, et cultiver un potager.' },
+	{ id: 'deco', name: 'Décoration', intro: 'Pour le plaisir des yeux : de quoi flâner, s’asseoir et veiller tard.' },
+];
+
+/**
+ * Un habitat s'améliore jusqu'au niveau 5 : chaque niveau compte comme un exemplaire de plus (power × niveau),
+ * pour bien plus cher, et n'est possible qu'après assez de kilomètres faits au total.
+ */
+export const MAX_LEVEL = 5;
+export const LEVEL_NAME = ['', 'simple', 'garni', 'fleuri', 'foisonnant', 'remarquable'];
+export const LEVEL_KM = [0, 0, 10, 30, 70, 150];
+const LEVEL_MULT = [0, 0, 4, 12, 35, 100];
+export const canLevel = kind => ITEMS[kind]?.cat === 'habitat';
+/** La boîte d'un objet posé : la cabane grandit avec son niveau. */
+export const itemBox = (kind, level = 1) => ITEMS[kind].boxes?.[level] ?? ITEMS[kind].box;
+export const levelCost = (kind, level) => Math.round((ITEMS[kind].cost * LEVEL_MULT[level]) / 5) * 5;
+/** Combien de membres un objet posé fait venir dans son équipe. */
+export const itemPower = it => (ITEMS[it.kind]?.power ?? 0) * (canLevel(it.kind) ? it.level ?? 1 : 1);
 
 const shade = (g, d, rx, ry = rx * 0.3) => wash(g, rx * 0.12, 2, rx, ry, '#2E4A22', d, { layers: 5, alpha: 0.07, edge: 0 });
 
@@ -300,41 +330,112 @@ function paintMare(g) {
 	return { top: -40, water: true };
 }
 
-function paintCabane(g, rot) {
-	const d = rng(47);
-	shade(g, d, 86, 22);
-	// Façade : planches, porte, fenêtre éclairée ; côtés : planches et une petite fenêtre.
+/** Les couleurs de cabane, au choix (gratuit, depuis la cabane posée). */
+export const CABIN_STYLES = [
+	{ name: 'bois naturel', wall: '#9A6A40', alt: '#A87A4C', trim: '#6E4A2C', roof: '#7A4A34', shut: '#6E4A2C' },
+	{ name: 'rouge', wall: '#B4473C', alt: '#BE5246', trim: '#F2EEE0', roof: '#8A8A80', shut: '#5E8A5A' },
+	{ name: 'vert sauge', wall: '#5E8A6A', alt: '#679473', trim: '#F2EEE0', roof: '#4A5A6A', shut: '#F2EEE0' },
+	{ name: 'bleu gris', wall: '#6A84A0', alt: '#748EAA', trim: '#F2EEE0', roof: '#5A4A40', shut: '#F2EEE0' },
+	{ name: 'miel', wall: '#C89A5A', alt: '#D2A666', trim: '#7A5232', roof: '#5E3A2A', shut: '#7A5232' },
+];
+
+/** Une planche de façade, pour les cabanes. */
+function plankRow(g, x, y, w, h, col, d) {
+	g.fillStyle = rgba(col, 0.95);
+	g.fillRect(x, y, w, h);
+	g.strokeStyle = rgba('#3A2414', 0.28);
+	g.lineWidth = 0.8;
+	g.strokeRect(x, y, w, h);
+	wash(g, x + w / 2, y + h / 2, w * 0.45, h * 0.4, '#FFF4DC', d, { layers: 1, alpha: 0.05, edge: 0 });
+}
+
+/** Une fenêtre peinte sur une façade : carreaux éclairés, croisillon, volets facultatifs. */
+function windowAt(g2, x, y, w, h, st, shutters) {
+	g2.fillStyle = rgba('#FBE7A8', 0.95); g2.fillRect(x, y, w, h);
+	g2.strokeStyle = rgba(st.trim, 0.95); g2.lineWidth = 2.2;
+	g2.strokeRect(x, y, w, h); g2.beginPath(); g2.moveTo(x + w / 2, y); g2.lineTo(x + w / 2, y + h); g2.moveTo(x, y + h / 2); g2.lineTo(x + w, y + h / 2); g2.stroke();
+	if (shutters) for (const sx of [x - w * 0.48, x + w + 1]) {
+		g2.fillStyle = rgba(st.shut, 0.95); g2.fillRect(sx, y - 1, w * 0.46, h + 2);
+		g2.strokeStyle = rgba('#3A2414', 0.25); g2.lineWidth = 0.8;
+		for (let k = 1; k < 4; k++) { g2.beginPath(); g2.moveTo(sx, y + (h * k) / 4); g2.lineTo(sx + w * 0.46, y + (h * k) / 4); g2.stroke(); }
+	}
+}
+
+/**
+ * La cabane, en trois tailles (on l'agrandit en l'améliorant) et cinq couleurs :
+ * 1 petite cabane de planches ; 2 cabane à auvent, sa terrasse et sa table, volets aux fenêtres ;
+ * 3 chalet en madriers, double porte, grande terrasse couverte sur le côté et bacs fleuris.
+ */
+function paintCabane(g, rot, level = 1, style = 0) {
+	const d = rng(47), st = CABIN_STYLES[style % CABIN_STYLES.length];
+	const L = Math.max(1, Math.min(3, level));
+	const W = [0, 121, 128, 176][L], D = [0, 88, 92, 108][L], H = [0, 78, 80, 86][L], rise = [0, 52, 54, 58][L];
+	const porch = L === 2 ? 36 : 0, pl = L === 3 ? 9 : 11;
+	shade(g, d, [0, 86, 96, 150][L], [0, 22, 28, 34][L]);
+	// Planches debout, ou madriers couchés pour le chalet.
+	const boards = (w, h) => (g2, d2) => {
+		if (L === 3) for (let i = 0; i * pl < h; i++) plankRow(g2, 0, -(i + 1) * pl, w, pl, i % 2 ? st.alt : st.wall, d2);
+		else for (let i = 0; i * pl < w; i++) plankRow(g2, i * pl, -h, pl, h, i % 2 ? st.alt : st.wall, d2);
+	};
+	const doorW = L === 3 ? 40 : 26, doorX = L === 1 ? 46 : W * 0.42 - doorW / 2;
+	const winX = L === 1 ? 84 : W * 0.72;
 	const front = (g2, d2) => {
-		for (let i = 0; i < 11; i++) plank(g2, i * 11, -78, 11, 78, i % 2 ? '#A87A4C' : '#9A6A40', d2, 0.95);
-		plank(g2, 46, -54, 26, 54, '#6E4A2C', d2);
-		g2.fillStyle = rgba('#3A2414', 0.9); g2.beginPath(); g2.arc(67, -27, 2, 0, 6.28); g2.fill();
-		g2.fillStyle = rgba('#FBE7A8', 0.95); g2.fillRect(84, -58, 22, 18);
-		g2.strokeStyle = rgba('#4A2E1A', 0.9); g2.lineWidth = 2;
-		g2.strokeRect(84, -58, 22, 18); g2.beginPath(); g2.moveTo(95, -58); g2.lineTo(95, -40); g2.moveTo(84, -49); g2.lineTo(106, -49); g2.stroke();
+		boards(W, H)(g2, d2);
+		g2.fillStyle = rgba(L === 1 ? '#6E4A2C' : st.shut, 0.97); g2.fillRect(doorX, -56, doorW, 56);
+		g2.strokeStyle = rgba(L === 1 ? '#4A2E1A' : st.trim, 0.9); g2.lineWidth = 2; g2.strokeRect(doorX, -56, doorW, 56);
+		if (L === 3) {
+			g2.beginPath(); g2.moveTo(doorX + doorW / 2, -56); g2.lineTo(doorX + doorW / 2, 0); g2.stroke();
+			windowAt(g2, doorX + 4, -50, doorW / 2 - 8, 22, st, false);
+			windowAt(g2, doorX + doorW / 2 + 4, -50, doorW / 2 - 8, 22, st, false);
+		} else if (L === 2) windowAt(g2, doorX + 6, -48, doorW - 12, 16, st, false);
+		g2.fillStyle = rgba('#3A2414', 0.9); g2.beginPath(); g2.arc(doorX + doorW - 5, -27, 2, 0, 6.28); g2.fill();
+		windowAt(g2, winX, -58, 22, 18, L === 1 ? { trim: '#4A2E1A' } : st, L >= 2);
+		if (L === 3) windowAt(g2, W * 0.12, -58, 22, 18, st, true);
 		for (let i = 0; i < 8; i++) leaf(g2, 4 + d2.range(-2, 5), -6 - i * 8, 9, 4, -Math.PI / 2 + d2.gauss() * 0.8, '#4E8A3E', d2, 0.8);
 	};
 	const side = (g2, d2) => {
-		for (let i = 0; i < 8; i++) plank(g2, i * 11, -78, 11, 78, i % 2 ? '#A87A4C' : '#9A6A40', d2, 0.95);
-		g2.fillStyle = rgba('#FBE7A8', 0.85); g2.fillRect(34, -56, 18, 16);
-		g2.strokeStyle = rgba('#4A2E1A', 0.9); g2.lineWidth = 2; g2.strokeRect(34, -56, 18, 16);
+		boards(D, H)(g2, d2);
+		windowAt(g2, D * 0.4, -56, 18, 16, L === 1 ? { trim: '#4A2E1A' } : st, L >= 2);
 	};
-	const back = (g2, d2) => { for (let i = 0; i < 11; i++) plank(g2, i * 11, -78, 11, 78, i % 2 ? '#A87A4C' : '#9A6A40', d2, 0.95); };
+	const back = (g2, d2) => boards(W, H)(g2, d2);
+	const roofCol = L === 1 ? '#7A4A34' : st.roof;
 	const shingles = (g2, d2) => {
-		g2.strokeStyle = rgba('#4A2A1E', 0.45); g2.lineWidth = 1;
-		for (let y = -8; y > -70; y -= 9) { g2.beginPath(); g2.moveTo(0, y); g2.lineTo(110, y); g2.stroke(); }
-		for (let i = 0; i < 4; i++) wash(g2, d2.range(10, 90), d2.range(-60, -10), d2.range(6, 12), d2.range(3, 5), '#6E9A4A', d2, { layers: 5, alpha: 0.35, edge: 0 });
+		g2.strokeStyle = rgba('#2A1E1A', 0.35); g2.lineWidth = 1;
+		for (let y = -8; y > -90; y -= 9) { g2.beginPath(); g2.moveTo(0, y); g2.lineTo(220, y); g2.stroke(); }
+		for (let i = 0; i < 4; i++) wash(g2, d2.range(10, 120), d2.range(-60, -10), d2.range(6, 12), d2.range(3, 5), '#6E9A4A', d2, { layers: 5, alpha: 0.3, edge: 0 });
 	};
-	const V = build(g, d, rot, [
-		box(0, 0, 0, 121, 88, 78, '#9A6A40', { front, back, left: side, right: side }),
-		roof(0, 0, 78, 121, 88, 52, 8, '#7A4A34', shingles, '#A87A4C'),
-		box(28, -18, 112, 12, 12, 34, '#8A7A6A'),
-	]);
+	const deckTop = (w, dp) => (g2, d2) => { for (let x = 0; x < w; x += 8) plankRow(g2, x, -dp, 8, dp, x % 16 ? '#C8A070' : '#BC9464', d2); };
+	const solids = [
+		box(0, 0, 0, W, D, H, st.wall, { front, back, left: side, right: side }),
+		box(28, -18, H + rise * 0.6, 12, 12, 34, '#8A7A6A'),
+	];
+	if (L === 2) {
+		// Le toit s'avance au-dessus d'une terrasse, posé sur deux poteaux ; une table devant la fenêtre.
+		solids.push(box(0, D / 2 + porch / 2, 0, W, porch, 4, '#BC9464', { top: deckTop(W, porch), topColor: '#C8A070' }));
+		for (const x of [-W / 2 + 6, W / 2 - 6]) solids.push(box(x, D / 2 + porch - 5, 4, 6, 6, H - 4, st.shut));
+		solids.push(box(W * 0.22, D / 2 + porch * 0.45, 4, 34, 14, 18, '#E8E2D2'), box(W * 0.22, D / 2 + porch * 0.45 + 12, 4, 30, 6, 9, '#E8E2D2'));
+		solids.push(roof(0, porch / 2, H, W, D + porch, rise, 8, roofCol, shingles, st.alt));
+	} else solids.push(roof(0, 0, H, W, D, rise, 8, roofCol, shingles, L === 1 ? '#A87A4C' : st.alt));
+	if (L === 3) {
+		// Grande terrasse couverte sur la droite : plancher, poteaux, toit plat, table ; bacs fleuris devant.
+		const tx = W / 2 + 40, tw = 80, td = D + 24;
+		solids.push(box(tx, 8, 0, tw, td, 5, '#BC9464', { top: deckTop(tw, td), topColor: '#C8A070' }));
+		for (const y of [8 + td / 2 - 5, 8 - td / 2 + 5]) solids.push(box(tx + tw / 2 - 5, y, 5, 6, 6, H - 5, '#7A5232'));
+		solids.push(box(tx, 8, H, tw + 10, td + 8, 5, st.roof));
+		solids.push(box(tx - 4, 12, 5, 30, 22, 20, '#8A6040'), box(tx - 4, 34, 5, 24, 6, 12, '#8A6040'));
+		const flowers = (g2, d2) => { for (let i = 0; i < 6; i++) wash(g2, d2.range(2, 20), d2.range(-9, -1), 3, 2.5, d2.pick(['#E87A9A', '#F2D24A', '#FFFFFF', '#5F933E']), d2, { layers: 3, alpha: 0.7, edge: 0.2 }); };
+		for (const x of [-W / 2 + 16, -W / 2 + 46]) solids.push(box(x, D / 2 + 9, 0, 22, 10, 12, '#7A5232', { top: flowers }));
+	}
+	const V = build(g, d, rot, solids);
 	// Lueur de la fenêtre, là où elle se trouve une fois la cabane tournée (devant ou côté, selon ce qu'on voit).
 	const fy = V.turn([0, 1, 0])[1], ry = V.turn([1, 0, 0])[1];
-	const win = fy > 0.3 ? [34.5, 44, 49] : ry > 0.3 ? [60.5, 0, 48] : ry < -0.3 ? [-60.5, 0, 48] : null;
-	if (!win) return { top: -150 };
+	const win = fy > 0.3 ? [winX + 11 - W / 2, D / 2, 49] : ry > 0.3 ? [W / 2 + 0.5, 0, 48] : ry < -0.3 ? [-W / 2 - 0.5, 0, 48] : null;
+	const top = V.at([0, 0, H + rise + 20])[1] - 10;
+	// Le seuil de la porte, avant rotation : le jardinier y entre et en sort.
+	const door = [doorX + doorW / 2 - W / 2, D / 2 + porch + 12];
+	if (!win) return { top, door };
 	const [gx, gy] = V.at(win);
-	return { top: -150, glow: gy, glowX: gx };
+	return { top, glow: gy, glowX: gx, door };
 }
 
 function paintAbri(g, rot) {
@@ -580,11 +681,128 @@ function paintCollecteur(g, rot, fill = 0.5, level = 1) {
 	return { top: V.at([0, 0, 80])[1] - 6 };
 }
 
+/** Sandarium : un carré de sable blond au ras du sol, bordé de pierres, percé de petits terriers. */
+function paintSandarium(g) {
+	const d = rng(62);
+	wash(g, 0, 2, 58, 20, '#6E5A3A', d, { layers: 5, alpha: 0.16, edge: 0.2 });
+	wash(g, 0, 0, 52, 17, '#E8D2A0', d, { layers: 10, alpha: 0.32, edge: 0.4 });
+	wash(g, -10, -3, 34, 9, '#F6E8C4', d, { layers: 5, alpha: 0.3, edge: 0 });
+	for (let i = 0; i < 9; i++) {
+		const x = d.range(-38, 38), y = d.range(-10, 9);
+		wash(g, x, y + 1, 4, 2, '#C8A870', d, { layers: 3, alpha: 0.4, edge: 0 });
+		g.fillStyle = rgba('#4A3420', 0.85); g.beginPath(); g.ellipse(x, y, 1.6, 1, 0, 0, 6.28); g.fill();
+	}
+	for (let a = 0; a < 6.28; a += 0.42) wash(g, Math.cos(a) * 56, Math.sin(a) * 19, d.range(5, 8), d.range(3.5, 5), d.pick(['#B8B2A4', '#A8A498', '#C8C0B0']), d, { layers: 5, alpha: 0.4, edge: 0.4 });
+	for (let i = 0; i < 6; i++) ribbon(g, curve(d.range(-50, 50), d.range(-18, -10), -Math.PI / 2 + d.gauss() * 0.3, d.range(8, 16), d.gauss() * 0.3, 4), 1.2, 0.3, '#7FAA48', d, 0.8);
+	// Une abeille sauvage qui rentre au terrier.
+	g.fillStyle = '#B8743A'; g.beginPath(); g.ellipse(14, -16, 3.2, 2, 0.3, 0, 6.28); g.fill();
+	g.fillStyle = 'rgba(253,247,231,0.75)'; g.beginPath(); g.ellipse(13, -19, 2.2, 1.2, -0.4, 0, 6.28); g.fill();
+	return { top: -30 };
+}
+
+/** Haie de bois mort (haie de Benjes) : des branches entassées entre deux rangs de piquets, un peu de lierre dessus. */
+function paintHaie(g) {
+	const d = rng(63);
+	shade(g, d, 92, 18);
+	const stakes = [-80, -48, -16, 16, 48, 80];
+	for (const x of stakes) plank(g, x - 2.5, -52 - 6, 5, 54, '#6E4A2C', d);
+	for (let i = 0; i < 70; i++) {
+		const x = d.range(-84, 84), y = d.range(-44, -2), a = d.gauss() * 0.5 + (d() < 0.5 ? 0 : Math.PI);
+		ribbon(g, curve(x, y, a, d.range(16, 34), d.gauss() * 0.4, 4), d.range(1.4, 3), 0.6, d.pick(['#7A5232', '#5A3A20', '#8A6A44', '#9A7A54']), d, 0.85);
+	}
+	for (let i = 0; i < 10; i++) wash(g, d.range(-80, 80), d.range(-44, -6), d.range(5, 10), d.range(3, 5), d.pick(['#C87A3A', '#A8602A', '#D8A050']), d, { layers: 4, alpha: 0.35, edge: 0.3 });
+	for (let i = 0; i < 16; i++) leaf(g, d.range(-70, 70), d.range(-48, -20), 7, 4, d() * 6.28, d.pick(['#3E6A3A', '#4E7A3E']), d, 0.85);
+	for (const x of stakes) plank(g, x - 2.5 + 3, -48, 5, 50, '#5E3E24', d);
+	return { top: -62 };
+}
+
+/** Muret de pierres sèches : des pierres plates empilées sans mortier, mousse et une fleur dans les joints. */
+function paintMuret(g) {
+	const d = rng(64);
+	shade(g, d, 92, 16);
+	for (let row = 0; row < 4; row++) {
+		const y = -6 - row * 11, half = 86 - row * 6;
+		for (let x = -half + (row % 2) * 8; x < half; x += d.range(15, 22)) {
+			const w = d.range(8, 11), h = d.range(5, 6.5);
+			wash(g, x + w, y, w, h, d.pick(['#B8B2A4', '#A8A498', '#C8C0B0', '#9A968A']), d, { layers: 6, alpha: 0.42, edge: 0.5 });
+			wash(g, x + w * 0.8, y - h * 0.4, w * 0.5, h * 0.3, '#EEEAE0', d, { layers: 3, alpha: 0.22, edge: 0 });
+		}
+	}
+	for (let i = 0; i < 7; i++) wash(g, d.range(-70, 70), d.range(-44, -4), d.range(4, 8), 2.5, '#6E9A4A', d, { layers: 4, alpha: 0.35, edge: 0 });
+	for (const [x, y] of [[-40, -40], [30, -46], [62, -18]]) for (let k = 0; k < 4; k++) wash(g, x + Math.cos(k * 1.57) * 2.5, y + Math.sin(k * 1.57) * 2.5, 2.2, 2.2, '#F2E070', d, { layers: 3, alpha: 0.6, edge: 0.2 });
+	// Un lézard au soleil, sur le dessus.
+	ribbon(g, curve(-8, -50, 0.1, 26, 0.5, 8), 2.6, 0.3, '#6E8A3A', d, 0.95);
+	return { top: -56 };
+}
+
+/** Pas japonais : quelques dalles plates qui serpentent dans l'herbe. */
+function paintPas(g) {
+	const d = rng(65);
+	for (const [x, y, s] of [[-56, 8, 13], [-26, -2, 14], [6, 6, 13], [36, -4, 14], [62, 4, 11]]) {
+		wash(g, x, y + 2, s + 2, s * 0.45, '#4A5A32', d, { layers: 4, alpha: 0.14, edge: 0 });
+		wash(g, x, y, s, s * 0.42, d.pick(['#C8C0B0', '#BCB8AC', '#D2CABA']), d, { layers: 8, alpha: 0.4, edge: 0.5 });
+		wash(g, x - s * 0.3, y - s * 0.12, s * 0.45, s * 0.16, '#F2EEE4', d, { layers: 3, alpha: 0.3, edge: 0 });
+		for (let k = 0; k < 3; k++) ribbon(g, curve(x + d.range(-s, s), y + s * 0.4, -Math.PI / 2 + d.gauss() * 0.3, d.range(5, 9), 0, 3), 1, 0.3, '#7FAA48', d, 0.8);
+	}
+	return { top: -14 };
+}
+
+/** Épouvantail : une croix de bois, une chemise à carreaux, un chapeau de paille ; un merle sur le bras. */
+function paintEpouvantail(g) {
+	const d = rng(66);
+	shade(g, d, 26, 7);
+	plank(g, -2.5, -128, 5, 128, '#7A5232', d);
+	plank(g, -40, -96, 80, 5, '#7A5232', d);
+	// La chemise, et ses carreaux.
+	g.fillStyle = rgba('#C8483A', 0.92);
+	g.beginPath(); g.moveTo(-30, -98); g.lineTo(30, -98); g.lineTo(18, -86); g.lineTo(16, -52); g.lineTo(-16, -52); g.lineTo(-18, -86); g.closePath(); g.fill();
+	g.strokeStyle = rgba('#7A2A22', 0.5); g.lineWidth = 1;
+	for (let x = -26; x < 30; x += 7) { g.beginPath(); g.moveTo(x, -98); g.lineTo(x * 0.6, -52); g.stroke(); }
+	for (let y = -92; y < -52; y += 7) { g.beginPath(); g.moveTo(-24, y); g.lineTo(24, y); g.stroke(); }
+	// La paille qui dépasse des manches et du bas.
+	for (const [x, y, a] of [[-38, -94, Math.PI], [38, -94, 0], [-8, -52, Math.PI / 2], [8, -52, Math.PI / 2]]) for (let k = 0; k < 4; k++) ribbon(g, curve(x, y, a + d.gauss() * 0.4, d.range(6, 11), 0, 3), 1, 0.3, '#E8C860', d, 0.9);
+	// La tête en toile et le chapeau.
+	wash(g, 0, -110, 10, 11, '#E8D8B0', d, { layers: 6, alpha: 0.5, edge: 0.4 });
+	g.fillStyle = rgba('#3A2A1A', 0.8); g.beginPath(); g.arc(-4, -112, 1.4, 0, 6.28); g.arc(4, -112, 1.4, 0, 6.28); g.fill();
+	wash(g, 0, -120, 22, 5, '#D8B060', d, { layers: 6, alpha: 0.5, edge: 0.3 });
+	wash(g, 0, -126, 11, 7, '#E8C870', d, { layers: 6, alpha: 0.5, edge: 0.3 });
+	plank(g, -11, -124, 22, 3, '#C8483A', d);
+	// Un merle posé sur le bras.
+	g.fillStyle = '#2A2420'; g.beginPath(); g.ellipse(28, -102, 6, 4, -0.2, 0, 6.28); g.fill();
+	g.beginPath(); g.arc(33, -106, 3, 0, 6.28); g.fill();
+	g.fillStyle = '#F2A02A'; g.beginPath(); g.moveTo(35.5, -106.5); g.lineTo(39, -105.5); g.lineTo(35.5, -104.5); g.fill();
+	return { top: -132 };
+}
+
+/**
+ * Ce qui pousse autour d'un habitat amélioré : herbes, fleurs sauvages et mousse, de plus en plus fournies
+ * à chaque niveau. `front` : les touffes de devant (peintes après l'objet), sinon celles de derrière.
+ */
+const FLAT_ADORN = new Set(['mare', 'sandarium']);
+
+export function paintAdorn(g, kind, level, front) {
+	if (level < 2) return;
+	const d = rng(70 + level * 7 + (front ? 1 : 0)), b = ITEMS[kind].box;
+	const rx = Math.min(b.ax, b.w - b.ax) * 0.88, ry = Math.min(rx * 0.32, (b.h - b.ay) * 0.8 + 6);
+	const n = (level - 1) * 4 + (front ? 2 : 0);
+	const flowers = level >= 5 ? ['#F2D24A', '#E87A9A', '#FFFFFF', '#9A7AD0', '#F08A3C'] : level >= 3 ? ['#F2D24A', '#E87A9A', '#FFFFFF', '#9A7AD0'] : ['#FFFFFF', '#F2D24A'];
+	for (let i = 0; i < n; i++) {
+		let a = front ? d.range(0.15, Math.PI - 0.15) : d.range(Math.PI + 0.1, 2 * Math.PI - 0.1);
+		// Autour d'une mare ou d'un sandarium, les touffes restent sur les bords, pas dans l'eau ni le sable.
+		if (FLAT_ADORN.has(kind)) a = (i % 2 ? 0 : Math.PI) + d.range(-0.45, 0.45) * (front ? -1 : 1);
+		const far = FLAT_ADORN.has(kind) ? d.range(0.95, 1) : d.range(0.75, 1);
+		const x = Math.cos(a) * rx * far, y = Math.sin(a) * ry * d.range(0.7, 1);
+		if (level >= 3 && d() < 0.4) wash(g, x, y, d.range(5, 9), 3, '#6E9A4A', d, { layers: 3, alpha: 0.3, edge: 0 });
+		for (let k = 0; k < 3; k++) ribbon(g, curve(x + d.gauss() * 2, y, -Math.PI / 2 + d.gauss() * 0.35, d.range(6, 10 + level * 2), d.gauss() * 0.3, 4), 1.1, 0.3, d.pick(['#5F933E', '#7FAA48', '#6E8A3E']), d, 0.85);
+		if (d() < 0.35 + level * 0.1) wash(g, x + d.gauss() * 2, y - d.range(8, 12 + level * 2), 2.4, 2.2, d.pick(flowers), d, { layers: 3, alpha: 0.65, edge: 0.2 });
+	}
+}
+
 /** Peintres : (contexte, rotation en radians) → { top, glow?, glowX?, water? }. */
 export const ITEM_PAINTERS = {
 	banc: paintBanc, massif: paintMassif, bois: paintBois, pierres: paintPierres, mangeoire: paintMangeoire, nichoir: paintNichoir,
 	lanterne: paintLanterne, compost: paintCompost, hotel: paintHotel, mare: paintMare, cabane: paintCabane, potager: paintPotager, collecteur: paintCollecteur, abri: paintAbri,
-	ruche: paintRuche, bain: paintBain, arche: paintArche,
+	ruche: paintRuche, bain: paintBain, arche: paintArche, sandarium: paintSandarium, haie: paintHaie, muret: paintMuret, pas: paintPas, epouvantail: paintEpouvantail,
 };
 
 /**
@@ -598,7 +816,8 @@ export function itemCost(kind, owned = 0) {
 /** Combien d'individus de plus d'une espèce les objets posés dans ce lieu attirent. */
 export function attracted(place, spId) {
 	let n = 0;
-	for (const it of place?.items ?? []) if ([].concat(ITEMS[it.kind]?.attracts ?? []).includes(spId)) n++;
+	// Un habitat fleuri (niveau 3) en attire un de plus, un habitat remarquable (niveau 5) encore un.
+	for (const it of place?.items ?? []) if ([].concat(ITEMS[it.kind]?.attracts ?? []).includes(spId)) n += 1 + ((it.level ?? 1) >= 3) + ((it.level ?? 1) >= 5);
 	return n;
 }
 

@@ -13,7 +13,7 @@ import { Sky, WEATHER_LABEL } from './weather.js';
 import { EcoPanel, tick, summaryHtml, addBoost, boostLeft, visualExtra, rates, GUILDS, BOOST_MULT, BOOST_PER_MIN, nectarCapacity, hasCollector, COLLECTOR_CAP, COLLECTOR_UPGRADE } from './idle.js';
 import { paperTexture } from './watercolor.js';
 import { Soundscape } from './audio.js';
-import { ITEMS, ITEM_ORDER, itemHelp, itemCost } from './deco.js';
+import { ITEMS, ITEM_ORDER, itemHelp, itemCost, CATS, MAX_LEVEL, LEVEL_NAME, LEVEL_KM, canLevel, levelCost, CABIN_STYLES } from './deco.js';
 import { VERSION } from './version.js';
 import { rollDay, markActive, giftReady, giftFor, claimGift, claim, toClaim, noteTap, noteQuest, challengesHtml, weekHtml, nextGoal, albumHtml, collection } from './daily.js';
 
@@ -75,7 +75,9 @@ const species = new Encyclopedia($('#species'), state, () => { persist(); update
 const places = new PlacesMap($('#map'), state, travel);
 // Aider une équipe de l'écosystème, c'est poser l'objet qui l'attire (s'il est débloqué et payable), sinon voir la liste.
 // La récolte en attente : sans collecteur, elle perle sur les fleurs ; avec, elle remplit les jarres.
-garden.dewAmount = () => (hasCollector(state) ? 0 : state.pending ?? 0);
+// Avec un collecteur, quelques gouttes restent visibles sur les fleurs : on voit que la récolte attend, et en toucher une vide tout.
+garden.dewAmount = () => state.pending ?? 0;
+garden.dewAll = () => hasCollector(state);
 garden.nectarFill = () => (state.pending ?? 0) / Math.max(1, nectarCapacity(state));
 
 /** Faire passer de la récolte en attente au compteur. */
@@ -92,10 +94,30 @@ function collect(amount) {
 	return v;
 }
 
+/** Le fermier ou la fermière de la cabane, au choix ; `the` : « Le fermier » plutôt que « un fermier ». */
+function farmerName(the = false) {
+	const f = state.gardener === 'fermiere';
+	return the ? (f ? 'La fermière' : 'Le fermier') : f ? 'une fermière' : 'un fermier';
+}
+
+/** Qui s'installe dans la cabane : on choisit à la première cabane, et on peut changer d'avis depuis la cabane. */
+function chooseFarmer(then) {
+	showModal(`<h2>Qui s’installe ?</h2><p>Quelqu’un vient vivre dans ta cabane et cultivera ton potager.</p>
+		<div class="farmer-pick"><button class="btn ghost" data-farmer="fermier">Un fermier</button><button class="btn ghost" data-farmer="fermiere">Une fermière</button></div>`);
+	$('#modal').querySelector('.farmer-pick').addEventListener('click', e => {
+		const b = e.target.closest('[data-farmer]');
+		if (!b) return;
+		state.gardener = b.dataset.farmer;
+		persist(true);
+		$('#modal').hidden = true;
+		then?.();
+	});
+}
+
 // Le jardinier récolte une parcelle mûre : un panier de légumes, en nectar.
 garden.onHarvest = () => {
 	state.nectar = (state.nectar ?? 0) + 60;
-	toast('Le jardinier a récolté ses légumes · +60 nectar', '#5F933E');
+	toast(`${farmerName(true)} a récolté ses légumes · +60 nectar`, '#5F933E');
 	renderHud();
 	persist();
 };
@@ -103,7 +125,7 @@ garden.onHarvest = () => {
 const eco = new EcoPanel($('#eco'), state, kind => {
 	const it = ITEMS[kind];
 	if (state.totals.distance / 1000 >= it.km && !needsFirst(kind) && (state.nectar ?? 0) >= priceOf(kind)) startPlacing(kind);
-	else openDeco();
+	else openDeco(it.cat);
 });
 
 // ─── Bandeau ──────────────────────────────────────────────────
@@ -116,7 +138,10 @@ function renderHud() {
 	$('#hud-km').textContent = km >= state.goalKm
 		? `${fmt(km, km < 10 ? 1 : 0)} km aujourd'hui ✓`
 		: `${fmt(km, 1)} km sur ${goal} aujourd'hui`;
-	$('#hud-steps').innerHTML = `<span class="nectar${boostLeft(state) ? ' boost' : ''}">${fmtInt(state.nectar ?? 0)}</span>`;
+	// La bourse de nectar, bien en vue ; dessous, ce qui attend d'être récolté (dans les fleurs ou le collecteur).
+	const pend = Math.floor(state.pending ?? 0), full = pend >= nectarCapacity(state);
+	$('#hud-steps').innerHTML = `<span class="nectar${boostLeft(state) ? ' boost' : ''}">${fmtInt(state.nectar ?? 0)}</span>`
+		+ `<small class="${full ? 'full' : pend >= 1 ? 'wait' : ''}">${full ? 'réserve pleine !' : pend >= 1 ? `+${fmtInt(pend)} à récolter` : 'nectar'}</small>`;
 	const k = Math.min(1, km / state.goalKm);
 	$('#ring-fg').style.strokeDashoffset = String(113.1 * (1 - k));
 }
@@ -203,7 +228,17 @@ garden.onTap = hit => {
 	clearTimeout(cardTimer);
 	if (placing) return movePlacing(hit);
 	if (!hit) { card.hidden = true; return; }
-	if (hit.dew) { const v = collect(garden.takeDew(hit.dew)); if (v >= 1) toast(`+${fmtInt(v)} nectar cueilli`, '#E3A33A'); return; }
+	if (hit.dew) {
+		if (garden.dewAll()) {
+			const jar = garden.items.find(x => x.kind === 'collecteur');
+			garden.takeDew(hit.dew);
+			if (jar) garden.pourFrom(jar);
+			const v = collect(state.pending);
+			if (v >= 1) toast(`+${fmtInt(v)} nectar récolté`, '#E3A33A');
+			return;
+		}
+		const v = collect(garden.takeDew(hit.dew)); if (v >= 1) toast(`+${fmtInt(v)} nectar cueilli`, '#E3A33A'); return;
+	}
 	if (hit.item) return tapItem(hit, card);
 	if (hit.critter) return tapCritter(hit, card);
 	if (hit.cell != null) {
@@ -246,7 +281,7 @@ function tapCritter(hit, card) {
 
 const MISSIONS = [
 	{ id: 'walk', text: 'Marche 300 m', help: 'Active le suivi et bouge : chaque pas compte, même à la maison.', done: () => state.totals.distance >= 300 },
-	{ id: 'collector', text: 'Installe un collecteur de nectar', help: 'Aménager › Un collecteur de nectar : il garde la récolte de tes butineurs.', done: () => hasCollector(state), go: () => openDeco() },
+	{ id: 'collector', text: 'Installe un collecteur de nectar', help: 'Aménager › Un collecteur de nectar : il garde la récolte de tes butineurs.', done: () => hasCollector(state), go: () => openDeco('recolte') },
 	{ id: 'collect', text: 'Récolte ton nectar', help: 'Touche le collecteur (ou les gouttes dorées sur les fleurs) quand il y a du nectar.', done: () => !!state.collectedOnce, go: () => { const it = Object.values(state.places).flatMap(p => p.items ?? []).find(i => i.kind === 'collecteur'); if (it && state.place) garden.focusOn(it.x, it.y); } },
 ];
 const MISSION_REWARD = 30;
@@ -361,7 +396,7 @@ function addMeters(m) {
 	for (const k of ITEM_ORDER) {
 		if (ITEMS[k].km > 0 && before < ITEMS[k].km && after >= ITEMS[k].km) {
 			sound.chime(2);
-			toast(`Tu peux maintenant installer ${ITEMS[k].name.toLowerCase()}`, '#9A7448', () => openDeco());
+			toast(`Tu peux maintenant installer ${ITEMS[k].name.toLowerCase()}`, '#9A7448', () => openDeco(ITEMS[k].cat));
 		}
 	}
 	here().km += m / 1000;
@@ -944,21 +979,56 @@ function needsFirst(kind) {
 const ownedCount = kind => Object.values(state.places).reduce((a, p) => a + (p.items ?? []).filter(i => i.kind === kind).length, 0);
 const priceOf = kind => itemCost(kind, ownedCount(kind));
 
+/** Le prochain niveau d'un habitat posé : son prix, ou ce qui manque (kilomètres), ou null s'il est au plus haut. */
+function nextLevel(it) {
+	const lv = it.level ?? 1, own = ITEMS[it.kind].levels, km = state.totals.distance / 1000;
+	// La cabane a ses propres niveaux (petite cabane, cabane à auvent, chalet).
+	if (own) return lv >= own.max ? null : { level: lv + 1, cost: own.cost[lv + 1], km: own.km[lv + 1], ok: km >= own.km[lv + 1] };
+	if (!canLevel(it.kind) || lv >= MAX_LEVEL) return null;
+	return { level: lv + 1, cost: levelCost(it.kind, lv + 1), km: LEVEL_KM[lv + 1], ok: km >= LEVEL_KM[lv + 1] };
+}
+
+/** Améliore un habitat posé : il compte pour un abri de plus dans son équipe, et se garnit de fleurs. */
+function levelUp(it) {
+	const nx = nextLevel(it);
+	if (!nx || !nx.ok || (state.nectar ?? 0) < nx.cost) return false;
+	state.nectar -= nx.cost;
+	it.level = nx.level;
+	it.spent = (it.spent ?? 0) + nx.cost;
+	garden.popItem(it);
+	garden.nextPopulate = 0;
+	const own = ITEMS[it.kind].levels;
+	toast(own ? `Ta cabane devient un${own.name[it.level] === 'chalet' ? '' : 'e'} ${own.name[it.level]} !` : `${ITEMS[it.kind].name} : niveau ${it.level}, ${LEVEL_NAME[it.level]}`, '#5F933E');
+	sound.chime(3);
+	renderHud();
+	persist(true);
+	return true;
+}
+
+let decoTab = 'habitat';
+
 function renderDeco() {
 	const km = state.totals.distance / 1000;
 	const nectar = state.nectar ?? 0;
 	const here_ = garden.items;
+	const cat = CATS.find(c => c.id === decoTab);
 	$('#deco').innerHTML = `
 		<div class="panel-head"><h2>Aménager</h2><button class="close" data-close-deco aria-label="Fermer">×</button></div>
-		<p class="sp-intro">Installe de quoi rendre ton jardin accueillant, pour toi et pour les animaux. Tout se paie en nectar, et se range quand tu veux (le nectar t'est rendu).</p>
-		<div class="deco-list">${ITEM_ORDER.map(k => {
-			const it = ITEMS[k], cost = priceOf(k), need = needsFirst(k), locked = km < it.km || !!need, poor = nectar < cost, n = here_.filter(x => x.kind === k).length;
+		<div class="deco-tabs" role="tablist">${CATS.map(c => `<button role="tab" aria-selected="${c.id === decoTab}" data-tab="${c.id}">${c.name}</button>`).join('')}</div>
+		<p class="sp-intro">${cat.intro} Tout se paie en nectar, et se range quand tu veux (le nectar t'est rendu).</p>
+		<div class="deco-list">${ITEM_ORDER.filter(k => ITEMS[k].cat === decoTab).map(k => {
+			const it = ITEMS[k], cost = priceOf(k), need = needsFirst(k), locked = km < it.km || !!need, poor = nectar < cost;
+			const mine = here_.filter(x => x.kind === k), n = mine.length;
+			// L'habitat le moins avancé d'ici, qu'on peut améliorer depuis la liste.
+			const low = mine.filter(x => nextLevel(x)).sort((a, b) => (a.level ?? 1) - (b.level ?? 1))[0], nx = low && nextLevel(low);
+			const up = nx ? nx.ok ? `<button class="btn primary small" data-level="${k}" ${nectar < nx.cost ? 'disabled' : ''}>Améliorer · ${fmtInt(nx.cost)}</button>` : `<span class="deco-lock">niveau ${nx.level} dès ${nx.km} km</span>` : '';
 			const action = km < it.km ? `<span class="deco-lock">dès ${it.km} km parcourus</span>`
 				: need ? `<span class="deco-lock">après avoir posé ${ITEMS[need].name.toLowerCase()}</span>`
-				: `<button class="btn primary small" data-buy="${k}" ${poor ? 'disabled' : ''}>${poor ? `il manque ${fmtInt(cost - nectar)}` : 'Installer'}</button>`;
+				: `<button class="btn ${n && canLevel(k) ? 'ghost' : 'primary'} small" data-buy="${k}" ${poor ? 'disabled' : ''}>${poor ? `il manque ${fmtInt(cost - nectar)}` : n ? 'Un de plus' : 'Installer'}</button>`;
+			const levels = n && canLevel(k) ? `<small>${mine.map(x => `niv. ${x.level ?? 1}`).join(' · ')}</small>` : n ? `<small>${n} ici</small>` : '';
 			return `<div class="deco-card${locked ? ' locked' : ''}"><div class="deco-art" data-art="${k}"></div>
 				<div class="deco-body"><h3>${it.name}</h3><p>${it.text}</p>${itemHelp(k) ? `<span class="deco-help">${itemHelp(k)}</span>` : ''}
-				<div class="deco-row"><span class="nectar">${fmtInt(cost)}</span>${n ? `<small>${n} ici</small>` : ''}${action}</div></div></div>`;
+				<div class="deco-row"><span class="nectar">${fmtInt(cost)}</span>${levels}${action}</div>${up ? `<div class="deco-row deco-up">${up}</div>` : ''}</div></div>`;
 		}).join('')}</div>`;
 	for (const el of $('#deco').querySelectorAll('[data-art]')) {
 		const sp = garden.itemSprite(el.dataset.art, 315), c = document.createElement('canvas');
@@ -968,7 +1038,8 @@ function renderDeco() {
 	}
 }
 
-function openDeco() {
+function openDeco(tab) {
+	if (typeof tab === 'string') decoTab = tab;
 	renderDeco();
 	$('#deco').classList.add('open');
 	$('#deco').setAttribute('aria-hidden', 'false');
@@ -987,7 +1058,7 @@ function startPlacing(kind, item = null) {
 	placing = { kind, item };
 	garden.lifted = item;
 	const [cx, cy] = item ? [item.x, item.y] : garden.toWorld(garden.canvas.clientWidth / 2, garden.canvas.clientHeight * 0.45);
-	garden.ghost = { kind, x: cx, y: cy, rot: item?.rot ?? 0 };
+	garden.ghost = { kind, x: cx, y: cy, rot: item?.rot ?? 0, level: item?.level };
 	$('#btn-place-turn').hidden = !ITEMS[kind].turn;
 	snapPlacing();
 	$('#placing-name').textContent = item ? `Déplacer : ${ITEMS[kind].name.toLowerCase()}` : ITEMS[kind].name;
@@ -1047,9 +1118,9 @@ $('#btn-place').addEventListener('click', () => {
 		state.nectar -= cost;
 		garden.placeItem(kind, x, y, rot).paid = cost;
 		const help = itemHelp(kind);
-		toast(`${ITEMS[kind].name} : installé${/^Une /.test(ITEMS[kind].name) ? 'e' : ''}${help ? ` · ${help}` : ''}`, '#9A7448');
+		toast(`${ITEMS[kind].name} : installé${/^Une /.test(ITEMS[kind].name) ? 'e' : /^Des /.test(ITEMS[kind].name) ? 's' : ''}${help ? ` · ${help}` : ''}`, '#9A7448');
 		if (kind === 'cabane' && garden.items.filter(x => x.kind === 'cabane').length === 1) {
-			setTimeout(() => toast('Un jardinier s’installe : construis-lui un potager', '#5F933E', () => openDeco()), 2600);
+			setTimeout(() => chooseFarmer(() => toast(`${farmerName(true)} s’installe : construis-lui un potager`, '#5F933E', () => openDeco('recolte'))), 1400);
 		}
 	}
 	sound.chime(2);
@@ -1072,10 +1143,13 @@ function tapItem(hit, card) {
 		toast(`+${fmtInt(collect(state.pending))} nectar récolté`, '#E3A33A');
 		return;
 	}
-	const lv = it.level ?? 1, up = it.kind === 'collecteur' && lv < 3 ? COLLECTOR_UPGRADE[lv + 1] : 0;
-	const info = it.kind === 'collecteur' ? `<small class="item-tip">Niveau ${lv} · garde ${COLLECTOR_CAP[lv]} nectar${up ? ` (niveau ${lv + 1} : ${COLLECTOR_CAP[lv + 1]})` : ''}. Réserve totale : ${fmtInt(nectarCapacity(state))}.</small>` : '';
+	const lv = it.level ?? 1, nx = nextLevel(it);
+	const up = it.kind === 'collecteur' && lv < 3 ? COLLECTOR_UPGRADE[lv + 1] : nx?.ok ? nx.cost : 0;
+	const info = it.kind === 'collecteur' ? `<small class="item-tip">Niveau ${lv} · garde ${COLLECTOR_CAP[lv]} nectar${up ? ` (niveau ${lv + 1} : ${COLLECTOR_CAP[lv + 1]})` : ''}. Réserve totale : ${fmtInt(nectarCapacity(state))}.</small>`
+		: def.levels ? `<small class="item-tip">${def.levels.name[lv][0].toUpperCase() + def.levels.name[lv].slice(1)}, ${CABIN_STYLES[(it.style ?? 0) % CABIN_STYLES.length].name}. ${farmerName(true)} y vit.${nx ? nx.ok ? ` Agrandis-la en ${def.levels.name[nx.level]}.` : ` ${def.levels.name[nx.level][0].toUpperCase() + def.levels.name[nx.level].slice(1)} dès ${nx.km} km parcourus.` : ''}</small>`
+		: canLevel(it.kind) ? `<small class="item-tip">Niveau ${lv} sur ${MAX_LEVEL}, ${LEVEL_NAME[lv]} : il fait venir ${lv * def.power} ${def.power * lv > 1 ? 'membres' : 'membre'}.${nx ? nx.ok ? ` Au niveau ${nx.level}, un de plus${def.power > 1 ? ` (${def.power})` : ''}.` : ` Niveau ${nx.level} dès ${nx.km} km parcourus.` : ''}</small>` : '';
 	card.innerHTML = `<b>${def.name}</b>${def.text}${info}<small class="item-tip">Astuce : un appui long dessus le soulève directement.</small>
-		<div class="item-actions">${up ? `<button class="btn primary" data-upgrade ${(state.nectar ?? 0) < up ? 'disabled' : ''}>Améliorer (${up})</button>` : ''}${def.turn ? '<button class="btn ghost" data-turn>Tourner</button>' : ''}<button class="btn ghost" data-move>Déplacer</button><button class="btn ghost" data-store>Ranger (+${fmtInt(it.paid ?? def.cost)})</button></div>`;
+		<div class="item-actions">${up ? `<button class="btn primary" data-upgrade ${(state.nectar ?? 0) < up ? 'disabled' : ''}>${def.levels ? 'Agrandir' : 'Améliorer'} (${fmtInt(up)})</button>` : ''}${def.levels ? '<button class="btn ghost" data-style>Couleur</button><button class="btn ghost" data-farmer-swap>' + (state.gardener === 'fermiere' ? 'Un fermier' : 'Une fermière') + '</button>' : ''}${def.turn ? '<button class="btn ghost" data-turn>Tourner</button>' : ''}<button class="btn ghost" data-move>Déplacer</button><button class="btn ghost" data-store>Ranger (+${fmtInt((it.paid ?? def.cost) + (it.spent ?? 0))})</button></div>`;
 	card.classList.remove('link');
 	card.classList.add('actions');
 	card.onclick = e => {
@@ -1087,6 +1161,21 @@ function tapItem(hit, card) {
 			cardTimer = setTimeout(() => { card.hidden = true; }, 6000);
 			return;
 		}
+		if (e.target.closest('[data-style]')) {
+			it.style = ((it.style ?? 0) + 1) % CABIN_STYLES.length;
+			garden.popItem(it);
+			persist(true);
+			tapItem(hit, card);
+			return;
+		}
+		if (e.target.closest('[data-farmer-swap]')) {
+			state.gardener = state.gardener === 'fermiere' ? 'fermier' : 'fermiere';
+			persist(true);
+			toast(`${farmerName(true)} s’installe dans la cabane`, '#5F933E');
+			card.hidden = true;
+			return;
+		}
+		if (e.target.closest('[data-upgrade]') && up && it.kind !== 'collecteur') { card.hidden = true; levelUp(it); return; }
 		if (e.target.closest('[data-upgrade]') && up && (state.nectar ?? 0) >= up) {
 			state.nectar -= up;
 			it.level = lv + 1;
@@ -1103,12 +1192,13 @@ function tapItem(hit, card) {
 		if (e.target.closest('[data-store]')) {
 			card.hidden = true;
 			garden.items.splice(garden.items.indexOf(it), 1);
-			state.nectar = (state.nectar ?? 0) + (it.paid ?? def.cost);
+			const back = (it.paid ?? def.cost) + (it.spent ?? 0);
+			state.nectar = (state.nectar ?? 0) + back;
 			// Un collecteur rangé emporte sa réserve : ce qui dépasse revient tout de suite à la bourse.
 			const over = (state.pending ?? 0) - nectarCapacity(state);
 			if (over > 0) { state.pending -= over; state.nectar += over; }
 			garden.nextPopulate = 0;
-			toast(`${def.name} rangé${/^Une /.test(def.name) ? 'e' : ''} : +${fmtInt(it.paid ?? def.cost)} nectar`, '#9A7448');
+			toast(`${def.name} rangé${/^Une /.test(def.name) ? 'e' : /^Des /.test(def.name) ? 's' : ''} : +${fmtInt(back)} nectar`, '#9A7448');
 			renderHud();
 			persist(true);
 		}
@@ -1118,6 +1208,14 @@ function tapItem(hit, card) {
 
 $('#deco').addEventListener('click', e => {
 	if (e.target.closest('[data-close-deco]')) return closeDeco();
+	const t = e.target.closest('[data-tab]');
+	if (t) { decoTab = t.dataset.tab; return renderDeco(); }
+	const l = e.target.closest('[data-level]');
+	if (l && !l.disabled) {
+		const low = garden.items.filter(x => x.kind === l.dataset.level && nextLevel(x)).sort((a, b) => (a.level ?? 1) - (b.level ?? 1))[0];
+		if (low && levelUp(low)) renderDeco();
+		return;
+	}
 	const b = e.target.closest('[data-buy]');
 	if (b && !b.disabled) startPlacing(b.dataset.buy);
 });
@@ -1268,7 +1366,8 @@ $('#btn-options').addEventListener('click', openOptions);
 $('#btn-species').addEventListener('click', () => species.open());
 $('#btn-eco').addEventListener('click', () => eco.open());
 $('#status').addEventListener('click', () => { if (!session) eco.open(); });
-$('#hud').addEventListener('click', () => places.open());
+$('#hud').addEventListener('click', e => { if (e.target.closest('#hud-steps')) { if (!session) eco.open(); return; } places.open(); });
+setInterval(() => { if (!document.hidden) renderHud(); }, 2000);
 $('#modal').addEventListener('click', e => {
 	const sp = e.target.closest('[data-open-sp]');
 	if (sp) species.open(sp.dataset.openSp);

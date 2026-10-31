@@ -50,7 +50,7 @@ arrondie à 0,1° (environ 10 km), seulement si la personne a autorisé sa posit
 - `js/harvest.js` : récolte des pas comptés appli fermée (Santé / Health Connect, podomètre), allure déduite de la cadence.
 - `js/species.js` : les lieux et leurs espèces, leur rôle, comment les aider, et ce qui les débloque.
 - `js/critters.js` : abeilles, papillons, libellules, oiseaux (battement d'ailes en quatre temps), héron, chouette, aigle, marmotte, lézards…
-- `js/beasts.js` : mammifères et jardinier animés par poses-clés (bond du lapin, du lièvre et de l'écureuil ; pas du chevreuil, du chamois et du renard ; le jardinier marche, ratisse, arrose, pousse la brouette).
+- `js/beasts.js` : mammifères et jardinier animés par poses-clés (bond du lapin, du lièvre et de l'écureuil ; pas du chevreuil, du chamois et du renard ; le fermier ou la fermière marche, ratisse, arrose, pousse la brouette).
 - `js/encyclopedia.js` : l'écran Biodiversité, lieu par lieu.
 - `js/map.js` : la carte des lieux.
 - `js/idle.js` : l'écosystème qui travaille seul (guildes, nectar, aménagements, vitalité, élan sportif).
@@ -80,6 +80,11 @@ un oiseau sème un arbuste ; tous les 4 arbustes, un geai ou un écureuil sème 
 en attente par étage). Une pousse semée plus grande que ce qu'on fait pousser reçoit un tiers de l'effort.
 L'herbe s'étend en pelouse continue (tapis peint au sol sous les touffes).
 Au-delà de 25 km/h rien ne pousse (vélo, voiture). Décor débloqué à 3, 6 et 10 km cumulés.
+
+Aménager a trois onglets : Habitats (abris pour la faune, améliorables du niveau 1 au niveau 5 : chaque niveau
+compte comme un abri de plus, coûte 4, 12, 35 puis 100 fois le prix de base et demande 10, 30, 70 puis 150 km au
+total), Récolte (collecteur, cabane, potager) et Décoration. La cabane s'agrandit en cabane à auvent (15 km) puis
+en chalet (50 km), se peint en cinq couleurs, et loge un fermier ou une fermière, au choix.
 
 Pas récoltés sans GPS : l'allure vient de la cadence (moins de 45 pas/min = ménage et petits pas → herbes folles,
 45-90 marche lente, 90-110 marche, 110-135 marche rapide, 135-155 jogging, au-delà course).

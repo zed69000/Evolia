@@ -5,7 +5,7 @@
 import { SPECIES, PLACE_BY_ID, PLACE_IN } from './species.js';
 import { thumbCopy } from './encyclopedia.js';
 import { PLANT_TYPES } from './plants.js';
-import { ITEMS } from './deco.js';
+import { ITEMS, itemPower } from './deco.js';
 import { dayKey } from './state.js';
 
 // Production par membre et par heure (effort par type de plante, nectar), et bonus sur toute la production.
@@ -48,7 +48,7 @@ export function guildMembers(state, placeId, gid) {
 	const g = GUILDS[gid], place = state.places[placeId];
 	const list = SPECIES.filter(s => s.place === placeId && s.kind === 'animal' && g.members.includes(s.id) && state.species[s.id])
 		.map(sp => ({ sp, n: Math.max(1, sp.critter.count?.(state) ?? 1) }));
-	const items = (place?.items ?? []).reduce((a, it) => a + (ITEMS[it.kind]?.team === gid ? ITEMS[it.kind].power : 0), 0);
+	const items = (place?.items ?? []).reduce((a, it) => a + (ITEMS[it.kind]?.team === gid ? itemPower(it) : 0), 0);
 	const level = (place?.upgrades?.[g.upgrade.id] ?? 0) + items;
 	const extra = list.length ? level : 0;
 	return { list, level, extra, total: list.reduce((a, m) => a + m.n, 0) + extra };
@@ -313,7 +313,7 @@ export class EcoPanel {
 			const names = m.list.map(({ sp, n }) => `${sp.name}${n > 1 ? ` ×${n}` : ''}`).join(', ');
 			const detail = opened ? `<div class="eco-team-more">
 				<p>${on ? `<b>${g.does[0].toUpperCase() + g.does.slice(1)}.</b> ${names}${m.extra ? `, et ${m.extra} de plus grâce à tes aménagements` : ''}.` : `Découvre une de ces espèces ${PLACE_IN[placeId]} pour lancer l'équipe : ${g.members.map(id => SPECIES.find(sp => sp.id === id)).filter(sp => sp?.place === placeId).slice(0, 3).map(sp => sp.name.toLowerCase()).join(', ') || 'elle vit dans un autre lieu'}.`}</p>
-				${on ? `<button class="btn primary small" data-place="${kind}">${placed ? 'En ajouter' : 'Aider'} : ${item.name.toLowerCase()}</button><small>${item.power > 1 ? `Il fait venir ${item.power} membres de plus` : 'Chaque objet posé fait venir un membre de plus'}${placed ? ` (déjà ${placed} ici)` : ''}. Tous les abris sont dans Aménager.</small>` : ''}
+				${on ? `<button class="btn primary small" data-place="${kind}">${placed ? 'En ajouter' : 'Aider'} : ${item.name.toLowerCase()}</button><small>${placed ? `Déjà ${placed} ici : touche-en un au jardin pour l’améliorer, chaque niveau compte comme un abri de plus` : item.power > 1 ? `Il fait venir ${item.power} membres de plus` : 'Chaque objet posé fait venir un membre de plus'}. Tous les abris sont dans Aménager, onglet Habitats.</small>` : ''}
 				<p class="eco-real"><b>Dans la vraie vie :</b> ${g.upgrade.real}</p>
 			</div>` : '';
 			return `<li class="eco-team${on ? '' : ' off'}${opened ? ' open' : ''}">

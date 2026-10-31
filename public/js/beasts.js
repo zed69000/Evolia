@@ -350,6 +350,8 @@ function farmer(ctx, s) {
 	const water = mode === 'water';
 	const hipY = -15 - bob, shY = -27 - bob;
 	const lean = mode === 'rake' ? 0.12 : mode === 'barrow' ? 0.14 : 0.03;
+	// La fermière : chemise rose, longue natte, une fleur au chapeau, pas de barbe.
+	const fem = !!s.fem, shirt = fem ? '#D0607A' : '#C8643E', sleeve = fem ? '#B84E68' : '#B85A3A';
 	const legs = (sign, color) => {
 		const a = sw * 0.45 * sign;
 		const kneeA = a + (walk ? Math.max(0, -Math.sin(ph + (sign > 0 ? 0 : Math.PI))) * 0.5 : 0) - 0.05;
@@ -361,31 +363,38 @@ function farmer(ctx, s) {
 	legs(-1, '#3E5E78');
 	// Bras du fond.
 	const armBack = walk && mode !== 'barrow' ? -sw * 0.5 : mode === 'barrow' ? 0.9 : mode === 'rake' ? 0.6 + rake * 0.35 : 0.2;
-	limb(ctx, -0.6, shY + 1.5, armBack, 5.6, armBack + 0.4, 5.2, 2.6, 2.2, '#B85A3A');
+	limb(ctx, -0.6, shY + 1.5, armBack, 5.6, armBack + 0.4, 5.2, 2.6, 2.2, sleeve);
 	legs(1, '#4E6E88');
 	ctx.save();
 	ctx.translate(0, hipY);
 	ctx.rotate(lean);
 	// Salopette, chemise, tête et chapeau de paille.
-	ell(ctx, 0.2, -6.2, 4.2, 7.2, 0, '#C8643E');
+	ell(ctx, 0.2, -6.2, 4.2, 7.2, 0, shirt);
 	ctx.fillStyle = '#5E8AA8';
 	ctx.beginPath(); ctx.roundRect(-3.8, -7.2, 7.8, 8.6, 2); ctx.fill();
 	ctx.fillRect(-2.6, -11, 1.2, 4); ctx.fillRect(1.6, -11, 1.2, 4);
+	if (fem) {
+		// La natte, derrière la tête, qui se balance un peu en marchant.
+		ctx.strokeStyle = '#7A4A2A'; ctx.lineWidth = 2.2; ctx.lineCap = 'round';
+		ctx.beginPath(); ctx.moveTo(-1.8, -15); ctx.quadraticCurveTo(-4.2 - sw * 0.8, -11, -3.6 - sw * 1.2, -7); ctx.stroke();
+		ell(ctx, -3.6 - sw * 1.2, -6.6, 1, 0.8, 0, '#E8B860');
+	}
 	ell(ctx, 0.9, -15.4, 3.4, 3.6, 0, SKIN);
-	ell(ctx, -1.6, -15.6, 1.6, 2.4, 0, '#7A4A2A');
-	ell(ctx, 1.8, -12.6, 2.2, 1.3, 0.2, '#8A5A34');
+	ell(ctx, -1.6, -15.6, fem ? 2 : 1.6, fem ? 2.8 : 2.4, 0, '#7A4A2A');
+	if (!fem) ell(ctx, 1.8, -12.6, 2.2, 1.3, 0.2, '#8A5A34');
 	ell(ctx, 2.6, -16, 0.45, 0.5, 0, '#1A1210');
 	ell(ctx, 4.2, -15, 0.8, 0.7, 0, '#E0A080');
 	ell(ctx, 3.2, -14.4, 0.7, 0.4, 0, '#C87A60');
 	ell(ctx, 0.6, -18.2, 7.2, 1.7, 0, '#E8B860');
 	ell(ctx, 0.4, -19.6, 3.6, 2.4, 0, '#E8B860');
-	ell(ctx, 0.4, -18.8, 3.6, 0.7, 0, '#C8643E');
+	ell(ctx, 0.4, -18.8, 3.6, 0.7, 0, shirt);
+	if (fem) { ell(ctx, 3.4, -19, 1.2, 1.2, 0, '#F2F0E8'); ell(ctx, 3.4, -19, 0.5, 0.5, 0, '#F2C230'); }
 	ctx.restore();
 	// Bras proche et outil.
 	const sx = Math.sin(lean) * -12 + 0.4, sy = shY + 2;
 	if (mode === 'rake') {
 		const a = 0.75 + rake * 0.35;
-		const [hx, hy] = limb(ctx, sx, sy, a, 5.4, a + 0.6, 5, 2.6, 2.2, '#C8643E');
+		const [hx, hy] = limb(ctx, sx, sy, a, 5.4, a + 0.6, 5, 2.6, 2.2, shirt);
 		const tx = hx + 16 * Math.cos(0.5 + rake * 0.18), ty = hy + 16 * Math.sin(0.5 + rake * 0.18);
 		ctx.strokeStyle = '#8A5A2E'; ctx.lineWidth = 1.1;
 		ctx.beginPath(); ctx.moveTo(hx - 6 * Math.cos(0.5), hy - 6 * Math.sin(0.5)); ctx.lineTo(tx, Math.min(ty, -0.5)); ctx.stroke();
@@ -395,7 +404,7 @@ function farmer(ctx, s) {
 		ctx.stroke();
 		ell(ctx, hx, hy, 1.2, 1.2, 0, SKIN);
 	} else if (water) {
-		const [hx, hy] = limb(ctx, sx, sy, 1.2, 5.4, 1.5, 5, 2.6, 2.2, '#C8643E');
+		const [hx, hy] = limb(ctx, sx, sy, 1.2, 5.4, 1.5, 5, 2.6, 2.2, shirt);
 		ell(ctx, hx + 2.6, hy + 1.6, 3.4, 2.6, 0, '#7A9AA8');
 		ctx.strokeStyle = '#7A9AA8'; ctx.lineWidth = 1;
 		ctx.beginPath(); ctx.moveTo(hx + 5, hy + 1); ctx.lineTo(hx + 10, hy + 3.6); ctx.stroke();
@@ -405,10 +414,10 @@ function farmer(ctx, s) {
 			ctx.beginPath(); ctx.arc(hx + 10.5 + u * 2, hy + 4 + u * (-(hy + 4)), 0.5, 0, TAU); ctx.fill();
 		}
 	} else if (mode === 'barrow') {
-		const [hx, hy] = limb(ctx, sx, sy, 0.95, 5.6, 1.15, 5.2, 2.6, 2.2, '#C8643E');
+		const [hx, hy] = limb(ctx, sx, sy, 0.95, 5.6, 1.15, 5.2, 2.6, 2.2, shirt);
 		barrow(ctx, hx, hy, s);
 	} else {
-		limb(ctx, sx, sy, walk ? sw * 0.5 : -0.1, 5.6, (walk ? sw * 0.5 : -0.1) + 0.3, 5.2, 2.6, 2.2, '#C8643E');
+		limb(ctx, sx, sy, walk ? sw * 0.5 : -0.1, 5.6, (walk ? sw * 0.5 : -0.1) + 0.3, 5.2, 2.6, 2.2, shirt);
 	}
 }
 

@@ -11,7 +11,7 @@ import { GAIT } from './beasts.js';
 import { SPECIES, PLACE_BY_ID } from './species.js';
 import { PARCEL_W, PARCEL_H, CELLS, CELL_KM, GROUND, zoneOf, zoneName, tileSteps, keepOut } from './zones.js';
 import { newPlace } from './state.js';
-import { ITEMS, ITEM_PAINTERS, attracted, paintSoil, PLOT } from './deco.js';
+import { ITEMS, ITEM_PAINTERS, attracted, paintSoil, PLOT, paintAdorn, canLevel, itemBox } from './deco.js';
 
 export { PARCEL_W, PARCEL_H, CELLS, CELL_KM };
 export const cellsOpen = place => Math.min(CELLS.length, place?.cells ?? 1);
@@ -662,7 +662,7 @@ export class Garden {
 		const obstacles = [
 			...here.map(p => ({ x: p.x, y: p.y, rad: PLANT_TYPES[p.type].spacing })),
 			...(ci === 0 ? Object.values(DECOR).filter(d => d.place === pid && d.rad).map(d => ({ x: d.x, y: d.y, rad: d.rad })) : []),
-			...(place.items ?? []).map(it => ({ x: it.x - cellOrigin(ci)[0], y: it.y - cellOrigin(ci)[1] - ITEMS[it.kind].box.ay * 0.3, rad: ITEMS[it.kind].box.w * 0.5 })),
+			...(place.items ?? []).map(it => ({ x: it.x - cellOrigin(ci)[0], y: it.y - cellOrigin(ci)[1] - itemBox(it.kind, it.level).ay * 0.3, rad: itemBox(it.kind, it.level).w * 0.5 })),
 		];
 		const same = here.filter(p => p.type === type);
 		const y0 = this.minY(pid, type, ci), H = PARCEL_H;
@@ -872,16 +872,20 @@ export class Garden {
 		const bed = kind === 'potager' && it ? { stage: Math.floor(this.bedStage(it) * 6) / 6, seed: plotSeed(it) } : null;
 		// Le collecteur montre son niveau de nectar (par dixièmes) et son niveau d'amélioration.
 		const jar = kind === 'collecteur' && it ? { fill: Math.round(Math.min(1, this.nectarFill?.() ?? 0) * 10) / 10, level: it.level ?? 1 } : null;
-		const key = bed ? `${kind}:${bed.seed}:${bed.stage}` : jar ? `${kind}:${jar.level}:${jar.fill}` : `${kind}:${rot}`;
+		// Un habitat amélioré se garnit d'herbes et de fleurs sauvages.
+		const lv = canLevel(kind) || ITEMS[kind].levels ? it?.level ?? 1 : 1, style = it?.style ?? 0;
+		const key = bed ? `${kind}:${bed.seed}:${bed.stage}` : jar ? `${kind}:${jar.level}:${jar.fill}` : `${kind}:${rot}:${lv}:${style}`;
 		let s = this.itemSprites.get(key);
 		if (!s) {
-			const box = ITEMS[kind].box, D = this.density * 1.4;
+			const box = itemBox(kind, lv), D = this.density * 1.4;
 			const c = document.createElement('canvas');
 			c.width = Math.ceil(box.w * D);
 			c.height = Math.ceil(box.h * D);
 			const g = c.getContext('2d');
 			g.setTransform(D, 0, 0, D, box.ax * D, box.ay * D);
-			const meta = bed ? ITEM_PAINTERS[kind](g, 0, bed.stage, false, bed.seed) : jar ? ITEM_PAINTERS[kind](g, 0, jar.fill, jar.level) : ITEM_PAINTERS[kind](g, (rot * Math.PI) / 180);
+			if (canLevel(kind)) paintAdorn(g, kind, lv, false);
+			const meta = bed ? ITEM_PAINTERS[kind](g, 0, bed.stage, false, bed.seed) : jar ? ITEM_PAINTERS[kind](g, 0, jar.fill, jar.level) : ITEM_PAINTERS[kind](g, (rot * Math.PI) / 180, lv, style);
+			if (canLevel(kind)) paintAdorn(g, kind, lv, true);
 			s = { canvas: c, ...meta };
 			this.itemSprites.set(key, s);
 		}
@@ -890,7 +894,7 @@ export class Garden {
 
 	/** Peut-on poser cet objet ici : dans une clairière ouverte, pas dans l'eau ni sur un sentier, pas sur un autre objet. */
 	canPlace(kind, x, y, except = null) {
-		const r = ITEMS[kind].box.w * 0.35;
+		const r = itemBox(kind, except?.level).w * 0.35;
 		if (!this.inOpen(x, y, r * 0.6) || keepOut(this.biome, x, y, r * 0.5)) return false;
 		// Pas sur un arbre ou un arbuste : herbes et fleurs, elles, s'écartent sans dommage.
 		for (const p of this.place.plants) {
@@ -902,7 +906,7 @@ export class Garden {
 			if (it === except) return false;
 			// Deux parcelles de potager se touchent (c'est ainsi qu'on agrandit le potager), sans se superposer.
 			if (kind === 'potager' && it.kind === 'potager') return Math.abs(it.x - x) < PLOT.w * 0.9 && Math.abs(it.y - y) < PLOT.h * 0.9;
-			return Math.hypot(it.x - x, (it.y - y) * 1.3) < r + ITEMS[it.kind].box.w * 0.35;
+			return Math.hypot(it.x - x, (it.y - y) * 1.3) < r + itemBox(it.kind, it.level).w * 0.35;
 		});
 	}
 
@@ -928,7 +932,7 @@ export class Garden {
 
 	/** Emprise au sol d'un objet : le rectangle derrière et sous lui où rien ne doit pousser. */
 	footprint(it) {
-		const box = ITEMS[it.kind].box;
+		const box = itemBox(it.kind, it.level);
 		return { x0: it.x - box.w * 0.5, x1: it.x + box.w * 0.5, y0: it.y - box.ay * 0.75, y1: it.y + 16 };
 	}
 
@@ -996,7 +1000,8 @@ export class Garden {
 
 	updateDew() {
 		const amount = this.glyph ? 0 : (this.dewAmount?.() ?? 0);
-		const want = amount >= 1 ? Math.min(10, Math.ceil(amount / 3)) : 0;
+		// Avec un collecteur, moins de gouttes : elles signalent la récolte, le collecteur la garde.
+		const want = amount >= 1 ? Math.min(this.dewAll?.() ? 5 : 10, Math.ceil(amount / (this.dewAll?.() ? 20 : 3))) : 0;
 		this.dew ??= [];
 		while (this.dew.length > want) this.dew.pop();
 		if (this.dew.length >= want) return;
@@ -1047,6 +1052,33 @@ export class Garden {
 			ctx.restore();
 		}
 		ctx.globalAlpha = 1;
+	}
+
+	/** Au-dessus de chaque collecteur, une étiquette dorée : combien attend d'être récolté (elle bat quand c'est plein). */
+	drawJarTags(ctx) {
+		const amount = Math.floor(this.dewAmount?.() ?? 0), full = (this.nectarFill?.() ?? 0) >= 1;
+		const z = Math.max(1, 1.2 / this.cam.z), label = full ? `${amount} · plein !` : `+${amount}`;
+		ctx.font = `800 ${13}px Nunito, sans-serif`;
+		const w = ctx.measureText(label).width + 30, h = 22;
+		for (const it of this.items) {
+			if (it.kind !== 'collecteur') continue;
+			const k = z * (full ? 1 + 0.06 * Math.sin(this.t * 5) : 1);
+			ctx.save();
+			ctx.translate(it.x, it.y - 128 - 6 * Math.sin(this.t * 2));
+			ctx.scale(k, k);
+			ctx.fillStyle = full ? 'rgba(232,112,40,0.95)' : 'rgba(253,240,200,0.95)';
+			ctx.beginPath(); ctx.roundRect(-w / 2, -h / 2, w, h, h / 2); ctx.fill();
+			ctx.strokeStyle = 'rgba(176,122,26,0.7)'; ctx.lineWidth = 1.2; ctx.stroke();
+			ctx.beginPath(); ctx.moveTo(-5, h / 2 - 0.5); ctx.lineTo(0, h / 2 + 6); ctx.lineTo(5, h / 2 - 0.5); ctx.closePath();
+			ctx.fillStyle = full ? 'rgba(232,112,40,0.95)' : 'rgba(253,240,200,0.95)'; ctx.fill();
+			// La petite goutte, puis le nombre.
+			ctx.fillStyle = full ? '#FFF4D0' : '#F2B62E';
+			ctx.beginPath(); ctx.moveTo(-w / 2 + 12, -7); ctx.quadraticCurveTo(-w / 2 + 17, 0, -w / 2 + 12, 3.5); ctx.quadraticCurveTo(-w / 2 + 7, 0, -w / 2 + 12, -7); ctx.fill();
+			ctx.fillStyle = full ? '#FFFFFF' : '#8A5A10';
+			ctx.textBaseline = 'middle';
+			ctx.fillText(label, -w / 2 + 21, 0.5);
+			ctx.restore();
+		}
 	}
 
 	/** Vider un collecteur : le nectar en sort en gouttes qui filent au compteur. */
@@ -1218,7 +1250,7 @@ export class Garden {
 
 	/** Le doigt prend l'objet à poser : s'il touche l'objet, il le tient par là ; sinon l'objet saute sous le doigt. */
 	grabGhost(drag, x, y) {
-		const [wx, wy] = this.toWorld(x, y), g = this.ghost, box = ITEMS[g.kind].box;
+		const [wx, wy] = this.toWorld(x, y), g = this.ghost, box = itemBox(g.kind, g.level);
 		const on = wx > g.x - box.w * 0.6 && wx < g.x + box.w * 0.6 && wy > g.y - box.ay - 10 && wy < g.y + 30;
 		drag.ghost = true;
 		drag.off = on ? [g.x - wx, g.y - wy] : [0, 0];
@@ -1260,9 +1292,15 @@ export class Garden {
 		let dew = null, dd = 22 / Math.min(1.4, this.cam.z);
 		for (const d of this.dew ?? []) { const k = Math.hypot(d.x - wx, d.y - wy); if (k < dd) { dd = k; dew = d; } }
 		if (dew) return { dew, x: sx, y: sy };
+		// L'étiquette au-dessus d'un collecteur se touche comme le collecteur.
+		if (this.dewAll?.() && (this.dewAmount?.() ?? 0) >= 1) {
+			const z = Math.max(1, 1.2 / this.cam.z);
+			const jar = this.items.find(it => it.kind === 'collecteur' && Math.abs(wx - it.x) < 40 * z && Math.abs(wy - (it.y - 128)) < 18 * z);
+			if (jar) return { item: jar, x: sx, y: sy };
+		}
 		// Les objets d'abord : posés au bord de la clairière, ils peuvent déborder sur une parcelle encore fermée.
 		for (const it of [...this.items].sort((a, b) => b.y - a.y)) {
-			const box = ITEMS[it.kind].box, top = this.itemSprite(it.kind, it.rot).top;
+			const box = itemBox(it.kind, it.level), top = this.itemSprite(it.kind, it.rot, it).top;
 			if (Math.abs(wx - it.x) < Math.max(18, box.w * 0.4) && wy > it.y + top && wy < it.y + 10) return { item: it, x: sx, y: sy };
 		}
 		if (ci >= 0 && !open) return { cell: ci, open, x: sx, y: sy };
@@ -1618,7 +1656,7 @@ export class Garden {
 	/** Seuil de la porte de la cabane, une fois tournée (en coordonnées monde). */
 	cabinDoor(it) {
 		const r = ((it.rot ?? 0) * Math.PI) / 180, c = Math.cos(r), s = Math.sin(r);
-		const [x, y] = [-1.5, 56];
+		const [x, y] = this.itemSprite('cabane', it.rot, it).door ?? [-1.5, 56];
 		return { x: it.x + x * c - y * s, y: it.y + (x * s + y * c) * 0.36 };
 	}
 
@@ -1628,6 +1666,7 @@ export class Garden {
 		const door = this.cabinDoor(cab);
 		let f = this.farmer;
 		if (!f || f.cab !== cab.id) f = this.farmer = { kind: 'farmer', p: {}, x: door.x, y: door.y, mode: 'stand', t: 0, ph: 0, dir: 1, timer: 1.5, cab: cab.id, hidden: true };
+		f.fem = this.state.gardener === 'fermiere';
 		f.t += dt;
 		const home = this.night() > 0.45 || this.precip() > 0.5;
 		if (home && !f.goal && f.hidden) return;
@@ -1903,7 +1942,7 @@ export class Garden {
 					// Sur la mangeoire, le bain ou le nichoir : on s'y pose un moment, puis on repart.
 					const it = b.visitItem;
 					if (!this.items.includes(it)) { b.mode = 'seek'; return; }
-					const top = this.itemSprite(it.kind, it.rot).top;
+					const top = this.itemSprite(it.kind, it.rot, it).top;
 					const vx = it.x + (it.kind === 'nichoir' ? 0 : b.vox), vy = it.y + (it.kind === 'nichoir' ? top * 0.68 : it.kind === 'bain' ? top * 0.82 : top * 0.62);
 					if (b.vk !== 'sit') { if (flyTo(vx, vy, 110, 10) < 3) { b.vk = 'sit'; b.timer = 4 + Math.random() * 5; } return; }
 					b.x = vx; b.y = vy + Math.sin(b.t * 9) * (it.kind === 'mangeoire' ? 0.8 : 0.3);
@@ -2282,7 +2321,7 @@ export class Garden {
 				continue;
 			}
 			if (e.item) {
-				const it = e.item, box = ITEMS[it.kind].box;
+				const it = e.item, box = itemBox(it.kind, it.level);
 				world();
 				if (glyph) {
 					ctx.fillStyle = 'rgba(122,84,52,0.9)';
@@ -2409,7 +2448,7 @@ export class Garden {
 			ctx.globalCompositeOperation = 'lighter';
 			const n = this.glow.width;
 			for (const it of this.items) {
-				const sp = this.itemSprite(it.kind, it.rot);
+				const sp = this.itemSprite(it.kind, it.rot, it);
 				if (sp.glow == null) continue;
 				const x = (it.x + (sp.glowX ?? 0)) * S + tx, y = (it.y + sp.glow) * S + ty;
 				if (x < -200 || x > cw + 200 || y < -200 || y > ch + 200) continue;
@@ -2438,12 +2477,13 @@ export class Garden {
 		}
 
 		if (!glyph && this.dew?.length) { world(); this.drawDew(ctx); }
+		if (!glyph && this.dewAll?.() && (this.dewAmount?.() ?? 0) >= 1) { world(); this.drawJarTags(ctx); }
 
 		if (this.ghost) {
-			const { kind, x, y } = this.ghost, box = ITEMS[kind].box, ok = this.canPlace(kind, x, y, this.lifted);
+			const { kind, x, y } = this.ghost, box = itemBox(kind, this.ghost.level), ok = this.canPlace(kind, x, y, this.lifted);
 			world();
 			ctx.globalAlpha = 0.6;
-			ctx.drawImage(this.itemSprite(kind, this.ghost.rot).canvas, x - box.ax, y - box.ay, box.w, box.h);
+			ctx.drawImage(this.itemSprite(kind, this.ghost.rot, this.lifted?.kind === 'potager' ? null : this.lifted).canvas, x - box.ax, y - box.ay, box.w, box.h);
 			ctx.globalAlpha = 1;
 			ctx.strokeStyle = ok ? 'rgba(95,147,62,0.9)' : 'rgba(192,68,47,0.9)';
 			ctx.lineWidth = 2.5 / this.cam.z;
