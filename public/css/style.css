@@ -225,9 +225,12 @@ html, body {
 	color: var(--doux);
 	transform: translate(-50%, calc(-100% - 14px));
 	min-width: 150px;
+	max-width: min(340px, calc(100% - 20px));
+	box-sizing: border-box;
 	pointer-events: none;
 	animation: toast-in .3s ease;
 }
+.bubble.below { transform: translate(-50%, 0); }
 .bubble b { display: block; font-family: Courgette, cursive; font-weight: 400; font-size: 18px; color: var(--foret); }
 .bubble .bar { margin: 6px 0 4px; height: 6px; }
 
@@ -241,7 +244,8 @@ html, body {
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	padding: 20px;
+	/* Jamais sous l'encoche ni sous la barre de navigation du téléphone. */
+	padding: calc(env(safe-area-inset-top, 0px) + 14px) 14px calc(env(safe-area-inset-bottom, 0px) + 14px);
 	animation: fade .3s ease;
 }
 @keyframes fade { from { opacity: 0; } }
@@ -614,7 +618,7 @@ html, body {
 .item-tip { display: block; margin-top: 4px; font-size: 12px; color: var(--doux); font-style: italic; }
 .item-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
 .item-actions .btn { padding: 8px; font-size: 13px; margin: 0; }
-.bubble.actions { pointer-events: auto; }
+.bubble.actions { pointer-events: auto; width: min(300px, calc(100% - 20px)); }
 /* La feuille du bas : l'état du suivi sur toute la largeur, les quatre boutons en dessous. */
 .status-row { flex-wrap: wrap; row-gap: 10px; }
 .status-row .status { flex: 1 0 100%; }

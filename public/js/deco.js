@@ -37,6 +37,32 @@ export const ITEMS = {
 };
 export const ITEM_ORDER = ['collecteur', 'banc', 'pas', 'massif', 'bois', 'pierres', 'mangeoire', 'nichoir', 'lanterne', 'compost', 'hotel', 'sandarium', 'mare', 'cabane', 'potager', 'abri', 'ruche', 'epouvantail', 'bain', 'haie', 'muret', 'arche'];
 
+/**
+ * Chaque milieu a ses aménagements : une ruche n'a rien à faire au fond d'un marais, ni un épouvantail sur la dune.
+ * Un objet absent de cette liste se pose partout (collecteur, cabane, banc, lanterne, pas japonais).
+ */
+const BIOMES = {
+	massif: ['prairie', 'montagne', 'littoral'],
+	bois: ['prairie', 'foret', 'marais'],
+	pierres: ['prairie', 'montagne', 'littoral'],
+	mangeoire: ['prairie', 'foret', 'marais'],
+	nichoir: ['prairie', 'foret', 'marais', 'montagne'],
+	compost: ['prairie', 'foret'],
+	hotel: ['prairie', 'foret', 'montagne'],
+	mare: ['prairie', 'marais', 'foret'],
+	abri: ['prairie', 'foret'],
+	ruche: ['prairie', 'montagne'],
+	bain: ['prairie', 'foret'],
+	potager: ['prairie'],
+	sandarium: ['prairie', 'littoral', 'montagne'],
+	haie: ['prairie', 'foret', 'marais'],
+	muret: ['prairie', 'montagne', 'littoral'],
+	epouvantail: ['prairie'],
+	arche: ['prairie'],
+};
+/** L'objet convient-il à ce milieu ? */
+export const fitsPlace = (kind, placeId) => !BIOMES[kind] || BIOMES[kind].includes(placeId);
+
 /** Les onglets d'« Aménager ». */
 export const CATS = [
 	{ id: 'habitat', name: 'Habitats', intro: 'Des abris pour la faune : chacun renforce une équipe de l’écosystème. Plutôt que d’en poser partout, améliore-les : un abri soigné accueille plus de monde.' },

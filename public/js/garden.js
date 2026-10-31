@@ -957,7 +957,8 @@ export class Garden {
 		// Au jardin, une parcelle de potager se peint sans sa terre (posée au sol), et ses légumes suivent leur pousse.
 		const bed = kind === 'potager' && it ? { stage: Math.floor(this.bedStage(it) * 6) / 6, seed: plotSeed(it) } : null;
 		// Le collecteur montre son niveau de nectar (par dixièmes) et son niveau d'amélioration.
-		const jar = kind === 'collecteur' && it ? { fill: Math.round(Math.min(1, this.nectarFill?.() ?? 0) * 10) / 10, level: it.level ?? 1 } : null;
+		const js = kind === 'collecteur' && it ? this.jarStock?.(it) : null;
+		const jar = kind === 'collecteur' && it ? { fill: js ? Math.round(Math.min(1, js.v / Math.max(1, js.cap)) * 10) / 10 : 0, level: it.level ?? 1 } : null;
 		// Un habitat amélioré se garnit d'herbes et de fleurs sauvages.
 		const lv = canLevel(kind) || ITEMS[kind].levels ? it?.level ?? 1 : 1, style = it?.style ?? 0;
 		const key = bed ? `${kind}:${bed.seed}:${bed.stage}` : jar ? `${kind}:${jar.level}:${jar.fill}` : `${kind}:${rot}:${lv}:${style}`;
@@ -1272,12 +1273,14 @@ export class Garden {
 
 	/** Au-dessus de chaque collecteur, une étiquette dorée : combien attend d'être récolté (elle bat quand c'est plein). */
 	drawJarTags(ctx) {
-		const amount = Math.floor(this.jarAmount?.() ?? 0), full = (this.nectarFill?.() ?? 0) >= 1;
-		const z = Math.max(1, 1.2 / this.cam.z), label = full ? `${amount} · plein !` : `+${amount}`;
+		const z = Math.max(1, 1.2 / this.cam.z);
 		ctx.font = `800 ${13}px Nunito, sans-serif`;
-		const w = ctx.measureText(label).width + 30, h = 22;
 		for (const it of this.items) {
 			if (it.kind !== 'collecteur') continue;
+			const js = this.jarStock?.(it) ?? { v: 0, cap: 1 };
+			const amount = Math.floor(js.v), full = js.v >= js.cap - 0.5, label = full ? `${amount} · plein !` : `+${amount}`;
+			ctx.font = `800 ${13}px Nunito, sans-serif`;
+			const w = ctx.measureText(label).width + 30, h = 22;
 			const k = z * (full ? 1 + 0.06 * Math.sin(this.t * 5) : 1);
 			ctx.save();
 			ctx.translate(it.x, it.y - 128 - 6 * Math.sin(this.t * 2));
@@ -1538,9 +1541,9 @@ export class Garden {
 		for (const d of this.dew ?? []) { const k = Math.hypot(d.x - wx, d.y - wy); if (k < dd) { dd = k; dew = d; } }
 		if (dew) return { dew, x: sx, y: sy };
 		// L'étiquette au-dessus d'un collecteur se touche comme le collecteur.
-		if ((this.jarAmount?.() ?? 0) >= 1) {
+		{
 			const z = Math.max(1, 1.2 / this.cam.z);
-			const jar = this.items.find(it => it.kind === 'collecteur' && Math.abs(wx - it.x) < 40 * z && Math.abs(wy - (it.y - 128)) < 18 * z);
+			const jar = this.items.find(it => it.kind === 'collecteur' && (this.jarStock?.(it)?.v ?? 0) >= 1 && Math.abs(wx - it.x) < 40 * z && Math.abs(wy - (it.y - 128)) < 18 * z);
 			if (jar) return { item: jar, x: sx, y: sy };
 		}
 		// Les objets d'abord : posés au bord de la clairière, ils peuvent déborder sur une parcelle encore fermée.
@@ -2842,7 +2845,7 @@ export class Garden {
 		}
 
 		if (!glyph && this.dew?.length) { world(); this.drawDew(ctx); }
-		if (!glyph && (this.jarAmount?.() ?? 0) >= 1) { world(); this.drawJarTags(ctx); }
+		if (!glyph && this.items.some(it => it.kind === 'collecteur')) { world(); this.drawJarTags(ctx); }
 		if (!glyph && this.farmer?.hidden) { world(); this.drawSmoke(ctx); }
 		if (this.floats?.length) { world(); this.drawFloats(ctx); }
 

@@ -3,6 +3,11 @@
 Chaque version, la plus récente en haut. Le site (evolia.sebastienalzamora.workers.dev) est toujours à jour ;
 le Play Store (tests internes) reçoit les versions indiquées « Play ».
 
+## 0.6.39 — 31 octobre 2026
+- **Chaque collecteur a sa propre réserve.** Il se remplit du nectar des fleurs qui l'entourent : posé au milieu des fleurs, il se remplit plus vite qu'un autre à l'écart. En toucher un ne vide que celui-là.
+- **Des bulles toujours entières.** Celle d'un objet (la cabane, avec tous ses boutons) reste entre le bandeau du haut et le panneau du bas, et se décale près des bords au lieu d'être coupée. Les fenêtres évitent l'encoche et la barre du téléphone.
+- **Des aménagements propres à chaque milieu.** « Aménager » ne propose que ce qui a sa place dans le lieu où l'on est : pas de ruche dans le marais, pas d'épouvantail sur la dune. La prairie garde tout.
+
 ## 0.6.38 — 31 octobre 2026
 - **Un fermier, une fermière plus vrais.**
     - Des proportions humaines, des bottes, une chemise aux manches retroussées, des mains, un vrai profil (nez, oreille, barbe ou natte) et un tablier pour la fermière.

@@ -5,8 +5,9 @@
 import { SPECIES, PLACE_BY_ID, PLACE_IN } from './species.js';
 import { thumbCopy } from './encyclopedia.js';
 import { PLANT_TYPES } from './plants.js';
-import { ITEMS, itemPower } from './deco.js';
+import { ITEMS, itemPower, fitsPlace } from './deco.js';
 import { dayKey } from './state.js';
+import { CELLS, PARCEL_W, PARCEL_H } from './zones.js';
 
 // Production par membre et par heure (effort par type de plante, nectar), et bonus sur toute la production.
 export const GUILDS = {
@@ -174,15 +175,82 @@ export const jarOf = state => Math.max(0, (state.pending ?? 0) - groundOf(state)
  * Celui de l'écosystème (`idle`) ne s'entasse pas au sol au-delà de ce que gardent les fleurs ; celui de la
  * marche, si : ce qu'on a gagné en bougeant ne se perd jamais. Rend ce qui a été perdu.
  */
-export function addWaiting(state, v, idle = false) {
+export function addWaiting(state, v, idle = false, placeId = null) {
 	if (!(v > 0)) return 0;
 	const ground = groundOf(state), jar = jarOf(state);
 	const toJar = Math.min(v, Math.max(0, jarCap(state) - jar));
 	const rest = v - toJar;
 	const toGround = idle ? Math.min(rest, Math.max(0, HAND_CAP - ground)) : rest;
+	syncJars(state);
 	state.pending = (state.pending ?? 0) + toJar + toGround;
 	state.ground = ground + toGround;
+	fillJars(state, toJar, placeId);
 	return rest - toGround;
+}
+
+// ─── Chaque collecteur a sa réserve ─────────────────────────────
+// it.stock : ce qu'un collecteur garde ; ensemble, ils font jarOf(state). Un collecteur se remplit du nectar
+// des fleurs qui l'entourent : bien placé au milieu des fleurs, il se remplit plus vite qu'un autre posé à l'écart.
+
+export const jarCapOf = it => COLLECTOR_CAP[it.level ?? 1];
+const jarsIn = place => (place?.items ?? []).filter(it => it.kind === 'collecteur');
+const allJars = state => Object.values(state.places).flatMap(jarsIn);
+
+/** Combien de fleurs butinent autour d'un collecteur (au moins 1, pour qu'un collecteur isolé se remplisse un peu). */
+function jarWeight(place, it) {
+	let n = 1;
+	for (const p of place.plants ?? []) {
+		if (p.type !== 'fleur' && p.type !== 'buisson' && p.type !== 'arbre') continue;
+		const [gx, gy] = CELLS[p.c ?? 0];
+		if (Math.hypot(gx * PARCEL_W + p.x - it.x, (gy * PARCEL_H + p.y - it.y) * 1.4) < 520) n += p.type === 'fleur' ? 1 : 0.5;
+	}
+	return n;
+}
+
+/** Répartit `v` nectar entre les collecteurs du lieu (selon leurs fleurs), puis ce qui déborde dans ceux des autres lieux. */
+function fillJars(state, v, placeId) {
+	const here = placeId && state.places[placeId] ? [state.places[placeId]] : [];
+	for (const group of [here, Object.values(state.places)]) {
+		let jars = group.flatMap(pl => jarsIn(pl).map(it => ({ it, w: jarWeight(pl, it) })));
+		while (v > 1e-6) {
+			jars = jars.filter(j => (j.it.stock ?? 0) < jarCapOf(j.it) - 1e-6);
+			if (!jars.length) break;
+			const W = jars.reduce((a, j) => a + j.w, 0);
+			let given = 0;
+			for (const j of jars) {
+				const g = Math.min(v * (j.w / W), jarCapOf(j.it) - (j.it.stock ?? 0));
+				j.it.stock = (j.it.stock ?? 0) + g;
+				given += g;
+			}
+			v -= given;
+			if (given < 1e-6) break;
+		}
+	}
+}
+
+/**
+ * Remet d'accord les réserves des collecteurs avec le total (vieilles parties, collecteur rangé ou ajouté) :
+ * ce qui manque se répartit selon la place libre, ce qui dépasse s'enlève à proportion.
+ */
+export function syncJars(state) {
+	const jars = allJars(state), total = jarOf(state);
+	const sum = jars.reduce((a, it) => a + (it.stock ?? 0), 0);
+	if (Math.abs(sum - total) < 0.01) return;
+	if (sum > total) { const k = sum > 0 ? total / sum : 0; for (const it of jars) it.stock = (it.stock ?? 0) * k; return; }
+	let v = total - sum;
+	const free = jars.map(it => Math.max(0, jarCapOf(it) - (it.stock ?? 0))), F = free.reduce((a, b) => a + b, 0);
+	if (F > 0) jars.forEach((it, i) => { const g = Math.min(free[i], (v * free[i]) / F); it.stock = (it.stock ?? 0) + g; });
+}
+
+/** Ce que garde un collecteur posé. */
+export const stockOf = (state, it) => { syncJars(state); return it.stock ?? 0; };
+
+/** Vide un seul collecteur : rend ce qu'il gardait (retiré de la récolte en attente). */
+export function emptyJar(state, it) {
+	const v = stockOf(state, it);
+	it.stock = 0;
+	state.pending = Math.max(0, (state.pending ?? 0) - v);
+	return v;
 }
 
 export function tick(state, garden, now = Date.now()) {
@@ -208,11 +276,14 @@ export function tick(state, garden, now = Date.now()) {
 		summary.places[placeId] = out;
 	}
 	// La récolte attend dans les collecteurs, puis au sol, jusqu'à la limite de la réserve.
-	summary.lost = addWaiting(state, summary.nectar, true);
-	const kept = summary.nectar - summary.lost;
-	const k = summary.nectar > 0 ? kept / summary.nectar : 0;
-	for (const out of Object.values(summary.places)) out.nectar *= k;
-	summary.nectar = kept;
+	// Chaque lieu remplit d'abord ses propres collecteurs.
+	summary.lost = 0;
+	for (const [id, out] of Object.entries(summary.places)) {
+		const lost = addWaiting(state, out.nectar, true, id);
+		summary.lost += lost;
+		out.nectar -= lost;
+	}
+	summary.nectar -= summary.lost;
 	// Le bilan de la dernière vraie absence reste lisible sur la page Écosystème.
 	if (hours > 10 / 60) {
 		const matured = {};
@@ -351,7 +422,7 @@ export class EcoPanel {
 				g.bonus ? `+${Math.round(g.bonus * m.total * 100)} % à tout` : '',
 			].filter(Boolean).join(' · ') : 'personne pour l\'instant';
 			// L'objet proposé : le plus utile qu'on peut déjà construire pour cette équipe.
-			const kinds = Object.keys(ITEMS).filter(k => ITEMS[k].team === gid);
+			const kinds = Object.keys(ITEMS).filter(k => ITEMS[k].team === gid && fitsPlace(k, placeId));
 			const km = (st.totals?.distance ?? 0) / 1000;
 			const kind = kinds.filter(k => ITEMS[k].km <= km && (!ITEMS[k].needs || (place.items ?? []).some(it => it.kind === ITEMS[k].needs))).sort((a, b) => ITEMS[b].power - ITEMS[a].power || ITEMS[a].cost - ITEMS[b].cost)[0] ?? kinds[0];
 			const item = ITEMS[kind];
@@ -359,7 +430,7 @@ export class EcoPanel {
 			const names = m.list.map(({ sp, n }) => `${sp.name}${n > 1 ? ` ×${n}` : ''}`).join(', ');
 			const detail = opened ? `<div class="eco-team-more">
 				<p>${on ? `<b>${g.does[0].toUpperCase() + g.does.slice(1)}.</b> ${names}${m.extra ? `, et ${m.extra} de plus grâce à tes aménagements` : ''}.` : `Découvre une de ces espèces ${PLACE_IN[placeId]} pour lancer l'équipe : ${g.members.map(id => SPECIES.find(sp => sp.id === id)).filter(sp => sp?.place === placeId).slice(0, 3).map(sp => sp.name.toLowerCase()).join(', ') || 'elle vit dans un autre lieu'}.`}</p>
-				${on ? `<button class="btn primary small" data-place="${kind}">${placed ? 'En ajouter' : 'Aider'} : ${item.name.toLowerCase()}</button><small>${placed ? `Déjà ${placed} ici : touche-en un au jardin pour l’améliorer, chaque niveau compte comme un abri de plus` : item.power > 1 ? `Il fait venir ${item.power} membres de plus` : 'Chaque objet posé fait venir un membre de plus'}. Tous les abris sont dans Aménager, onglet Habitats.</small>` : ''}
+				${on && item ? `<button class="btn primary small" data-place="${kind}">${placed ? 'En ajouter' : 'Aider'} : ${item.name.toLowerCase()}</button><small>${placed ? `Déjà ${placed} ici : touche-en un au jardin pour l’améliorer, chaque niveau compte comme un abri de plus` : item.power > 1 ? `Il fait venir ${item.power} membres de plus` : 'Chaque objet posé fait venir un membre de plus'}. Tous les abris sont dans Aménager, onglet Habitats.</small>` : ''}
 				<p class="eco-real"><b>Dans la vraie vie :</b> ${g.upgrade.real}</p>
 			</div>` : '';
 			return `<li class="eco-team${on ? '' : ' off'}${opened ? ' open' : ''}">

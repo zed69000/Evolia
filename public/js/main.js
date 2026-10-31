@@ -7,13 +7,13 @@ import { PlacesMap } from './map.js';
 import { PLANT_TYPES, DECOR, plantName } from './plants.js';
 import { GpsTracker, MotionTracker, SimTracker } from './tracker.js';
 import { SOURCES, bestSource, harvest, classifyCadence } from './harvest.js';
-import { PLACES, PLACE_BY_ID, PLACE_DE, SPECIES, SPECIES_BY_ID, checkSpecies, placeOpen, speciesOf } from './species.js';
+import { PLACES, PLACE_BY_ID, PLACE_DE, PLACE_IN, SPECIES, SPECIES_BY_ID, checkSpecies, placeOpen, speciesOf } from './species.js';
 import { Encyclopedia, thumbCopy } from './encyclopedia.js';
 import { Sky, WEATHER_LABEL } from './weather.js';
-import { EcoPanel, tick, summaryHtml, addBoost, boostLeft, visualExtra, rates, GUILDS, BOOST_MULT, BOOST_PER_MIN, nectarCapacity, hasCollector, COLLECTOR_CAP, COLLECTOR_UPGRADE, addWaiting, groundOf, jarOf, jarCap } from './idle.js';
+import { EcoPanel, tick, summaryHtml, addBoost, boostLeft, visualExtra, rates, GUILDS, BOOST_MULT, BOOST_PER_MIN, nectarCapacity, hasCollector, COLLECTOR_CAP, COLLECTOR_UPGRADE, addWaiting, groundOf, jarOf, jarCap, stockOf, jarCapOf, emptyJar } from './idle.js';
 import { paperTexture } from './watercolor.js';
 import { Soundscape } from './audio.js';
-import { ITEMS, ITEM_ORDER, itemHelp, itemCost, CATS, MAX_LEVEL, LEVEL_NAME, LEVEL_KM, canLevel, levelCost, CABIN_STYLES } from './deco.js';
+import { ITEMS, ITEM_ORDER, itemHelp, itemCost, fitsPlace, CATS, MAX_LEVEL, LEVEL_NAME, LEVEL_KM, canLevel, levelCost, CABIN_STYLES } from './deco.js';
 import { VERSION } from './version.js';
 import { exportCode, importCode, backupAge } from './backup.js';
 import { canNotify, askNotify, scheduleReminders, clearReminders } from './notify.js';
@@ -82,8 +82,8 @@ garden.dewAmount = () => groundOf(state);
 // Le chantier d'un objet posé : un « toc » à chaque coup de marteau, une petite cloche à la fin.
 garden.onBuildTap = k => sound.knock(k);
 garden.onBuildDone = () => sound.chime(2);
-garden.jarAmount = () => jarOf(state);
-garden.nectarFill = () => jarOf(state) / Math.max(1, jarCap(state));
+// Chaque collecteur a sa réserve, remplie par les fleurs qui l'entourent.
+garden.jarStock = it => ({ v: stockOf(state, it), cap: jarCapOf(it) });
 
 /**
  * La cagnotte : quand on récolte, la bourse ne saute pas d'un coup, elle grimpe. Un flot de gouttes part du collecteur
@@ -119,10 +119,10 @@ function jackpot(v, x, y) {
 }
 
 /** Faire passer de la récolte en attente au compteur : celle du sol (`ground`) ou celle des collecteurs. */
-function collect(amount, ground = false) {
-	const v = Math.max(0, Math.min(ground ? groundOf(state) : jarOf(state), amount));
+function collect(amount, ground = false, taken = false) {
+	const v = taken ? amount : Math.max(0, Math.min(ground ? groundOf(state) : jarOf(state), amount));
 	if (v <= 0) return 0;
-	state.pending -= v;
+	if (!taken) state.pending -= v;
 	if (ground) state.ground -= v;
 	state.nectar = (state.nectar ?? 0) + v;
 	state.collectedOnce = true;
@@ -289,9 +289,24 @@ function travel(id) {
 
 let cardTimer = 0;
 function placeCard(card, hit, ms = 4500) {
-	card.style.left = `${Math.max(90, Math.min($('#app').clientWidth - 90, hit.x))}px`;
-	card.style.top = `${Math.max(170, hit.y - 20)}px`;
+	// La bulle se pose au-dessus du doigt, mais reste toujours entière à l'écran : décalée sur le côté près d'un bord,
+	// et sous le doigt s'il n'y a pas la place au-dessus (sous le bandeau du haut).
+	const app = $('#app'), W = app.clientWidth, H = app.clientHeight, pad = 10;
+	card.classList.remove('below');
+	// Mesurée au milieu de l'écran : collée à un bord, elle se rétrécirait pour tenir.
+	card.style.left = `${W / 2}px`;
+	card.style.top = `${hit.y - 20}px`;
 	card.hidden = false;
+	const w = card.offsetWidth, h = card.offsetHeight;
+	card.style.left = `${Math.max(pad + w / 2, Math.min(W - pad - w / 2, hit.x))}px`;
+	// Entre le bandeau du haut et le panneau du bas : jamais cachée derrière l'un ou l'autre.
+	const ay = app.getBoundingClientRect().top, sheet = $('#home');
+	const top = $('#hud').getBoundingClientRect().bottom - ay + 8;
+	const bottom = (sheet && sheet.offsetParent ? sheet.getBoundingClientRect().top - ay : H) - pad;
+	if (hit.y - 20 - 14 - h < top) {
+		card.classList.add('below');
+		card.style.top = `${Math.max(top, Math.min(bottom - h, hit.y + 24))}px`;
+	} else if (hit.y - 20 - 14 > bottom) card.style.top = `${bottom + 14}px`;
 	cardTimer = setTimeout(() => { card.hidden = true; }, ms);
 }
 
@@ -435,7 +450,9 @@ function focusDew() {
 	if (d) garden.focusOn(d.x, d.y);
 }
 function focusJar() {
-	const it = garden.items.find(i => i.kind === 'collecteur');
+	// Le collecteur le plus rempli d'abord.
+	const jars = garden.items.filter(i => i.kind === 'collecteur');
+	const it = jars.sort((a, b) => stockOf(state, b) - stockOf(state, a))[0];
 	if (it) garden.focusOn(it.x, it.y - 40);
 }
 
@@ -565,7 +582,7 @@ function addMeters(m) {
 	here().km += m / 1000;
 	// Le nectar de la marche se dépose comme celui des butineurs : en gouttes sur les fleurs, ou dans le collecteur.
 	// Il n'est pas limité par la réserve : ce qu'on a gagné en marchant ne se perd jamais.
-	addWaiting(state, m / 5);
+	addWaiting(state, m / 5, false, state.place);
 	if (markActive(state)) {
 		const s = state.daily.streak;
 		toast(s > 1 ? `Jour actif : ${s} jours de suite !` : 'Jour actif : ta série commence', '#F08A3C', () => showDaily());
@@ -909,7 +926,7 @@ async function playHarvest(res, source) {
 	state.totals.distance += res.distance;
 	here().km += res.distance / 1000;
 	state.totals.steps += res.steps;
-	addWaiting(state, res.distance / 5);
+	addWaiting(state, res.distance / 5, false, state.place);
 	// L'élan des pas relus vaut celui d'une marche suivie en direct : 3 min par minute de vraie marche,
 	// 2 min par minute de petits pas (ménage, marche lente).
 	addBoost(state, res.groups.reduce((n, g) => n + g.minutes * (g.act.id === 'menage' || g.act.id === 'marche-lente' ? 2 : 3), 0));
@@ -1189,8 +1206,8 @@ function renderDeco() {
 	$('#deco').innerHTML = `
 		<div class="panel-head"><h2>Aménager</h2><button class="close" data-close-deco aria-label="Fermer">×</button></div>
 		<div class="deco-tabs" role="tablist">${CATS.map(c => `<button role="tab" aria-selected="${c.id === decoTab}" data-tab="${c.id}">${c.name}</button>`).join('')}</div>
-		<p class="sp-intro">${cat.intro} Tout se paie en nectar, et se range quand tu veux (le nectar t'est rendu).</p>
-		<div class="deco-list">${ITEM_ORDER.filter(k => ITEMS[k].cat === decoTab).map(k => {
+		<p class="sp-intro">${cat.intro} Tout se paie en nectar, et se range quand tu veux (le nectar t'est rendu).${state.place !== 'prairie' ? ` Ici, seulement ce qui a sa place ${PLACE_IN[state.place]}.` : ''}</p>
+		<div class="deco-list">${ITEM_ORDER.filter(k => ITEMS[k].cat === decoTab && fitsPlace(k, state.place)).map(k => {
 			const it = ITEMS[k], cost = priceOf(k), need = needsFirst(k), locked = km < it.km || !!need, poor = nectar < cost;
 			const mine = here_.filter(x => x.kind === k), n = mine.length;
 			// L'habitat le moins avancé d'ici, qu'on peut améliorer depuis la liste.
@@ -1312,9 +1329,9 @@ $('#btn-place-turn').addEventListener('click', () => {
 function tapItem(hit, card) {
 	const it = hit.item, def = ITEMS[it.kind];
 	// Un collecteur plein (même un peu) se vide d'un seul geste.
-	if (it.kind === 'collecteur' && jarOf(state) >= 1) {
+	if (it.kind === 'collecteur' && stockOf(state, it) >= 1) {
 		state.collectedJar = true;
-		jackpot(collect(jarOf(state)), it.x, it.y - 40);
+		jackpot(collect(emptyJar(state, it), false, true), it.x, it.y - 40);
 		return;
 	}
 	const lv = it.level ?? 1, nx = nextLevel(it);
@@ -1372,13 +1389,11 @@ function tapItem(hit, card) {
 		if (e.target.closest('[data-move]')) { card.hidden = true; startPlacing(it.kind, it); }
 		if (e.target.closest('[data-store]')) {
 			card.hidden = true;
+			// Un collecteur rangé : ce qu'il gardait revient tout de suite à la bourse.
+			if (it.kind === 'collecteur') state.nectar = (state.nectar ?? 0) + emptyJar(state, it);
 			garden.items.splice(garden.items.indexOf(it), 1);
 			const back = (it.paid ?? def.cost) + (it.spent ?? 0);
 			state.nectar = (state.nectar ?? 0) + back;
-			// Un collecteur rangé emporte sa réserve : ce qui dépasse revient tout de suite à la bourse.
-			// Un collecteur rangé : ce qu'il contenait de trop pour les autres revient tout de suite à la bourse.
-			const over = jarOf(state) - jarCap(state);
-			if (over > 0) { state.pending -= over; state.nectar += over; }
 			garden.nextPopulate = 0;
 			toast(`${def.name} rangé${/^Une /.test(def.name) ? 'e' : /^Des /.test(def.name) ? 's' : ''} : +${fmtInt(back)} nectar`, '#9A7448');
 			renderHud();
