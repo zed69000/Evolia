@@ -380,8 +380,9 @@ export class EcoPanel {
 		if (!n) return;
 		const st = this.state;
 		const cap = nectarCapacity(st);
-		const live = Math.min(cap, (st.pending ?? 0) + this.totalPerHour() * (Date.now() - (st.lastIdle ?? Date.now())) / 3600000);
-		n.textContent = `${live.toLocaleString('fr-FR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} / ${fmt(cap)}`;
+		// Tout ce qui attend (comme dans le bandeau) ; seule la production de l'écosystème s'arrête à la réserve.
+		const pend = st.pending ?? 0, made = this.totalPerHour() * (Date.now() - (st.lastIdle ?? Date.now())) / 3600000;
+		n.textContent = `${fmt(pend + Math.min(made, Math.max(0, cap - pend)))} · réserve ${fmt(cap)}`;
 		const b = this.panel.querySelector('#eco-boost-left');
 		if (b) b.textContent = fmtDur(boostLeft(st));
 	}
@@ -397,7 +398,7 @@ export class EcoPanel {
 		// 1. Le nectar, en direct, et ce qu'il rapporte.
 		const hero = `<div class="eco-hero">
 			<span class="eco-label">À récolter</span>
-			<b class="nectar" id="eco-nectar">${fmt(st.pending ?? 0)} / ${fmt(nectarCapacity(st))}</b>
+			<b class="nectar" id="eco-nectar">${fmt(st.pending ?? 0)} · réserve ${fmt(nectarCapacity(st))}</b>
 			<span class="eco-rate">${working ? `+${fmt(this.totalPerHour())} par heure, même appli fermée · ${hasCollector(st) ? 'touche ton collecteur pour tout récupérer' : 'cueille les gouttes sur les fleurs, ou installe un collecteur'}` : 'Découvre des animaux : ils récolteront pour toi'}</span>
 			<span class="eco-rate">Dans ta bourse : <b>${fmt(st.nectar ?? 0)}</b> nectar</span>
 		</div>`;

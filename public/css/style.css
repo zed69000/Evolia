@@ -748,6 +748,8 @@ html, body {
 #app:has(.panel.open) .peek-btn { display: none; }
 /* Pendant qu'on pose un objet, la bulle du guide s'efface. */
 #app.placing .tip { display: none; }
+/* Pendant qu'on pose un objet, le panneau du bas s'efface : seule la barre « Poser ici » reste. */
+#app.placing #home { transform: translateY(115%); pointer-events: none; }
 /* Les messages laissent la place au bouton œil, en haut à droite. */
 #toasts { padding: 0 58px; }
 
@@ -803,7 +805,7 @@ body:has(#modal:not([hidden])) .tip, body:has(.panel.open) .tip, body:has(#coach
 		overflow-y: auto;
 		box-shadow: -6px 0 22px rgba(40, 60, 30, .16);
 	}
-	.sheet.off { transform: translateX(calc(100% + 30px)); }
+	.sheet.off, #app.placing #home { transform: translateX(calc(100% + 30px)); }
 	.peek .sheet:not(.off) { transform: translateX(40px); }
 	/* Le bandeau : une carte compacte en haut à gauche, pas une barre étirée sur toute la largeur. */
 	#hud { left: calc(env(safe-area-inset-left, 0px) + 12px); right: auto; width: min(430px, calc(100% - var(--side) - 30px)); box-sizing: border-box; }

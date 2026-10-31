@@ -3,6 +3,15 @@
 Chaque version, la plus récente en haut. Le site (evolia.sebastienalzamora.workers.dev) est toujours à jour ;
 le Play Store (tests internes) reçoit les versions indiquées « Play ».
 
+## 0.7.10 — 1er novembre 2026
+- **Correctif important :** le jardin pouvait se figer sur un aplat vert. Il suffisait d'avoir une mare (celle du marais, ou une petite mare posée) sur la gauche du jardin : l'animation de ses ronds dans l'eau plantait. C'est corrigé, et une image ratée ne peut plus jamais figer le jeu.
+- **Après une vraie balade** (300 m ou plus), son bilan s'ouvre de lui-même : kilomètres, ce qui a poussé, le nectar gagné et l'élan. Avant, ce n'était qu'un petit message.
+- **Un objet ne peut plus en cacher un autre** (la cabane posée juste devant le collecteur le rendait invisible).
+- Pendant qu'on pose un objet, le panneau du bas s'efface.
+- Un collecteur vide n'affiche plus « +0 ».
+- L'écosystème affiche le même total à récolter que le bandeau, et la réserve à côté (il affichait « 180,0 / 180 » quand 1 251 attendaient).
+- La nuit est un peu moins sombre : on voit encore son jardin.
+
 ## 0.7.9 — 1er novembre 2026 · Play
 - **La brume est belle aussi sur iPhone.** Safari (avant iOS 18) ne savait pas flouter le dessin : la lisière y gardait des bords nets. Le flou passe maintenant par une technique qu'il comprend, et la terre des potagers en profite aussi.
 - **Un vent léger dans la végétation.** La couronne des arbres balance doucement, le tronc reste planté. Les arbustes frémissent, l'herbe et les fleurs ondulent un peu plus.

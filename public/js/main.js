@@ -763,6 +763,8 @@ function endSession() {
 		const grown = Object.entries(matured).map(([t, n]) => `+${n} ${plural(n, t)}`).join(', ');
 		const bike = (w.bike ?? 0) > w.distance / 2;
 		toast(`${bike ? 'Sortie à vélo' : 'Balade finie'} : ${fmt(w.distance / 1000)} km${bike ? ` (comptés ${fmt((w.distance - w.bike * 0.6) / 1000)} km)` : ''}${grown ? ` · ${grown}` : ''}`, '#F08A3C', () => showRecap(w, duration, matured));
+		// Une vraie sortie mérite son bilan à l'écran, pas seulement un petit message : il s'ouvre de lui-même.
+		if (w.distance >= 300) whenFree(() => { if ($('#modal').hidden) showRecap(w, duration, matured); });
 	}
 	// La relecture des pas attendait la fin de la balade : elle rattrape maintenant ce qui s'est fait autour.
 	if (!w.sim && Date.now() - state.lastHarvest > 2 * 60000) setTimeout(() => maybeHarvest(), 1500);

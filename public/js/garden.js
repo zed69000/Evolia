@@ -52,7 +52,8 @@ const Z_MAX = 3.2;
 const DEFAULT_SUN = { rise: 7.5, set: 19 };
 
 function ambientAt(h, sun) {
-	const N = ['#1E2B4D', 0.55], DAWN = ['#F2B880', 0.25], DAY = ['#FFFFFF', 0], GOLD = ['#F4A85E', 0.25], DUSK = ['#6E5A8E', 0.4];
+	// La nuit reste lisible : on voit encore son jardin, sous un bleu profond.
+	const N = ['#1E2B4D', 0.44], DAWN = ['#F2B880', 0.25], DAY = ['#FFFFFF', 0], GOLD = ['#F4A85E', 0.25], DUSK = ['#6E5A8E', 0.4];
 	const keys = [[0, N], [sun.rise - 1, N], [sun.rise, DAWN], [sun.rise + 1.5, DAY], [sun.set - 1.5, DAY], [sun.set - 0.2, GOLD], [sun.set + 0.5, DUSK], [sun.set + 1.25, N], [24, N]];
 	for (let i = 0; i < keys.length - 1; i++) {
 		const [h0, [c0, a0]] = keys[i], [h1, [c1, a1]] = keys[i + 1];
@@ -67,7 +68,7 @@ function ambientAt(h, sun) {
 // Lumière selon la hauteur du soleil (degrés) : un matin d'octobre, bas sur l'horizon, reste doré
 // bien plus longtemps qu'un matin d'été. [hauteur, couleur multipliée, opacité]
 const ALT_LIGHT = [
-	[-90, '#1E2B4D', 0.58], [-12, '#1E2B4D', 0.58], [-6, '#3E4A7E', 0.5], [-2, '#8A6A9E', 0.42],
+	[-90, '#1E2B4D', 0.46], [-12, '#1E2B4D', 0.46], [-6, '#3E4A7E', 0.42], [-2, '#8A6A9E', 0.42],
 	[1, '#F09A5E', 0.32], [5, '#F4B470', 0.2], [12, '#F8D8A8', 0.09], [25, '#FFF4E4', 0.03], [40, '#FFFFFF', 0], [90, '#FFFFFF', 0],
 ];
 
@@ -1153,7 +1154,12 @@ export class Garden {
 			if (kind === 'potager' && it.kind === 'potager') return Math.abs(it.x - x) < PLOT.w * 0.9 && Math.abs(it.y - y) < PLOT.h * 0.9;
 			// Deux tronçons de haie (de muret, d'allée) se touchent bout à bout, sans se chevaucher.
 			if (LINK[kind] && it.kind === kind) return Math.hypot(it.x - x, (it.y - y) / 0.36) < LINK[kind] * 0.85;
-			return Math.hypot(it.x - x, (it.y - y) * 1.3) < r + itemBox(it.kind, it.level).w * 0.35;
+			if (Math.hypot(it.x - x, (it.y - y) * 1.3) < r + itemBox(it.kind, it.level).w * 0.35) return true;
+			// Pas juste devant un autre objet au point de le cacher (ni juste derrière un grand qui le cacherait) :
+			// la cabane posée devant le collecteur le rendait invisible.
+			const mine = itemBox(kind, except?.level), theirs = itemBox(it.kind, it.level);
+			const front = y > it.y ? mine : theirs, dy = Math.abs(y - it.y);
+			return Math.abs(it.x - x) < (mine.w + theirs.w) * 0.3 && dy < front.ay * 0.55;
 		});
 	}
 
@@ -1422,7 +1428,8 @@ export class Garden {
 			ctx.beginPath(); ctx.moveTo(x - 7 * s, y); ctx.lineTo(x + 7 * s, y); ctx.stroke();
 		}
 		for (let i = 0; i < 2; i++) {
-			const cyc = t * 0.35 + i * 0.5 + (seed % 7) * 0.13, k = cyc % 1, n = Math.floor(cyc);
+			// `seed` (l'abscisse de la mare) peut être négatif : le cycle reste toujours entre 0 et 1.
+			const cyc = t * 0.35 + i * 0.5 + (Math.abs(seed) % 7) * 0.13, k = ((cyc % 1) + 1) % 1, n = Math.floor(cyc);
 			const x = Math.sin(n * 12.9 + i * 4.1 + seed) * rx * 0.6, y = Math.cos(n * 7.3 + i * 2.7) * ry * 0.5 - 4 * s;
 			ctx.strokeStyle = `rgba(240,250,248,${(1 - k) * 0.45})`;
 			ctx.lineWidth = 1;
@@ -1514,6 +1521,8 @@ export class Garden {
 		for (const it of this.items) {
 			if (it.kind !== 'collecteur') continue;
 			const js = this.jarStock?.(it) ?? { v: 0, cap: 1 };
+			// Un collecteur vide n'a pas d'étiquette : « +0 » au-dessus d'une jarre neuve ne disait rien.
+			if (js.v < 1) continue;
 			const amount = Math.floor(js.v), full = js.v >= js.cap - 0.5, label = full ? `${amount} · plein !` : `+${amount}`;
 			ctx.font = `800 ${13}px Nunito, sans-serif`;
 			const w = ctx.measureText(label).width + 30, h = 22;
@@ -1815,9 +1824,15 @@ export class Garden {
 		// Images par seconde (moyenne glissante), affichées en mode test.
 		if (raw > 0 && raw < 1) this.fps = this.fps ? this.fps * 0.95 + (1 / raw) * 0.05 : 1 / raw;
 		this.t += dt;
-		if (this.base) {
-			this.update(dt, now);
-			this.render();
+		// Une image ratée ne doit jamais figer le jardin : on la saute, et l'on continue à la suivante.
+		try {
+			if (this.base) {
+				this.update(dt, now);
+				this.render();
+			}
+		} catch (e) {
+			if (!this.frameError) console.error(e);
+			this.frameError = true;
 		}
 		requestAnimationFrame(this.frame);
 	};
