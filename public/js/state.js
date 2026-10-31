@@ -1,5 +1,7 @@
 // Règles du jeu (activités, effort) et sauvegarde locale.
 
+import { CELLS, PARCEL_W, PARCEL_H } from './zones.js';
+
 // Seuils et multiplicateurs repris du prototype Unity (Assets/Data/Activities).
 export const ACTIVITIES = [
 	{ id: 'marche-lente', name: 'Marche lente', min: 1, mult: 0.8, base: 2.5, plant: 'herbe' },
@@ -57,15 +59,37 @@ export function dayKey(d = new Date()) {
 	return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-export const newPlace = () => ({ plants: [], worldH: 1000, unlocked: {}, km: 0, arrived: Date.now() });
+export const newPlace = () => ({ plants: [], worldH: 1000, unlocked: {}, km: 0, arrived: Date.now(), biomes: ['prairie'] });
+
+// ─── Un seul jardin, un milieu par parcelle ─────────────────────
+// Depuis la 0.7, tous les milieux vivent dans le même jardin : chaque parcelle a le sien (place.biomes[ci]).
+// La première parcelle d'un milieu est son « cœur » : ses mares, ses vieux arbres, ses décors.
+
+export const GARDEN = 'jardin';
+export const BIOMES = ['prairie', 'marais', 'foret', 'montagne', 'littoral'];
+/** Le milieu d'une parcelle. */
+export const biomeOf = (place, ci = 0) => place?.biomes?.[ci] ?? 'prairie';
+/** La parcelle cœur d'un milieu, ou -1 s'il n'est pas (encore) dans le jardin. */
+export const heartOf = (place, biome) => (place?.biomes ?? ['prairie']).indexOf(biome);
+/** Le rang d'une parcelle parmi celles de son milieu (0 : le cœur). */
+export function rankOf(place, ci) {
+	const b = biomeOf(place, ci);
+	let n = 0;
+	for (let j = 0; j < ci; j++) if (biomeOf(place, j) === b) n++;
+	return n;
+}
+/** Les milieux présents dans le jardin. */
+export const biomesIn = place => new Set(place?.biomes ?? ['prairie']);
+/** Kilomètres faits depuis que le cœur d'un milieu est dans le jardin (pour ses décors). */
+export const biomeKm = (place, biome) => Math.max(0, (place?.km ?? 0) - (place?.heartKm?.[biome] ?? 0));
 
 function fresh() {
 	return {
-		v: 2,
 		createdAt: Date.now(),
 		goalKm: 2.5,
-		place: 'prairie',
-		places: { prairie: newPlace() },
+		v: 3,
+		place: GARDEN,
+		places: { [GARDEN]: newPlace() },
 		walks: [],
 		days: {},
 		totals: { distance: 0, effort: 0, walks: 0, steps: 0 },
@@ -89,10 +113,58 @@ function migrate(s) {
 	return s;
 }
 
+/**
+ * 0.7 : les lieux (prairie, marais, forêt…) deviennent les parcelles d'un seul jardin. On les met bout à bout,
+ * dans l'ordre des lieux : chaque plante garde sa place dans sa parcelle, chaque objet suit la sienne.
+ */
+function mergePlaces(s) {
+	if (s.v >= 3) return s;
+	const km = (s.totals?.distance ?? 0) / 1000;
+	const G = { ...newPlace(), biomes: [], items: [], km, xp: 0, succ: {}, upgrades: {}, heartKm: {}, renewed: {}, seeded: true, arrived: s.createdAt ?? Date.now() };
+	const at = (x, y) => CELLS.findIndex(([gx, gy]) => gx === Math.floor(x / PARCEL_W) && gy === Math.floor(y / PARCEL_H));
+	for (const id of BIOMES) {
+		const P = s.places?.[id];
+		if (!P) continue;
+		const n = Math.min(CELLS.length, P.cells ?? 1), map = [];
+		for (let i = 0; i < n && G.biomes.length < CELLS.length; i++) { map[i] = G.biomes.length; G.biomes.push(id); }
+		if (!map.length) continue;
+		for (const p of P.plants ?? []) {
+			const j = map[p.c ?? 0];
+			if (j == null) continue;
+			if (j) p.c = j; else delete p.c;
+			G.plants.push(p);
+		}
+		for (const it of P.items ?? []) {
+			// L'objet suit sa parcelle (ou la plus proche, s'il était posé au bord).
+			let i = at(it.x, it.y);
+			if (map[i] == null) i = map.reduce((best, _, k) => {
+				const d = Math.hypot((CELLS[k][0] + 0.5) * PARCEL_W - it.x, (CELLS[k][1] + 0.5) * PARCEL_H - it.y);
+				return d < best.d ? { k, d } : best;
+			}, { k: 0, d: Infinity }).k;
+			const j = map[i];
+			it.x += (CELLS[j][0] - CELLS[i][0]) * PARCEL_W;
+			it.y += (CELLS[j][1] - CELLS[i][1]) * PARCEL_H;
+			G.items.push(it);
+		}
+		Object.assign(G.unlocked, P.unlocked ?? {});
+		G.xp += P.xp ?? 0;
+		for (const [k, v] of Object.entries(P.succ ?? {})) G.succ[k] = (G.succ[k] ?? 0) + v;
+		for (const [k, v] of Object.entries(P.upgrades ?? {})) G.upgrades[k] = (G.upgrades[k] ?? 0) + v;
+		G.heartKm[id] = Math.max(0, km - (P.km ?? 0));
+		G.renewed[id] = 1;
+	}
+	if (!G.biomes.length) G.biomes.push('prairie');
+	G.cells = G.biomes.length;
+	s.places = { [GARDEN]: G };
+	s.place = GARDEN;
+	s.v = 3;
+	return s;
+}
+
 export function load() {
 	try {
 		const raw = localStorage.getItem(KEY);
-		if (raw) return migrate({ ...fresh(), v: 1, ...JSON.parse(raw) });
+		if (raw) return mergePlaces(migrate({ ...fresh(), v: 1, ...JSON.parse(raw) }));
 	} catch (e) { /* stockage indisponible : on repart d'un jardin neuf */ }
 	return fresh();
 }

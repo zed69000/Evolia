@@ -3,6 +3,22 @@
 Chaque version, la plus récente en haut. Le site (evolia.sebastienalzamora.workers.dev) est toujours à jour ;
 le Play Store (tests internes) reçoit les versions indiquées « Play ».
 
+## 0.7.0 — 31 octobre 2026
+- **Tous les milieux dans un seul jardin.**
+    - Plus de voyage entre les lieux : à chaque nouvelle parcelle, tu choisis son milieu (prairie, marais, forêt, montagne, littoral) parmi ceux que tu as découverts.
+    - La première parcelle d'un milieu est son cœur : les trois mares du marais, les vieux arbres de la forêt… Les suivantes prennent ses coins (roselière, hêtraie, alpage fleuri…).
+    - D'une parcelle à l'autre, le sol et le relief se fondent doucement : pas de frontière nette entre le sable et la prairie.
+    - Le jardin compte maintenant jusqu'à 24 parcelles.
+    - Les animaux vivent dans les parcelles de leur milieu ; tes équipes travaillent pour tout le jardin.
+    - Les parties en cours sont converties : chaque lieu devient une suite de parcelles, avec ses plantes et ses objets.
+    - En haut de l'écran, le nom de la parcelle que tu regardes ; touche-le pour la carte des milieux.
+- **Aménagements par milieu :** un objet ne se pose que dans une parcelle où il a sa place, et plus jamais dans une mare.
+- **De l'eau vivante.** Les ruisseaux du marais relient vraiment les mares, le courant y glisse, et des reflets et des ronds dans l'eau animent les mares.
+- **Le collecteur range les gouttes :** dès qu'il a de la place (vidé, amélioré ou tout juste posé), les gouttes qui attendaient sur les fleurs y coulent.
+- **Effet miniature :** le haut et le bas de l'écran légèrement flous (tilt shift), et un léger vignettage. Désactivable dans les options.
+- **Économie d'énergie :** une option limite le jeu à 30 images par seconde, pour un téléphone qui chauffe moins.
+- **Fiches d'espèces :** les grands animaux (chamois, bouquetin, aigle…) ne sont plus coupés.
+
 ## 0.6.39 — 31 octobre 2026
 - **Chaque collecteur a sa propre réserve.** Il se remplit du nectar des fleurs qui l'entourent : posé au milieu des fleurs, il se remplit plus vite qu'un autre à l'écart. En toucher un ne vide que celui-là.
 - **Des bulles toujours entières.** Celle d'un objet (la cabane, avec tous ses boutons) reste entre le bandeau du haut et le panneau du bas, et se décale près des bords au lieu d'être coupée. Les fenêtres évitent l'encoche et la barre du téléphone.

@@ -31,11 +31,30 @@ export function thumb(sp, size, locked) {
 		fit(DECOR[sp.decor].box);
 		DECOR_PAINTERS[sp.decor](g);
 	} else {
+		// Peint d'abord sur une grande toile, puis mesuré : un animal plus grand que la vignette (chamois, bouquetin,
+		// aigle…) est réduit et recentré, au lieu d'être coupé.
 		const ck = sp.critter.kind;
-		const k = (size / 26) * (CRITTER_SCALE[ck] ?? 1);
-		g.translate(size / 2, size / 2 + (CRITTER_SHIFT[ck] ?? 0) * k);
-		g.scale(k, k);
-		drawCritter(g, ck, 0.4, 'perch', sp.critter);
+		const k = (size / 26) * (CRITTER_SCALE[ck] ?? 1) * dpr, S = c.width * 3;
+		const off = document.createElement('canvas');
+		off.width = off.height = S;
+		const o = off.getContext('2d');
+		o.translate(S / 2, S / 2 + (CRITTER_SHIFT[ck] ?? 0) * k);
+		o.scale(k, k);
+		drawCritter(o, ck, 0.4, 'perch', sp.critter);
+		const px = o.getImageData(0, 0, S, S).data;
+		let x0 = S, y0 = S, x1 = -1, y1 = -1;
+		for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+			if (px[(y * S + x) * 4 + 3] < 10) continue;
+			if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
+		}
+		g.setTransform(1, 0, 0, 1, 0, 0);
+		if (x1 >= x0) {
+			const bw = x1 - x0 + 1, bh = y1 - y0 + 1, f = Math.min(1, (c.width * 0.9) / bw, (c.height * 0.9) / bh);
+			// Sans débordement, l'animal garde sa place habituelle ; sinon il est recentré sur ce qui se voit.
+			const fits = f === 1 && x0 >= c.width && x1 < c.width * 2 && y0 >= c.height && y1 < c.height * 2;
+			if (fits) g.drawImage(off, c.width, c.height, c.width, c.height, 0, 0, c.width, c.height);
+			else g.drawImage(off, x0, y0, bw, bh, (c.width - bw * f) / 2, (c.height - bh * f) / 2, bw * f, bh * f);
+		}
 	}
 	if (locked) {
 		g.setTransform(1, 0, 0, 1, 0, 0);
@@ -62,7 +81,7 @@ export class Encyclopedia {
 		this.panel = panel;
 		this.state = state;
 		this.onChange = onChange;
-		this.filter = state.place;
+		this.filter = 'prairie';
 		panel.addEventListener('click', e => {
 			const card = e.target.closest('[data-sp]');
 			if (card) return this.showDetail(card.dataset.sp);
@@ -74,7 +93,7 @@ export class Encyclopedia {
 	}
 
 	open(id) {
-		if (id) this.showDetail(id); else { this.filter = this.state.place; this.showGrid(); }
+		if (id) this.showDetail(id); else { this.filter = 'prairie'; this.showGrid(); }
 		this.panel.classList.add('open');
 		this.panel.setAttribute('aria-hidden', 'false');
 	}

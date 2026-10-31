@@ -1,8 +1,7 @@
 // Interface : bandeau, suivi automatique du mouvement, récolte des pas, récap, carnet, biodiversité, tutoriel.
 
-import { load, save, reset, newPlace, allPlants, ACTIVITIES, ACTIVITY_BY_ID, MAX_SPEED_KMH, activityFor, effortFor, dayKey, todayMeters, addDistance, STEP_LENGTH_M, effortMix } from './state.js';
-import { Garden, CELLS, CELL_KM, cellsOpen } from './garden.js';
-import { zoneName } from './zones.js';
+import { load, save, reset, allPlants, biomeKm, heartOf, ACTIVITIES, ACTIVITY_BY_ID, MAX_SPEED_KMH, activityFor, effortFor, dayKey, todayMeters, addDistance, STEP_LENGTH_M, effortMix } from './state.js';
+import { Garden, CELLS, CELL_KM, cellsOpen, cellName } from './garden.js';
 import { PlacesMap } from './map.js';
 import { PLANT_TYPES, DECOR, plantName } from './plants.js';
 import { GpsTracker, MotionTracker, SimTracker } from './tracker.js';
@@ -10,7 +9,7 @@ import { SOURCES, bestSource, harvest, classifyCadence } from './harvest.js';
 import { PLACES, PLACE_BY_ID, PLACE_DE, PLACE_IN, SPECIES, SPECIES_BY_ID, checkSpecies, placeOpen, speciesOf } from './species.js';
 import { Encyclopedia, thumbCopy } from './encyclopedia.js';
 import { Sky, WEATHER_LABEL } from './weather.js';
-import { EcoPanel, tick, summaryHtml, addBoost, boostLeft, visualExtra, rates, GUILDS, BOOST_MULT, BOOST_PER_MIN, nectarCapacity, hasCollector, COLLECTOR_CAP, COLLECTOR_UPGRADE, addWaiting, groundOf, jarOf, jarCap, stockOf, jarCapOf, emptyJar } from './idle.js';
+import { EcoPanel, tick, summaryHtml, addBoost, boostLeft, visualExtra, rates, GUILDS, BOOST_MULT, BOOST_PER_MIN, nectarCapacity, hasCollector, COLLECTOR_CAP, COLLECTOR_UPGRADE, addWaiting, groundOf, jarOf, jarCap, stockOf, jarCapOf, emptyJar, drainGround } from './idle.js';
 import { paperTexture } from './watercolor.js';
 import { Soundscape } from './audio.js';
 import { ITEMS, ITEM_ORDER, itemHelp, itemCost, fitsPlace, CATS, MAX_LEVEL, LEVEL_NAME, LEVEL_KM, canLevel, levelCost, CABIN_STYLES } from './deco.js';
@@ -32,7 +31,7 @@ const state = load();
 state.totals.steps ??= 0;
 state.placesOpen ??= { prairie: true };
 const garden = new Garden($('#garden'), state);
-garden.idleBonus = sp => visualExtra(state, sp.place, sp);
+garden.idleBonus = sp => visualExtra(state, state.place, sp);
 if (params.has('h')) garden.hourOverride = parseFloat(params.get('h'));
 if (params.has('date')) garden.dateOverride = params.get('date');
 const sky = new Sky(state, garden, () => renderHud());
@@ -74,7 +73,7 @@ function persist(now = false) {
 }
 
 const species = new Encyclopedia($('#species'), state, () => { persist(); updateSpeciesDot(); });
-const places = new PlacesMap($('#map'), state, travel);
+const places = new PlacesMap($('#map'), state, showBiome);
 // Aider une équipe de l'écosystème, c'est poser l'objet qui l'attire (s'il est débloqué et payable), sinon voir la liste.
 // La récolte en attente : sans collecteur, elle perle sur les fleurs ; avec, elle remplit les jarres.
 // Avec un collecteur, quelques gouttes restent visibles sur les fleurs : on voit que la récolte attend, et en toucher une vide tout.
@@ -188,7 +187,7 @@ const eco = new EcoPanel($('#eco'), state, kind => {
 
 function renderHud() {
 	const km = todayMeters(state) / 1000;
-	$('#hud-day').textContent = PLACE_BY_ID[state.place].name;
+	$('#hud-day').textContent = cellName(here(), garden.active);
 	// En toutes lettres : ce qu'on a fait aujourd'hui, puis l'objectif du jour (ou qu'il est atteint).
 	const goal = fmt(state.goalKm, state.goalKm % 1 ? 1 : 0);
 	$('#hud-km').textContent = km >= state.goalKm
@@ -247,7 +246,7 @@ function announceSpecies(quiet = false) {
 	if (quiet) return;
 	if (found.length || opened.length) sound.chime(opened.length ? 3 : 2);
 	for (const sp of found) toast(`${sp.kind === 'milieu' ? 'Nouveau milieu' : 'Nouvelle espèce'} : ${sp.name}`, '#F08A3C', () => species.open(sp.id));
-	for (const p of opened) toast(`Nouveau lieu ouvert : ${p.name}`, p.color, () => places.open());
+	for (const p of opened) toast(`Nouveau milieu : ${p.name.toLowerCase()} ! Choisis-le pour une prochaine parcelle`, p.color, () => places.open(p.id));
 	celebrateHerbarium();
 }
 
@@ -266,23 +265,10 @@ function celebrateHerbarium() {
 }
 setInterval(announceSpecies, 4000);
 
-/** Change de lieu : chaque lieu a son jardin, ses parcelles et ses espèces. */
-function travel(id) {
-	if (id === state.place || !placeOpen(state, id)) return;
-	if (session) endSession();
-	const first = !state.places[id];
-	state.places[id] ??= newPlace();
-	state.place = id;
-	garden.setPlace(id);
-	endQuest();
-	renderHud();
-	renderStatus();
-	persist(true);
-	const p = PLACE_BY_ID[id];
-	if (first) {
-		showModal(`<h2>${p.name}</h2><p>${p.intro}</p><p>Ici poussent d'autres espèces. Tes pas feront pousser ce jardin-là, et sa clôture reculera à mesure que tu bougeras.</p>
-			<button class="btn primary" data-close>Explorer</button>`);
-	} else toast(`Tu es dans ${p.name.toLowerCase()}`, p.color);
+/** Va voir un milieu dans le jardin : la caméra file vers sa parcelle cœur. */
+function showBiome(id) {
+	const ci = heartOf(here(), id);
+	if (ci >= 0) garden.flyToCell(ci);
 }
 
 // ─── Toucher : plante, animal, parcelle ───────────────────────
@@ -324,7 +310,8 @@ garden.onTap = hit => {
 	if (hit.critter) return tapCritter(hit, card);
 	if (hit.cell != null) {
 		if (hit.open) garden.flyToCell(hit.cell);
-		else toast(`${zoneName(state.place, hit.cell, 'Nouvelle parcelle')} : encore ${fmt(Math.max(0.1, Math.ceil((CELL_KM[hit.cell] - here().km) * 10) / 10), 1)} km dans ${PLACE_BY_ID[state.place].name.toLowerCase()}`, '#9A7448');
+		else if (here().km >= CELL_KM[hit.cell]) chooseBiome(hit.cell);
+		else toast(`Nouvelle parcelle : encore ${fmt(Math.max(0.1, Math.ceil((CELL_KM[hit.cell] - here().km) * 10) / 10), 1)} km`, '#9A7448');
 		return;
 	}
 	const p = hit.plant;
@@ -436,8 +423,8 @@ const TIPS = [
 		title: 'Le potager', text: 'Pose des carrés de potager près de la cabane, côte à côte : les légumes poussent quand tu marches, et chaque récolte rapporte du nectar.' },
 	{ id: 'journal', target: '#btn-journal', when: () => (state.walks?.length ?? 0) >= 1,
 		title: 'Ton carnet', text: 'Tes sorties, tes kilomètres de la semaine et ce qu’ils ont fait pousser.' },
-	{ id: 'places', target: '#hud-day', when: () => Object.keys(state.places).length >= 2,
-		title: 'Un nouveau lieu', text: 'Touche le nom du lieu, en haut, pour voyager : chaque lieu a ses plantes, ses animaux et son écosystème.' },
+	{ id: 'biomes', target: '#hud-day', when: () => Object.keys(state.placesOpen ?? {}).length >= 2,
+		title: 'Un nouveau milieu', text: 'À chaque nouvelle parcelle, tu choisis son milieu : une mare au marais, de vieux arbres en forêt… Touche le nom en haut pour voir tous les milieux.' },
 	{ id: 'daily', target: '#daily', when: () => totalKm() >= 1,
 		title: 'Les défis du jour', text: 'Chaque jour, un cadeau et trois petits défis. Bouger quelques jours de suite fait grossir le cadeau.' },
 ];
@@ -507,9 +494,10 @@ $('#next-goal').addEventListener('click', () => {
 	const goal = nextGoal(state);
 	if (!goal) return;
 	if (!/espèce/.test(goal)) { toast(goal, '#9A7448'); return; }
-	const open = PLACES.filter(p => state.places[p.id] || placeOpen(state, p)).map(p => p.id);
+	const present = here().biomes ?? ['prairie'];
+	const open = PLACES.filter(p => present.includes(p.id) || placeOpen(state, p)).map(p => p.id);
 	const todo = SPECIES.filter(s => open.includes(s.place) && !state.species[s.id] && s.hint)
-		.sort((a, b) => (a.place === state.place ? 0 : 1) - (b.place === state.place ? 0 : 1) || (a.kind === 'plante' ? 1 : 0) - (b.kind === 'plante' ? 1 : 0))
+		.sort((a, b) => (present.includes(a.place) ? 0 : 1) - (present.includes(b.place) ? 0 : 1) || (a.kind === 'plante' ? 1 : 0) - (b.kind === 'plante' ? 1 : 0))
 		.slice(0, 6);
 	showModal(`<div class="modal-body"><h2>À découvrir</h2><p>${goal}. Voici des pistes :</p>
 		<ul class="harvest-rows">${todo.map(s => `<li><b>${PLACE_BY_ID[s.place].name}</b> · ${s.hint}</li>`).join('')}</ul></div>
@@ -596,23 +584,56 @@ function addEffortXp(effort) {
 }
 
 function checkUnlocks(events) {
-	const pl = here();
-	// La clôture recule : une nouvelle parcelle s'ouvre tous les quelques kilomètres faits dans ce lieu.
-	for (let n = cellsOpen(pl); n < CELLS.length && pl.km >= CELL_KM[n]; n = cellsOpen(pl)) {
-		garden.openCell(n);
-		(pl.cellDates ??= {})[n] = Date.now();
-		garden.flyToCell(n);
-		sound.chime(3);
-		toast(`La clôture recule : ${zoneName(state.place, n, 'une nouvelle parcelle').toLowerCase()} !`, '#9A7448');
+	const pl = here(), n = cellsOpen(pl);
+	// La clôture recule : une nouvelle parcelle tous les quelques kilomètres. On choisit son milieu ; tant qu'il
+	// n'y en a qu'un d'ouvert (la prairie), elle s'ouvre tout de suite.
+	if (n < CELLS.length && pl.km >= CELL_KM[n] && pl.pendingCell !== n) {
+		pl.pendingCell = n;
 		events?.push({ kind: 'cell', n });
+		if (PLACES.filter(p => placeOpen(state, p)).length <= 1) openParcel(n, 'prairie');
+		else {
+			sound.chime(3);
+			toast('Une nouvelle parcelle t’attend : choisis son milieu', '#9A7448', () => chooseBiome(n));
+			whenFree(() => chooseBiome(n));
+		}
 	}
 	for (const [key, d] of Object.entries(DECOR)) {
-		if (d.place !== state.place || d.always || pl.unlocked[key] || pl.km < d.km) continue;
+		if (heartOf(pl, d.place) < 0 || d.always || pl.unlocked[key] || biomeKm(pl, d.place) < d.km) continue;
 		pl.unlocked[key] = Date.now();
 		garden.reveal(key);
 		toast(DECOR_MSG[key], '#5BB5B0');
 		events?.push({ kind: 'decor', key });
 	}
+}
+
+/** Ouvre la parcelle `n` dans le milieu choisi ; s'il reste assez de kilomètres, la suivante attend déjà son tour. */
+function openParcel(n, biome) {
+	const pl = here();
+	if (cellsOpen(pl) !== n) return;
+	garden.openCell(n, biome);
+	delete pl.pendingCell;
+	(pl.cellDates ??= {})[n] = Date.now();
+	garden.flyToCell(n);
+	sound.chime(3);
+	toast(`La clôture recule : ${cellName(pl, n).toLowerCase()} !`, PLACE_BY_ID[biome].color);
+	persist(true);
+	checkUnlocks();
+}
+
+/** Le choix du milieu d'une nouvelle parcelle : les milieux ouverts, et ce qu'il faut pour les autres. */
+function chooseBiome(n) {
+	const pl = here();
+	if (cellsOpen(pl) !== n || pl.km < CELL_KM[n]) return;
+	const present = pl.biomes ?? ['prairie'];
+	showModal(`<div class="modal-body"><h2>Une nouvelle parcelle</h2>
+		<p>Choisis son milieu : chacun a ses plantes, ses animaux et ses aménagements.</p>
+		<div class="biome-pick">${PLACES.map(p => {
+			const open = placeOpen(state, p), count = present.filter(b => b === p.id).length;
+			const note = !open ? `dès ${p.km} km et ${p.found} espèces` : count ? `${count} parcelle${count > 1 ? 's' : ''} dans ton jardin` : 'nouveau dans ton jardin !';
+			return `<button class="biome-opt${count || !open ? '' : ' fresh'}" data-biome="${p.id}" ${open ? '' : 'disabled'} style="--pc:${p.color}"><i></i><span><b>${p.name}</b><small>${note}</small></span></button>`;
+		}).join('')}</div></div>
+		<div class="modal-foot"><button class="btn ghost" data-close>Plus tard</button></div>`);
+	for (const b of $('#modal').querySelectorAll('[data-biome]')) b.addEventListener('click', () => { closeModal(); openParcel(n, b.dataset.biome); });
 }
 
 // ─── Suivi automatique : pas de bouton, l'appli voit seule quand on bouge ─
@@ -871,7 +892,7 @@ function growthChips(matured, touched) {
 function showRecap(w, duration, matured) {
 	const chips = growthChips(matured, w.touched);
 	for (const ev of w.events) if (ev.kind === 'decor') chips.push(`<span class="chip gold">${DECOR[ev.key].name}</span>`);
-	for (const ev of w.events) if (ev.kind === 'cell') chips.push(`<span class="chip gold">${zoneName(state.place, ev.n, 'Nouvelle parcelle')}</span>`);
+	for (const ev of w.events) if (ev.kind === 'cell') chips.push(`<span class="chip gold">${cellsOpen(here()) > ev.n ? cellName(here(), ev.n) : 'Nouvelle parcelle'}</span>`);
 	for (const ev of w.events) if (ev.kind === 'sown') chips.push(`<span class="chip">Semé par ${ev.by} : ${plantName(ev.plant).toLowerCase()}</span>`);
 	const title = w.distance > 3000 ? 'Quelle balade !' : 'Belle balade !';
 	let ecoLine = '';
@@ -952,7 +973,7 @@ async function playHarvest(res, source) {
 	persist(true);
 	// Ce que la sortie a ouvert : nouvelles parcelles et nouveaux décors.
 	const decor = events.map(ev => ev.kind === 'cell'
-		? `<span class="chip gold">Nouvelle parcelle : ${zoneName(state.place, ev.n, 'un nouveau coin').toLowerCase()}</span>`
+		? `<span class="chip gold">Nouvelle parcelle${cellsOpen(here()) > ev.n ? ` : ${cellName(here(), ev.n).toLowerCase()}` : ''}</span>`
 		: `<span class="chip gold">${DECOR[ev.key]?.name ?? ''}</span>`).join('');
 	showModal(`<div class="modal-body">
 		<h2>Pendant ton absence</h2>
@@ -1061,14 +1082,14 @@ function renderJournal() {
 			<div class="goal" style="bottom:${(state.goalKm / max) * 100}%" title="Objectif"></div>
 			${days.map(x => `<div class="col${x.today ? ' today' : ''}"><div class="b" style="height:${(x.km / max) * 100}%"></div><span>${letters[x.d.getDay()]}</span></div>`).join('')}
 		</div>
-		<h3>Tous tes jardins</h3>
+		<h3>Ton jardin</h3>
 		<ul class="rows">
 			${Object.entries(PLANT_TYPES).map(([t, d]) => `<li><span>${d.plural[0].toUpperCase() + d.plural.slice(1)} <small>· ${ACTIVITIES.filter(a => a.plant === t).map(a => a.name.toLowerCase()).join(', ')}</small></span><b>${mature(t)}</b></li>`).join('')}
 		</ul>
-		<h3>${PLACE_BY_ID[state.place].name} · ${fmt(pl.km, 1)} km ici</h3>
+		${[...new Set(pl.biomes ?? ['prairie'])].map(b => `<h3>${PLACE_BY_ID[b].name} · ${(pl.biomes ?? ['prairie']).filter(x => x === b).length} parcelle${(pl.biomes ?? ['prairie']).filter(x => x === b).length > 1 ? 's' : ''}</h3>
 		<ul class="rows">
-			${Object.entries(DECOR).filter(([, d]) => d.place === state.place && !d.always).map(([k, d]) => `<li><span>${d.name}</span><b>${pl.unlocked[k] ? '✓' : `à ${d.km} km`}</b></li>`).join('')}
-		</ul>
+			${Object.entries(DECOR).filter(([, d]) => d.place === b && !d.always).map(([k, d]) => `<li><span>${d.name}</span><b>${pl.unlocked[k] ? '✓' : `dans ${fmt(Math.max(0.1, d.km - biomeKm(pl, b)), 1)} km`}</b></li>`).join('')}
+		</ul>`).join('')}
 		<h3>Ton album</h3>
 		<div id="album">${albumHtml(state)}</div>
 		<h3>Dernières balades</h3>
@@ -1202,12 +1223,12 @@ function renderDeco() {
 	const km = state.totals.distance / 1000;
 	const nectar = state.nectar ?? 0;
 	const here_ = garden.items;
-	const cat = CATS.find(c => c.id === decoTab);
+	const cat = CATS.find(c => c.id === decoTab), biome = garden.biomeOf(garden.active);
 	$('#deco').innerHTML = `
 		<div class="panel-head"><h2>Aménager</h2><button class="close" data-close-deco aria-label="Fermer">×</button></div>
 		<div class="deco-tabs" role="tablist">${CATS.map(c => `<button role="tab" aria-selected="${c.id === decoTab}" data-tab="${c.id}">${c.name}</button>`).join('')}</div>
-		<p class="sp-intro">${cat.intro} Tout se paie en nectar, et se range quand tu veux (le nectar t'est rendu).${state.place !== 'prairie' ? ` Ici, seulement ce qui a sa place ${PLACE_IN[state.place]}.` : ''}</p>
-		<div class="deco-list">${ITEM_ORDER.filter(k => ITEMS[k].cat === decoTab && fitsPlace(k, state.place)).map(k => {
+		<p class="sp-intro">${cat.intro} Tout se paie en nectar, et se range quand tu veux (le nectar t'est rendu).${biome !== 'prairie' ? ` Ici, seulement ce qui a sa place ${PLACE_IN[biome]}.` : ''}</p>
+		<div class="deco-list">${ITEM_ORDER.filter(k => ITEMS[k].cat === decoTab && fitsPlace(k, biome)).map(k => {
 			const it = ITEMS[k], cost = priceOf(k), need = needsFirst(k), locked = km < it.km || !!need, poor = nectar < cost;
 			const mine = here_.filter(x => x.kind === k), n = mine.length;
 			// L'habitat le moins avancé d'ici, qu'on peut améliorer depuis la liste.
@@ -1307,7 +1328,9 @@ $('#btn-place').addEventListener('click', () => {
 		const cost = priceOf(kind);
 		if ((state.nectar ?? 0) < cost) { toast('Pas assez de nectar', '#C0442F'); return endPlacing(); }
 		state.nectar -= cost;
-		garden.placeItem(kind, x, y, rot).paid = cost;
+		const placed = garden.placeItem(kind, x, y, rot);
+		placed.paid = cost;
+		if (kind === 'collecteur') fillFromDew(placed);
 		const help = itemHelp(kind);
 		toast(`${ITEMS[kind].name} : installé${/^Une /.test(ITEMS[kind].name) ? 'e' : /^Des /.test(ITEMS[kind].name) ? 's' : ''}${help ? ` · ${help}` : ''}`, '#9A7448');
 		if (kind === 'cabane' && garden.items.filter(x => x.kind === 'cabane').length === 1) {
@@ -1326,12 +1349,23 @@ $('#btn-place-turn').addEventListener('click', () => {
 	renderPlacing();
 });
 
+/** Un collecteur a de la place : les gouttes qui attendaient sur les fleurs filent s'y ranger. */
+function fillFromDew(it) {
+	const before = groundOf(state), moved = drainGround(state, state.place);
+	if (moved < 1) return;
+	setTimeout(() => garden.dewToJar(it, moved / before), 700);
+	renderHud();
+}
+
 function tapItem(hit, card) {
 	const it = hit.item, def = ITEMS[it.kind];
+	// Un collecteur vide avec des gouttes qui attendent sur les fleurs : elles viennent s'y ranger.
+	if (it.kind === 'collecteur' && stockOf(state, it) < 1) fillFromDew(it);
 	// Un collecteur plein (même un peu) se vide d'un seul geste.
 	if (it.kind === 'collecteur' && stockOf(state, it) >= 1) {
 		state.collectedJar = true;
 		jackpot(collect(emptyJar(state, it), false, true), it.x, it.y - 40);
+		fillFromDew(it);
 		return;
 	}
 	const lv = it.level ?? 1, nx = nextLevel(it);
@@ -1380,6 +1414,7 @@ function tapItem(hit, card) {
 			garden.popItem(it);
 			card.hidden = true;
 			toast(`Collecteur niveau ${it.level} : il garde ${COLLECTOR_CAP[it.level]} nectar`, '#E3A33A');
+			fillFromDew(it);
 			sound.chime(2);
 			renderHud();
 			renderStatus();
@@ -1541,6 +1576,10 @@ function renderOptions() {
 		<h3>Musique</h3>
 		<label class="switch"><input type="checkbox" id="opt-music" ${sound.musicSettings.on ? 'checked' : ''}><i></i><span>Musique zen, jamais la même</span></label>
 		${sound.musicSettings.on ? `<input type="range" id="opt-music-vol" class="volume" min="0" max="1" step="0.05" value="${sound.musicSettings.vol}" aria-label="Volume de la musique">` : ''}
+		<h3>Effet miniature</h3>
+		<label class="switch"><input type="checkbox" id="opt-fx" ${state.fx !== false ? 'checked' : ''}><i></i><span>Haut et bas de l'écran un peu flous, bords adoucis : le jardin comme une maquette</span></label>
+		<h3>Économie d'énergie</h3>
+		<label class="switch"><input type="checkbox" id="opt-eco" ${state.eco30 ? 'checked' : ''}><i></i><span>30 images par seconde : le téléphone chauffe moins, la batterie dure plus</span></label>
 		<h3>Ma partie</h3>
 		<p class="empty">Ton jardin est gardé sur ce téléphone. Garde-en une copie (un code à coller dans tes notes ou à t'envoyer) : elle le ramène après un changement de téléphone. ${backupAge(state)}</p>
 		<button class="btn ghost wide" id="opt-backup">Garder une copie de ma partie</button>
@@ -1551,7 +1590,7 @@ function renderOptions() {
 		<button class="btn ghost wide" id="opt-coach">Revoir le tutoriel</button>
 		<a class="btn ghost wide opt-link" href="privacy.html" target="_blank" rel="noopener">Confidentialité</a>
 		<h3>Recommencer</h3>
-		<p class="empty">Efface ton jardin, tes lieux, tes espèces et tes balades sur ce téléphone, pour repartir d'une prairie neuve.</p>
+		<p class="empty">Efface ton jardin, tes espèces et tes balades sur ce téléphone, pour repartir d'une prairie neuve.</p>
 		<button class="btn ghost wide danger" id="opt-reset">Recommencer à zéro</button>
 		<h3>Mode test</h3>
 		<label class="switch"><input type="checkbox" id="opt-dev" ${DEV ? 'checked' : ''}><i></i><span>Outils de test et raccourcis (pour essayer le jeu sans marcher)</span></label>
@@ -1566,7 +1605,7 @@ function renderOptions() {
 			<button id="dev-sim">${tracking.sim ? 'Arrêter le déplacement simulé' : 'Simuler un déplacement'}</button>
 			<button id="dev-harvest">Simuler une journée d'activité</button>
 			<button id="dev-km">+1 km ici (agrandir la clôture)</button>
-			<button id="dev-km10">+10 km (ouvrir des lieux)</button>
+			<button id="dev-km10">+10 km (ouvrir des milieux)</button>
 			<button id="dev-nectar">+500 nectar</button>
 			<button id="dev-day">Nouveau jour (cadeau et défis)</button>
 			<button id="dev-reset" class="danger">Effacer le jardin</button></div>` : ''}`;
@@ -1619,7 +1658,7 @@ $('#options').addEventListener('click', async e => {
 		closeOptions();
 		showDaily(true);
 	}
-	if ((id === 'dev-reset' || id === 'opt-reset') && confirm('Recommencer à zéro ? Ton jardin, tes lieux, tes espèces et tes balades seront effacés.')) {
+	if ((id === 'dev-reset' || id === 'opt-reset') && confirm('Recommencer à zéro ? Ton jardin, tes espèces et tes balades seront effacés.')) {
 		clearTimeout(saveTimer);
 		resetting = true;
 		reset();
@@ -1627,6 +1666,18 @@ $('#options').addEventListener('click', async e => {
 	}
 });
 $('#options').addEventListener('change', e => {
+	if (e.target.id === 'opt-fx') {
+		state.fx = e.target.checked;
+		$('#app').classList.toggle('no-fx', !state.fx);
+		persist(true);
+		return;
+	}
+	if (e.target.id === 'opt-eco') {
+		state.eco30 = e.target.checked;
+		garden.maxFps = state.eco30 ? 30 : 0;
+		persist(true);
+		return;
+	}
 	if (e.target.id === 'opt-notify') {
 		const on = e.target.checked;
 		(on ? askNotify() : Promise.resolve(false)).then(ok => {
@@ -1739,6 +1790,10 @@ renderStatus();
 const firstRun = !state.seenIntro;
 rollDay(state);
 checkUnlocks();
+if (here().pendingCell === cellsOpen(here()) && here().km >= CELL_KM[cellsOpen(here())]) whenFree(() => chooseBiome(here().pendingCell));
+garden.maxFps = state.eco30 ? 30 : 0;
+$('#app').classList.toggle('no-fx', state.fx === false);
+garden.onActive = () => { $('#hud-day').textContent = cellName(here(), garden.active); };
 announceSpecies(firstRun);
 updateSpeciesDot();
 persist(true);

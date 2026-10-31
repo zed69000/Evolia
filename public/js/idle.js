@@ -46,8 +46,8 @@ const TYPE_PLURAL = { herbe: 'herbes', fleur: 'fleurs', buisson: 'arbustes', arb
  * (et par les anciennes améliorations, achetées avant que tout passe par « Aménager »).
  */
 export function guildMembers(state, placeId, gid) {
-	const g = GUILDS[gid], place = state.places[placeId];
-	const list = SPECIES.filter(s => s.place === placeId && s.kind === 'animal' && g.members.includes(s.id) && state.species[s.id])
+	const g = GUILDS[gid], place = state.places[placeId], present = new Set(place?.biomes ?? ['prairie']);
+	const list = SPECIES.filter(s => present.has(s.place) && s.kind === 'animal' && g.members.includes(s.id) && state.species[s.id])
 		.map(sp => ({ sp, n: Math.max(1, sp.critter.count?.(state) ?? 1) }));
 	const items = (place?.items ?? []).reduce((a, it) => a + (ITEMS[it.kind]?.team === gid ? itemPower(it) : 0), 0);
 	const level = (place?.upgrades?.[g.upgrade.id] ?? 0) + items;
@@ -245,6 +245,19 @@ export function syncJars(state) {
 /** Ce que garde un collecteur posé. */
 export const stockOf = (state, it) => { syncJars(state); return it.stock ?? 0; };
 
+/**
+ * Quand un collecteur a de nouveau de la place (vidé, amélioré, ou tout juste posé), les gouttes qui attendaient
+ * sur les fleurs y coulent. Rend combien de nectar a rejoint les collecteurs.
+ */
+export function drainGround(state, placeId = null) {
+	syncJars(state);
+	const move = Math.min(groundOf(state), Math.max(0, jarCap(state) - jarOf(state)));
+	if (move < 1) return 0;
+	state.ground -= move;
+	fillJars(state, move, placeId);
+	return move;
+}
+
 /** Vide un seul collecteur : rend ce qu'il gardait (retiré de la récolte en attente). */
 export function emptyJar(state, it) {
 	const v = stockOf(state, it);
@@ -398,7 +411,7 @@ export class EcoPanel {
 		const hb = habitatBonus(st);
 		const habitats = `<div class="eco-elan${hb ? ' on' : ''}"><b>Habitats +${Math.round(hb * 100)} %</b><span>${r.capped
 			? 'Ton écosystème produit tout ce que permet ton activité de la semaine. Pour aller plus loin : bouge, ou améliore un abri (chaque niveau ajoute 3 %).'
-			: 'Chaque niveau d’abri, dans n’importe quel lieu, relève de 3 % ce que ton écosystème peut produire, jusqu’à +150 %.'}</span></div>`;
+			: 'Chaque niveau d’abri, dans n’importe quelle parcelle, relève de 3 % ce que ton écosystème peut produire, jusqu’à +150 %.'}</span></div>`;
 
 		// 3. Ce qui pousse tout seul, en plantes (pas en points).
 		const grow = Object.entries(r.grow).filter(([, v]) => v > 0).sort((a, b) => PLANT_TYPES[a[0]].cost - PLANT_TYPES[b[0]].cost)
@@ -422,14 +435,14 @@ export class EcoPanel {
 				g.bonus ? `+${Math.round(g.bonus * m.total * 100)} % à tout` : '',
 			].filter(Boolean).join(' · ') : 'personne pour l\'instant';
 			// L'objet proposé : le plus utile qu'on peut déjà construire pour cette équipe.
-			const kinds = Object.keys(ITEMS).filter(k => ITEMS[k].team === gid && fitsPlace(k, placeId));
+			const kinds = Object.keys(ITEMS).filter(k => ITEMS[k].team === gid && (place.biomes ?? ['prairie']).some(bi => fitsPlace(k, bi)));
 			const km = (st.totals?.distance ?? 0) / 1000;
 			const kind = kinds.filter(k => ITEMS[k].km <= km && (!ITEMS[k].needs || (place.items ?? []).some(it => it.kind === ITEMS[k].needs))).sort((a, b) => ITEMS[b].power - ITEMS[a].power || ITEMS[a].cost - ITEMS[b].cost)[0] ?? kinds[0];
 			const item = ITEMS[kind];
 			const placed = (place.items ?? []).filter(it => ITEMS[it.kind]?.team === gid).length;
 			const names = m.list.map(({ sp, n }) => `${sp.name}${n > 1 ? ` ×${n}` : ''}`).join(', ');
 			const detail = opened ? `<div class="eco-team-more">
-				<p>${on ? `<b>${g.does[0].toUpperCase() + g.does.slice(1)}.</b> ${names}${m.extra ? `, et ${m.extra} de plus grâce à tes aménagements` : ''}.` : `Découvre une de ces espèces ${PLACE_IN[placeId]} pour lancer l'équipe : ${g.members.map(id => SPECIES.find(sp => sp.id === id)).filter(sp => sp?.place === placeId).slice(0, 3).map(sp => sp.name.toLowerCase()).join(', ') || 'elle vit dans un autre lieu'}.`}</p>
+				<p>${on ? `<b>${g.does[0].toUpperCase() + g.does.slice(1)}.</b> ${names}${m.extra ? `, et ${m.extra} de plus grâce à tes aménagements` : ''}.` : `Découvre une de ces espèces ${PLACE_IN[placeId]} pour lancer l'équipe : ${g.members.map(id => SPECIES.find(sp => sp.id === id)).filter(sp => sp && (place.biomes ?? ['prairie']).includes(sp.place)).slice(0, 3).map(sp => sp.name.toLowerCase()).join(', ') || 'elle vit dans un milieu que ton jardin n’a pas encore'}.`}</p>
 				${on && item ? `<button class="btn primary small" data-place="${kind}">${placed ? 'En ajouter' : 'Aider'} : ${item.name.toLowerCase()}</button><small>${placed ? `Déjà ${placed} ici : touche-en un au jardin pour l’améliorer, chaque niveau compte comme un abri de plus` : item.power > 1 ? `Il fait venir ${item.power} membres de plus` : 'Chaque objet posé fait venir un membre de plus'}. Tous les abris sont dans Aménager, onglet Habitats.</small>` : ''}
 				<p class="eco-real"><b>Dans la vraie vie :</b> ${g.upgrade.real}</p>
 			</div>` : '';
@@ -450,7 +463,7 @@ export class EcoPanel {
 			${lastHtml}
 			<h3 class="eco-h">Tes équipes ${PLACE_IN[placeId]} <small>touche pour le détail</small></h3>
 			<ul class="eco-teams">${teams}</ul>
-			<h3 class="eco-h">Vitalité du lieu</h3>
+			<h3 class="eco-h">Vitalité du jardin</h3>
 			<div class="eco-vit"><div class="bar"><i style="width:${Math.round(vit.progress * 100)}%"></i></div><span>Niveau ${vit.level}${vit.bonus ? ` : tout pousse ${Math.round(vit.bonus * 100)} % plus vite ici` : ''}. Elle monte avec chaque plante qui pousse.</span></div>
 			<p class="eco-note">Ton écosystème travaille jusqu'à 12 h d'affilée sans toi : ouvre l'appli matin et soir pour ne rien perdre.</p>`;
 		for (const el of this.panel.querySelectorAll('[data-eco-thumb]')) {

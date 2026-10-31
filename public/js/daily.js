@@ -3,11 +3,10 @@
 // Une journée « active » : au moins ACTIVE_M mètres. Rater un jour ne remet pas la série à zéro,
 // elle est seulement divisée par deux : on encourage, on ne punit pas.
 
-import { dayKey, todayMeters, allPlants, autoGoal } from './state.js';
+import { dayKey, todayMeters, allPlants, autoGoal, biomeKm } from './state.js';
 import { PLACES, PLACE_BY_ID, PLACE_DE, SPECIES, SPECIES_BY_ID, placeOpen } from './species.js';
 import { DECOR } from './plants.js';
-import { CELLS, CELL_KM, cellsOpen } from './garden.js';
-import { zoneName } from './zones.js';
+import { CELLS, CELL_KM, cellsOpen, cellName } from './garden.js';
 
 export const ACTIVE_M = 500;
 
@@ -139,29 +138,32 @@ export function weekHtml(state) {
 	return `<div class="week-dots">${out.join('')}</div>`;
 }
 
-/** Le plus proche objectif, en kilomètres : nouvelle parcelle, décor, nouveau lieu, ou objectif du jour. */
+/** Le plus proche objectif, en kilomètres : nouvelle parcelle, décor, nouveau milieu, ou objectif du jour. */
 export function nextGoal(state) {
-	const place = state.places[state.place];
+	const place = state.places[state.place], present = place.biomes ?? ['prairie'];
 	const total = state.totals.distance / 1000;
 	const goals = [];
 	const n = cellsOpen(place);
-	if (n < CELLS.length) goals.push({ km: CELL_KM[n] - place.km, text: `pour ouvrir ${zoneName(state.place, n, 'une parcelle').toLowerCase()}` });
+	if (n < CELLS.length) goals.push({ km: CELL_KM[n] - place.km, text: 'pour ouvrir une nouvelle parcelle' });
 	for (const [k, d] of Object.entries(DECOR)) {
-		if (d.place === state.place && !d.always && !place.unlocked[k]) goals.push({ km: d.km - place.km, text: `pour ${DECOR_TEASE[k] ?? 'une surprise'}` });
+		if (present.includes(d.place) && !d.always && !place.unlocked[k]) goals.push({ km: d.km - biomeKm(place, d.place), text: `pour ${DECOR_TEASE[k] ?? 'une surprise'}` });
 	}
 	for (const p of PLACES) {
-		if (state.places[p.id] || placeOpen(state, p)) continue;
+		if (present.includes(p.id) || placeOpen(state, p)) continue;
 		const missing = p.found - Object.keys(state.species).length;
-		if (missing > 0 && p.km - total <= 0) goals.push({ km: 0, species: missing, text: `pour ouvrir ${p.name.toLowerCase()}` });
-		else if (missing <= 0) goals.push({ km: p.km - total, text: `pour ouvrir ${p.name.toLowerCase()}` });
+		if (missing > 0 && p.km - total <= 0) goals.push({ km: 0, species: missing, text: `pour découvrir ${p.name.toLowerCase()}` });
+		else if (missing <= 0) goals.push({ km: p.km - total, text: `pour découvrir ${p.name.toLowerCase()}` });
 	}
 	const today = state.goalKm - todayMeters(state) / 1000;
 	if (today > 0) goals.push({ km: today, text: "pour l'objectif du jour" });
 	const best = goals.filter(g => g.km > 0 || g.species).sort((a, b) => (a.species ? 0.5 : a.km) - (b.species ? 0.5 : b.km))[0];
 	if (!best) {
-		// Tout est ouvert : reste à compléter l'herbier du lieu.
-		const h = herbarium(state, state.place), left = h.total - h.found;
-		return left > 0 ? `Encore ${left} espèce${left > 1 ? 's' : ''} pour compléter l’herbier ${PLACE_DE[state.place]}` : null;
+		// Tout est ouvert : reste à compléter l'herbier d'un des milieux du jardin.
+		for (const b of present) {
+			const h = herbarium(state, b), left = h.total - h.found;
+			if (left > 0) return `Encore ${left} espèce${left > 1 ? 's' : ''} pour compléter l’herbier ${PLACE_DE[b]}`;
+		}
+		return null;
 	}
 	if (best.species) return `Encore ${best.species} espèce${best.species > 1 ? 's' : ''} à découvrir ${best.text}`;
 	return `Plus que ${fmt(Math.max(0.1, Math.ceil(best.km * 10) / 10))} km ${best.text}`;
@@ -177,7 +179,7 @@ export function herbarium(state, placeId) {
 export const HERBARIUM_REWARD = 500;
 export function newlyComplete(state) {
 	const done = (state.complete ??= {});
-	return PLACES.filter(p => state.places[p.id] && !done[p.id] && (h => h.found >= h.total)(herbarium(state, p.id)));
+	return PLACES.filter(p => (state.places[state.place]?.biomes ?? []).includes(p.id) && !done[p.id] && (h => h.found >= h.total)(herbarium(state, p.id)));
 }
 
 const DECOR_TEASE = {
@@ -194,10 +196,10 @@ export function albumHtml(state, limit = 40) {
 		if (sp && typeof t === 'number') items.push({ t, html: `<li data-open-sp="${id}"><i class="al-dot" style="background:${PLACE_BY_ID[sp.place]?.color ?? '#A3BD57'}"></i><span>${sp.name}</span><small>${sp.kind === 'milieu' ? 'milieu' : sp.kind === 'animal' ? 'animal' : 'plante'}</small></li>` });
 	}
 	for (const [id, t] of Object.entries(state.placesOpen ?? {})) {
-		if (typeof t === 'number') items.push({ t, html: `<li><i class="al-dot big" style="background:${PLACE_BY_ID[id].color}"></i><span><b>${PLACE_BY_ID[id].name}</b></span><small>nouveau lieu</small></li>` });
+		if (typeof t === 'number' && PLACE_BY_ID[id]) items.push({ t, html: `<li><i class="al-dot big" style="background:${PLACE_BY_ID[id].color}"></i><span><b>${PLACE_BY_ID[id].name}</b></span><small>nouveau milieu</small></li>` });
 	}
 	for (const [pid, pl] of Object.entries(state.places)) {
-		for (const [n, t] of Object.entries(pl.cellDates ?? {})) items.push({ t, html: `<li><i class="al-dot fence"></i><span>${zoneName(pid, Number(n), 'Parcelle')} · ${PLACE_BY_ID[pid].name.toLowerCase()}</span><small>clôture agrandie</small></li>` });
+		for (const [n, t] of Object.entries(pl.cellDates ?? {})) items.push({ t, html: `<li><i class="al-dot fence"></i><span>${cellName(pl, Number(n))}</span><small>nouvelle parcelle</small></li>` });
 		for (const [k, t] of Object.entries(pl.unlocked ?? {})) if (typeof t === 'number' && DECOR[k]) items.push({ t, html: `<li><i class="al-dot" style="background:#5BB5B0"></i><span>${DECOR[k].name}</span><small>décor</small></li>` });
 	}
 	items.sort((a, b) => b.t - a.t);

@@ -22,15 +22,17 @@ Puis ouvrir http://localhost:8642/?dev=1
 - `?date=2026-07-15` : force la date (pour comparer la lumière d'été et d'hiver).
 - `?weather=rain` : force la météo (`clear`, `clouds`, `overcast`, `fog`, `drizzle`, `rain`, `snow`, `storm`).
 
-## Lieux
+## Milieux (un seul jardin)
 
+Depuis la 0.7, tous les milieux vivent dans le même jardin : chaque parcelle a le sien, choisi à son ouverture.
 Prairie (départ), marais (8 km et 10 espèces), forêt (20 km, 24), montagne (45 km, 40), littoral (80 km, 55).
-Chaque lieu a son jardin, son sol, ses décors et ses espèces (142 en tout, dans `js/species.js`). La forêt arrive avec
-ses vieux arbres, un sol d'humus couvert de feuilles, de fougères et de mousse ; la montagne est un alpage vert semé
-de rochers ; le littoral un sable blond à oyats et coquillages ; le marais a trois mares reliées par une rivière.
-Compléter l'herbier d'un lieu (toutes ses espèces) rapporte 500 nectar.
-Dans chaque lieu, le terrain s'agrandit clairière par clairière (formes rondes ou ovales qui se fondent entre elles) : une clôture suit leur bord,
-la suivante attend en pointillés et s'ouvre à 1 ; 2,5 ; 4,5 ; 7 ; 10… km faits sur place (12 au plus).
+Chaque milieu a son sol, ses décors et ses espèces (142 en tout, dans `js/species.js`). La première parcelle d'un milieu
+est son cœur : la forêt y a ses vieux arbres, le marais ses trois mares reliées par une rivière. Les parcelles suivantes
+prennent les coins du milieu (roselière, hêtraie…). D'un milieu à l'autre, le sol et le relief se fondent sans couture.
+Compléter l'herbier d'un milieu (toutes ses espèces) rapporte 500 nectar.
+Le terrain s'agrandit clairière par clairière : la suivante s'ouvre à 1 ; 2,5 ; 4,5 ; 7 ; 10… km au total (24 au plus).
+Aménager ne propose que ce qui convient au milieu de la parcelle regardée, et un objet ne se pose que là où il a sa place.
+Les anciennes parties (un jardin par lieu) sont converties : les lieux deviennent des parcelles mises bout à bout.
 
 ## Ciel
 
@@ -41,11 +43,11 @@ arrondie à 0,1° (environ 10 km), seulement si la personne a autorisé sa posit
 
 - `js/watercolor.js` : primitives de peinture (lavis, rubans, feuilles, grain de papier).
 - `js/plants.js` : herbes, fleurs, buissons, arbres et décor (mare, champignons, tronc).
-- `js/garden.js` : le jardin d'un lieu (parcelles, clôture), caméra et zoom à trois niveaux de détail, vent, animaux, ombres, saisons.
+- `js/garden.js` : le jardin (parcelles et leur milieu, clôture), caméra et zoom à trois niveaux de détail, vent, animaux, ombres, saisons.
 - `js/tracker.js` : GPS et simulation.
 - `js/state.js` : activités (reprises du prototype Unity), effort, sauvegarde locale.
 - `js/main.js` : interface (bandeau, suivi automatique, récap, carnet, tutoriel).
-- `js/zones.js` : le sol sans raccord et les coins de chaque lieu (champ de coquelicots, verger, roselière…).
+- `js/zones.js` : le sol sans raccord, fondu d'un milieu à l'autre, et les coins de chaque milieu (champ de coquelicots, verger, roselière…).
 - `js/audio.js` : les sons de la nature, fabriqués avec Web Audio (vent, pluie, ressac, grillons, cris des animaux visibles, cloches douces).
 - `js/deco.js` : les objets à installer (cabane, banc, nichoir, lanterne…), peints à l'aquarelle.
 - `js/daily.js` : revenir chaque jour (cadeau, série de jours actifs, trois défis, prochain objectif, album).
@@ -55,7 +57,7 @@ arrondie à 0,1° (environ 10 km), seulement si la personne a autorisé sa posit
 - `js/critters.js` : abeilles, papillons, libellules, oiseaux (battement d'ailes en quatre temps), héron, chouette, aigle, marmotte, lézards…
 - `js/beasts.js` : mammifères et jardinier animés par poses-clés (bond du lapin, du lièvre et de l'écureuil ; pas du chevreuil, du chamois et du renard ; le fermier ou la fermière marche, ratisse, arrose, pousse la brouette).
 - `js/encyclopedia.js` : l'écran Biodiversité, lieu par lieu.
-- `js/map.js` : la carte des lieux.
+- `js/map.js` : la carte des milieux.
 - `js/idle.js` : l'écosystème qui travaille seul (guildes, nectar, aménagements, vitalité, élan sportif).
 - `js/weather.js` : soleil et météo réels.
 - `js/backup.js` : la copie de la partie (un code compressé à garder, à restaurer sur un autre téléphone).

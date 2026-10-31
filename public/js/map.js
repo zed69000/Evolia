@@ -1,6 +1,6 @@
-// Carte du monde : tous les lieux réunis sur un même paysage peint à l'aquarelle. La montagne en haut,
-// une rivière qui descend par la forêt et le marais jusqu'à la mer ; les lieux encore fermés restent dans la brume.
-// On touche un lieu pour le voir en détail et y aller.
+// Carte des milieux : tous réunis sur un même paysage peint à l'aquarelle. La montagne en haut,
+// une rivière qui descend par la forêt et le marais jusqu'à la mer ; les milieux encore fermés restent dans la brume.
+// On touche un milieu pour le voir en détail ; s'il a déjà ses parcelles, on va les voir dans le jardin.
 
 import { PLACES, PLACE_BY_ID, SPECIES, placeOpen } from './species.js';
 import { rng, wash, ribbon, curve, rgba } from './watercolor.js';
@@ -143,8 +143,11 @@ export class PlacesMap {
 		});
 	}
 
-	open() {
-		this.sel = this.state.place;
+	/** Les milieux qui ont déjà au moins une parcelle dans le jardin. */
+	present() { return this.state.places[this.state.place]?.biomes ?? ['prairie']; }
+
+	open(sel = null) {
+		this.sel = sel ?? 'prairie';
 		this.render();
 		this.panel.classList.add('open');
 		this.panel.setAttribute('aria-hidden', 'false');
@@ -159,7 +162,7 @@ export class PlacesMap {
 		const st = this.state;
 		const open = Object.fromEntries(PLACES.map(p => [p.id, placeOpen(st, p)]));
 		this.panel.innerHTML = `
-			<div class="panel-head"><h2>Le monde</h2><button class="close" data-close-map aria-label="Fermer">×</button></div>
+			<div class="panel-head"><h2>Les milieux</h2><button class="close" data-close-map aria-label="Fermer">×</button></div>
 			<div class="wm" style="aspect-ratio:${W} / ${H}"><canvas></canvas><div class="wm-nodes"></div></div>
 			<div class="wm-card card"></div>`;
 		// La carte n'est repeinte que si un lieu s'est ouvert depuis la dernière fois.
@@ -184,7 +187,7 @@ export class PlacesMap {
 	renderNodes() {
 		const st = this.state;
 		this.panel.querySelector('.wm-nodes').innerHTML = PLACES.map(p => {
-			const n = NODE[p.id], open = placeOpen(st, p), here = st.place === p.id;
+			const n = NODE[p.id], open = placeOpen(st, p), here = this.present().includes(p.id);
 			return `<button class="wm-node${open ? '' : ' locked'}${here ? ' here' : ''}${this.sel === p.id ? ' sel' : ''}" data-node="${p.id}" style="left:${(n.x / W) * 100}%;top:${(n.y / H) * 100}%;--pc:${p.color}">
 				${here ? '<i class="wm-pin" aria-hidden="true"></i>' : ''}<b>${p.short}</b>${open ? '' : `<small>${p.km} km</small>`}</button>`;
 		}).join('');
@@ -192,11 +195,11 @@ export class PlacesMap {
 
 	renderCard() {
 		const st = this.state, p = PLACE_BY_ID[this.sel];
-		const open = placeOpen(st, p), here = st.place === p.id;
+		const open = placeOpen(st, p), here = this.present().includes(p.id);
 		const km = st.totals.distance / 1000, found = Object.keys(st.species).length;
 		const list = SPECIES.filter(s => s.place === p.id), n = list.filter(s => st.species[s.id]).length;
-		const action = here ? '<span class="chip gold">Tu es ici</span>'
-			: open ? `<button class="btn primary small" data-travel="${p.id}">Y aller</button>`
+		const action = here ? `<button class="btn primary small" data-travel="${p.id}">Voir dans mon jardin</button>`
+			: open ? '<span class="chip gold">Disponible : choisis-le pour ta prochaine parcelle</span>'
 			: `<div class="pl-need">
 				<div><span>${fmt(Math.min(km, p.km))} / ${p.km} km parcourus</span><div class="bar"><i style="width:${Math.min(100, (km / p.km) * 100)}%"></i></div></div>
 				<div><span>${Math.min(found, p.found)} / ${p.found} espèces découvertes</span><div class="bar"><i style="width:${Math.min(100, (found / p.found) * 100)}%"></i></div></div>

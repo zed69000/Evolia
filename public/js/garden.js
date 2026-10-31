@@ -1,5 +1,5 @@
-// Le jardin d'un lieu (prairie, marais, forêt…) : un terrain qui s'agrandit parcelle par parcelle
-// quand on bouge, une caméra libre avec zoom, trois niveaux de détail, les plantes, les animaux,
+// Le jardin : un terrain qui s'agrandit parcelle par parcelle quand on bouge, chaque parcelle dans son milieu
+// (prairie, marais, forêt, montagne, littoral), une caméra libre avec zoom, trois niveaux de détail, les plantes, les animaux,
 // le vent, les ombres et le ciel (heure, saison, météo).
 // Coordonnées : chaque plante garde des coordonnées locales à sa parcelle (`c`, 0 par défaut) ;
 // le monde les décale de l'origine de la parcelle (colonne × PARCEL_W, rangée × PARCEL_H).
@@ -9,14 +9,19 @@ import { PLANT_TYPES, DECOR, DECOR_PAINTERS, paintPlant, paintTurf, newVariant, 
 import { drawCritter, CRITTER_SIZE, FLIGHT } from './critters.js';
 import { GAIT } from './beasts.js';
 import { SPECIES, PLACE_BY_ID, speciesOf } from './species.js';
-import { PARCEL_W, PARCEL_H, CELLS, CELL_KM, GROUND, zoneOf, zoneName, tileSteps, keepOut } from './zones.js';
-import { newPlace } from './state.js';
-import { ITEMS, ITEM_PAINTERS, attracted, paintSoil, PLOT, paintAdorn, canLevel, itemBox, LINK, linkEnds } from './deco.js';
+import { PARCEL_W, PARCEL_H, CELLS, CELL_KM, GROUND, zoneOf, zoneName, tileSteps, tileSig, keepOut, cellIndexAt, riversIn } from './zones.js';
+import { biomeOf, heartOf, rankOf, biomesIn } from './state.js';
+import { ITEMS, ITEM_PAINTERS, attracted, paintSoil, PLOT, paintAdorn, canLevel, itemBox, LINK, linkEnds, fitsPlace } from './deco.js';
 
 export { PARCEL_W, PARCEL_H, CELLS, CELL_KM };
 export const cellsOpen = place => Math.min(CELLS.length, place?.cells ?? 1);
 export const cellOrigin = i => [CELLS[i][0] * PARCEL_W, CELLS[i][1] * PARCEL_H];
 const cellOf = p => p.c ?? 0;
+/** Le nom d'une parcelle : le milieu pour son cœur (« Le marais »), puis ses coins (« La roselière »…). */
+export function cellName(place, ci) {
+	const b = biomeOf(place, ci);
+	return zoneName(b, rankOf(place, ci), PLACE_BY_ID[b].name);
+}
 const FENCE_STEP = 34;
 const STAGES = 30;
 const SWAY = { herbe: 0.09, fleur: 0.07, buisson: 0.02, arbre: 0.012 };
@@ -32,6 +37,8 @@ const OLD_TREES = {
 	montagne: [[60, 330], [370, 420], [345, 1010]],
 	littoral: [[60, 900], [375, 1030]],
 };
+// L'eau des mares (décors), pour ses reflets : taille relative à la mare de la prairie.
+const POND_SIZE = { pond: 1, bigpond: 1.65, mare2: 1, mare3: 1.15 };
 const POND_PADS = [[40, -10], [58, 10], [-60, 14], [-20, 24], [10, -26]];
 const FLYERS = new Set(['bee', 'butterfly', 'dragonfly', 'hoverfly', 'beefly']);
 // Niveaux de détail selon le zoom : formes simples, aquarelle, aquarelle détaillée.
@@ -131,11 +138,12 @@ export class Garden {
 		this.onTap = null;
 		this.pointers = new Map();
 		this.vel = { x: 0, y: 0 };
-		this.biome = state.place;
 		this.active = 0;
+		// La case du sol en (gx, gy) : son milieu et son rang (voir zones.js).
+		this.at = (gx, gy) => this.tileAt(gx, gy);
 		this.cam = { cx: PARCEL_W / 2, cy: PARCEL_H * 0.42, z: 1 };
 
-		this.ensurePlace(this.biome);
+		this.ensurePlace();
 		this.tidyPlants();
 		this.resize();
 		new ResizeObserver(() => this.resize()).observe(canvas);
@@ -146,59 +154,72 @@ export class Garden {
 
 	// ─── Lieu et parcelles ─────────────────────────────────────────
 
-	get place() { return this.state.places[this.biome]; }
+	get place() { return this.state.places[this.state.place]; }
 
-	/** Crée le jardin d'un lieu la première fois qu'on y va, avec quelques plantes de départ. */
-	ensurePlace(id) {
-		const place = this.state.places[id];
-		if (place && (place.seeded || place.plants.length)) return false;
-		if (!place) this.state.places[id] = newPlace();
-		this.state.places[id].seeded = true;
-		this.seedStarterGarden(id);
-		return true;
+	/** Le milieu d'une parcelle. */
+	biomeOf(ci) { return biomeOf(this.place, ci); }
+	/** La parcelle cœur d'un milieu (ses mares, ses vieux arbres, ses décors), ou -1. */
+	heart(biome) { return heartOf(this.place, biome); }
+	/** Le coin d'une parcelle (null pour un cœur). */
+	zoneAt(ci) { return zoneOf(this.biomeOf(ci), rankOf(this.place, ci)); }
+
+	/**
+	 * La case du sol en (gx, gy) : le milieu de sa parcelle, et son rang parmi celles de ce milieu. Hors du jardin
+	 * (et pour la prochaine parcelle, encore dans la brume), la campagne sauvage du milieu ouvert le plus proche.
+	 */
+	tileAt(gx, gy) {
+		const n = cellsOpen(this.place), sig = (this.place.biomes ?? []).slice(0, n).join(',');
+		if (this.tileMemo?.sig !== sig) this.tileMemo = { sig, map: new Map() };
+		const k = `${gx},${gy}`;
+		let t = this.tileMemo.map.get(k);
+		if (t) return t;
+		const ci = cellIndexAt(gx, gy);
+		if (ci >= 0 && ci < n) t = { biome: this.biomeOf(ci), rank: rankOf(this.place, ci) };
+		else {
+			let best = 0, bd = Infinity;
+			for (let j = 0; j < n; j++) { const d = Math.hypot(CELLS[j][0] - gx, (CELLS[j][1] - gy) * 1.2); if (d < bd) { bd = d; best = j; } }
+			t = { biome: this.biomeOf(best), rank: -1 };
+		}
+		this.tileMemo.map.set(k, t);
+		return t;
+	}
+
+	/** Le premier jardin : quelques plantes de départ ; puis le caractère de chaque milieu déjà là. */
+	ensurePlace() {
+		const place = this.place;
+		if (!place.seeded && !place.plants.length) this.seedStarterGarden(this.biomeOf(0), 0);
+		place.seeded = true;
+		for (const b of biomesIn(place)) this.renewBiome(b);
 	}
 
 	/**
-	 * Le caractère d'un lieu dès l'arrivée : la forêt a déjà ses vieux arbres, la montagne ses mélèzes, la dune
-	 * ses pins. Ajouté une seule fois, aussi aux lieux ouverts avant ; rien ne reste dans l'eau des mares du marais.
+	 * Le caractère d'un milieu dès son arrivée dans le jardin : la forêt a déjà ses vieux arbres, la montagne ses
+	 * mélèzes, la dune ses pins. Ajouté une seule fois, dans sa parcelle cœur ; rien ne reste dans l'eau des mares.
 	 */
-	renewPlace(id) {
-		const place = this.state.places[id];
-		if (!place || (place.renewed ?? 0) >= 1) return;
-		place.renewed = 1;
-		for (const [x, y] of OLD_TREES[id] ?? []) {
-			if (place.plants.some(p => Math.hypot(p.x - x, (p.y - y) * 1.25) < 70)) continue;
-			this.spawn(id, 'arbre', 1, { x, y });
+	renewBiome(biome) {
+		const place = this.place, ci = this.heart(biome);
+		if (ci < 0) return;
+		if (typeof place.renewed !== 'object') place.renewed = place.renewed ? { prairie: 1 } : {};
+		if (place.renewed[biome]) return;
+		place.renewed[biome] = 1;
+		const here = place.plants.filter(p => cellOf(p) === ci);
+		for (const [x, y] of OLD_TREES[biome] ?? []) {
+			if (here.some(p => Math.hypot(p.x - x, (p.y - y) * 1.25) < 70)) continue;
+			this.spawn(this.state.place, 'arbre', 1, { x, y }, ci);
 		}
-		const ponds = Object.values(DECOR).filter(d => d.place === id && d.always && d.rad);
-		place.plants = place.plants.filter(p => !ponds.some(d => Math.hypot(p.x - d.x, (p.y - d.y) * 1.25) < d.rad));
+		const ponds = Object.values(DECOR).filter(d => d.place === biome && d.always && d.rad);
+		place.plants = place.plants.filter(p => cellOf(p) !== ci || !ponds.some(d => Math.hypot(p.x - d.x, (p.y - d.y) * 1.25) < d.rad));
 	}
 
 	/** Les plantes d'une ancienne version restées hors des clairières reviennent à l'intérieur. */
 	tidyPlants() {
 		for (const p of this.place.plants) {
 			const ci = cellOf(p), [ox, oy] = cellOrigin(ci);
-			if (ci >= cellsOpen(this.place) || (this.inBlob(this.blob(ci), ox + p.x, oy + p.y, 10) && !keepOut(this.biome, ox + p.x, oy + p.y))) continue;
-			const pos = this.place_(this.biome, p.type, ci);
+			if (ci >= cellsOpen(this.place) || (this.inBlob(this.blob(ci), ox + p.x, oy + p.y, 10) && !keepOut(this.at, ox + p.x, oy + p.y))) continue;
+			const pos = this.place_(this.state.place, p.type, ci);
 			p.x = Math.round(pos.x); p.y = Math.round(pos.y);
 		}
 		for (const it of this.place.items ?? []) this.clearUnder(it);
-	}
-
-	/** Change de lieu : un autre jardin, d'autres espèces. */
-	setPlace(id) {
-		this.ensurePlace(id);
-		this.renewPlace(id);
-		this.biome = id;
-		this.active = 0;
-		this.insects = [];
-		this.pdata = {};
-		this.particles = [];
-		this.current = null;
-		this.nextPopulate = 0;
-		this.cam = { cx: PARCEL_W / 2, cy: PARCEL_H * 0.42, z: 1 };
-		this.camTarget = null;
-		this.tidyPlants();
 	}
 
 	openCells() {
@@ -216,15 +237,25 @@ export class Garden {
 		return CELLS.findIndex(([x, y]) => x === gx && y === gy);
 	}
 
-	/** Une nouvelle parcelle s'ouvre avec les plantes de son coin, pour qu'elle ait tout de suite son caractère. */
-	openCell(i) {
+	/**
+	 * Une nouvelle parcelle s'ouvre dans le milieu choisi. La première d'un milieu en est le cœur : son premier jardin,
+	 * ses vieux arbres, ses mares. Les suivantes arrivent avec les plantes de leur coin, pour avoir tout de suite leur caractère.
+	 */
+	openCell(i, biome = 'prairie') {
 		const place = this.place;
+		(place.biomes ??= ['prairie'])[i] = biome;
 		place.cells = Math.max(cellsOpen(place), i + 1);
-		const start = zoneOf(this.biome, i)?.start ?? [['herbe', 5, 1], ['fleur', 2, 1]];
-		// Une parcelle est grande : on double les herbes et on ajoute moitié plus de fleurs, pour qu'elle ne paraisse jamais vide.
-		const more = { herbe: 2, fleur: 1.5 };
-		for (const [type, count, growth] of start) {
-			for (let k = 0; k < Math.round(count * (more[type] ?? 1)); k++) this.spawn(this.biome, type, growth, this.place_(this.biome, type, i), i);
+		if (this.heart(biome) === i) {
+			(place.heartKm ??= {})[biome] = place.km ?? 0;
+			this.seedStarterGarden(biome, i);
+			this.renewBiome(biome);
+		} else {
+			const start = this.zoneAt(i)?.start ?? [['herbe', 5, 1], ['fleur', 2, 1]];
+			// Une parcelle est grande : on double les herbes et on ajoute moitié plus de fleurs, pour qu'elle ne paraisse jamais vide.
+			const more = { herbe: 2, fleur: 1.5 };
+			for (const [type, count, growth] of start) {
+				for (let k = 0; k < Math.round(count * (more[type] ?? 1)); k++) this.spawn(this.state.place, type, growth, this.place_(this.state.place, type, i), i);
+			}
 		}
 		const [ox, oy] = cellOrigin(i);
 		this.burst(ox + PARCEL_W / 2, oy + PARCEL_H * 0.4, 30, '#F4C23E');
@@ -232,12 +263,12 @@ export class Garden {
 
 	// ─── Clairières : chaque parcelle est une forme ronde ou ovale, un peu bosselée ; elles se fondent entre elles.
 
-	/** Forme d'une parcelle : ovale tiré au hasard (mais toujours le même pour ce lieu et cette parcelle), bord ondulé. */
+	/** Forme d'une parcelle : ovale tiré au hasard (mais toujours le même pour cette parcelle), bord ondulé. */
 	blob(ci) {
-		const key = `${this.biome}:${ci}`;
+		const key = `${ci}`;
 		let b = this.blobs.get(key);
 		if (b) return b;
-		const r = rng(7 + this.biome.length * 97 + ci * 53);
+		const r = rng(7 + 7 * 97 + ci * 53);
 		const [ox, oy] = cellOrigin(ci);
 		b = {
 			cx: ox + PARCEL_W / 2 + r.range(-20, 20), cy: oy + PARCEL_H / 2 + r.range(-40, 40),
@@ -456,7 +487,7 @@ export class Garden {
 	 * attend son tour (une par image) : on montre en attendant sa version légère, ou la couleur du sol.
 	 */
 	tileFor(gx, gy, lo = false) {
-		const key = `${this.biome}:${gx},${gy}`;
+		const key = `${tileSig(this.at, gx, gy)}:${gx},${gy}`;
 		const hi = this.bgs.get(key), light = this.bgs.get(`${key}:lo`);
 		const want = lo ? light : hi;
 		if (want) { want.used = this.t; return want.canvas; }
@@ -469,7 +500,7 @@ export class Garden {
 	}
 
 	queueTile(gx, gy, lo) {
-		const key = `${this.biome}:${gx},${gy}${lo ? ':lo' : ''}`;
+		const key = `${tileSig(this.at, gx, gy)}:${gx},${gy}${lo ? ':lo' : ''}`;
 		if (this.tileJobs.has(key)) return;
 		const D = this.density * (lo ? 0.4 : 1);
 		const c = document.createElement('canvas');
@@ -477,7 +508,7 @@ export class Garden {
 		c.height = Math.ceil(PARCEL_H * D);
 		const g = c.getContext('2d');
 		g.scale(D, D);
-		this.tileJobs.set(key, { key, c, g, steps: tileSteps(this.biome, gx, gy, col => this.groundColor(col), this.season), i: 0, lo, at: this.t });
+		this.tileJobs.set(key, { key, c, g, steps: tileSteps(this.at, gx, gy, col => this.groundColor(col), this.season), i: 0, lo, at: this.t });
 	}
 
 	/** Avance la peinture des cases en attente, sans dépasser `ms` millisecondes par image. */
@@ -536,13 +567,14 @@ export class Garden {
 		}
 		m.setTransform(S, 0, 0, S, cw / 2 - this.cam.cx * S, ch / 2 - this.cam.cy * S);
 		m.globalCompositeOperation = 'destination-out';
-		// Au littoral, la mer reste nette : la brume s'efface au-dessus du rivage.
-		if (this.biome === 'littoral' && !this.glyph) {
-			const prev = m.fillStyle, fade = m.createLinearGradient(0, 120, 0, 190);
+		// Au littoral de la première rangée, la mer reste nette : la brume s'efface au-dessus du rivage.
+		if (!this.glyph) for (const ci of this.openCells()) {
+			if (this.biomeOf(ci) !== 'littoral' || CELLS[ci][1] !== 0) continue;
+			const prev = m.fillStyle, fade = m.createLinearGradient(0, 120, 0, 190), [ox] = cellOrigin(ci);
 			fade.addColorStop(0, 'rgba(0,0,0,0.85)');
 			fade.addColorStop(1, 'rgba(0,0,0,0)');
 			m.fillStyle = fade;
-			m.fillRect(-1e5, -1e5, 2e5, 1e5 + 190);
+			m.fillRect(ox, -1e5, PARCEL_W, 1e5 + 190);
 			m.fillStyle = prev;
 		}
 		m.globalAlpha = 0.55;
@@ -568,7 +600,7 @@ export class Garden {
 	 */
 	gardenMask() {
 		const open = this.openCells();
-		const key = `${this.biome}:${open.join(',')}`;
+		const key = open.join(',');
 		if (this.maskCache?.key === key) return this.maskCache;
 		const k = 1 / 8, pad = 160;
 		let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
@@ -724,8 +756,8 @@ export class Garden {
 
 	// ─── Plantes ───────────────────────────────────────────────────
 
-	/** Un premier jardin composé à la main pour chaque lieu, pour ne pas arriver sur un terrain vide. */
-	seedStarterGarden(pid) {
+	/** Un premier jardin composé à la main pour chaque milieu, dans sa parcelle cœur : jamais un terrain vide. */
+	seedStarterGarden(pid, ci = 0) {
 		const starters = {
 			prairie: { herbe: [[70, 470], [115, 520], [300, 420], [345, 560], [210, 640], [80, 690], [265, 740], [190, 500]], fleur: [[140, 440, 1], [172, 470, 1], [120, 480, 0.3]], arbre: [[310, 330, 0.08]] },
 			marais: { herbe: [[50, 330], [370, 340], [40, 770], [380, 700], [300, 820], [140, 820]], fleur: [[330, 370, 1], [80, 740, 1], [360, 760, 0.3]] },
@@ -733,11 +765,12 @@ export class Garden {
 			montagne: { herbe: [[80, 480], [140, 540], [300, 470], [360, 600], [220, 660]], fleur: [[200, 520, 1], [230, 545, 1]], arbre: [[90, 330, 0.08]] },
 			littoral: { herbe: [[60, 420], [120, 470], [300, 450], [360, 520], [200, 560], [80, 640]], fleur: [[240, 480, 1], [150, 600, 0.3]], arbre: [[330, 760, 0.08]] },
 		}[pid];
-		for (const [type, list] of Object.entries(starters)) for (const [x, y, g = 1] of list) this.spawn(pid, type, g, { x, y });
+		for (const [type, list] of Object.entries(starters)) for (const [x, y, g = 1] of list) this.spawn(this.state.place, type, g, { x, y }, ci);
 	}
 
+	/** Pas de plante dans la mer, en haut des parcelles du littoral de la première rangée. */
 	minY(pid, type, ci = 0) {
-		return MIN_Y[type] + (pid === 'littoral' && CELLS[ci][1] === 0 ? 240 : 0);
+		return MIN_Y[type] + (this.biomeOf(ci) === 'littoral' && CELLS[ci][1] === 0 ? 240 : 0);
 	}
 
 	/** Trouve une place libre dans une parcelle ; si elle est pleine, on serre un peu les plantes. */
@@ -747,7 +780,7 @@ export class Garden {
 		const here = place.plants.filter(p => cellOf(p) === ci);
 		const obstacles = [
 			...here.map(p => ({ x: p.x, y: p.y, rad: PLANT_TYPES[p.type].spacing })),
-			...(ci === 0 ? Object.values(DECOR).filter(d => d.place === pid && d.rad).map(d => ({ x: d.x, y: d.y, rad: d.rad })) : []),
+			...Object.values(DECOR).filter(d => d.rad && this.heart(d.place) === ci).map(d => ({ x: d.x, y: d.y, rad: d.rad })),
 			...(place.items ?? []).map(it => ({ x: it.x - cellOrigin(ci)[0], y: it.y - cellOrigin(ci)[1] - itemBox(it.kind, it.level).ay * 0.3, rad: itemBox(it.kind, it.level).w * 0.5 })),
 		];
 		const same = here.filter(p => p.type === type);
@@ -774,8 +807,8 @@ export class Garden {
 			}
 			if (x < 30 || x > PARCEL_W - 30 || y < y0 || y > H - 30) continue;
 			const wx = cellOrigin(ci)[0] + x, wy = cellOrigin(ci)[1] + y;
-			if (pid === this.biome && !this.inBlob(this.blob(ci), wx, wy, type === 'arbre' ? 50 : 26)) continue;
-			if (keepOut(pid, wx, wy, type === 'arbre' ? 30 : 8)) continue;
+			if (!this.inBlob(this.blob(ci), wx, wy, type === 'arbre' ? 50 : 26)) continue;
+			if (keepOut(this.at, wx, wy, type === 'arbre' ? 30 : 8)) continue;
 			let gap = Infinity;
 			for (const o of obstacles) gap = Math.min(gap, Math.hypot(o.x - x, (o.y - y) * 1.25) - o.rad - sp);
 			// Les petites plantes se regroupent en touffes ; les arbres cherchent de l'espace.
@@ -788,16 +821,14 @@ export class Garden {
 	spawn(pid, type, growth = 0, pos = this.place_(pid, type), ci = 0) {
 		const p = {
 			id: uid(), type, x: Math.round(pos.x), y: Math.round(pos.y), growth, ...(ci ? { c: ci } : {}),
-			seed: Math.floor(Math.random() * 2147483647), variant: newVariant(type, pid, this.state.species, zoneOf(pid, ci)?.favor), born: Date.now(),
+			seed: Math.floor(Math.random() * 2147483647), variant: newVariant(type, this.biomeOf(ci), this.state.species, this.zoneAt(ci)?.favor), born: Date.now(),
 		};
 		this.state.places[pid].plants.push(p);
 		return p;
 	}
 
-	/** Ajoute de l'effort à la plante en cours de ce type dans un lieu ; plante une graine si besoin,
-	 *  dans la parcelle regardée (ou, pour un autre lieu, dans une de ses parcelles au hasard). */
-	addEffort(type, amount, pid = this.biome, follow = true) {
-		this.ensurePlace(pid);
+	/** Ajoute de l'effort à la plante en cours de ce type ; plante une graine si besoin, là où il en manque le plus. */
+	addEffort(type, amount, pid = this.state.place, follow = true) {
 		const place = this.state.places[pid];
 		const events = [];
 		const cost = PLANT_TYPES[type].cost;
@@ -841,11 +872,11 @@ export class Garden {
 		if (place.plants.filter(q => q.sown && q.type === next.type && q.growth < 1).length >= 2) return;
 		const ci = cellOf(parent);
 		const pos = this.place_(pid, next.type, ci, parent);
-		const by = pick(next.by[pid] ?? next.by.default);
+		const by = pick(next.by[this.biomeOf(ci)] ?? next.by.default);
 		const p = this.spawn(pid, next.type, next.start, pos, ci);
 		p.sown = by;
 		events.push({ kind: 'sown', plant: p, pid, by });
-		if (pid === this.biome) {
+		{
 			const [ox, oy] = cellOrigin(ci);
 			this.burst(ox + p.x, oy + p.y - 6, 8);
 		}
@@ -862,9 +893,9 @@ export class Garden {
 		let best = 0, bestScore = Infinity;
 		for (let ci = 0; ci < n; ci++) {
 			const have = place.plants.filter(q => cellOf(q) === ci && q.type === type).length;
-			const zone = zoneOf(pid, ci);
+			const zone = this.zoneAt(ci);
 			const likes = zone && zone.start.some(([t]) => t === type) ? 1.6 : 1;
-			const score = have / (want * likes) - (pid === this.biome && ci === this.active ? 0.15 : 0) + Math.random() * 0.05;
+			const score = have / (want * likes) - (ci === this.active ? 0.15 : 0) + Math.random() * 0.05;
 			if (score < bestScore) { bestScore = score; best = ci; }
 		}
 		return best;
@@ -979,10 +1010,19 @@ export class Garden {
 		return s;
 	}
 
-	/** Peut-on poser cet objet ici : dans une clairière ouverte, pas dans l'eau ni sur un sentier, pas sur un autre objet. */
+	/**
+	 * Peut-on poser cet objet ici : dans une clairière ouverte, dans un milieu où il a sa place, pas dans l'eau
+	 * ni sur un sentier, pas sur un autre objet.
+	 */
 	canPlace(kind, x, y, except = null) {
 		const r = itemBox(kind, except?.level).w * 0.35;
-		if (!this.inOpen(x, y, r * 0.6) || keepOut(this.biome, x, y, r * 0.5)) return false;
+		if (!this.inOpen(x, y, r * 0.6) || keepOut(this.at, x, y, r * 0.5)) return false;
+		if (!fitsPlace(kind, this.biomeAtWorld(x, y))) return false;
+		// Pas dans une mare ni sur un décor (vieux tronc, muret, éboulis…).
+		for (const key of Object.keys(DECOR)) {
+			const d = DECOR[key], pos = d.rad && this.decorVisible(key) && this.decorPos(key);
+			if (pos && Math.hypot(pos.x - x, (pos.y - y) * 1.25) < d.rad * 0.8 + r) return false;
+		}
 		// Pas sur un arbre ou un arbuste : herbes et fleurs, elles, s'écartent sans dommage.
 		for (const p of this.place.plants) {
 			if (p.type !== 'arbre' && p.type !== 'buisson') continue;
@@ -1046,7 +1086,7 @@ export class Garden {
 			if (p.type === 'arbre' || p.type === 'buisson') continue;
 			const ci = cellOf(p), [ox, oy] = cellOrigin(ci), x = ox + p.x, y = oy + p.y;
 			if (x < f.x0 || x > f.x1 || y < f.y0 || y > f.y1) continue;
-			const pos = this.place_(this.biome, p.type, ci);
+			const pos = this.place_(this.state.place, p.type, ci);
 			p.x = Math.round(pos.x); p.y = Math.round(pos.y);
 			this.meta.delete(p.id);
 		}
@@ -1152,18 +1192,33 @@ export class Garden {
 		return s;
 	}
 
+	/** Un décor est là quand son milieu a sa parcelle cœur dans le jardin (et, sauf les mares du marais, après quelques km). */
 	decorVisible(key) {
-		const d = DECOR[key], place = this.state.places[d.place];
-		return d.place === this.biome && !!place && (d.always || !!place.unlocked[key]);
+		const d = DECOR[key];
+		return this.heart(d.place) >= 0 && (d.always || !!this.place.unlocked?.[key]);
+	}
+
+	/** Où est un décor dans le monde : ses coordonnées sont celles de la parcelle cœur de son milieu. */
+	decorPos(key) {
+		const d = DECOR[key], ci = this.heart(d.place);
+		if (ci < 0) return null;
+		const [ox, oy] = cellOrigin(ci);
+		return { x: ox + d.x, y: oy + d.y };
+	}
+
+	/** Le milieu en un point du monde (celui de la parcelle où il tombe). */
+	biomeAtWorld(x, y) {
+		const ci = this.cellAt(x, y);
+		return ci >= 0 && ci < cellsOpen(this.place) ? this.biomeOf(ci) : this.tileAt(Math.floor(x / PARCEL_W), Math.floor(y / PARCEL_H)).biome;
 	}
 
 	/** Montre un décor qui vient d'apparaître. */
 	reveal(key) {
-		const d = DECOR[key];
-		if (d.place !== this.biome) return;
+		const pos = this.decorPos(key);
+		if (!pos) return;
 		this.popAt[key] = this.t;
-		this.burst(d.x, d.y - 20, 24, '#F4C23E');
-		this.focusOn(d.x, d.y);
+		this.burst(pos.x, pos.y - 20, 24, '#F4C23E');
+		this.focusOn(pos.x, pos.y);
 	}
 
 	/**
@@ -1200,6 +1255,69 @@ export class Garden {
 			if (!room.length) break;
 			const [x, y] = pick(room);
 			this.dew.push({ x, y: y + 4, ph: Math.random() * 6.28, born: this.t });
+		}
+	}
+
+	// ─── L'eau qui vit ─────────────────────────────────────────────
+
+	/** Le courant des ruisseaux : de petits reflets clairs qui glissent vers l'aval, à leur rythme. */
+	drawStreams(ctx, v, gx0, gx1, gy0, gy1) {
+		const t = this.t;
+		ctx.save();
+		ctx.lineCap = 'round';
+		for (let gy = gy0; gy <= gy1; gy++) for (let gx = gx0; gx <= gx1; gx++) {
+			for (const r of riversIn(this.at, gx, gy)) {
+				if (r.x1 < v.x0 || r.x0 > v.x0 + v.w || r.y1 < v.y0 || r.y0 > v.y0 + v.h) continue;
+				const w = r.r * 0.55, gap = 38;
+				let acc = (t * 26 + r.seed % 97) % gap;
+				for (let k = 1; k < r.pts.length; k++) {
+					const [x0, y0] = r.pts[k - 1], [x1, y1] = r.pts[k], L = Math.hypot(x1 - x0, y1 - y0) || 1;
+					const ux = (x1 - x0) / L, uy = (y1 - y0) / L;
+					for (; acc < L; acc += gap) {
+						const x = x0 + ux * acc, y = y0 + uy * acc, side = Math.sin(x * 0.13 + y * 0.07) * w * 0.45;
+						const fade = 0.25 + 0.2 * Math.sin(t * 2 + x * 0.05);
+						ctx.strokeStyle = `rgba(240,250,250,${fade})`;
+						ctx.lineWidth = 1.4;
+						ctx.beginPath();
+						ctx.moveTo(x - uy * side - ux * 5, y + ux * side - uy * 5);
+						ctx.lineTo(x - uy * side + ux * 5, y + ux * side + uy * 5);
+						ctx.stroke();
+					}
+					acc -= L;
+				}
+			}
+		}
+		ctx.restore();
+	}
+
+	/** Une mare vit : des éclats de lumière qui dérivent, et de temps en temps un rond dans l'eau (un insecte, une goutte). */
+	pondLife(ctx, s, seed) {
+		const t = this.t, rx = 62 * s, ry = 26 * s;
+		ctx.save();
+		ctx.lineCap = 'round';
+		for (let i = 0; i < 4; i++) {
+			const ph = i * 1.7 + seed * 0.01;
+			const x = Math.sin(t * 0.25 + ph) * rx * 0.7, y = Math.cos(t * 0.19 + ph * 1.3) * ry * 0.6 - 4 * s;
+			const a = Math.max(0, 0.35 * Math.sin(t * 1.3 + ph * 2));
+			ctx.strokeStyle = `rgba(255,255,250,${a})`;
+			ctx.lineWidth = 1.3;
+			ctx.beginPath(); ctx.moveTo(x - 7 * s, y); ctx.lineTo(x + 7 * s, y); ctx.stroke();
+		}
+		for (let i = 0; i < 2; i++) {
+			const cyc = t * 0.35 + i * 0.5 + (seed % 7) * 0.13, k = cyc % 1, n = Math.floor(cyc);
+			const x = Math.sin(n * 12.9 + i * 4.1 + seed) * rx * 0.6, y = Math.cos(n * 7.3 + i * 2.7) * ry * 0.5 - 4 * s;
+			ctx.strokeStyle = `rgba(240,250,248,${(1 - k) * 0.45})`;
+			ctx.lineWidth = 1;
+			ctx.beginPath(); ctx.ellipse(x, y, 3 + k * 16 * s, (3 + k * 16 * s) * 0.42, 0, 0, Math.PI * 2); ctx.stroke();
+		}
+		ctx.restore();
+	}
+
+	/** Les gouttes qui attendaient sur les fleurs filent vers un collecteur qui a de nouveau de la place. */
+	dewToJar(it, share = 1) {
+		const n = Math.ceil((this.dew?.length ?? 0) * Math.min(1, share));
+		for (const d of (this.dew ?? []).splice(0, n)) {
+			for (let k = 0; k < 2; k++) this.nectarDrops.push({ x: d.x, y: d.y, t: -k * 0.12 - Math.random() * 0.4, dur: 1.1 + Math.random() * 0.4, wob: Math.random() * 6.28, to: [it.x, it.y - 50] });
 		}
 	}
 
@@ -1356,9 +1474,11 @@ export class Garden {
 	/** Point d'eau d'une parcelle (mare, grande mare, mer), en coordonnées du monde. */
 	water(ci) {
 		const [ox, oy] = cellOrigin(ci);
-		if (this.biome === 'littoral') return CELLS[ci][1] === 0 ? { x: ox + PARCEL_W / 2, y: oy + 70, rx: 200, ry: 50, scale: 3 } : null;
-		if (ci !== 0) return null;
-		for (const [k, d] of Object.entries(DECOR)) if (d.water && this.decorVisible(k)) return { x: d.x, y: d.y, rx: 95 * (d.scale ?? 1), ry: 48 * (d.scale ?? 1), scale: d.scale ?? 1 };
+		if (this.biomeOf(ci) === 'littoral' && CELLS[ci][1] === 0) return { x: ox + PARCEL_W / 2, y: oy + 70, rx: 200, ry: 50, scale: 3 };
+		for (const [k, d] of Object.entries(DECOR)) {
+			if (!d.water || this.heart(d.place) !== ci || !this.decorVisible(k)) continue;
+			return { x: ox + d.x, y: oy + d.y, rx: 95 * (d.scale ?? 1), ry: 48 * (d.scale ?? 1), scale: d.scale ?? 1 };
+		}
 		return null;
 	}
 
@@ -1570,6 +1690,8 @@ export class Garden {
 	// ─── Boucle ────────────────────────────────────────────────────
 
 	frame = now => {
+		// Économie d'énergie : au plus 30 images par seconde (le téléphone chauffe moins, la batterie dure plus).
+		if (this.maxFps && now - this.last < 1000 / this.maxFps - 2) { requestAnimationFrame(this.frame); return; }
 		const raw = (now - this.last) / 1000, dt = Math.min(0.05, raw);
 		this.last = now;
 		// Images par seconde (moyenne glissante), affichées en mode test.
@@ -1619,7 +1741,7 @@ export class Garden {
 
 		// La parcelle regardée est celle où germent les nouvelles graines.
 		const ci = this.cellAt(this.cam.cx, this.cam.cy);
-		if (ci >= 0 && ci < cellsOpen(this.place)) this.active = ci;
+		if (ci >= 0 && ci < cellsOpen(this.place) && ci !== this.active) { this.active = ci; this.onActive?.(ci); }
 
 		if (this.t > this.nextPopulate) { this.populate(); this.updateDew(); this.nextPopulate = this.t + 1; }
 		for (const i of this.insects) this.updateInsect(i, dt);
@@ -1691,10 +1813,10 @@ export class Garden {
 			P.perches = [...P.bushes, ...P.trees];
 		}
 		if (!visible.length) return;
-		// Un effectif par espèce pour tout le lieu ; chaque animal s'installe dans une parcelle visible qui lui convient.
-		const scale = Math.min(2, 1 + (visible.length - 1) * 0.35);
+		// Un effectif par espèce pour tout le jardin ; chaque animal s'installe dans une parcelle visible de son milieu.
+		const scale = Math.min(2, 1 + (visible.length - 1) * 0.35), present = biomesIn(place);
 		for (const sp of SPECIES) {
-			if (sp.kind !== 'animal' || sp.place !== this.biome || !sp.critter.behavior) continue;
+			if (sp.kind !== 'animal' || !present.has(sp.place) || !sp.critter.behavior) continue;
 			const c = sp.critter;
 			let want = this.state.species[sp.id] && ok(c.when) ? Math.round((c.count(this.state) + (this.idleBonus?.(sp) ?? 0)) * scale) + attracted(place, sp.id) : 0;
 			// Sous la pluie ou la neige, les insectes volants se mettent à l'abri.
@@ -1705,7 +1827,7 @@ export class Garden {
 			const active = this.insects.filter(i => i.sp === sp.id && !i.leaving);
 			for (let k = active.length; k < want; k++) {
 				let b = null;
-				for (const ci of [...visible].sort(() => Math.random() - 0.5)) if ((b = this.newCritter(sp, this.pdata[ci]))) break;
+				for (const ci of visible.filter(ci => this.biomeOf(ci) === sp.place).sort(() => Math.random() - 0.5)) if ((b = this.newCritter(sp, this.pdata[ci]))) break;
 				if (b) this.insects.push(b);
 			}
 			for (let k = active.length; k > want; k--) active[k - 1].leaving = true;
@@ -1824,8 +1946,8 @@ export class Garden {
 					const fly = c.kind !== 'spider';
 					return target && { ...base, target, ox: (Math.random() - 0.5) * 50, oy: 14 + Math.random() * 30, x: fly ? side : P.ox + target.x, y: fly ? y - 60 : P.oy + target.y, mode: fly ? 'arrive' : 'perch' };
 				}
-				const d = DECOR[c.on];
-				return P.ci === 0 && this.decorVisible(c.on) && { ...base, decor: c.on, x: d.x + (Math.random() - 0.5) * 20, y: d.y + this.decorSprite(c.on).top * 0.8, mode: 'perch' };
+				const d = this.decorPos(c.on);
+				return d && P.ci === this.heart(DECOR[c.on].place) && this.decorVisible(c.on) && { ...base, decor: c.on, x: d.x + (Math.random() - 0.5) * 20, y: d.y + this.decorSprite(c.on).top * 0.8, mode: 'perch' };
 			}
 			case 'perch': {
 				const target = pick(c.on === 'buisson' ? P.bushes : P.trees);
@@ -1864,7 +1986,7 @@ export class Garden {
 	homeFor(key, P) {
 		const pool = { tree: P.trees, arbre: P.trees, buisson: P.bushes, fleur: P.flowers, herbe: P.herbs }[key];
 		if (pool) { const p = pick(pool); return p && { x: P.ox + p.x, y: P.oy + p.y }; }
-		return DECOR[key] && P.ci === 0 && this.decorVisible(key) ? { x: DECOR[key].x, y: DECOR[key].y } : null;
+		return DECOR[key] && P.ci === this.heart(DECOR[key].place) && this.decorVisible(key) ? this.decorPos(key) : null;
 	}
 
 	// ─── Ce que les bêtes font pour le jardin ─────────────────────
@@ -2544,8 +2666,9 @@ export class Garden {
 		for (let gy = gy0; gy <= gy1; gy++) for (let gx = gx0; gx <= gx1; gx++) {
 			const tile = this.tileFor(gx, gy, lo);
 			if (tile) ctx.drawImage(tile, gx * PARCEL_W, gy * PARCEL_H, PARCEL_W + seam, PARCEL_H + seam);
-			else { ctx.fillStyle = this.groundColor(GROUND[this.biome].base); ctx.fillRect(gx * PARCEL_W, gy * PARCEL_H, PARCEL_W, PARCEL_H); }
+			else { ctx.fillStyle = this.groundColor(GROUND[this.tileAt(gx, gy).biome].base); ctx.fillRect(gx * PARCEL_W, gy * PARCEL_H, PARCEL_W, PARCEL_H); }
 		}
+		if (!glyph) this.drawStreams(ctx, v, gx0, gx1, gy0, gy1);
 		this.drawMist(ctx, world, cw, ch);
 		this.trimTiles();
 		this.drawNextOutline(ctx, v);
@@ -2658,8 +2781,8 @@ export class Garden {
 		// Décor, plantes et animaux au sol, triés par profondeur.
 		const entities = [];
 		for (const key of Object.keys(DECOR)) {
-			const d = DECOR[key];
 			if (!this.decorVisible(key)) continue;
+			const d = this.decorPos(key);
 			entities.push({ decor: key, x: d.x, y: d.y });
 		}
 		for (const p of place.plants) {
@@ -2700,6 +2823,7 @@ export class Garden {
 				ctx.translate(e.x, e.y);
 				ctx.scale(k, k);
 				ctx.drawImage(this.itemSprite(it.kind, it.rot, it).canvas, -box.ax, -box.ay, box.w, box.h);
+				if (!glyph && it.kind === 'mare') this.pondLife(ctx, 0.75, it.x);
 				continue;
 			}
 			if (e.decor) {
@@ -2712,12 +2836,13 @@ export class Garden {
 				ctx.globalAlpha = age < 0.5 ? age / 0.5 : 1;
 				ctx.drawImage(this.decorSprite(e.decor).canvas, -box.ax, -box.ay, box.w, box.h);
 				ctx.globalAlpha = 1;
+				if (!glyph && POND_SIZE[e.decor]) this.pondLife(ctx, POND_SIZE[e.decor], e.x);
 				if (!glyph && (d.water || e.decor === 'nenuphars')) {
 					// Le triton nage sous les nénuphars, le canard flotte par-dessus.
 					world();
 					const lilies = this.decorVisible('nenuphars');
 					for (const b of this.insects) {
-						if (!b.p.swim || b.ci !== 0) continue;
+						if (!b.p.swim || b.ci !== this.heart(d.place)) continue;
 						const duck = b.kind === 'duck';
 						if (duck ? e.decor === 'nenuphars' || !lilies : e.decor !== 'nenuphars') this.drawInsect(ctx, b);
 					}
@@ -2907,7 +3032,7 @@ export class Garden {
 	 * morceaux de bord, piquets et points, chacun avec sa boîte pour ne dessiner que ce qui est à l'écran.
 	 */
 	edges() {
-		const n = cellsOpen(this.place), key = `${this.biome}:${n}`;
+		const n = cellsOpen(this.place), key = `${n}`;
 		if (this.edgeCache?.key === key) return this.edgeCache;
 		const open = this.openCells();
 		const along = (run, step) => {
@@ -2993,11 +3118,13 @@ export class Garden {
 		for (const i of cells) {
 			const [ox, oy] = cellOrigin(i);
 			const isOpen = i < cellsOpen(place);
-			const title = zoneName(this.biome, i, PLACE_BY_ID[this.biome].name);
+			const title = isOpen ? cellName(place, i) : 'Nouvelle parcelle';
 			const left = Math.max(0.1, Math.ceil((CELL_KM[i] - km) * 10) / 10);
+			// Assez de kilomètres : la parcelle attend qu'on choisisse son milieu.
+			const ready = !isOpen && km >= CELL_KM[i];
 			const sub = isOpen
 				? `${place.plants.filter(p => cellOf(p) === i && p.growth >= 1).length} plantes`
-				: `encore ${left.toLocaleString('fr-FR', { maximumFractionDigits: 1 })} km ici`;
+				: ready ? 'touche pour choisir son milieu' : `encore ${left.toLocaleString('fr-FR', { maximumFractionDigits: 1 })} km`;
 			// Centre de la parcelle à l'écran ; une parcelle fermée garde son étiquette visible tant qu'on en voit un bout.
 			const cw = this.canvas.width, ch = this.canvas.height;
 			const sx0 = ox * S + tx, sx1 = (ox + PARCEL_W) * S + tx, sy0 = oy * S + ty, sy1 = (oy + PARCEL_H) * S + ty;
@@ -3021,7 +3148,7 @@ export class Garden {
 				const seenW = Math.min(sx1, cw) - Math.max(sx0, 0), seenH = Math.min(sy1, ch) - Math.max(sy0, 0);
 				// Parcelle hors de l'écran ou à peine visible : une petite flèche au bord, vers elle.
 				if (seenW < w + 16 * dpr || seenH < 200 * dpr) {
-					this.drawEdgeHint(ctx, sx0, sx1, sy0, sy1, `${left.toLocaleString('fr-FR', { maximumFractionDigits: 1 })} km`);
+					this.drawEdgeHint(ctx, sx0, sx1, sy0, sy1, ready ? 'à choisir' : `${left.toLocaleString('fr-FR', { maximumFractionDigits: 1 })} km`);
 					continue;
 				}
 				x = Math.max(Math.max(sx0, 0) + w / 2 + 8 * dpr, Math.min(Math.min(sx1, cw) - w / 2 - 8 * dpr, x));

@@ -25,11 +25,13 @@ export const PLACES = [
 	},
 ];
 export const PLACE_BY_ID = Object.fromEntries(PLACES.map(p => [p.id, p]));
+// Le jardin qui réunit tous les milieux (hors de PLACES : ce n'est pas un milieu).
+PLACE_BY_ID.jardin = { id: 'jardin', name: 'Ton jardin', short: 'Jardin', color: '#A3BD57' };
 
 const ALLURE = { herbe: 'quand tu marches lentement ou fais le ménage', fleur: 'quand tu marches', buisson: 'quand tu marches vite', arbre: 'quand tu cours' };
 /** « de la prairie », « du marais »… et « dans la prairie », « sur le littoral »… pour des phrases justes. */
-export const PLACE_DE = { prairie: 'de la prairie', marais: 'du marais', foret: 'de la forêt', montagne: 'de la montagne', littoral: 'du littoral' };
-export const PLACE_IN = { prairie: 'dans la prairie', marais: 'dans le marais', foret: 'dans la forêt', montagne: 'en montagne', littoral: 'sur le littoral' };
+export const PLACE_DE = { jardin: 'de ton jardin', prairie: 'de la prairie', marais: 'du marais', foret: 'de la forêt', montagne: 'de la montagne', littoral: 'du littoral' };
+export const PLACE_IN = { jardin: 'dans ton jardin', prairie: 'dans la prairie', marais: 'dans le marais', foret: 'dans la forêt', montagne: 'en montagne', littoral: 'sur le littoral' };
 const TYPE_LABEL = { herbe: 'Une herbe', fleur: 'Une fleur', buisson: 'Un arbuste', arbre: 'Un arbre' };
 
 const plant = (place, type, id, name, latin, look, role, help, fact) => ({ id, place, kind: 'plante', type, look, name, latin, role, help, fact });
@@ -37,9 +39,15 @@ const animal = (place, id, name, latin, critter, unlock, hint, role, help, fact)
 const milieu = (place, id, decor, name, latin, role, help, fact) => ({ id, place, kind: 'milieu', decor, name, latin, role, help, fact });
 
 // Petites aides pour les conditions d'apparition des animaux.
-const P = (s, place) => s.places?.[place];
-const nMature = (s, place, type, id) => (P(s, place)?.plants ?? []).filter(p => p.growth >= 1 && (!type || p.type === type) && (!id || speciesOf(p) === id)).length;
-const has = (s, place, decor) => !!P(s, place)?.unlocked?.[decor];
+// Depuis la 0.7, un seul jardin : on compte les plantes des parcelles de ce milieu, et les décors de son cœur.
+const G = s => s.places?.[s.place] ?? Object.values(s.places ?? {})[0];
+const nMature = (s, place, type, id) => {
+	const g = G(s), biomes = g?.biomes ?? ['prairie'];
+	return (g?.plants ?? []).filter(p => (biomes[p.c ?? 0] ?? 'prairie') === place && p.growth >= 1 && (!type || p.type === type) && (!id || speciesOf(p) === id)).length;
+};
+// Kilomètres faits depuis que ce milieu est dans le jardin (0 s'il n'y est pas).
+const kmIn = (s, place) => ((G(s)?.biomes ?? ['prairie']).includes(place) ? Math.max(0, (G(s)?.km ?? 0) - (G(s)?.heartKm?.[place] ?? 0)) : 0);
+const has = (s, place, decor) => (G(s)?.biomes ?? ['prairie']).includes(place) && !!G(s)?.unlocked?.[decor];
 
 const GRASS = { herbe: true };
 
@@ -550,7 +558,7 @@ export const SPECIES = [
 		'Préserve les forêts de pins cembro, dont il dépend.',
 		'Sans lui, le pin cembro aurait bien du mal à se ressemer.'),
 	animal('montagne', 'aigle', 'Aigle royal', 'Aquila chrysaetos', { kind: 'eagle', behavior: 'soar', when: 'day', count: () => 1 },
-		s => (P(s, 'montagne')?.km ?? 0) >= 10, 'Parcours 10 km en montagne',
+		s => kmIn(s, 'montagne') >= 10, 'Parcours 10 km en montagne',
 		"Au sommet de la chaîne alimentaire, il régule marmottes, lièvres et renards.",
 		"Ne t'approche jamais d'une aire et ne fais pas voler de drone près des falaises.",
 		"Ses ailes peuvent mesurer plus de deux mètres d'envergure."),
@@ -560,7 +568,7 @@ export const SPECIES = [
 		"L'hiver, reste sur les pistes : dérangé, il s'envole et brûle des réserves qu'il ne peut pas refaire.",
 		"Il devient tout blanc en hiver, jusqu'aux pattes, couvertes de plumes comme des raquettes."),
 	animal('montagne', 'chocard', 'Chocard à bec jaune', 'Pyrrhocorax graculus', { kind: 'bird', body: '#1A1816', belly: '#24201E', cap: '#1A1816', beakColor: '#F2D24A', beak: 3, behavior: 'perch', on: 'arbre', when: 'day', count: () => 2 },
-		s => (P(s, 'montagne')?.km ?? 0) >= 5, 'Parcours 5 km en montagne',
+		s => kmIn(s, 'montagne') >= 5, 'Parcours 5 km en montagne',
 		"Il mange insectes, baies et graines sur les pelouses d'altitude, qu'il ressème en volant de crête en crête.",
 		'Ne lui donne pas tes restes de pique-nique : le pain le rend malade.',
 		'Il joue dans les rafales au-dessus des falaises, en piqué et en vrille.'),
@@ -648,7 +656,7 @@ export const SPECIES = [
 		"Remets les rochers à leur place après les avoir soulevés : des animaux vivent dessous.",
 		"Introduit par les bateaux en Amérique et en Australie, il y est devenu envahissant."),
 	animal('littoral', 'sterne', 'Sterne pierregarin', 'Sterna hirundo', { kind: 'gull', wing: '#D8DCE0', cap: '#1A1816', beakColor: '#D8402A', behavior: 'soar', when: 'day', count: () => 2 },
-		s => (P(s, 'littoral')?.km ?? 0) >= 4, 'Parcours 4 km sur le littoral',
+		s => kmIn(s, 'littoral') >= 4, 'Parcours 4 km sur le littoral',
 		'Elle plonge pour pêcher de petits poissons, et régule les bancs près du rivage.',
 		'Ne marche pas dans les colonies sur les plages : ses œufs se confondent avec le sable.',
 		'On la surnomme « hirondelle de mer », pour sa queue fourchue et son vol léger.'),
@@ -733,7 +741,7 @@ export function checkSpecies(state) {
 	return found;
 }
 
-/** Lieux ouverts : kilomètres cumulés et espèces découvertes. */
+/** Milieux disponibles pour une nouvelle parcelle : kilomètres cumulés et espèces découvertes. */
 export function placeOpen(state, place) {
 	const p = typeof place === 'string' ? PLACE_BY_ID[place] : place;
 	return state.totals.distance / 1000 >= p.km && Object.keys(state.species).length >= p.found;
