@@ -13,7 +13,7 @@ le Play Store (tests internes) reçoit les versions indiquées « Play ».
     - souffler un peu en contemplant le jardin, les mains dans le dos ;
     - se promener avec son animal : le chien en laisse, le chat sur les talons.
 
-## 0.6.37 — 31 octobre 2026
+## 0.6.37 — 31 octobre 2026 · Play
 - **On construit pour de vrai.** Un objet posé ou amélioré se monte sous nos yeux. La poussière se soulève, la silhouette de l'objet apparaît en transparence, puis il monte du sol au rythme de trois coups de marteau. Un petit rebond, des étincelles et des feuilles, et une cloche terminent le chantier.
 - **Des gouttes de nectar bien séparées.** Elles ne se posent plus les unes sur les autres, et chacune affiche ce qu'elle rapporte (« +52 »).
 
