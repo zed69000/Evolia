@@ -157,6 +157,20 @@ function roof(cx, cy, z, w, dp, rise, over, color, paint = null, gable = tone(co
 	};
 }
 
+/** Un contour d'encre fait à la main : chaque bord légèrement tremblé, plus appuyé par endroits. */
+function inkOutline(g, pts, d) {
+	g.strokeStyle = rgba('#3A2414', 0.5);
+	g.lineWidth = 1.05;
+	g.lineJoin = g.lineCap = 'round';
+	g.beginPath();
+	for (let i = 0; i < pts.length; i++) {
+		const [x0, y0] = pts[i], [x1, y1] = pts[(i + 1) % pts.length];
+		g.moveTo(x0 + d.gauss() * 0.3, y0 + d.gauss() * 0.3);
+		for (let k = 1; k <= 3; k++) { const t = k / 3; g.lineTo(x0 + (x1 - x0) * t + (k < 3 ? d.gauss() * 0.45 : 0), y0 + (y1 - y0) * t + (k < 3 ? d.gauss() * 0.45 : 0)); }
+	}
+	g.stroke();
+}
+
 /** Peint des volumes dans l'ordre (du fond vers l'avant), faces cachées omises, éclairage doux venu d'en haut à gauche. */
 function build(g, d, rot, solids) {
 	const V = view(rot);
@@ -166,15 +180,24 @@ function build(g, d, rot, solids) {
 		faces.sort((a, b) => V.depth(a.f.pts[0]) - V.depth(b.f.pts[0]));
 		for (const { f, nn } of faces) {
 			const lit = 0.72 + 0.32 * Math.max(0, nn[0] * LIGHT[0] + nn[1] * LIGHT[1] + nn[2] * LIGHT[2]);
-			g.beginPath();
-			f.pts.forEach((p, i) => { const [x, y] = V.at(p); i ? g.lineTo(x, y) : g.moveTo(x, y); });
-			g.closePath();
+			const pts = f.pts.map(p => V.at(p));
+			const trace = () => { g.beginPath(); pts.forEach(([x, y], i) => (i ? g.lineTo(x, y) : g.moveTo(x, y))); g.closePath(); };
+			trace();
 			if (f.color) {
 				g.fillStyle = rgba(tone(f.color, lit), 0.95);
 				g.fill();
-				g.strokeStyle = rgba('#3A2414', 0.3);
-				g.lineWidth = 0.8;
-				g.stroke();
+				// Un lavis qui n'est jamais uni : quelques taches plus claires ou plus sombres dans la face.
+				const xs = pts.map(p => p[0]), ys = pts.map(p => p[1]);
+				const cx = (Math.min(...xs) + Math.max(...xs)) / 2, cy = (Math.min(...ys) + Math.max(...ys)) / 2;
+				const fw = Math.max(...xs) - Math.min(...xs), fh = Math.max(...ys) - Math.min(...ys);
+				if (fw > 6 && fh > 6) {
+					g.save();
+					g.clip();
+					for (let k = 0; k < 3; k++) wash(g, cx + d.gauss() * fw * 0.25, cy + d.gauss() * fh * 0.25, fw * 0.35, fh * 0.3, tone(f.color, lit * d.range(0.85, 1.15)), d, { layers: 2, alpha: 0.14, edge: 0 });
+					g.restore();
+				}
+				inkOutline(g, pts, d);
+				trace();
 			}
 			if (!f.paint) continue;
 			// La face devient une feuille plane où l'on peint comme sur un objet de face.
@@ -366,14 +389,24 @@ export const CABIN_STYLES = [
 	{ name: 'miel', wall: '#C89A5A', alt: '#D2A666', trim: '#7A5232', roof: '#5E3A2A', shut: '#7A5232' },
 ];
 
-/** Une planche de façade, pour les cabanes. */
+/** Une planche de façade, pour les cabanes : jamais deux de la même teinte, le fil du bois, un nœud de temps en temps. */
 function plankRow(g, x, y, w, h, col, d) {
-	g.fillStyle = rgba(col, 0.95);
+	g.fillStyle = rgba(tone(col, d.range(0.86, 1.12)), 0.95);
 	g.fillRect(x, y, w, h);
-	g.strokeStyle = rgba('#3A2414', 0.28);
+	const along = w > h;
+	g.strokeStyle = rgba('#3A2414', 0.16);
+	g.lineWidth = 0.5;
+	for (let k = 1; k <= 2; k++) {
+		g.beginPath();
+		if (along) { const yy = y + (h * k) / 3 + d.gauss() * 0.6; g.moveTo(x, yy); g.bezierCurveTo(x + w * 0.3, yy + d.gauss(), x + w * 0.7, yy + d.gauss(), x + w, yy); }
+		else { const xx = x + (w * k) / 3 + d.gauss() * 0.6; g.moveTo(xx, y); g.bezierCurveTo(xx + d.gauss(), y + h * 0.3, xx + d.gauss(), y + h * 0.7, xx, y + h); }
+		g.stroke();
+	}
+	if (d() < 0.25) { g.fillStyle = rgba('#3A2414', 0.35); g.beginPath(); g.ellipse(x + w * d.range(0.25, 0.75), y + h * d.range(0.25, 0.75), along ? 1.6 : 1, along ? 1 : 1.6, 0, 0, 6.28); g.fill(); }
+	g.strokeStyle = rgba('#3A2414', 0.32);
 	g.lineWidth = 0.8;
 	g.strokeRect(x, y, w, h);
-	wash(g, x + w / 2, y + h / 2, w * 0.45, h * 0.4, '#FFF4DC', d, { layers: 1, alpha: 0.05, edge: 0 });
+	wash(g, x + w / 2, y + h / 2, w * 0.45, h * 0.4, '#FFF4DC', d, { layers: 1, alpha: 0.06, edge: 0 });
 }
 
 /** Une fenêtre peinte sur une façade : carreaux éclairés, croisillon, volets facultatifs. */
@@ -408,7 +441,11 @@ function paintCabane(g, rot, level = 1, style = 0) {
 	const winX = L === 1 ? 84 : W * 0.72;
 	const front = (g2, d2) => {
 		boards(W, H)(g2, d2);
-		g2.fillStyle = rgba(L === 1 ? '#6E4A2C' : st.shut, 0.97); g2.fillRect(doorX, -56, doorW, 56);
+		// La porte : des planches, une écharpe en Z, un cadre.
+		const doorCol = L === 1 ? '#6E4A2C' : st.shut;
+		for (let x = doorX; x < doorX + doorW - 0.5; x += doorW / 3) plankRow(g2, x, -56, doorW / 3, 56, doorCol, d2);
+		g2.strokeStyle = rgba(tone(doorCol, 0.7), 0.85); g2.lineWidth = 3;
+		g2.beginPath(); g2.moveTo(doorX + 2, -46); g2.lineTo(doorX + doorW - 2, -46); g2.lineTo(doorX + 2, -12); g2.lineTo(doorX + doorW - 2, -12); g2.stroke();
 		g2.strokeStyle = rgba(L === 1 ? '#4A2E1A' : st.trim, 0.9); g2.lineWidth = 2; g2.strokeRect(doorX, -56, doorW, 56);
 		if (L === 3) {
 			g2.beginPath(); g2.moveTo(doorX + doorW / 2, -56); g2.lineTo(doorX + doorW / 2, 0); g2.stroke();
@@ -418,7 +455,16 @@ function paintCabane(g, rot, level = 1, style = 0) {
 		g2.fillStyle = rgba('#3A2414', 0.9); g2.beginPath(); g2.arc(doorX + doorW - 5, -27, 2, 0, 6.28); g2.fill();
 		windowAt(g2, winX, -58, 22, 18, L === 1 ? { trim: '#4A2E1A' } : st, L >= 2);
 		if (L === 3) windowAt(g2, W * 0.12, -58, 22, 18, st, true);
-		for (let i = 0; i < 8; i++) leaf(g2, 4 + d2.range(-2, 5), -6 - i * 8, 9, 4, -Math.PI / 2 + d2.gauss() * 0.8, '#4E8A3E', d2, 0.8);
+		// Le lierre grimpe à l'angle : une tige qui ondule, des feuilles en cœur de deux verts, plus touffu en bas.
+		const ivy = [];
+		for (let y = 0; y > -H - 4; y -= 4) ivy.push([5 + Math.sin(y / 9) * 3 + d2.gauss() * 0.6, y]);
+		ribbon(g2, ivy, 1.2, 0.6, '#5A4A2A', d2, 0.7);
+		ivy.forEach(([x, y], i) => {
+			const n = i < 6 ? 3 : i % 2 ? 2 : 1;
+			for (let q = 0; q < n; q++) leaf(g2, x + d2.gauss() * (i < 6 ? 7 : 4), y + d2.gauss() * 2, d2.range(5, 8), d2.range(3, 4.5), -Math.PI / 2 + d2.gauss() * 1.2, d2.pick(['#3E7A3A', '#4E8A3E', '#2E6A34', '#6E9A48']), d2, 0.85);
+		});
+		// Le bas des planches, plus sombre : l'humidité et les éclaboussures de pluie.
+		wash(g2, W / 2, -3, W * 0.5, 5, '#3A2414', d2, { layers: 2, alpha: 0.12, edge: 0 });
 	};
 	const side = (g2, d2) => {
 		boards(D, H)(g2, d2);
@@ -427,14 +473,29 @@ function paintCabane(g, rot, level = 1, style = 0) {
 	const back = (g2, d2) => boards(W, H)(g2, d2);
 	const roofCol = L === 1 ? '#7A4A34' : st.roof;
 	const shingles = (g2, d2) => {
-		g2.strokeStyle = rgba('#2A1E1A', 0.35); g2.lineWidth = 1;
-		for (let y = -8; y > -90; y -= 9) { g2.beginPath(); g2.moveTo(0, y); g2.lineTo(220, y); g2.stroke(); }
-		for (let i = 0; i < 4; i++) wash(g2, d2.range(10, 120), d2.range(-60, -10), d2.range(6, 12), d2.range(3, 5), '#6E9A4A', d2, { layers: 5, alpha: 0.3, edge: 0 });
+		// Des rangs de bardeaux un peu de travers, puis la mousse qui gagne le toit, et de l'herbe au faîte.
+		g2.strokeStyle = rgba('#2A1E1A', 0.32); g2.lineWidth = 0.9;
+		for (let y = -8; y > -90; y -= 9) {
+			g2.beginPath(); g2.moveTo(0, y + d2.gauss() * 0.6);
+			for (let x = 20; x <= 220; x += 20) g2.lineTo(x, y + d2.gauss() * 0.8);
+			g2.stroke();
+			for (let x = d2.range(0, 12); x < 220; x += d2.range(9, 16)) { g2.beginPath(); g2.moveTo(x, y); g2.lineTo(x + d2.gauss() * 0.5, y - 8); g2.stroke(); }
+		}
+		for (let i = 0; i < 8; i++) wash(g2, d2.range(5, 130), d2.pick([d2.range(-14, -3), d2.range(-75, -5)]), d2.range(5, 11), d2.range(2.5, 5), d2.pick(['#6E9A4A', '#7FA048', '#5F8A3E', '#8AAA5A']), d2, { layers: 3, alpha: 0.22, edge: 0.06, variance: 0.4 });
+		for (let i = 0; i < 18; i++) {
+			const x = d2.range(4, 150), y = -Math.hypot(W / 2 + 8, rise) + d2.range(1, 7);
+			for (let k = 0; k < 3; k++) ribbon(g2, curve(x + d2.gauss() * 2, y, -Math.PI / 2 + d2.gauss() * 0.4, d2.range(4, 9), d2.gauss() * 0.3, 3), 1, 0.2, d2.pick(['#5F8A3E', '#7FAA48', '#4E7A3A']), d2, 0.75);
+		}
 	};
 	const deckTop = (w, dp) => (g2, d2) => { for (let x = 0; x < w; x += 8) plankRow(g2, x, -dp, 8, dp, x % 16 ? '#C8A070' : '#BC9464', d2); };
+	// Une tache de terre et d'herbe sous la cabane, comme posée sur le papier.
+	wash(g, 4, 2, [0, 96, 108, 160][L], [0, 26, 30, 38][L], '#C8B88A', d, { layers: 4, alpha: 0.16, edge: 0 });
+	wash(g, -10, 4, [0, 80, 90, 140][L], [0, 18, 22, 28][L], '#8AAA5A', d, { layers: 3, alpha: 0.12, edge: 0 });
 	const solids = [
 		box(0, 0, 0, W, D, H, st.wall, { front, back, left: side, right: side }),
 		box(28, -18, H + rise * 0.6, 12, 12, 34, '#8A7A6A'),
+		// Une pierre plate devant la porte.
+		box(doorX + doorW / 2 - W / 2, D / 2 + porch + 6, 0, doorW + 10, 12, 4, '#B4AE9E'),
 	];
 	if (L === 2) {
 		// Le toit s'avance au-dessus d'une terrasse, posé sur deux poteaux ; une table devant la fenêtre.
@@ -453,7 +514,37 @@ function paintCabane(g, rot, level = 1, style = 0) {
 		const flowers = (g2, d2) => { for (let i = 0; i < 6; i++) wash(g2, d2.range(2, 20), d2.range(-9, -1), 3, 2.5, d2.pick(['#E87A9A', '#F2D24A', '#FFFFFF', '#5F933E']), d2, { layers: 3, alpha: 0.7, edge: 0.2 }); };
 		for (const x of [-W / 2 + 16, -W / 2 + 46]) solids.push(box(x, D / 2 + 9, 0, 22, 10, 12, '#7A5232', { top: flowers }));
 	}
-	const V = build(g, d, rot, solids);
+	const V = view(rot);
+	// Les pots fleuris de part et d'autre de la porte, et l'herbe au pied des murs : peints à plat, devant ou derrière la
+	// cabane selon qu'ils sont du côté qu'on voit.
+	const pots = [[doorX - W / 2 - 10, D / 2 + porch + 9], [doorX + doorW - W / 2 + 12, D / 2 + porch + 8], [doorX + doorW - W / 2 + 24, D / 2 + porch + 14]];
+	const tufts = [];
+	for (let k = 0; k < 26; k++) {
+		const t = k / 26, edge = Math.floor(t * 4), f = (t * 4) % 1;
+		const p = [[-W / 2 + f * W, D / 2 + 2], [W / 2 + 2, D / 2 - f * D], [W / 2 - f * W, -D / 2 - 2], [-W / 2 - 2, -D / 2 + f * D]][edge];
+		tufts.push([p[0] + d.gauss() * 3, p[1] + d.gauss() * 2]);
+	}
+	const flat = front => {
+		for (const p of tufts) {
+			if ((V.depth([p[0], p[1], 0]) > 0) !== front) continue;
+			const [x, y] = V.at([p[0], p[1], 0]);
+			for (let k = 0; k < 5; k++) ribbon(g, curve(x + d.gauss() * 3, y, -Math.PI / 2 + d.gauss() * 0.4, d.range(5, 12), d.gauss() * 0.3, 3), 1.3, 0.2, d.pick(['#4E7A3A', '#5F8A3E', '#7FAA48', '#3E6A34']), d, 0.8);
+		}
+		for (const [i, p] of pots.entries()) {
+			if ((V.depth([p[0], p[1], 0]) > 0) !== front) continue;
+			const [x, y] = V.at([p[0], p[1], 0]), s = i === 2 ? 0.8 : 1;
+			// Le feuillage et les fleurs au-dessus, puis le pot de terre cuite.
+			wash(g, x, y - 16 * s, 9 * s, 8 * s, '#4E8A3E', d, { layers: 4, alpha: 0.4, edge: 0.15 });
+			for (let q = 0; q < 6; q++) wash(g, x + d.gauss() * 5 * s, y - 18 * s + d.gauss() * 4 * s, 2.4 * s, 2.2 * s, d.pick(['#E87A3A', '#F2A03A', '#E87A9A', '#F2D24A']), d, { layers: 3, alpha: 0.8, edge: 0.2 });
+			g.fillStyle = rgba('#C06A3A', 0.95);
+			g.beginPath(); g.moveTo(x - 6 * s, y - 10 * s); g.lineTo(x + 6 * s, y - 10 * s); g.lineTo(x + 4.5 * s, y); g.lineTo(x - 4.5 * s, y); g.closePath(); g.fill();
+			g.fillStyle = rgba('#D88A5A', 0.95); g.fillRect(x - 6.6 * s, y - 11.5 * s, 13.2 * s, 2.4 * s);
+			inkOutline(g, [[x - 6 * s, y - 10 * s], [x + 6 * s, y - 10 * s], [x + 4.5 * s, y], [x - 4.5 * s, y]], d);
+		}
+	};
+	flat(false);
+	build(g, d, rot, solids);
+	flat(true);
 	// Lueur de la fenêtre, là où elle se trouve une fois la cabane tournée (devant ou côté, selon ce qu'on voit).
 	const fy = V.turn([0, 1, 0])[1], ry = V.turn([1, 0, 0])[1];
 	const win = fy > 0.3 ? [winX + 11 - W / 2, D / 2, 49] : ry > 0.3 ? [W / 2 + 0.5, 0, 48] : ry < -0.3 ? [-W / 2 - 0.5, 0, 48] : null;

@@ -100,18 +100,30 @@ function paintHerbe(ctx, g, seed, look, env = {}) {
 		for (const b of blades.slice(0, n)) ribbon(ctx, curve(b.x, 0, -Math.PI / 2 + b.a, b.len * k, b.bend, 7), 2.2, 0.3, tone(b.c), d, 0.9);
 		return { top: -36 * k, r: 10 };
 	}
+	// Une touffe d'aquarelle : une flaque de vert tendre au pied, des brins sombres en éventail derrière, des brins
+	// clairs et plus courts devant, quelques touches sombres au cœur ; une fois montée en graines, des épillets.
 	const palette = look.palette ?? GREENS;
-	const blades = Array.from({ length: 9 }, () => ({
-		x: r.gauss() * 4, len: r.range(14, 34), ang: -Math.PI / 2 + r.gauss() * 0.32, bend: r.gauss() * 0.5, w: r.range(2, 3.2), c: r.pick(palette),
-	}));
-	const n = 2 + Math.round(g * 7);
-	blades.slice(0, n).forEach((b, i) => {
-		const pts = curve(b.x, 0, b.ang, b.len * k, b.bend, 6);
-		ribbon(ctx, pts, b.w, 0.3, tone(b.c), d, 0.9);
-		// Épillets au bout des plus hauts brins, une fois l'herbe montée en graines.
-		if (g >= 1 && i < 3 && b.len > 24) { const p = pts[pts.length - 1]; wash(ctx, p[0], p[1] - 2, 1.4, 3.4, '#C8B87A', d, { layers: 4, alpha: 0.35, edge: 0.25 }); }
+	const pale = mix(palette[palette.length - 1], '#D8E07A', 0.35), deep = mix(palette[0], '#1E3A22', 0.25);
+	wash(ctx, 0, 0.5, 13 * k, 3.6 * k, tone(pale), d, { layers: 3, alpha: 0.16, edge: 0 });
+	const blade = (front, i) => {
+		const a = -Math.PI / 2 + Math.max(-0.8, Math.min(0.8, r.gauss() * (front ? 0.3 : 0.38)));
+		const len = (front ? r.range(14, 28) : r.range(22, 42)) * k, side = Math.sign(a + Math.PI / 2) || 1;
+		const col = front ? r.pick([pale, palette[palette.length - 1], palette[2] ?? palette[1]]) : r.pick([deep, palette[0], palette[1]]);
+		const pts = curve(r.gauss() * 3.5, 0.5, a, len, side * r.range(0.1, 0.45), 6);
+		ribbon(ctx, pts, r.range(2.4, 3.8) * (0.7 + 0.3 * k), 0.15, tone(col), d, front ? 0.85 : 0.9);
+		return pts;
+	};
+	const back = 7 + Math.round(g * 12), front = 3 + Math.round(g * 7);
+	const tall = [];
+	for (let i = 0; i < back; i++) tall.push(blade(false, i));
+	wash(ctx, 0, -2 * k, 5 * k, 3 * k, tone(deep), d, { layers: 2, alpha: 0.22, edge: 0 });
+	for (let i = 0; i < front; i++) blade(true, i);
+	// Épillets au bout des plus hauts brins, une fois l'herbe montée en graines.
+	if (g >= 1) tall.sort((p, q) => p[p.length - 1][1] - q[q.length - 1][1]).slice(0, 2).forEach(pts => {
+		const p = pts[pts.length - 1];
+		wash(ctx, p[0], p[1] - 1.5, 0.9, 2.6, '#C8B87A', d, { layers: 3, alpha: 0.28, edge: 0.15 });
 	});
-	return { top: -30 * k, r: 8 };
+	return { top: -34 * k, r: 10 };
 }
 
 /**
