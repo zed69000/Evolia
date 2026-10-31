@@ -3,6 +3,11 @@
 Chaque version, la plus récente en haut. Le site (evolia.sebastienalzamora.workers.dev) est toujours à jour ;
 le Play Store (tests internes) reçoit les versions indiquées « Play ».
 
+## 0.7.3 — 31 octobre 2026
+- **La brume, encore plus douce.** Plus aucun trait net dans le brouillard (ni droit au loin, ni autour de la prochaine parcelle). Les nuages du bord ont des tailles et des écarts variés, se posent sur une bande de brume continue au lieu de flotter seuls, et forment une seule masse. Le brouillard s'épaissit plus vite : on ne voit plus de taches sombres au loin.
+- **Plus de vol d'oiseaux** qui traversait l'écran.
+- **Plus de pointillés** derrière les abeilles et les syrphes.
+
 ## 0.7.2 — 31 octobre 2026
 - **Une brume plus belle.** Les nuages de la lisière sont repeints : des volutes blanches, douces, sans contour, avec un dessous bleuté comme de vrais nuages. Elles débordent un peu sur le bord des clairières pour les encadrer, et la brume blanchit en s'éloignant.
 
