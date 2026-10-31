@@ -143,6 +143,36 @@ export function nectarCapacity(state) {
 
 export const hasCollector = state => Object.values(state.places).some(p => (p.items ?? []).some(it => it.kind === 'collecteur'));
 
+/** Ce que gardent les collecteurs posés, ensemble (0 sans collecteur). */
+export const jarCap = state => nectarCapacity(state) - HAND_CAP;
+
+/**
+ * La récolte qui attend a deux places : les collecteurs (state.pending − state.ground), jusqu'à leur capacité,
+ * puis le sol, en gouttes sur les fleurs (state.ground). Les vieilles parties sans state.ground le retrouvent ici.
+ */
+export function groundOf(state) {
+	if (state.ground == null) state.ground = Math.max(0, (state.pending ?? 0) - jarCap(state));
+	state.ground = Math.min(state.ground, state.pending ?? 0);
+	return state.ground;
+}
+export const jarOf = state => Math.max(0, (state.pending ?? 0) - groundOf(state));
+
+/**
+ * Dépose du nectar à récolter : d'abord dans les collecteurs, puis ce qui n'y tient plus reste au sol.
+ * Celui de l'écosystème (`idle`) ne s'entasse pas au sol au-delà de ce que gardent les fleurs ; celui de la
+ * marche, si : ce qu'on a gagné en bougeant ne se perd jamais. Rend ce qui a été perdu.
+ */
+export function addWaiting(state, v, idle = false) {
+	if (!(v > 0)) return 0;
+	const ground = groundOf(state), jar = jarOf(state);
+	const toJar = Math.min(v, Math.max(0, jarCap(state) - jar));
+	const rest = v - toJar;
+	const toGround = idle ? Math.min(rest, Math.max(0, HAND_CAP - ground)) : rest;
+	state.pending = (state.pending ?? 0) + toJar + toGround;
+	state.ground = ground + toGround;
+	return rest - toGround;
+}
+
 export function tick(state, garden, now = Date.now()) {
 	const last = state.lastIdle ?? now;
 	state.lastIdle = now;
@@ -165,14 +195,12 @@ export function tick(state, garden, now = Date.now()) {
 		summary.nectar += out.nectar;
 		summary.places[placeId] = out;
 	}
-	// La récolte attend dans les fleurs et les collecteurs, jusqu'à la limite de la réserve.
-	const room = Math.max(0, nectarCapacity(state) - (state.pending ?? 0));
-	const kept = Math.min(room, summary.nectar);
-	summary.lost = summary.nectar - kept;
+	// La récolte attend dans les collecteurs, puis au sol, jusqu'à la limite de la réserve.
+	summary.lost = addWaiting(state, summary.nectar, true);
+	const kept = summary.nectar - summary.lost;
 	const k = summary.nectar > 0 ? kept / summary.nectar : 0;
 	for (const out of Object.values(summary.places)) out.nectar *= k;
 	summary.nectar = kept;
-	state.pending = (state.pending ?? 0) + kept;
 	// Le bilan de la dernière vraie absence reste lisible sur la page Écosystème.
 	if (hours > 10 / 60) {
 		const matured = {};

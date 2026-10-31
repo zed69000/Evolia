@@ -11,7 +11,7 @@ import { GAIT } from './beasts.js';
 import { SPECIES, PLACE_BY_ID } from './species.js';
 import { PARCEL_W, PARCEL_H, CELLS, CELL_KM, GROUND, zoneOf, zoneName, tileSteps, keepOut } from './zones.js';
 import { newPlace } from './state.js';
-import { ITEMS, ITEM_PAINTERS, attracted, paintSoil, PLOT, paintAdorn, canLevel, itemBox } from './deco.js';
+import { ITEMS, ITEM_PAINTERS, attracted, paintSoil, PLOT, paintAdorn, canLevel, itemBox, LINK, linkEnds } from './deco.js';
 
 export { PARCEL_W, PARCEL_H, CELLS, CELL_KM };
 export const cellsOpen = place => Math.min(CELLS.length, place?.cells ?? 1);
@@ -960,12 +960,28 @@ export class Garden {
 			if (it === except) return false;
 			// Deux parcelles de potager se touchent (c'est ainsi qu'on agrandit le potager), sans se superposer.
 			if (kind === 'potager' && it.kind === 'potager') return Math.abs(it.x - x) < PLOT.w * 0.9 && Math.abs(it.y - y) < PLOT.h * 0.9;
+			// Deux tronçons de haie (de muret, d'allée) se touchent bout à bout, sans se chevaucher.
+			if (LINK[kind] && it.kind === kind) return Math.hypot(it.x - x, (it.y - y) / 0.36) < LINK[kind] * 0.85;
 			return Math.hypot(it.x - x, (it.y - y) * 1.3) < r + itemBox(it.kind, it.level).w * 0.35;
 		});
 	}
 
 	/** Une parcelle de potager s'aligne sur la grille des parcelles déjà posées, pour s'y souder. */
 	snapPlot(kind, x, y, except) {
+		// Un tronçon de haie, de muret ou d'allée vient se coller au bout le plus proche d'un tronçon déjà posé.
+		if (LINK[kind]) {
+			const a = ((this.ghost?.rot ?? 0) * Math.PI) / 180, h = LINK[kind] / 2;
+			const ox = Math.cos(a) * h, oy = Math.sin(a) * h * 0.36;
+			let best = null, bd = 70;
+			for (const it of this.items) {
+				if (it.kind !== kind || it === except) continue;
+				for (const [ex, ey] of linkEnds(it)) for (const s of [1, -1]) {
+					const cx = ex + s * ox, cy = ey + s * oy, dd = Math.hypot(cx - x, cy - y);
+					if (dd < bd) { bd = dd; best = [cx, cy]; }
+				}
+			}
+			return best ?? [x, y];
+		}
 		const first = kind === 'potager' && this.items.find(it => it.kind === 'potager' && it !== except);
 		if (!first) return [x, y];
 		return [first.x + Math.round((x - first.x) / PLOT.w) * PLOT.w, first.y + Math.round((y - first.y) / PLOT.h) * PLOT.h];
@@ -1060,8 +1076,7 @@ export class Garden {
 
 	updateDew() {
 		const amount = this.glyph ? 0 : (this.dewAmount?.() ?? 0);
-		// Avec un collecteur, moins de gouttes : elles signalent la récolte, le collecteur la garde.
-		const want = amount >= 1 ? Math.min(this.dewAll?.() ? 5 : 10, Math.ceil(amount / (this.dewAll?.() ? 20 : 3))) : 0;
+		const want = amount >= 1 ? Math.min(10, Math.ceil(amount / 3)) : 0;
 		this.dew ??= [];
 		while (this.dew.length > want) this.dew.pop();
 		if (this.dew.length >= want) return;
@@ -1133,7 +1148,7 @@ export class Garden {
 
 	/** Au-dessus de chaque collecteur, une étiquette dorée : combien attend d'être récolté (elle bat quand c'est plein). */
 	drawJarTags(ctx) {
-		const amount = Math.floor(this.dewAmount?.() ?? 0), full = (this.nectarFill?.() ?? 0) >= 1;
+		const amount = Math.floor(this.jarAmount?.() ?? 0), full = (this.nectarFill?.() ?? 0) >= 1;
 		const z = Math.max(1, 1.2 / this.cam.z), label = full ? `${amount} · plein !` : `+${amount}`;
 		ctx.font = `800 ${13}px Nunito, sans-serif`;
 		const w = ctx.measureText(label).width + 30, h = 22;
@@ -1153,6 +1168,7 @@ export class Garden {
 			ctx.beginPath(); ctx.moveTo(-w / 2 + 12, -7); ctx.quadraticCurveTo(-w / 2 + 17, 0, -w / 2 + 12, 3.5); ctx.quadraticCurveTo(-w / 2 + 7, 0, -w / 2 + 12, -7); ctx.fill();
 			ctx.fillStyle = full ? '#FFFFFF' : '#8A5A10';
 			ctx.textBaseline = 'middle';
+			ctx.textAlign = 'left';
 			ctx.fillText(label, -w / 2 + 21, 0.5);
 			ctx.restore();
 		}
@@ -1370,7 +1386,7 @@ export class Garden {
 		for (const d of this.dew ?? []) { const k = Math.hypot(d.x - wx, d.y - wy); if (k < dd) { dd = k; dew = d; } }
 		if (dew) return { dew, x: sx, y: sy };
 		// L'étiquette au-dessus d'un collecteur se touche comme le collecteur.
-		if (this.dewAll?.() && (this.dewAmount?.() ?? 0) >= 1) {
+		if ((this.jarAmount?.() ?? 0) >= 1) {
 			const z = Math.max(1, 1.2 / this.cam.z);
 			const jar = this.items.find(it => it.kind === 'collecteur' && Math.abs(wx - it.x) < 40 * z && Math.abs(wy - (it.y - 128)) < 18 * z);
 			if (jar) return { item: jar, x: sx, y: sy };
@@ -2601,7 +2617,7 @@ export class Garden {
 		}
 
 		if (!glyph && this.dew?.length) { world(); this.drawDew(ctx); }
-		if (!glyph && this.dewAll?.() && (this.dewAmount?.() ?? 0) >= 1) { world(); this.drawJarTags(ctx); }
+		if (!glyph && (this.jarAmount?.() ?? 0) >= 1) { world(); this.drawJarTags(ctx); }
 		if (!glyph && this.farmer?.hidden) { world(); this.drawSmoke(ctx); }
 
 		if (this.ghost) {

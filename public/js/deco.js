@@ -29,9 +29,9 @@ export const ITEMS = {
 	bain: { cat: 'habitat', name: 'Un bain d’oiseaux', cost: 100, km: 8, team: 'semeur', power: 1, attracts: 'merle', text: 'De l’eau fraîche : les oiseaux reviennent, et sèment autour.', box: { w: 80, h: 90, ax: 40, ay: 80 } },
 	potager: { cat: 'recolte', name: 'Un carré de potager', cost: 90, km: 5, needs: 'cabane', team: 'semeur', power: 2, attracts: ['lapin', 'lievre'], text: 'Salades, choux et tomates, cultivés par ton fermier ou ta fermière, poussent quand tu marches. Pose les carrés côte à côte pour agrandir le potager.', box: { w: 150, h: 100, ax: 75, ay: 64 } },
 	sandarium: { cat: 'habitat', name: 'Un sandarium', cost: 70, km: 4, team: 'pollinisateur', power: 1, attracts: 'abeille', text: 'Un carré de sable au soleil : les abeilles sauvages qui nichent au sol y creusent leurs terriers.', box: { w: 130, h: 70, ax: 65, ay: 42 } },
-	haie: { cat: 'habitat', name: 'Une haie de bois mort', cost: 110, km: 10, team: 'regulateur', power: 2, attracts: 'herisson', text: 'Des branches empilées entre des piquets : roitelets et hérissons s’y cachent, et elle se tasse en terreau.', box: { w: 190, h: 100, ax: 95, ay: 74 } },
-	muret: { cat: 'habitat', name: 'Un muret de pierres sèches', cost: 140, km: 15, team: 'regulateur', power: 2, attracts: 'lezard', text: 'Des pierres posées sans mortier, qui gardent la chaleur : lézards, orvets et papillons s’y abritent.', box: { w: 190, h: 90, ax: 95, ay: 66 } },
-	pas: { cat: 'deco', name: 'Des pas japonais', cost: 20, km: 0, text: 'Quelques pierres plates dans l’herbe, pour flâner sans tasser le sol.', box: { w: 150, h: 60, ax: 75, ay: 32 } },
+	haie: { cat: 'habitat', name: 'Une haie de bois mort', cost: 110, km: 10, team: 'regulateur', power: 2, attracts: 'herisson', turn: true, text: 'Des branches empilées entre des piquets : roitelets et hérissons s’y cachent, et elle se tasse en terreau. Tourne-la, et pose plusieurs tronçons bout à bout pour border ton jardin.', box: { w: 190, h: 100, ax: 95, ay: 74 } },
+	muret: { cat: 'habitat', name: 'Un muret de pierres sèches', cost: 140, km: 15, team: 'regulateur', power: 2, attracts: 'lezard', turn: true, text: 'Des pierres posées sans mortier, qui gardent la chaleur : lézards, orvets et papillons s’y abritent. Pose plusieurs tronçons bout à bout pour en faire un long mur.', box: { w: 190, h: 90, ax: 95, ay: 66 } },
+	pas: { cat: 'deco', name: 'Des pas japonais', cost: 20, km: 0, turn: true, text: 'Quelques pierres plates dans l’herbe, pour flâner sans tasser le sol. Mets-en plusieurs à la suite pour tracer une allée.', box: { w: 150, h: 60, ax: 75, ay: 32 } },
 	epouvantail: { cat: 'deco', name: 'Un épouvantail', cost: 80, km: 6, text: 'Chapeau de paille et chemise à carreaux : il veille sur le potager, et les oiseaux s’y posent quand même.', box: { w: 100, h: 160, ax: 50, ay: 148 } },
 	arche: { cat: 'deco', name: 'Une arche de roses', cost: 120, km: 20, turn: true, team: 'pollinisateur', power: 1, attracts: 'paon-du-jour', text: 'Un passage fleuri pour les papillons.', box: { w: 170, h: 190, ax: 85, ay: 172 } },
 };
@@ -701,49 +701,79 @@ function paintSandarium(g) {
 	return { top: -30 };
 }
 
-/** Haie de bois mort (haie de Benjes) : des branches entassées entre deux rangs de piquets, un peu de lierre dessus. */
-function paintHaie(g) {
-	const d = rng(63);
-	shade(g, d, 92, 18);
-	const stakes = [-80, -48, -16, 16, 48, 80];
-	for (const x of stakes) plank(g, x - 2.5, -52 - 6, 5, 54, '#6E4A2C', d);
-	for (let i = 0; i < 70; i++) {
-		const x = d.range(-84, 84), y = d.range(-44, -2), a = d.gauss() * 0.5 + (d() < 0.5 ? 0 : Math.PI);
-		ribbon(g, curve(x, y, a, d.range(16, 34), d.gauss() * 0.4, 4), d.range(1.4, 3), 0.6, d.pick(['#7A5232', '#5A3A20', '#8A6A44', '#9A7A54']), d, 0.85);
-	}
-	for (let i = 0; i < 10; i++) wash(g, d.range(-80, 80), d.range(-44, -6), d.range(5, 10), d.range(3, 5), d.pick(['#C87A3A', '#A8602A', '#D8A050']), d, { layers: 4, alpha: 0.35, edge: 0.3 });
-	for (let i = 0; i < 16; i++) leaf(g, d.range(-70, 70), d.range(-48, -20), 7, 4, d() * 6.28, d.pick(['#3E6A3A', '#4E7A3E']), d, 0.85);
-	for (const x of stakes) plank(g, x - 2.5 + 3, -48, 5, 50, '#5E3E24', d);
-	return { top: -62 };
+/**
+ * Objets en longueur (haie, muret, pas japonais) : ils se tournent par pas de 45° et se raccordent bout à bout.
+ * Longueur d'un tronçon, le long de son axe (au sol, avant la projection).
+ */
+export const LINK = { haie: 150, muret: 160, pas: 140 };
+
+/** Les deux bouts d'un tronçon posé, au sol (coordonnées du monde). */
+export function linkEnds(it) {
+	const L = LINK[it.kind] / 2, a = ((it.rot ?? 0) * Math.PI) / 180;
+	const dx = Math.cos(a) * L, dy = Math.sin(a) * L * GROUND;
+	return [[it.x - dx, it.y - dy], [it.x + dx, it.y + dy]];
 }
 
-/** Muret de pierres sèches : des pierres plates empilées sans mortier, mousse et une fleur dans les joints. */
-function paintMuret(g) {
-	const d = rng(64);
+/** Haie de bois mort (haie de Benjes) : des branches entassées entre deux rangs de piquets, un peu de lierre dessus. */
+function paintHaie(g, rot = 0) {
+	const d = rng(63), V = view(rot), L = LINK.haie / 2 + 4;
+	shade(g, d, 92, 18);
+	const stake = (x, y) => {
+		const [x0, y0] = V.at([x, y, 0]), [x1, y1] = V.at([x, y, 54]);
+		g.strokeStyle = rgba('#5E3E24', 0.95); g.lineWidth = 4.5; g.lineCap = 'round';
+		g.beginPath(); g.moveTo(x0, y0); g.lineTo(x1, y1); g.stroke();
+		g.strokeStyle = rgba('#8A6040', 0.6); g.lineWidth = 1.5;
+		g.beginPath(); g.moveTo(x0 - 1, y0); g.lineTo(x1 - 1, y1); g.stroke();
+	};
+	const xs = [-L + 6, -L / 2 + 3, 0, L / 2 - 3, L - 6];
+	// Les piquets du fond, puis les branches, puis les piquets de devant.
+	const back = V.depth([0, -9, 0]) < V.depth([0, 9, 0]) ? -9 : 9;
+	for (const x of xs) stake(x, back);
+	for (let i = 0; i < 80; i++) {
+		const x = d.range(-L, L), y = d.range(-8, 8), z = d.range(4, 46), len = d.range(14, 30), a = d.gauss() * 0.5;
+		const [px, py] = V.at([x, y, z]), [qx, qy] = V.at([Math.max(-L, Math.min(L, x + Math.cos(a) * len * (d() < 0.5 ? -1 : 1))), y + d.gauss() * 4, z + Math.sin(a) * len * 0.5]);
+		g.strokeStyle = rgba(d.pick(['#7A5232', '#5A3A20', '#8A6A44', '#9A7A54']), 0.85);
+		g.lineWidth = d.range(1.4, 3);
+		g.beginPath(); g.moveTo(px, py); g.quadraticCurveTo((px + qx) / 2 + d.gauss() * 2, (py + qy) / 2 - 2, qx, qy); g.stroke();
+	}
+	for (let i = 0; i < 10; i++) { const [x, y] = V.at([d.range(-L, L), d.range(-6, 6), d.range(8, 40)]); wash(g, x, y, d.range(5, 9), d.range(3, 5), d.pick(['#C87A3A', '#A8602A', '#D8A050']), d, { layers: 4, alpha: 0.35, edge: 0.3 }); }
+	for (let i = 0; i < 16; i++) { const [x, y] = V.at([d.range(-L + 8, L - 8), d.range(-6, 6), d.range(30, 50)]); leaf(g, x, y, 7, 4, d() * 6.28, d.pick(['#3E6A3A', '#4E7A3E']), d, 0.85); }
+	for (const x of xs) stake(x, -back);
+	return { top: V.at([0, 0, 62])[1] };
+}
+
+/** Muret de pierres sèches : des pierres plates empilées sans mortier, mousse et fleurs dans les joints. */
+function paintMuret(g, rot = 0) {
+	const d = rng(64), V = view(rot), L = LINK.muret / 2 + 4;
 	shade(g, d, 92, 16);
 	for (let row = 0; row < 4; row++) {
-		const y = -6 - row * 11, half = 86 - row * 6;
-		for (let x = -half + (row % 2) * 8; x < half; x += d.range(15, 22)) {
-			const w = d.range(8, 11), h = d.range(5, 6.5);
-			wash(g, x + w, y, w, h, d.pick(['#B8B2A4', '#A8A498', '#C8C0B0', '#9A968A']), d, { layers: 6, alpha: 0.42, edge: 0.5 });
-			wash(g, x + w * 0.8, y - h * 0.4, w * 0.5, h * 0.3, '#EEEAE0', d, { layers: 3, alpha: 0.22, edge: 0 });
+		const z = 5 + row * 10, inset = row * 4;
+		for (let x = -L + inset + (row % 2) * 8; x < L - inset; x += d.range(15, 21)) {
+			const w = d.range(8, 11), [px, py] = V.at([x + w, 0, z]);
+			wash(g, px, py, w * 0.95, d.range(5, 6.5), d.pick(['#B8B2A4', '#A8A498', '#C8C0B0', '#9A968A']), d, { layers: 6, alpha: 0.42, edge: 0.5 });
+			wash(g, px - w * 0.2, py - 2.4, w * 0.5, 2, '#EEEAE0', d, { layers: 3, alpha: 0.22, edge: 0 });
 		}
 	}
-	for (let i = 0; i < 7; i++) wash(g, d.range(-70, 70), d.range(-44, -4), d.range(4, 8), 2.5, '#6E9A4A', d, { layers: 4, alpha: 0.35, edge: 0 });
-	for (const [x, y] of [[-40, -40], [30, -46], [62, -18]]) for (let k = 0; k < 4; k++) wash(g, x + Math.cos(k * 1.57) * 2.5, y + Math.sin(k * 1.57) * 2.5, 2.2, 2.2, '#F2E070', d, { layers: 3, alpha: 0.6, edge: 0.2 });
+	for (let i = 0; i < 7; i++) { const [x, y] = V.at([d.range(-L + 10, L - 10), 0, d.range(4, 40)]); wash(g, x, y, d.range(4, 8), 2.5, '#6E9A4A', d, { layers: 4, alpha: 0.35, edge: 0 }); }
+	for (const k of [-0.5, 0.2, 0.8]) {
+		const [x, y] = V.at([k * L, 0, d.range(18, 38)]);
+		for (let j = 0; j < 4; j++) wash(g, x + Math.cos(j * 1.57) * 2.5, y + Math.sin(j * 1.57) * 2.5, 2.2, 2.2, '#F2E070', d, { layers: 3, alpha: 0.6, edge: 0.2 });
+	}
 	// Un lézard au soleil, sur le dessus.
-	ribbon(g, curve(-8, -50, 0.1, 26, 0.5, 8), 2.6, 0.3, '#6E8A3A', d, 0.95);
-	return { top: -56 };
+	const [lx, ly] = V.at([-8, 0, 44]), [mx, my] = V.at([14, 0, 44]);
+	ribbon(g, curve(lx, ly - 4, Math.atan2(my - ly, mx - lx), Math.max(10, Math.hypot(mx - lx, my - ly)), 0.5, 8), 2.6, 0.3, '#6E8A3A', d, 0.95);
+	return { top: V.at([0, 0, 50])[1] - 6 };
 }
 
-/** Pas japonais : quelques dalles plates qui serpentent dans l'herbe. */
-function paintPas(g) {
-	const d = rng(65);
-	for (const [x, y, s] of [[-56, 8, 13], [-26, -2, 14], [6, 6, 13], [36, -4, 14], [62, 4, 11]]) {
-		wash(g, x, y + 2, s + 2, s * 0.45, '#4A5A32', d, { layers: 4, alpha: 0.14, edge: 0 });
-		wash(g, x, y, s, s * 0.42, d.pick(['#C8C0B0', '#BCB8AC', '#D2CABA']), d, { layers: 8, alpha: 0.4, edge: 0.5 });
-		wash(g, x - s * 0.3, y - s * 0.12, s * 0.45, s * 0.16, '#F2EEE4', d, { layers: 3, alpha: 0.3, edge: 0 });
-		for (let k = 0; k < 3; k++) ribbon(g, curve(x + d.range(-s, s), y + s * 0.4, -Math.PI / 2 + d.gauss() * 0.3, d.range(5, 9), 0, 3), 1, 0.3, '#7FAA48', d, 0.8);
+/** Pas japonais : quelques dalles plates qui serpentent dans l'herbe, le long de l'axe. */
+function paintPas(g, rot = 0) {
+	const d = rng(65), V = view(rot), L = LINK.pas / 2;
+	for (const [x, y, s] of [[-L + 14, 5, 13], [-L / 2 + 6, -4, 14], [6, 4, 13], [L / 2, -4, 14], [L - 10, 3, 11]]) {
+		const [px, py] = V.at([x, y, 0]);
+		wash(g, px, py + 2, s + 2, s * 0.45, '#4A5A32', d, { layers: 4, alpha: 0.14, edge: 0 });
+		wash(g, px, py, s, s * 0.42, d.pick(['#C8C0B0', '#BCB8AC', '#D2CABA']), d, { layers: 8, alpha: 0.4, edge: 0.5 });
+		wash(g, px - s * 0.3, py - s * 0.12, s * 0.45, s * 0.16, '#F2EEE4', d, { layers: 3, alpha: 0.3, edge: 0 });
+		for (let k = 0; k < 3; k++) ribbon(g, curve(px + d.range(-s, s), py + s * 0.4, -Math.PI / 2 + d.gauss() * 0.3, d.range(5, 9), 0, 3), 1, 0.3, '#7FAA48', d, 0.8);
 	}
 	return { top: -14 };
 }

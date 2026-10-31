@@ -86,8 +86,10 @@ compte comme un abri de plus, coûte 4, 12, 35 puis 100 fois le prix de base et 
 total), Récolte (collecteur, cabane, potager) et Décoration. La cabane s'agrandit en cabane à auvent (15 km) puis
 en chalet (50 km), se peint en cinq couleurs, et loge un fermier ou une fermière, au choix, avec un chien ou
 un chat. Quand le fermier est chez lui, la cheminée fume. Le nectar butiné attend dans les fleurs ou le
-collecteur : rien n'entre dans la bourse sans qu'on le récolte. Le nectar des pas (1 pour 5 m) se dépose aussi, sans
-limite de réserve. Un guide explique chaque nouveauté au bon moment : une bulle près du bouton concerné,
+collecteur : rien n'entre dans la bourse sans qu'on le récolte. Le nectar des pas (1 pour 5 m) se dépose aussi. Le
+collecteur se remplit jusqu'à sa capacité ; ce qui n'y tient plus reste au sol, en gouttes (l'écosystème y
+en laisse au plus 30, la marche sans limite). La haie, le muret et les pas japonais se tournent et se
+raccordent bout à bout. Un guide explique chaque nouveauté au bon moment : une bulle près du bouton concerné,
 qui s'illumine (bourse, gouttes, Aménager, collecteur, écosystème, espèces, habitats, cabane, potager, carnet,
 lieux, défis du jour). Les premières missions : marcher 300 m, cueillir les gouttes, poser un collecteur, le vider.
 

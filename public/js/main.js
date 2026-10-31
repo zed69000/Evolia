@@ -10,7 +10,7 @@ import { SOURCES, bestSource, harvest, classifyCadence } from './harvest.js';
 import { PLACES, PLACE_BY_ID, SPECIES, SPECIES_BY_ID, checkSpecies, placeOpen, speciesOf } from './species.js';
 import { Encyclopedia, thumbCopy } from './encyclopedia.js';
 import { Sky, WEATHER_LABEL } from './weather.js';
-import { EcoPanel, tick, summaryHtml, addBoost, boostLeft, visualExtra, rates, GUILDS, BOOST_MULT, BOOST_PER_MIN, nectarCapacity, hasCollector, COLLECTOR_CAP, COLLECTOR_UPGRADE } from './idle.js';
+import { EcoPanel, tick, summaryHtml, addBoost, boostLeft, visualExtra, rates, GUILDS, BOOST_MULT, BOOST_PER_MIN, nectarCapacity, hasCollector, COLLECTOR_CAP, COLLECTOR_UPGRADE, addWaiting, groundOf, jarOf, jarCap } from './idle.js';
 import { paperTexture } from './watercolor.js';
 import { Soundscape } from './audio.js';
 import { ITEMS, ITEM_ORDER, itemHelp, itemCost, CATS, MAX_LEVEL, LEVEL_NAME, LEVEL_KM, canLevel, levelCost, CABIN_STYLES } from './deco.js';
@@ -76,15 +76,16 @@ const places = new PlacesMap($('#map'), state, travel);
 // Aider une équipe de l'écosystème, c'est poser l'objet qui l'attire (s'il est débloqué et payable), sinon voir la liste.
 // La récolte en attente : sans collecteur, elle perle sur les fleurs ; avec, elle remplit les jarres.
 // Avec un collecteur, quelques gouttes restent visibles sur les fleurs : on voit que la récolte attend, et en toucher une vide tout.
-garden.dewAmount = () => state.pending ?? 0;
-garden.dewAll = () => hasCollector(state);
-garden.nectarFill = () => (state.pending ?? 0) / Math.max(1, nectarCapacity(state));
+garden.dewAmount = () => groundOf(state);
+garden.jarAmount = () => jarOf(state);
+garden.nectarFill = () => jarOf(state) / Math.max(1, jarCap(state));
 
-/** Faire passer de la récolte en attente au compteur. */
-function collect(amount) {
-	const v = Math.max(0, Math.min(state.pending ?? 0, amount));
+/** Faire passer de la récolte en attente au compteur : celle du sol (`ground`) ou celle des collecteurs. */
+function collect(amount, ground = false) {
+	const v = Math.max(0, Math.min(ground ? groundOf(state) : jarOf(state), amount));
 	if (v <= 0) return 0;
 	state.pending -= v;
+	if (ground) state.ground -= v;
 	state.nectar = (state.nectar ?? 0) + v;
 	state.collectedOnce = true;
 	sound.chime(1);
@@ -156,7 +157,8 @@ function renderHud() {
 		? `${fmt(km, km < 10 ? 1 : 0)} km aujourd'hui ✓`
 		: `${fmt(km, 1)} km sur ${goal} aujourd'hui`;
 	// La bourse de nectar, bien en vue ; dessous, ce qui attend d'être récolté (dans les fleurs ou le collecteur).
-	const pend = Math.floor(state.pending ?? 0), full = pend >= nectarCapacity(state);
+	// Plein : le collecteur ne prend plus rien, ou sans collecteur, les fleurs sont chargées.
+	const pend = Math.floor(state.pending ?? 0), full = hasCollector(state) ? jarOf(state) >= jarCap(state) : groundOf(state) >= 30;
 	$('#hud-steps').innerHTML = `<span class="nectar${boostLeft(state) ? ' boost' : ''}">${fmtInt(state.nectar ?? 0)}</span>`
 		+ `<small class="${full ? 'full' : pend >= 1 ? 'wait' : ''}">${pend >= 1 ? `+${fmtInt(pend)} à récolter` : 'nectar'}</small>`;
 	const k = Math.min(1, km / state.goalKm);
@@ -246,16 +248,9 @@ garden.onTap = hit => {
 	if (placing) return movePlacing(hit);
 	if (!hit) { card.hidden = true; return; }
 	if (hit.dew) {
-		if (garden.dewAll()) {
-			const jar = garden.items.find(x => x.kind === 'collecteur');
-			garden.takeDew(hit.dew);
-			if (jar) garden.pourFrom(jar);
-			state.collectedJar = true;
-			const v = collect(state.pending);
-			if (v >= 1) toast(`+${fmtInt(v)} nectar récolté`, '#E3A33A');
-			return;
-		}
-		const v = collect(garden.takeDew(hit.dew)); if (v >= 1) toast(`+${fmtInt(v)} nectar cueilli`, '#E3A33A'); return;
+		const v = collect(garden.takeDew(hit.dew), true);
+		if (v >= 1) toast(`+${fmtInt(v)} nectar cueilli`, '#E3A33A');
+		return;
 	}
 	if (hit.item) return tapItem(hit, card);
 	if (hit.critter) return tapCritter(hit, card);
@@ -349,12 +344,12 @@ const totalKm = () => state.totals.distance / 1000;
 const TIPS = [
 	{ id: 'purse', target: '#hud-steps', when: () => state.totals.distance > 0 || (state.nectar ?? 0) >= 1,
 		title: 'Ta bourse de nectar', text: 'Le nectar sert à aménager ton jardin. Tes pas en produisent (1 pour 5 m), tes animaux aussi : il se dépose sur les fleurs, et tu le cueilles. Dessous, ce qui t’attend.' },
-	{ id: 'dew', target: '#hud-steps', when: () => !hasCollector(state) && (state.pending ?? 0) >= 2, show: () => focusDew(),
+	{ id: 'dew', target: '#hud-steps', when: () => groundOf(state) >= 2, show: () => focusDew(),
 		title: 'Du nectar sur les fleurs', text: 'Tes butineurs déposent leur récolte en gouttes dorées sur les fleurs. Touche-les pour la cueillir : sinon elle attend, sans entrer dans ta bourse.' },
 	{ id: 'deco', target: '#btn-deco', when: () => (state.nectar ?? 0) >= 60 && !hasCollector(state),
 		title: 'Aménager', text: 'Tu as de quoi poser un collecteur : il garde la récolte de tes butineurs, plus besoin de cueillir les gouttes une à une.' },
-	{ id: 'jar', target: '#hud-steps', when: () => hasCollector(state) && (state.pending ?? 0) >= 5, show: () => focusJar(),
-		title: 'Ton collecteur se remplit', text: 'L’étiquette au-dessus montre ce qu’il contient. Touche-le pour tout récupérer. Plein, il ne garde plus rien : passe le vider, ou améliore-le.' },
+	{ id: 'jar', target: '#hud-steps', when: () => jarOf(state) >= 5, show: () => focusJar(),
+		title: 'Ton collecteur se remplit', text: 'L’étiquette au-dessus montre ce qu’il contient. Touche-le pour tout récupérer. Plein, il ne prend plus rien : le nectar reste au sol, en gouttes sur les fleurs. Vide-le, ou améliore-le.' },
 	{ id: 'eco', target: '#btn-eco', when: () => Object.keys(state.species).length >= 2,
 		title: 'Ton écosystème', text: 'Les animaux découverts travaillent pour toi, même appli fermée : ils font pousser le jardin et récoltent du nectar. Quand tu bouges, ils travaillent trois fois plus.' },
 	{ id: 'species', target: '#btn-species', when: () => Object.keys(state.species).length >= 1,
@@ -513,7 +508,7 @@ function addMeters(m) {
 	here().km += m / 1000;
 	// Le nectar de la marche se dépose comme celui des butineurs : en gouttes sur les fleurs, ou dans le collecteur.
 	// Il n'est pas limité par la réserve : ce qu'on a gagné en marchant ne se perd jamais.
-	state.pending = (state.pending ?? 0) + m / 5;
+	addWaiting(state, m / 5);
 	if (markActive(state)) {
 		const s = state.daily.streak;
 		toast(s > 1 ? `Jour actif : ${s} jours de suite !` : 'Jour actif : ta série commence', '#F08A3C', () => showDaily());
@@ -705,8 +700,8 @@ function renderStatus() {
 	dot.className = `status-dot${state.tracking ? ' idle' : ''}`;
 	title.textContent = state.tracking ? 'Au repos' : 'Suivi en pause';
 	// La récolte qui attend : dans les fleurs (à cueillir) ou dans les collecteurs (à vider d'un geste).
-	const pend = Math.floor(state.pending ?? 0), cap = nectarCapacity(state);
-	const wait = pend >= cap ? ' · réserve pleine, récolte !' : pend >= 1 ? ` · ${fmtInt(pend)} à récolter` : r.capped && x === 1 ? ' · à plein : bouge pour plus' : '';
+	const pend = Math.floor(state.pending ?? 0), full = hasCollector(state) && jarOf(state) >= jarCap(state);
+	const wait = full ? ` · collecteur plein, ${fmtInt(pend)} à récolter` : pend >= 1 ? ` · ${fmtInt(pend)} à récolter` : r.capped && x === 1 ? ' · à plein : bouge pour plus' : '';
 	sub.textContent = `Écosystème : +${fmtInt(r.nectar * x)} nectar/h${x > 1 ? ` · élan ×${x}` : ''}${wait} ›`;
 	renderDaily();
 }
@@ -854,7 +849,7 @@ async function playHarvest(res, source) {
 	state.totals.distance += res.distance;
 	here().km += res.distance / 1000;
 	state.totals.steps += res.steps;
-	state.pending = (state.pending ?? 0) + res.distance / 5;
+	addWaiting(state, res.distance / 5);
 	// L'élan des pas relus vaut celui d'une marche suivie en direct : 3 min par minute de vraie marche,
 	// 2 min par minute de petits pas (ménage, marche lente).
 	addBoost(state, res.groups.reduce((n, g) => n + g.minutes * (g.act.id === 'menage' || g.act.id === 'marche-lente' ? 2 : 3), 0));
@@ -1252,10 +1247,10 @@ $('#btn-place-turn').addEventListener('click', () => {
 function tapItem(hit, card) {
 	const it = hit.item, def = ITEMS[it.kind];
 	// Un collecteur plein (même un peu) se vide d'un seul geste.
-	if (it.kind === 'collecteur' && (state.pending ?? 0) >= 1) {
+	if (it.kind === 'collecteur' && jarOf(state) >= 1) {
 		garden.pourFrom(it);
 		state.collectedJar = true;
-		toast(`+${fmtInt(collect(state.pending))} nectar récolté`, '#E3A33A');
+		toast(`+${fmtInt(collect(jarOf(state)))} nectar récolté`, '#E3A33A');
 		return;
 	}
 	const lv = it.level ?? 1, nx = nextLevel(it);
@@ -1317,7 +1312,8 @@ function tapItem(hit, card) {
 			const back = (it.paid ?? def.cost) + (it.spent ?? 0);
 			state.nectar = (state.nectar ?? 0) + back;
 			// Un collecteur rangé emporte sa réserve : ce qui dépasse revient tout de suite à la bourse.
-			const over = (state.pending ?? 0) - nectarCapacity(state);
+			// Un collecteur rangé : ce qu'il contenait de trop pour les autres revient tout de suite à la bourse.
+			const over = jarOf(state) - jarCap(state);
 			if (over > 0) { state.pending -= over; state.nectar += over; }
 			garden.nextPopulate = 0;
 			toast(`${def.name} rangé${/^Une /.test(def.name) ? 'e' : /^Des /.test(def.name) ? 's' : ''} : +${fmtInt(back)} nectar`, '#9A7448');
@@ -1491,7 +1487,7 @@ $('#status').addEventListener('click', () => { if (!session) eco.open(); });
 $('#hud').addEventListener('click', e => {
 	if (!e.target.closest('#hud-steps')) return places.open();
 	if ((state.pending ?? 0) < 1) { if (!session) eco.open(); return; }
-	if (hasCollector(state)) { focusJar(); toast('Ta récolte t’attend dans le collecteur : touche-le pour la vider', '#E3A33A'); }
+	if (jarOf(state) >= 1) { focusJar(); toast(`Ta récolte t’attend dans le collecteur${groundOf(state) >= 1 ? ', et en gouttes sur les fleurs' : ''} : touche-le pour le vider`, '#E3A33A'); }
 	else { focusDew(); toast('Ta récolte perle sur les fleurs : touche les gouttes dorées', '#E3A33A'); }
 });
 setInterval(() => { if (!document.hidden) renderHud(); }, 2000);
