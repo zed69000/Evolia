@@ -3,6 +3,10 @@
 Chaque version, la plus récente en haut. Le site (evolia.sebastienalzamora.workers.dev) est toujours à jour ;
 le Play Store (tests internes) reçoit les versions indiquées « Play ».
 
+## 0.7.6 — 31 octobre 2026
+- **Des rivières peintes comme les mares.** Plus de tuyau régulier : l'eau est faite de lavis qui se chevauchent, avec la même couleur, le même bord sombre et irrégulier que les mares, une largeur qui varie, de l'herbe mouillée sur les berges et quelques reflets. Les ruisseaux du marais sont plus larges, font de vrais méandres et s'évasent en arrivant dans les mares.
+- **Des sentiers vivants :** largeur irrégulière, bords flous, terre plus ou moins usée.
+
 ## 0.7.5 — 31 octobre 2026
 - **Sentiers et ruisseaux qui se fondent dans le terrain.** Leurs bouts ne finissent plus en pointe ni par un bord net : ils pâlissent et s'effacent doucement, avec quelques trous d'usure, et l'herbe pousse par-dessus les sentiers. La source du marais naît de la même façon.
 

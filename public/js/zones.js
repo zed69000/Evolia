@@ -5,7 +5,7 @@
 // jamais de raccord, chaque tache, touffe ou caillou est défini en coordonnées du monde et peint, à
 // l'identique et dans le même ordre, dans toutes les cases qu'il touche.
 
-import { rng, wash, leaf, ribbon, curve, rgba } from './watercolor.js';
+import { rng, wash, leaf, ribbon, curve, rgba, mix } from './watercolor.js';
 
 export const PARCEL_W = 420;
 export const PARCEL_H = 1200;
@@ -634,14 +634,67 @@ function overgrow(g, pts, rr, w) {
 	}
 }
 
+/** Points tous les `step` pas le long d'un tracé, avec leur direction et leur distance depuis le début. */
+function along(pts, step) {
+	const out = [];
+	let d = 0;
+	for (let k = 1; k < pts.length; k++) {
+		const [x0, y0] = pts[k - 1], [x1, y1] = pts[k], L = Math.hypot(x1 - x0, y1 - y0) || 1;
+		for (let s = 0; s < L; s += step) out.push([x0 + ((x1 - x0) * s) / L, y0 + ((y1 - y0) * s) / L, (x1 - x0) / L, (y1 - y0) / L, d + s]);
+		d += L;
+	}
+	return { pts: out, length: d };
+}
+
+/** Une largeur qui varie doucement le long d'un tracé : jamais un tuyau régulier. */
+const varying = (rr, w) => {
+	const p1 = rr() * 6.28, p2 = rr() * 6.28;
+	return s => w * (0.82 + 0.2 * Math.sin(s / 75 + p1) + 0.1 * Math.sin(s / 24 + p2));
+};
+
+/**
+ * Un cours d'eau peint comme les mares : des lavis qui se chevauchent, des berges irrégulières, une largeur qui
+ * varie, de l'herbe mouillée tout autour et quelques reflets. `widen(t)` (t de 0 à 1) l'élargit, par exemple à
+ * son embouchure dans une mare.
+ */
+function waterCourse(g, pts, w, rr, widen = () => 1) {
+	const { pts: S, length: L } = along(pts, 5), width = varying(rr, w);
+	const W = ([, , , , d]) => width(d) * widen(d / L);
+	S.forEach((q, i) => { if (i % 3 === 0) wash(g, q[0], q[1], W(q) * 1.25, W(q) * 1.05, '#7FAA48', rr, { layers: 3, alpha: 0.035, edge: 0, variance: 0.3 }); });
+	S.forEach((q, i) => { if (i % 2 === 0) wash(g, q[0], q[1], W(q) * 0.62, W(q) * 0.56, '#3E7E7A', rr, { layers: 2, alpha: 0.05, edge: 0, variance: 0.25 }); });
+	for (const q of S) wash(g, q[0], q[1], W(q) * 0.52, W(q) * 0.47, '#5BB5B0', rr, { layers: 3, alpha: 0.09, edge: 0, variance: 0.25 });
+	S.forEach((q, i) => { if (i % 3 === 0) wash(g, q[0] - 2, q[1] - 2, W(q) * 0.26, W(q) * 0.2, '#8FD0C8', rr, { layers: 2, alpha: 0.08, edge: 0 }); });
+	// Les berges : le même trait sombre et irrégulier que le bord des mares, de chaque côté.
+	const bank = mix('#5BB5B0', '#1a2810', 0.4);
+	for (const side of [-1, 1]) {
+		const line = S.map(q => { const k = side * W(q) * 0.5 + rr.gauss() * 0.8; return [q[0] - q[3] * k, q[1] + q[2] * k]; });
+		g.strokeStyle = rgba(bank, 0.3);
+		g.lineWidth = 2.2;
+		g.lineJoin = g.lineCap = 'round';
+		g.beginPath();
+		line.forEach(([x, y], i) => (i ? g.lineTo(x, y) : g.moveTo(x, y)));
+		g.stroke();
+	}
+	// Des reflets clairs, de-ci de-là, dans le sens du courant.
+	S.forEach(([x, y, dx, dy], i) => {
+		if (i % 11 || rr() < 0.3) return;
+		const len = rr.range(10, 22), side = rr.gauss() * w * 0.12;
+		ribbon(g, [[x - dy * side, y + dx * side], [x - dy * side + dx * len, y + dx * side + dy * len]], 1.4, 0.6, '#FDF7E7', rr, 0.5);
+	});
+}
+
+/** Un sentier peint au lavis : terre blonde, bord plus sombre, bande usée au milieu ; une largeur qui varie. */
+function earthPath(g, pts, w, rr) {
+	const { pts: S } = along(pts, 5), width = varying(rr, w);
+	S.forEach((q, i) => { if (i % 2 === 0) wash(g, q[0], q[1], width(q[4]) * 0.62, width(q[4]) * 0.5, '#9A7E52', rr, { layers: 2, alpha: 0.07, edge: 0, variance: 0.3 }); });
+	for (const q of S) wash(g, q[0], q[1], width(q[4]) * 0.5, width(q[4]) * 0.4, '#D2B482', rr, { layers: 3, alpha: 0.12, edge: 0, variance: 0.25 });
+	S.forEach((q, i) => { if (i % 2 === 0) wash(g, q[0] - 1, q[1] - 1.5, width(q[4]) * 0.22, width(q[4]) * 0.17, '#E8D4A6', rr, { layers: 2, alpha: 0.08, edge: 0 }); });
+}
+
 function crossing(kind, r, ox, oy, W, H, top, seed) {
 	if (kind === 'brook') {
 		const pts = across(r, ox, oy, W, H, top, r() < 0.65, 90);
-		const item = longItem(pts, 30, 'river', (g, rr) => softEnds(g, item, tipsOf(pts), 130, rr, o => {
-			ribbon(o, pts, 48, 48, '#7FAA48', rr, 0.3);
-			ribbon(o, pts, 24, 24, '#7FB8C8', rr, 0.75);
-			ribbon(o, pts.map(([x, y]) => [x - 3, y - 2]), 5, 5, '#E8F4F4', rr, 0.45);
-		}), seed);
+		const item = longItem(pts, 30, 'river', (g, rr) => softEnds(g, item, tipsOf(pts), 130, rr, o => waterCourse(o, pts, 30, rr)), seed);
 		return item;
 	}
 	const pts = across(r, ox, oy, W, H, top, r() < 0.5, 60);
@@ -649,9 +702,7 @@ function crossing(kind, r, ox, oy, W, H, top, seed) {
 		// Un chemin de terre blonde, bien lisible : un bord plus sombre où l'herbe le mord, la terre chaude,
 		// une bande plus claire au milieu, usée par les pas ; des pierres plates à demi enfoncées,
 		// des graviers, et des touffes d'herbe et de fleurs qui débordent sur les bords.
-		ribbon(g, pts, 27, 27, '#9A7E52', rr, 0.32);
-		ribbon(g, pts, 23, 23, '#D2B482', rr, 0.62);
-		ribbon(g, pts.map(([x, y]) => [x - 1, y - 1.5]), 11, 11, '#E8D4A6', rr, 0.4);
+		earthPath(g, pts, 26, rr);
 		for (let i = 0; i < pts.length; i++) {
 			const [x0, y0] = pts[i], [x1, y1] = pts[i + 1] ?? pts[i];
 			const n = Math.max(1, Math.round(Math.hypot(x1 - x0, y1 - y0) / 9));
@@ -681,9 +732,9 @@ function crossing(kind, r, ox, oy, W, H, top, seed) {
 const MARSH_STREAMS = [
 	// Chaque ruisseau part du milieu d'une mare et finit au milieu de la suivante : les mares, peintes par-dessus,
 	// cachent ses bouts, et l'eau coule sans trou de l'une à l'autre.
-	{ from: [150, 0], to: [100, 236], w: 22, amp: 55, seed: 1, spring: true },
-	{ from: [112, 262], to: [196, 540], w: 12, amp: 18, seed: 2 },
-	{ from: [236, 590], to: [306, 924], w: 13, amp: 22, seed: 3 },
+	{ from: [150, 0], to: [100, 236], w: 36, amp: 40, seed: 1, spring: true },
+	{ from: [112, 262], to: [196, 540], w: 34, amp: 38, seed: 2 },
+	{ from: [236, 590], to: [306, 924], w: 36, amp: 42, seed: 3 },
 ];
 
 /** Un cours d'eau d'un point à un autre (coordonnées de la parcelle) : un lit d'herbe humide, l'eau, un reflet clair. */
@@ -692,22 +743,22 @@ function stream({ from: [x0, y0], to: [x1, y1], w, amp, seed, spring }, ox, oy) 
 	const L = Math.hypot(x1 - x0, y1 - y0), n = Math.max(4, Math.ceil(L / 30));
 	for (let k = 0; k <= n; k++) {
 		const t = k / n, fade = Math.min(1, t * 6, (1 - t) * 6);
-		const d = (amp * Math.sin(t * L / 520 + p1) + amp * 0.35 * Math.sin(t * L / 170 + p2)) * fade;
+		// Au moins un vrai méandre, quelle que soit la longueur du ruisseau.
+		const d = (amp * Math.sin(t * Math.PI * 1.5 + p1) + amp * 0.35 * Math.sin(t * Math.PI * 3.6 + p2)) * fade;
 		pts.push([ox + x0 + (x1 - x0) * t + d * (y1 - y0) / L, oy + y0 + (y1 - y0) * t - d * (x1 - x0) / L]);
 	}
-	// Les bouts finissent sous les mares ; la rivière d'arrivée, elle, naît d'une source qui se fond dans le sol.
-	const paint = (g, rr) => {
-		ribbon(g, pts, w * 2, w * 2, '#6E9A5A', rr, 0.3);
-		ribbon(g, pts, w, w, '#7FB8C8', rr, 0.78);
-		ribbon(g, pts.map(([x, y]) => [x - 2, y - 1.5]), w * 0.22, w * 0.22, '#E8F4F4', rr, 0.45);
-	};
-	const item = longItem(pts, w * 0.8 + 6, 'river', spring ? (g, rr) => softEnds(g, item, tipsOf(pts).slice(0, 1), 110, rr, o => paint(o, rr)) : paint, hash('marais', 'stream', seed));
+	// Les bouts finissent sous les mares, en s'évasant comme une embouchure ; la rivière d'arrivée, elle, naît d'une
+	// source qui se fond dans le sol.
+	const mouth = t => 1 + 0.7 * Math.max(0, (t - 0.82) / 0.18) + (spring ? 0 : 0.7 * Math.max(0, (0.18 - t) / 0.18));
+	const paint = (g, rr) => waterCourse(g, pts, w, rr, mouth);
+	const item = longItem(pts, w * 0.6 + 6, 'river', spring ? (g, rr) => softEnds(g, item, tipsOf(pts).slice(0, 1), 110, rr, o => paint(o, rr)) : paint, hash('marais', 'stream', seed));
 	return item;
 }
 
 function longItem(pts, r, kind, paint, seed) {
 	const xs = pts.map(p => p[0]), ys = pts.map(p => p[1]);
-	return { layer: 1.5, pts, r, kind, paint, seed, x0: Math.min(...xs) - 30, x1: Math.max(...xs) + 30, y0: Math.min(...ys) - 30, y1: Math.max(...ys) + 30 };
+	// La boîte déborde largement : l'herbe mouillée des berges et l'embouchure dans les mares ne sont jamais coupées.
+	return { layer: 1.5, pts, r, kind, paint, seed, x0: Math.min(...xs) - 80, x1: Math.max(...xs) + 80, y0: Math.min(...ys) - 80, y1: Math.max(...ys) + 80 };
 }
 
 /** Distance d'un point à une ligne brisée, avec un rejet rapide par boîte. */
