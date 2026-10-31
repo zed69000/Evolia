@@ -12,22 +12,22 @@ import { dayKey } from './state.js';
 export const GUILDS = {
 	pollinisateur: {
 		name: 'Pollinisateurs', does: 'font pousser les fleurs', grow: { fleur: 3 }, nectar: 4, bonus: 0,
-		members: ['abeille', 'bourdon', 'syrphe', 'bombyle', 'petite-tortue', 'paon-du-jour', 'azure', 'citron', 'apollon'],
+		members: ['abeille', 'bourdon', 'syrphe', 'bombyle', 'petite-tortue', 'paon-du-jour', 'azure', 'citron', 'apollon', 'moire', 'souci'],
 		upgrade: { id: 'hotel', name: 'Hôtel à insectes', cost: 40, real: 'Un fagot de tiges creuses ou des bûches percées, au soleil, accueillent les abeilles solitaires.' },
 	},
 	semeur: {
 		name: 'Semeurs', does: 'sèment arbustes et arbres', grow: { buisson: 2, arbre: 1.5 }, nectar: 1, bonus: 0,
-		members: ['merle', 'geai', 'cassenoix', 'colvert', 'ecureuil'],
+		members: ['merle', 'geai', 'cassenoix', 'colvert', 'ecureuil', 'lagopede', 'chocard'],
 		upgrade: { id: 'nichoir', name: 'Nichoir', cost: 60, real: "Un nichoir posé avant février, à l'abri du soleil de midi et hors de portée des chats." },
 	},
 	sol: {
 		name: 'Vie du sol', does: 'font pousser les herbes et enrichissent le sol', grow: { herbe: 2.5 }, nectar: 0.5, bonus: 0.03,
-		members: ['lombric', 'fourmi', 'escargot', 'gendarme', 'lucane', 'marmotte', 'crabe', 'goeland'],
+		members: ['lombric', 'fourmi', 'escargot', 'gendarme', 'lucane', 'marmotte', 'crabe', 'goeland', 'bouquetin'],
 		upgrade: { id: 'compost', name: 'Compost', cost: 50, real: 'Un tas de compost et de feuilles mortes nourrit vers de terre, cloportes et champignons.' },
 	},
 	regulateur: {
 		name: 'Prédateurs utiles', does: 'protègent le jardin des ravageurs', grow: {}, nectar: 0.5, bonus: 0.05,
-		members: ['coccinelle', 'epeire', 'sauterelle', 'mesange', 'herisson', 'lezard', 'ver-luisant', 'sympetrum', 'demoiselle', 'grenouille', 'triton', 'heron', 'martin-pecheur', 'pic', 'hulotte', 'salamandre', 'aigle', 'gravelot'],
+		members: ['coccinelle', 'epeire', 'sauterelle', 'mesange', 'herisson', 'lezard', 'ver-luisant', 'sympetrum', 'demoiselle', 'grenouille', 'triton', 'heron', 'martin-pecheur', 'pic', 'hulotte', 'salamandre', 'aigle', 'gravelot', 'sterne', 'huitrier', 'lezard-vert'],
 		upgrade: { id: 'sauvage', name: 'Coin sauvage', cost: 80, real: "Un coin d'herbes hautes, de ronces et de pierres abrite hérissons, lézards et coccinelles." },
 	},
 };
@@ -74,8 +74,8 @@ export function addBoost(state, minutes) {
 /**
  * L'écosystème entretient, le sport fait grandir : ce que les bêtes produisent seules est plafonné par ce que
  * la personne a bougé ces 7 derniers jours. Par jour, au plus la moitié de l'effort de sa marche moyenne en
- * croissance, et autant de nectar que sa marche moyenne ; un petit plancher pour qui ne bouge pas encore.
- * L'élan triple ensuite le tout, comme avant.
+ * croissance, et autant de nectar que sa marche moyenne ; un plancher (1,5 km par jour) pour qui marche peu.
+ * Les habitats relèvent ce plafond, puis l'élan triple le tout.
  */
 export function activityBudget(state, now = Date.now()) {
 	let sum = 0;
@@ -84,7 +84,19 @@ export function activityBudget(state, now = Date.now()) {
 		sum += state.days?.[dayKey(new Date(now - i * 86400000))] ?? 0;
 	}
 	const meters = sum / age;
-	return { grow: Math.max(60, (meters / 10) * 0.5) / 24, nectar: Math.max(120, meters / 5) / 24 };
+	const k = 1 + habitatBonus(state);
+	return { grow: (Math.max(150, (meters / 10) * 0.5) / 24) * k, nectar: (Math.max(300, meters / 5) / 24) * k };
+}
+
+/**
+ * Les habitats relèvent ce plafond : chaque niveau d'abri posé, dans n'importe quel lieu, ajoute 3 %
+ * (une mare ou une ruche, qui comptent double, 6 %), jusqu'à +150 %. Aménager multiplie ce que le sport rapporte.
+ */
+export const HABITAT_STEP = 0.03, HABITAT_MAX = 1.5;
+export function habitatBonus(state) {
+	let n = 0;
+	for (const place of Object.values(state.places ?? {})) for (const it of place.items ?? []) if (ITEMS[it.kind]?.cat === 'habitat') n += itemPower(it);
+	return Math.min(HABITAT_MAX, n * HABITAT_STEP);
 }
 
 /** Production brute d'un lieu, avant le plafond d'activité. */
@@ -311,6 +323,12 @@ export class EcoPanel {
 			? `<div class="eco-elan on"><b>Élan ×${BOOST_MULT}</b><span>Grâce à ta dernière sortie, tout pousse 3 fois plus vite encore <b id="eco-boost-left">${fmtDur(boost)}</b>.</span></div>`
 			: `<div class="eco-elan"><b>Élan</b><span>Après une marche, tout pousse <b>3 fois plus vite</b> pendant 3 fois sa durée : 20 min de marche, 1 h d'élan.</span></div>`;
 
+		// 2 bis. Les habitats : ce qu'ils ajoutent au maximum, et si l'on y est déjà.
+		const hb = habitatBonus(st);
+		const habitats = `<div class="eco-elan${hb ? ' on' : ''}"><b>Habitats +${Math.round(hb * 100)} %</b><span>${r.capped
+			? 'Ton écosystème produit tout ce que permet ton activité de la semaine. Pour aller plus loin : bouge, ou améliore un abri (chaque niveau ajoute 3 %).'
+			: 'Chaque niveau d’abri, dans n’importe quel lieu, relève de 3 % ce que ton écosystème peut produire, jusqu’à +150 %.'}</span></div>`;
+
 		// 3. Ce qui pousse tout seul, en plantes (pas en points).
 		const grow = Object.entries(r.grow).filter(([, v]) => v > 0).sort((a, b) => PLANT_TYPES[a[0]].cost - PLANT_TYPES[b[0]].cost)
 			.map(([t, v]) => `<li><i>${TYPE_ICON[t]}</i><span>${perHour(v * x, t)}</span></li>`).join('');
@@ -356,6 +374,7 @@ export class EcoPanel {
 			<div class="panel-head"><h2>Écosystème</h2><button class="close" data-close-eco aria-label="Fermer">×</button></div>
 			${hero}
 			${elan}
+			${habitats}
 			${grow ? `<h3 class="eco-h">Pousse tout seul ${boost ? `<small>avec l'élan</small>` : ''}</h3><ul class="eco-grow">${grow}</ul>` : ''}
 			${lastHtml}
 			<h3 class="eco-h">Tes équipes ${PLACE_IN[placeId]} <small>touche pour le détail</small></h3>

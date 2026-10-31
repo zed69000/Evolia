@@ -9,6 +9,7 @@
   "dependencies": {
     "@capacitor/android": "^8.5.3",
     "@capacitor/core": "^8.5.3",
+    "@capacitor/local-notifications": "^8.3.1",
     "@capgo/capacitor-health": "^8.11.12",
     "@capgo/capacitor-pedometer": "^8.0.51"
   },

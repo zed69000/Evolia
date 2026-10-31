@@ -22,18 +22,18 @@ export const ITEMS = {
 	hotel: { cat: 'habitat', name: 'Un hôtel à insectes', cost: 80, km: 3, turn: true, team: 'pollinisateur', power: 1, attracts: 'abeille', text: 'Abeilles solitaires et coccinelles y passent l’hiver.', box: { w: 110, h: 140, ax: 55, ay: 124 } },
 	mare: { cat: 'habitat', name: 'Une petite mare', cost: 90, km: 4, team: 'regulateur', power: 2, text: 'Libellules et grenouilles chassent les moustiques qui y dansent.', box: { w: 160, h: 80, ax: 80, ay: 40 } },
 	cabane: { cat: 'recolte', name: 'Une petite cabane', cost: 200, km: 5, turn: true, text: 'Ton abri au fond du jardin, et la maison de ton jardinier. Agrandis-la, et choisis sa couleur.', box: { w: 200, h: 215, ax: 100, ay: 175 },
-		levels: { max: 3, cost: [0, 0, 600, 2000], km: [0, 0, 15, 50], name: ['', 'petite cabane', 'cabane à auvent', 'chalet'] },
+		levels: { max: 3, cost: [0, 0, 600, 2000], km: [0, 0, 10, 30], name: ['', 'petite cabane', 'cabane à auvent', 'chalet'] },
 		boxes: [null, null, { w: 220, h: 235, ax: 110, ay: 180 }, { w: 340, h: 255, ax: 125, ay: 195 }] },
 	abri: { cat: 'habitat', name: 'Un abri à hérisson', cost: 70, km: 6, turn: true, team: 'regulateur', power: 1, attracts: 'herisson', text: 'Une petite maison sous les feuilles, où il passe l’hiver.', box: { w: 90, h: 70, ax: 45, ay: 50 } },
 	ruche: { cat: 'habitat', name: 'Une ruche en paille', cost: 120, km: 6, team: 'pollinisateur', power: 2, attracts: 'abeille', text: 'Toute une colonie d’abeilles pour polliniser tes fleurs.', box: { w: 80, h: 90, ax: 40, ay: 78 } },
 	bain: { cat: 'habitat', name: 'Un bain d’oiseaux', cost: 100, km: 8, team: 'semeur', power: 1, attracts: 'merle', text: 'De l’eau fraîche : les oiseaux reviennent, et sèment autour.', box: { w: 80, h: 90, ax: 40, ay: 80 } },
 	potager: { cat: 'recolte', name: 'Un carré de potager', cost: 90, km: 5, needs: 'cabane', team: 'semeur', power: 2, attracts: ['lapin', 'lievre'], text: 'Salades, choux et tomates, cultivés par ton fermier ou ta fermière, poussent quand tu marches. Pose les carrés côte à côte pour agrandir le potager.', box: { w: 150, h: 100, ax: 75, ay: 64 } },
 	sandarium: { cat: 'habitat', name: 'Un sandarium', cost: 70, km: 4, team: 'pollinisateur', power: 1, attracts: 'abeille', text: 'Un carré de sable au soleil : les abeilles sauvages qui nichent au sol y creusent leurs terriers.', box: { w: 130, h: 70, ax: 65, ay: 42 } },
-	haie: { cat: 'habitat', name: 'Une haie de bois mort', cost: 110, km: 10, team: 'regulateur', power: 2, attracts: 'herisson', turn: true, text: 'Des branches empilées entre des piquets : roitelets et hérissons s’y cachent, et elle se tasse en terreau. Tourne-la, et pose plusieurs tronçons bout à bout pour border ton jardin.', box: { w: 190, h: 100, ax: 95, ay: 74 } },
-	muret: { cat: 'habitat', name: 'Un muret de pierres sèches', cost: 140, km: 15, team: 'regulateur', power: 2, attracts: 'lezard', turn: true, text: 'Des pierres posées sans mortier, qui gardent la chaleur : lézards, orvets et papillons s’y abritent. Pose plusieurs tronçons bout à bout pour en faire un long mur.', box: { w: 190, h: 90, ax: 95, ay: 66 } },
+	haie: { cat: 'habitat', name: 'Une haie de bois mort', cost: 110, km: 8, team: 'regulateur', power: 2, attracts: 'herisson', turn: true, text: 'Des branches empilées entre des piquets : roitelets et hérissons s’y cachent, et elle se tasse en terreau. Tourne-la, et pose plusieurs tronçons bout à bout pour border ton jardin.', box: { w: 190, h: 100, ax: 95, ay: 74 } },
+	muret: { cat: 'habitat', name: 'Un muret de pierres sèches', cost: 140, km: 10, team: 'regulateur', power: 2, attracts: 'lezard', turn: true, text: 'Des pierres posées sans mortier, qui gardent la chaleur : lézards, orvets et papillons s’y abritent. Pose plusieurs tronçons bout à bout pour en faire un long mur.', box: { w: 190, h: 90, ax: 95, ay: 66 } },
 	pas: { cat: 'deco', name: 'Des pas japonais', cost: 20, km: 0, turn: true, text: 'Quelques pierres plates dans l’herbe, pour flâner sans tasser le sol. Mets-en plusieurs à la suite pour tracer une allée.', box: { w: 150, h: 60, ax: 75, ay: 32 } },
 	epouvantail: { cat: 'deco', name: 'Un épouvantail', cost: 80, km: 6, text: 'Chapeau de paille et chemise à carreaux : il veille sur le potager, et les oiseaux s’y posent quand même.', box: { w: 100, h: 160, ax: 50, ay: 148 } },
-	arche: { cat: 'deco', name: 'Une arche de roses', cost: 120, km: 20, turn: true, team: 'pollinisateur', power: 1, attracts: 'paon-du-jour', text: 'Un passage fleuri pour les papillons.', box: { w: 170, h: 190, ax: 85, ay: 172 } },
+	arche: { cat: 'deco', name: 'Une arche de roses', cost: 120, km: 14, turn: true, team: 'pollinisateur', power: 1, attracts: 'paon-du-jour', text: 'Un passage fleuri pour les papillons.', box: { w: 170, h: 190, ax: 85, ay: 172 } },
 };
 export const ITEM_ORDER = ['collecteur', 'banc', 'pas', 'massif', 'bois', 'pierres', 'mangeoire', 'nichoir', 'lanterne', 'compost', 'hotel', 'sandarium', 'mare', 'cabane', 'potager', 'abri', 'ruche', 'epouvantail', 'bain', 'haie', 'muret', 'arche'];
 
@@ -50,7 +50,7 @@ export const CATS = [
  */
 export const MAX_LEVEL = 5;
 export const LEVEL_NAME = ['', 'simple', 'garni', 'fleuri', 'foisonnant', 'remarquable'];
-export const LEVEL_KM = [0, 0, 10, 30, 70, 150];
+export const LEVEL_KM = [0, 0, 6, 18, 40, 80];
 const LEVEL_MULT = [0, 0, 4, 12, 35, 100];
 export const canLevel = kind => ITEMS[kind]?.cat === 'habitat';
 /** La boîte d'un objet posé : la cabane grandit avec son niveau. */
@@ -860,5 +860,8 @@ const UNIT = {
 /** Ce qu'un objet apporte à l'écosystème, en quelques mots (ou '' pour un objet de décor). */
 export function itemHelp(kind) {
 	const it = ITEMS[kind];
-	return it.team ? `+${it.power} ${UNIT[it.team][it.power > 1 ? 1 : 0]}` : '';
+	if (!it.team) return '';
+	const team = `+${it.power} ${UNIT[it.team][it.power > 1 ? 1 : 0]}`;
+	// Un habitat relève aussi le plafond de l'écosystème, de 3 % par niveau (voir idle.js).
+	return it.cat === 'habitat' ? `${team} · +${3 * it.power} % de production` : team;
 }

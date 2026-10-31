@@ -5,5 +5,11 @@
   "backgroundColor": "#FDF7E7",
   "android": {
     "backgroundColor": "#FDF7E7"
+  },
+  "plugins": {
+    "LocalNotifications": {
+      "smallIcon": "ic_stat_evolia",
+      "iconColor": "#F08A3C"
+    }
   }
 }

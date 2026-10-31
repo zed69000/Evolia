@@ -320,6 +320,27 @@ const CHAMOIS = {
 	},
 };
 
+// Le bouquetin : plus trapu, gris-brun, une barbiche et de grandes cornes annelées en arc vers l'arrière.
+const IBEX = {
+	...CHAMOIS, legH: 15, bodyL: 27, bodyH: 13.5, neckW: 6, fur: '#8C7C64', belly: '#A8987C', leg: '#6A5A46', legFar: '#4E4232',
+	headDraw(ctx, x, y, graze, s) {
+		ctx.save();
+		ctx.translate(x, y);
+		ctx.rotate(0.3 + graze * 0.85);
+		ell(ctx, 3, 0, 5.2, 3.4, 0, '#8C7C64');
+		ell(ctx, 6.8, 0.9, 2.2, 1.8, 0.1, '#7A6A54');
+		ell(ctx, 5.8, 3.4, 0.9, 1.8, 0.2, '#4E4232');
+		ell(ctx, 2.6, -1, 0.8, 0.8, 0, '#1A1210');
+		ell(ctx, -1, -3, 1.3, 2.2, -0.6, '#7A6A54');
+		ctx.lineCap = 'round';
+		ctx.strokeStyle = '#6A5A44'; ctx.lineWidth = 2.6;
+		ctx.beginPath(); ctx.moveTo(1.6, -2.4); ctx.quadraticCurveTo(-1, -12, -8, -9.5); ctx.stroke();
+		ctx.strokeStyle = 'rgba(240,226,196,0.6)'; ctx.lineWidth = 0.7;
+		for (const [a, b] of [[0.6, -5.8], [-0.6, -8.2], [-2.6, -9.8], [-5, -10.2]]) { ctx.beginPath(); ctx.moveTo(a - 1, b - 0.4); ctx.lineTo(a + 1, b + 0.6); ctx.stroke(); }
+		ctx.restore();
+	},
+};
+
 const FOX = {
 	legH: 10, bodyL: 22, bodyH: 8.5, neck: 6, neckW: 5, head: 4, stride: 10, lift: 3.4, bob: 0.9, legW: 1.4, trot: true,
 	fur: '#C8662A', belly: '#F2E6D4', leg: '#2A1E18', legFar: '#1A1210', hoof: null, rump: null,
@@ -567,7 +588,7 @@ export const BEASTS = {
 	hare: (ctx, t, mode, p, s) => leporid(ctx, s, { ...LIEVRE, ...p }),
 	squirrel: (ctx, t, mode, p, s) => squirrel(ctx, s),
 	roe: (ctx, t, mode, p, s) => quadruped(ctx, s, ROE),
-	chamois: (ctx, t, mode, p, s) => quadruped(ctx, s, CHAMOIS),
+	chamois: (ctx, t, mode, p, s) => quadruped(ctx, s, p.ibex ? IBEX : CHAMOIS),
 	fox: (ctx, t, mode, p, s) => quadruped(ctx, s, FOX),
 	farmer: (ctx, t, mode, p, s) => farmer(ctx, s),
 	dog: (ctx, t, mode, p, s) => pet(ctx, s, DOG),

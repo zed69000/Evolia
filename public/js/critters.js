@@ -452,9 +452,10 @@ const DRAW = {
 		ell(ctx, 0, 9, 3.6, 2.6);
 	},
 
-	gull(ctx, t) {
+	// Goéland par défaut ; une sterne passe ses couleurs (ailes plus claires, calotte noire, bec rouge).
+	gull(ctx, t, mode, p = {}) {
 		const flap = Math.sin(t * 3) * 3;
-		ctx.fillStyle = '#B8C0C8';
+		ctx.fillStyle = p.wing ?? '#B8C0C8';
 		for (const s of [-1, 1]) {
 			ctx.beginPath();
 			ctx.moveTo(0, 0);
@@ -468,7 +469,8 @@ const DRAW = {
 		ctx.fillStyle = '#F4F4F2';
 		ell(ctx, 0, 1, 3, 6);
 		ell(ctx, 0, -5, 2.2, 2.2);
-		ctx.fillStyle = '#E8C43E';
+		if (p.cap) { ctx.fillStyle = p.cap; ell(ctx, 0, -5.6, 2.1, 1.5); }
+		ctx.fillStyle = p.beakColor ?? '#E8C43E';
 		ell(ctx, 0, -7.4, 0.8, 1.4);
 	},
 

@@ -21,6 +21,12 @@ const FENCE_STEP = 34;
 const STAGES = 30;
 const SWAY = { herbe: 0.09, fleur: 0.07, buisson: 0.02, arbre: 0.012 };
 const MIN_Y = { herbe: 60, fleur: 100, buisson: 100, arbre: 220 };
+// Les vieux arbres déjà là en arrivant (cœur du lieu, sur les bords pour laisser la place au milieu).
+const OLD_TREES = {
+	foret: [[55, 300], [365, 330], [40, 600], [385, 660], [60, 930], [360, 1000], [160, 1110], [250, 250]],
+	montagne: [[60, 330], [370, 420], [345, 1010]],
+	littoral: [[60, 900], [375, 1030]],
+};
 const POND_PADS = [[40, -10], [58, 10], [-60, 14], [-20, 24], [10, -26]];
 const FLYERS = new Set(['bee', 'butterfly', 'dragonfly', 'hoverfly', 'beefly']);
 // Niveaux de détail selon le zoom : formes simples, aquarelle, aquarelle détaillée.
@@ -145,6 +151,22 @@ export class Garden {
 		return true;
 	}
 
+	/**
+	 * Le caractère d'un lieu dès l'arrivée : la forêt a déjà ses vieux arbres, la montagne ses mélèzes, la dune
+	 * ses pins. Ajouté une seule fois, aussi aux lieux ouverts avant ; rien ne reste dans l'eau des mares du marais.
+	 */
+	renewPlace(id) {
+		const place = this.state.places[id];
+		if (!place || (place.renewed ?? 0) >= 1) return;
+		place.renewed = 1;
+		for (const [x, y] of OLD_TREES[id] ?? []) {
+			if (place.plants.some(p => Math.hypot(p.x - x, (p.y - y) * 1.25) < 70)) continue;
+			this.spawn(id, 'arbre', 1, { x, y });
+		}
+		const ponds = Object.values(DECOR).filter(d => d.place === id && d.always && d.rad);
+		place.plants = place.plants.filter(p => !ponds.some(d => Math.hypot(p.x - d.x, (p.y - d.y) * 1.25) < d.rad));
+	}
+
 	/** Les plantes d'une ancienne version restées hors des clairières reviennent à l'intérieur. */
 	tidyPlants() {
 		for (const p of this.place.plants) {
@@ -159,6 +181,7 @@ export class Garden {
 	/** Change de lieu : un autre jardin, d'autres espèces. */
 	setPlace(id) {
 		this.ensurePlace(id);
+		this.renewPlace(id);
 		this.biome = id;
 		this.active = 0;
 		this.insects = [];
@@ -2894,7 +2917,8 @@ export class Garden {
 		ctx.font = `bold ${Math.round(13 * dpr)}px Nunito, sans-serif`;
 		const w = ctx.measureText(label).width + 22 * dpr, h = 28 * dpr;
 		const x = right ? cw - w / 2 - 8 * dpr : left ? w / 2 + 8 * dpr : Math.max(w / 2 + 8 * dpr, Math.min(cw - w / 2 - 8 * dpr, cx));
-		const y = below ? ch - 230 * dpr : above ? 120 * dpr : Math.max(140 * dpr, Math.min(ch - 240 * dpr, cy));
+		// Sous le bouton œil (en haut à droite) : l'étiquette ne passe jamais dessous.
+		const y = below ? ch - 230 * dpr : above ? 205 * dpr : Math.max(205 * dpr, Math.min(ch - 240 * dpr, cy));
 		ctx.fillStyle = 'rgba(243,237,217,0.95)';
 		ctx.beginPath();
 		ctx.roundRect(x - w / 2, y - h / 2, w, h, h / 2);

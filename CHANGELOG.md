@@ -3,6 +3,29 @@
 Chaque version, la plus récente en haut. Le site (evolia.sebastienalzamora.workers.dev) est toujours à jour ;
 le Play Store (tests internes) reçoit les versions indiquées « Play ».
 
+## 0.6.35 — 31 octobre 2026
+- **Des biomes qui ressemblent à leur nom.**
+    - **Forêt :** on y arrive sous de vieux arbres, sur un sol d'humus couvert de feuilles, de fougères et de mousse.
+    - **Montagne :** c'est un alpage vert semé de vrais rochers.
+    - **Littoral :** un sable blond, avec des touffes d'oyat et des coquillages.
+    - **Marais :** trois mares, reliées par une rivière qui descend du nord.
+- **Pensé pour ceux qui marchent peu.**
+    - Les lieux sont plus proches : marais à 8 km, forêt à 20, montagne à 45, littoral à 80.
+    - Les niveaux d'habitats s'ouvrent plus tôt (6, 18, 40 et 80 km), comme la cabane à auvent (10 km) et le chalet (30 km).
+    - Même en marchant peu, l'écosystème produit au moins l'équivalent de 1,5 km par jour.
+- **Les habitats rapportent enfin.** Chaque niveau d'abri relève de 3 % ce que l'écosystème peut produire, jusqu'à +150 %. La page Écosystème l'affiche.
+- **8 nouvelles espèces.**
+    - Montagne : lagopède alpin, chocard à bec jaune, bouquetin des Alpes, moiré des Alpes.
+    - Littoral : sterne pierregarin, huîtrier pie, lézard vert, souci.
+- **Herbier complet :** trouver toutes les espèces d'un lieu rapporte 500 nectar.
+- **Garder sa partie :** dans Options, une copie de la partie à garder et à restaurer, même sur un autre téléphone.
+- **Rappels** (appli Android, à activer) : collecteur plein, cadeau du jour, série à garder.
+- **Petites corrections :**
+    - le guide explique la bourse avant l'écosystème, et se cache pendant qu'on pose un objet ;
+    - pendant la mission du collecteur, Aménager s'ouvre sur l'onglet Récolte ;
+    - les messages et l'étiquette de distance ne passent plus sous le bouton œil ;
+    - l'écran ne peut plus remonter d'un coup.
+
 ## 0.6.34 — 31 octobre 2026 · Play
 - **La récolte devient une cagnotte.** Vider le collecteur fait jaillir un grand « +N » doré. Un flot de gouttes file vers la bourse, chacune tinte un peu plus aigu en arrivant, et le compteur grimpe chiffre après chiffre (jusqu'à 3 s pour une grosse récolte). Une gerbe d'étincelles et un carillon terminent.
 
@@ -80,7 +103,7 @@ le Play Store (tests internes) reçoit les versions indiquées « Play ».
 
 ## 0.6.13 et avant — 22 au 24 octobre 2026
 - **Evolia devient une appli :** un jardin à l'aquarelle qui pousse quand on bouge.
-- **Cinq lieux, 113 espèces,** le vrai ciel (soleil et météo), les saisons.
+- **Cinq lieux, 134 espèces,** le vrai ciel (soleil et météo), les saisons.
 - **Écosystème :** les animaux découverts travaillent seuls, le sport triple leur travail.
 - Clôture qui s'agrandit, retour quotidien (cadeau et défis), suivi automatique des pas, jeu « Trouve… ».
 - **Aménager** son jardin : cabane, banc, abris, ruisseaux et sentiers.

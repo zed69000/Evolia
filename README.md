@@ -24,8 +24,11 @@ Puis ouvrir http://localhost:8642/?dev=1
 
 ## Lieux
 
-Prairie (départ), marais (12 km et 10 espèces), forêt (35 km, 24), montagne (80 km, 40), littoral (140 km, 55).
-Chaque lieu a son jardin, son sol, ses décors et ses espèces (125 en tout, dans `js/species.js`).
+Prairie (départ), marais (8 km et 10 espèces), forêt (20 km, 24), montagne (45 km, 40), littoral (80 km, 55).
+Chaque lieu a son jardin, son sol, ses décors et ses espèces (142 en tout, dans `js/species.js`). La forêt arrive avec
+ses vieux arbres, un sol d'humus couvert de feuilles, de fougères et de mousse ; la montagne est un alpage vert semé
+de rochers ; le littoral un sable blond à oyats et coquillages ; le marais a trois mares reliées par une rivière.
+Compléter l'herbier d'un lieu (toutes ses espèces) rapporte 500 nectar.
 Dans chaque lieu, le terrain s'agrandit clairière par clairière (formes rondes ou ovales qui se fondent entre elles) : une clôture suit leur bord,
 la suivante attend en pointillés et s'ouvre à 1 ; 2,5 ; 4,5 ; 7 ; 10… km faits sur place (12 au plus).
 
@@ -55,6 +58,8 @@ arrondie à 0,1° (environ 10 km), seulement si la personne a autorisé sa posit
 - `js/map.js` : la carte des lieux.
 - `js/idle.js` : l'écosystème qui travaille seul (guildes, nectar, aménagements, vitalité, élan sportif).
 - `js/weather.js` : soleil et météo réels.
+- `js/backup.js` : la copie de la partie (un code compressé à garder, à restaurer sur un autre téléphone).
+- `js/notify.js` : les rappels de l'appli Android (collecteur plein, cadeau du jour, série à garder).
 
 ## Sur téléphone (Capacitor, à venir)
 
@@ -82,9 +87,9 @@ L'herbe s'étend en pelouse continue (tapis peint au sol sous les touffes).
 Au-delà de 25 km/h rien ne pousse (vélo, voiture). Décor débloqué à 3, 6 et 10 km cumulés.
 
 Aménager a trois onglets : Habitats (abris pour la faune, améliorables du niveau 1 au niveau 5 : chaque niveau
-compte comme un abri de plus, coûte 4, 12, 35 puis 100 fois le prix de base et demande 10, 30, 70 puis 150 km au
-total), Récolte (collecteur, cabane, potager) et Décoration. La cabane s'agrandit en cabane à auvent (15 km) puis
-en chalet (50 km), se peint en cinq couleurs, et loge un fermier ou une fermière, au choix, avec un chien ou
+compte comme un abri de plus, coûte 4, 12, 35 puis 100 fois le prix de base et demande 6, 18, 40 puis 80 km au
+total), Récolte (collecteur, cabane, potager) et Décoration. La cabane s'agrandit en cabane à auvent (10 km) puis
+en chalet (30 km), se peint en cinq couleurs, et loge un fermier ou une fermière, au choix, avec un chien ou
 un chat. Quand le fermier est chez lui, la cheminée fume. Le nectar butiné attend dans les fleurs ou le
 collecteur : rien n'entre dans la bourse sans qu'on le récolte. Le nectar des pas (1 pour 5 m) se dépose aussi. Le
 collecteur se remplit jusqu'à sa capacité ; ce qui n'y tient plus reste au sol, en gouttes (l'écosystème y
@@ -92,6 +97,10 @@ en laisse au plus 30, la marche sans limite). La haie, le muret et les pas japon
 raccordent bout à bout. Un guide explique chaque nouveauté au bon moment : une bulle près du bouton concerné,
 qui s'illumine (bourse, gouttes, Aménager, collecteur, écosystème, espèces, habitats, cabane, potager, carnet,
 lieux, défis du jour). Les premières missions : marcher 300 m, cueillir les gouttes, poser un collecteur, le vider.
+
+L'écosystème produit au plus ce que permet la marche moyenne des 7 derniers jours (plancher : 1,5 km par jour).
+Chaque niveau d'habitat posé, dans n'importe quel lieu, relève ce plafond de 3 % (6 % pour une mare ou une ruche),
+jusqu'à +150 %. L'élan du sport triple ensuite le tout.
 
 Pas récoltés sans GPS : l'allure vient de la cadence (moins de 45 pas/min = ménage et petits pas → herbes folles,
 45-90 marche lente, 90-110 marche, 110-135 marche rapide, 135-155 jogging, au-delà course).

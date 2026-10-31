@@ -768,6 +768,8 @@ export const DECOR = {
 	murger: { place: 'prairie', name: 'Le muret de pierres', km: 6, x: 370, y: 790, rad: 44, box: { w: 120, h: 70, ax: 60, ay: 52 } },
 	log: { place: 'prairie', name: 'Le vieux tronc', km: 10, x: 320, y: 920, rad: 70, box: { w: 160, h: 90, ax: 80, ay: 62 } },
 	bigpond: { place: 'marais', name: 'La grande mare', always: true, x: 210, y: 560, rad: 175, water: true, scale: 1.65, box: { w: 420, h: 270, ax: 210, ay: 150 } },
+	mare2: { place: 'marais', name: 'La mare aux grenouilles', always: true, x: 100, y: 248, rad: 78, box: { w: 240, h: 130, ax: 120, ay: 64 } },
+	mare3: { place: 'marais', name: 'La mare du bas', always: true, x: 312, y: 935, rad: 92, box: { w: 270, h: 150, ax: 135, ay: 74 } },
 	nenuphars: { place: 'marais', name: 'Les nénuphars', km: 2, x: 210, y: 561, rad: 0, box: { w: 420, h: 270, ax: 210, ay: 150 } },
 	roseliere: { place: 'marais', name: 'La roselière', km: 5, x: 80, y: 840, rad: 75, box: { w: 180, h: 130, ax: 90, ay: 108 } },
 	mushrooms: { place: 'foret', name: 'Les amanites', km: 3, x: 330, y: 760, rad: 32, box: { w: 80, h: 70, ax: 40, ay: 60 } },
@@ -810,6 +812,22 @@ function paintBigPond(ctx) {
 	ctx.restore();
 	return { top: -100 };
 }
+
+/** Les deux autres mares du marais : la même eau, retournée et à une autre taille, avec quelques joncs au bord. */
+function smallPond(ctx, k, flip, seed) {
+	const d = rng(seed);
+	ctx.save();
+	ctx.scale(k * flip, k);
+	paintPond(ctx);
+	ctx.restore();
+	for (let i = 0; i < 14; i++) {
+		const side = i % 2 ? 1 : -1, x = side * d.range(70, 100) * k, y = d.range(-30, 20) * k;
+		leaf(ctx, x, y, d.range(14, 26), 2, -Math.PI / 2 + d.gauss() * 0.25, '#6E8A3A', d, 0.75);
+	}
+	return { top: -50 };
+}
+const paintMare2 = ctx => smallPond(ctx, 1, -1, 7171);
+const paintMare3 = ctx => smallPond(ctx, 1.15, 1, 8282);
 
 function paintNenuphars(ctx) {
 	const d = rng(9090);
@@ -942,7 +960,7 @@ function paintGanivelles(ctx) {
 }
 
 export const DECOR_PAINTERS = {
-	pond: paintPond, bigpond: paintBigPond, nenuphars: paintNenuphars, roseliere: paintRoseliere, murger: paintMurger, log: paintLog,
+	pond: paintPond, bigpond: paintBigPond, mare2: paintMare2, mare3: paintMare3, nenuphars: paintNenuphars, roseliere: paintRoseliere, murger: paintMurger, log: paintLog,
 	mushrooms: paintMushrooms, litiere: paintLitiere, souche: paintSouche, eboulis: paintEboulis, neve: paintNeve,
 	laisse: paintLaisse, ganivelles: paintGanivelles,
 };

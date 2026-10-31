@@ -7,7 +7,7 @@ import { PlacesMap } from './map.js';
 import { PLANT_TYPES, DECOR, plantName } from './plants.js';
 import { GpsTracker, MotionTracker, SimTracker } from './tracker.js';
 import { SOURCES, bestSource, harvest, classifyCadence } from './harvest.js';
-import { PLACES, PLACE_BY_ID, SPECIES, SPECIES_BY_ID, checkSpecies, placeOpen, speciesOf } from './species.js';
+import { PLACES, PLACE_BY_ID, PLACE_DE, SPECIES, SPECIES_BY_ID, checkSpecies, placeOpen, speciesOf } from './species.js';
 import { Encyclopedia, thumbCopy } from './encyclopedia.js';
 import { Sky, WEATHER_LABEL } from './weather.js';
 import { EcoPanel, tick, summaryHtml, addBoost, boostLeft, visualExtra, rates, GUILDS, BOOST_MULT, BOOST_PER_MIN, nectarCapacity, hasCollector, COLLECTOR_CAP, COLLECTOR_UPGRADE, addWaiting, groundOf, jarOf, jarCap } from './idle.js';
@@ -15,7 +15,9 @@ import { paperTexture } from './watercolor.js';
 import { Soundscape } from './audio.js';
 import { ITEMS, ITEM_ORDER, itemHelp, itemCost, CATS, MAX_LEVEL, LEVEL_NAME, LEVEL_KM, canLevel, levelCost, CABIN_STYLES } from './deco.js';
 import { VERSION } from './version.js';
-import { rollDay, markActive, giftReady, giftFor, claimGift, claim, toClaim, noteTap, noteQuest, challengesHtml, weekHtml, nextGoal, albumHtml, collection } from './daily.js';
+import { exportCode, importCode, backupAge } from './backup.js';
+import { canNotify, askNotify, scheduleReminders, clearReminders } from './notify.js';
+import { rollDay, markActive, giftReady, giftFor, claimGift, claim, toClaim, noteTap, noteQuest, challengesHtml, weekHtml, nextGoal, albumHtml, collection, herbarium, newlyComplete, HERBARIUM_REWARD } from './daily.js';
 
 const params = new URLSearchParams(location.search);
 const DEV_KEY = 'evolia.dev';
@@ -243,6 +245,21 @@ function announceSpecies(quiet = false) {
 	if (found.length || opened.length) sound.chime(opened.length ? 3 : 2);
 	for (const sp of found) toast(`${sp.kind === 'milieu' ? 'Nouveau milieu' : 'Nouvelle espèce'} : ${sp.name}`, '#F08A3C', () => species.open(sp.id));
 	for (const p of opened) toast(`Nouveau lieu ouvert : ${p.name}`, p.color, () => places.open());
+	celebrateHerbarium();
+}
+
+/** Un herbier complet : toutes les espèces d'un lieu trouvées. Une fête, et une récompense, une fois par lieu. */
+function celebrateHerbarium() {
+	for (const p of newlyComplete(state)) {
+		state.complete[p.id] = Date.now();
+		state.nectar = (state.nectar ?? 0) + HERBARIUM_REWARD;
+		persist(true);
+		renderHud();
+		sound.chime(3);
+		whenFree(() => showModal(`<h2>Herbier complet !</h2>
+			<p>Tu as trouvé les ${herbarium(state, p.id).total} espèces ${PLACE_DE[p.id]} : elles vivent toutes dans ton jardin. Ton écosystème t'offre ${HERBARIUM_REWARD} nectar.</p>
+			<button class="btn primary" data-close>Merci !</button>`));
+	}
 }
 setInterval(announceSpecies, 4000);
 
@@ -347,7 +364,7 @@ function renderMission() {
 		toast(`Mission réussie : ${m.text.toLowerCase()} · +${MISSION_REWARD} nectar`, '#5F933E');
 		sound.chime(2);
 		m = currentMission();
-		if (!m) { state.onboarded = true; toast('Tu connais l’essentiel : bonne balade !', '#F08A3C'); }
+		if (!m) { state.onboarded = true; toast('Tu connais l’essentiel : bonne balade !', '#F08A3C'); setTimeout(() => whenFree(offerNotify), 4000); }
 		persist(true);
 		renderHud();
 	}
@@ -383,14 +400,14 @@ const TIPS = [
 		title: 'Aménager', text: 'Tu as de quoi poser un collecteur : il garde la récolte de tes butineurs, plus besoin de cueillir les gouttes une à une.' },
 	{ id: 'jar', target: '#hud-steps', when: () => jarOf(state) >= 5, show: () => focusJar(),
 		title: 'Ton collecteur se remplit', text: 'L’étiquette au-dessus montre ce qu’il contient. Touche-le pour tout récupérer. Plein, il ne prend plus rien : le nectar reste au sol, en gouttes sur les fleurs. Vide-le, ou améliore-le.' },
-	{ id: 'eco', target: '#btn-eco', when: () => Object.keys(state.species).length >= 2,
+	{ id: 'eco', target: '#btn-eco', when: () => !!state.tips?.purse && SPECIES.some(sp => sp.kind === 'animal' && state.species[sp.id]),
 		title: 'Ton écosystème', text: 'Les animaux découverts travaillent pour toi, même appli fermée : ils font pousser le jardin et récoltent du nectar. Quand tu bouges, ils travaillent trois fois plus.' },
 	{ id: 'species', target: '#btn-species', when: () => Object.keys(state.species).length >= 1,
 		title: 'Les espèces', text: 'Chaque plante et chaque animal découvert a sa fiche : son rôle dans la nature, et comment l’aider chez toi.' },
 	{ id: 'habitats', target: '#btn-deco', when: () => ownedAny('habitat') || ((state.nectar ?? 0) >= 40 && hasCollector(state)),
-		title: 'Des abris pour la faune', text: 'Dans Aménager › Habitats : chaque abri renforce une équipe d’animaux. Plutôt que d’en poser partout, améliore-les, ils accueillent plus de monde.' },
-	{ id: 'level', target: '#btn-deco', when: () => ownedAny('habitat') && totalKm() >= 10,
-		title: 'Tes abris peuvent grandir', text: 'Avec 10 km parcourus, tes habitats passent au niveau 2. Touche-en un au jardin, ou ouvre Aménager, pour l’améliorer.' },
+		title: 'Des abris pour la faune', text: 'Dans Aménager › Habitats : chaque abri renforce une équipe d’animaux, et chaque niveau d’abri relève de 3 % ce que ton écosystème peut produire. Améliore-les plutôt que d’en poser partout.' },
+	{ id: 'level', target: '#btn-deco', when: () => ownedAny('habitat') && totalKm() >= LEVEL_KM[2],
+		title: 'Tes abris peuvent grandir', text: `Avec ${LEVEL_KM[2]} km parcourus, tes habitats passent au niveau 2. Touche-en un au jardin, ou ouvre Aménager, pour l’améliorer.` },
 	{ id: 'cabane', target: '#btn-deco', when: () => totalKm() >= 5 && !owned('cabane'),
 		title: 'Une cabane !', text: 'Avec 5 km parcourus, tu peux poser une cabane (Aménager › Récolte). Un fermier ou une fermière s’y installe et cultivera ton potager.' },
 	{ id: 'potager', target: '#btn-deco', when: () => owned('cabane') && !owned('potager'),
@@ -735,7 +752,10 @@ function renderStatus() {
 	// La récolte qui attend : dans les fleurs (à cueillir) ou dans les collecteurs (à vider d'un geste).
 	const pend = Math.floor(state.pending ?? 0), full = hasCollector(state) && jarOf(state) >= jarCap(state);
 	const wait = full ? ` · collecteur plein, ${fmtInt(pend)} à récolter` : pend >= 1 ? ` · ${fmtInt(pend)} à récolter` : r.capped && x === 1 ? ' · à plein : bouge pour plus' : '';
-	sub.textContent = `Écosystème : +${fmtInt(r.nectar * x)} nectar/h${x > 1 ? ` · élan ×${x}` : ''}${wait} ›`;
+	// Personne au travail : on dit comment lancer l'écosystème plutôt qu'un petit chiffre qui ne vient de nulle part.
+	const working = Object.values(r.members).some(n => n > 0);
+	sub.textContent = working ? `Écosystème : +${fmtInt(r.nectar * x)} nectar/h${x > 1 ? ` · élan ×${x}` : ''}${wait} ›`
+		: `Écosystème : découvre un animal pour le lancer${wait} ›`;
 	renderDaily();
 }
 
@@ -967,7 +987,8 @@ async function offerHarvest() {
 }
 
 document.addEventListener('visibilitychange', async () => {
-	if (document.hidden) { persist(true); sound.pause(); return; }
+	if (document.hidden) { persist(true); sound.pause(); planReminders(); return; }
+	clearReminders();
 	sound.resume();
 	runIdle(true);
 	// Une balade restée ouverte pendant que le téléphone dormait se termine là où on a cessé de bouger,
@@ -1373,7 +1394,8 @@ $('#deco').addEventListener('click', e => {
 	const b = e.target.closest('[data-buy]');
 	if (b && !b.disabled) startPlacing(b.dataset.buy);
 });
-$('#btn-deco').addEventListener('click', openDeco);
+// Pendant la mission du collecteur, Aménager s'ouvre directement sur l'onglet Récolte.
+$('#btn-deco').addEventListener('click', () => openDeco(currentMission()?.id === 'collector' ? 'recolte' : undefined));
 
 // ─── Options : version, réglages, mode test ───────────────────
 
@@ -1388,6 +1410,90 @@ function harvestHtml(src) {
 		: '';
 	return `<div class="harvest-info"><b>Pas relus appli fermée avec ${src.label}.</b> ${last}${help}</div>
 		<button class="btn ghost wide" id="opt-harvest-now">Relire mes pas maintenant</button>`;
+}
+
+// ─── Ma partie : une copie à garder, et la restaurer ───────────
+
+async function showBackup() {
+	const code = await exportCode(state);
+	state.backupAt = Date.now();
+	persist(true);
+	showModal(`<h2>Ta copie de partie</h2>
+		<p>Garde ce code en lieu sûr (tes notes, un message à toi-même). Pour retrouver ton jardin : Options › Restaurer une partie, puis colle-le.</p>
+		<textarea class="backup-code" readonly>${code}</textarea>
+		<button class="btn primary" id="btn-copy-code">Copier le code</button>
+		${navigator.share ? '<button class="btn ghost wide" id="btn-share-code">Partager…</button>' : ''}
+		<button class="btn ghost wide" id="btn-save-code">Enregistrer dans un fichier</button>
+		<button class="btn ghost wide" data-close>Fermer</button>`);
+	$('#btn-copy-code').onclick = async () => {
+		try { await navigator.clipboard.writeText(code); } catch (e) { $('.backup-code').select(); document.execCommand('copy'); }
+		toast('Code copié : colle-le dans tes notes', '#5F933E');
+	};
+	if ($('#btn-share-code')) $('#btn-share-code').onclick = () => navigator.share({ title: 'Ma partie Evolia', text: code }).catch(() => {});
+	$('#btn-save-code').onclick = () => {
+		const a = document.createElement('a');
+		a.href = URL.createObjectURL(new Blob([code], { type: 'text/plain' }));
+		a.download = `evolia-${dayKey()}.txt`;
+		a.click();
+		setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+	};
+}
+
+function showRestore() {
+	showModal(`<h2>Restaurer une partie</h2>
+		<p>Colle ici le code de ta copie, ou choisis son fichier. Le jardin de ce téléphone sera remplacé.</p>
+		<textarea class="backup-code" id="restore-code" placeholder="EVOLIA1:…"></textarea>
+		<input type="file" id="restore-file" accept=".txt,text/plain" hidden>
+		<button class="btn ghost wide" id="btn-restore-file">Choisir un fichier</button>
+		<button class="btn primary" id="btn-restore-go">Restaurer</button>
+		<button class="btn ghost wide" data-close>Annuler</button>`);
+	$('#btn-restore-file').onclick = () => $('#restore-file').click();
+	$('#restore-file').onchange = async e => { const f = e.target.files?.[0]; if (f) $('#restore-code').value = await f.text(); };
+	$('#btn-restore-go').onclick = async () => {
+		let saved;
+		try { saved = await importCode($('#restore-code').value); } catch (e) { toast(e.message, '#C0442F'); return; }
+		const km = fmt((saved.totals.distance ?? 0) / 1000, 0), n = Object.keys(saved.species).length;
+		if (!confirm(`Restaurer ce jardin (${km} km, ${n} espèces) ? Celui de ce téléphone sera remplacé.`)) return;
+		clearTimeout(saveTimer);
+		resetting = true;
+		save(saved);
+		location.reload();
+	};
+}
+
+// ─── Rappels (appli Android) ───────────────────────────────────
+
+/** Une fois les premières missions finies, on propose les rappels, une seule fois. */
+function offerNotify() {
+	if (!canNotify() || state.notifyAsked || !$('#modal').hidden) return;
+	state.notifyAsked = true;
+	persist(true);
+	showModal(`<h2>Un petit rappel ?</h2>
+		<p>Evolia peut te prévenir quand ton collecteur est plein, quand ton cadeau du jour t’attend, et le soir si ta série risque de s’arrêter. Trois rappels au plus, et tu peux les couper dans Options.</p>
+		<button class="btn primary" id="btn-notify-yes">Oui, préviens-moi</button>
+		<button class="btn ghost wide" data-close>Non merci</button>`);
+	$('#btn-notify-yes').onclick = async () => {
+		closeModal();
+		state.notify = await askNotify();
+		persist(true);
+		toast(state.notify ? 'Rappels activés' : 'Sans autorisation, pas de rappel : tu peux changer d’avis dans Options', '#5F933E');
+	};
+}
+
+/** En quittant l'appli : quand le collecteur sera plein, le cadeau de demain matin, la série à garder ce soir. */
+function planReminders() {
+	if (!state.notify) return;
+	const perH = Object.keys(state.places).reduce((a, id) => a + rates(state, id).nectar, 0) * (boostLeft(state) ? BOOST_MULT : 1);
+	const space = jarCap(state) - jarOf(state), hours = perH > 0 ? space / perH : Infinity;
+	const gift = new Date(); gift.setDate(gift.getDate() + 1); gift.setHours(9, 0, 0, 0);
+	const evening = new Date(); evening.setHours(18, 30, 0, 0);
+	const d = state.daily ?? {};
+	scheduleReminders({
+		jarFullAt: hasCollector(state) && space > 0 && hours <= 12 ? Date.now() + hours * 3600000 : null,
+		giftAt: gift.getTime(),
+		streak: d.lastActive === d.day ? 0 : d.streak ?? 0,
+		streakAt: evening.getTime(),
+	});
 }
 
 function renderOptions() {
@@ -1413,6 +1519,12 @@ function renderOptions() {
 		<h3>Musique</h3>
 		<label class="switch"><input type="checkbox" id="opt-music" ${sound.musicSettings.on ? 'checked' : ''}><i></i><span>Musique zen, jamais la même</span></label>
 		${sound.musicSettings.on ? `<input type="range" id="opt-music-vol" class="volume" min="0" max="1" step="0.05" value="${sound.musicSettings.vol}" aria-label="Volume de la musique">` : ''}
+		<h3>Ma partie</h3>
+		<p class="empty">Ton jardin est gardé sur ce téléphone. Garde-en une copie (un code à coller dans tes notes ou à t'envoyer) : elle le ramène après un changement de téléphone. ${backupAge(state)}</p>
+		<button class="btn ghost wide" id="opt-backup">Garder une copie de ma partie</button>
+		<button class="btn ghost wide" id="opt-restore">Restaurer une partie</button>
+		${canNotify() ? `<h3>Rappels</h3>
+		<label class="switch"><input type="checkbox" id="opt-notify" ${state.notify ? 'checked' : ''}><i></i><span>Collecteur plein, cadeau du jour, série à garder</span></label>` : ''}
 		<h3>Aide</h3>
 		<button class="btn ghost wide" id="opt-coach">Revoir le tutoriel</button>
 		<a class="btn ghost wide opt-link" href="privacy.html" target="_blank" rel="noopener">Confidentialité</a>
@@ -1460,6 +1572,8 @@ $('#options').addEventListener('click', async e => {
 	if (id === 'opt-harvest') { state.harvestDeclined = false; closeOptions(); offerHarvest(); }
 	if (id === 'opt-harvest-now') { closeOptions(); maybeHarvest(); }
 	if (id === 'opt-coach') { closeOptions(); coach(0); }
+	if (id === 'opt-backup') showBackup();
+	if (id === 'opt-restore') showRestore();
 	if (id === 'dev-hour-real') { garden.hourOverride = null; renderOptions(); }
 	if (id === 'dev-sim') {
 		if (tracking.sim) { tracking.sim.stop(); tracking.sim = null; }
@@ -1491,6 +1605,16 @@ $('#options').addEventListener('click', async e => {
 	}
 });
 $('#options').addEventListener('change', e => {
+	if (e.target.id === 'opt-notify') {
+		const on = e.target.checked;
+		(on ? askNotify() : Promise.resolve(false)).then(ok => {
+			state.notify = on && ok;
+			if (on && !ok) toast('Autorise les notifications d’Evolia dans les réglages du téléphone', '#C0442F');
+			persist(true);
+			renderOptions();
+		});
+		return;
+	}
 	if (e.target.id === 'opt-sound') { sound.setOn(e.target.checked); persist(true); renderOptions(); return; }
 	if (e.target.id === 'opt-music') { sound.setMusicOn(e.target.checked); persist(true); renderOptions(); return; }
 	if (e.target.id === 'opt-volume' || e.target.id === 'opt-music-vol') { persist(true); return; }

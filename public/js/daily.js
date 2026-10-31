@@ -4,7 +4,7 @@
 // elle est seulement divisée par deux : on encourage, on ne punit pas.
 
 import { dayKey, todayMeters, allPlants, autoGoal } from './state.js';
-import { PLACES, PLACE_BY_ID, SPECIES, SPECIES_BY_ID, placeOpen } from './species.js';
+import { PLACES, PLACE_BY_ID, PLACE_DE, SPECIES, SPECIES_BY_ID, placeOpen } from './species.js';
 import { DECOR } from './plants.js';
 import { CELLS, CELL_KM, cellsOpen } from './garden.js';
 import { zoneName } from './zones.js';
@@ -158,9 +158,26 @@ export function nextGoal(state) {
 	const today = state.goalKm - todayMeters(state) / 1000;
 	if (today > 0) goals.push({ km: today, text: "pour l'objectif du jour" });
 	const best = goals.filter(g => g.km > 0 || g.species).sort((a, b) => (a.species ? 0.5 : a.km) - (b.species ? 0.5 : b.km))[0];
-	if (!best) return null;
+	if (!best) {
+		// Tout est ouvert : reste à compléter l'herbier du lieu.
+		const h = herbarium(state, state.place), left = h.total - h.found;
+		return left > 0 ? `Encore ${left} espèce${left > 1 ? 's' : ''} pour compléter l’herbier ${PLACE_DE[state.place]}` : null;
+	}
 	if (best.species) return `Encore ${best.species} espèce${best.species > 1 ? 's' : ''} à découvrir ${best.text}`;
 	return `Plus que ${fmt(Math.max(0.1, Math.ceil(best.km * 10) / 10))} km ${best.text}`;
+}
+
+/** L'herbier d'un lieu : ses espèces trouvées, sur toutes celles qui y vivent. */
+export function herbarium(state, placeId) {
+	const all = SPECIES.filter(s => s.place === placeId);
+	return { found: all.filter(s => state.species[s.id]).length, total: all.length };
+}
+
+/** Compléter l'herbier d'un lieu rapporte une belle récompense, une seule fois par lieu. */
+export const HERBARIUM_REWARD = 500;
+export function newlyComplete(state) {
+	const done = (state.complete ??= {});
+	return PLACES.filter(p => state.places[p.id] && !done[p.id] && (h => h.found >= h.total)(herbarium(state, p.id)));
 }
 
 const DECOR_TEASE = {

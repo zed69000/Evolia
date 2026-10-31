@@ -45,6 +45,8 @@ edit("android/app/src/main/AndroidManifest.xml", s => {
 	let add = "";
 	for (const p of perms) if (!s.includes(`"${p}"`)) add += `    <uses-permission android:name="${p}" />\n`;
 	for (const p of healthDeclared) if (!HEALTH_KEEP.has(p) && !s.includes(`"${p}"`)) add += `    <uses-permission android:name="${p}" tools:node="remove" />\n`;
+	// Les rappels n'ont pas besoin d'être à la minute près : pas d'alarme exacte (Google Play la fait justifier).
+	if (!s.includes('"android.permission.SCHEDULE_EXACT_ALARM"')) add += '    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" tools:node="remove" />\n';
 	if (add) s = s.replace(/(<manifest[^>]*>\n)/, `$1${add}`);
 	if (!s.includes("android:screenOrientation")) s = s.replace('android:name=".MainActivity"', 'android:name=".MainActivity"\n            android:screenOrientation="portrait"');
 	if (!s.includes('android:screenOrientation="portrait"') || !s.includes('READ_HEART_RATE" tools:node="remove"')) throw new Error("AndroidManifest.xml inattendu");
