@@ -30,7 +30,7 @@ const STAGES = 30;
 const SWAY = { herbe: 0.09, fleur: 0.07, buisson: 0.02, arbre: 0.012 };
 const MIN_Y = { herbe: 60, fleur: 100, buisson: 100, arbre: 220 };
 // Les arbres où le jardinier va cueillir, et la couleur de leurs fruits.
-const FRUIT_TREES = { pommier: '#D8402E', poirier: '#C8B848', merisier: '#B0283A' };
+const FRUIT_TREES = { pommier: '#D8402E', poirier: '#C8B848', merisier: '#B0283A', prunier: '#6A3A7A' };
 // Construire un objet : la durée, et les instants des coups de marteau.
 const BUILD_TIME = 1.25, BUILD_TAPS = [0.2, 0.5, 0.8];
 const smoothstep = k => k * k * (3 - 2 * k);
@@ -400,7 +400,9 @@ export class Garden {
 	flyTo(cx, cy, z = this.cam.z) {
 		// Pendant qu'on aménage, la vue ne bouge que sous le doigt : rien ne l'emmène ailleurs.
 		if (this.camLock?.()) return;
-		this.camTarget = { cx, cy, z: Math.max(this.zMin(), Math.min(Z_MAX, z)) };
+		z = Math.max(this.zMin(), Math.min(Z_MAX, z));
+		// En paysage, le panneau couvre la droite de l'écran : le point visé se place au centre de ce qui reste visible.
+		this.camTarget = { cx: cx + (this.insetRight ?? 0) / 2 / (this.base * z), cy, z };
 	}
 
 	flyToCell(i) {

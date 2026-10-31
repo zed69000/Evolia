@@ -277,18 +277,24 @@ let cardTimer = 0;
 function placeCard(card, hit, ms = 4500) {
 	// La bulle se pose au-dessus du doigt, mais reste toujours entière à l'écran : décalée sur le côté près d'un bord,
 	// et sous le doigt s'il n'y a pas la place au-dessus (sous le bandeau du haut).
-	const app = $('#app'), W = app.clientWidth, H = app.clientHeight, pad = 10;
+	const app = $('#app'), H = app.clientHeight, pad = 10;
+	// En paysage, le panneau est une colonne à droite : la bulle reste à sa gauche.
+	const W = app.clientWidth - (garden.insetRight ?? 0);
 	card.classList.remove('below');
+	card.style.maxHeight = '';
 	// Mesurée au milieu de l'écran : collée à un bord, elle se rétrécirait pour tenir.
 	card.style.left = `${W / 2}px`;
 	card.style.top = `${hit.y - 20}px`;
 	card.hidden = false;
-	const w = card.offsetWidth, h = card.offsetHeight;
+	const w = card.offsetWidth;
+	let h = card.offsetHeight;
 	card.style.left = `${Math.max(pad + w / 2, Math.min(W - pad - w / 2, hit.x))}px`;
 	// Entre le bandeau du haut et le panneau du bas : jamais cachée derrière l'un ou l'autre.
 	const ay = app.getBoundingClientRect().top, sheet = $('#home');
 	const top = $('#hud').getBoundingClientRect().bottom - ay + 8;
-	const bottom = (sheet && sheet.offsetParent ? sheet.getBoundingClientRect().top - ay : H) - pad;
+	const bottom = (sheet && sheet.offsetParent && !garden.insetRight ? sheet.getBoundingClientRect().top - ay : H) - pad;
+	// Plus haute que la place disponible (paysage) : elle défile.
+	if (h > bottom - top) { card.style.maxHeight = `${bottom - top}px`; h = bottom - top; }
 	if (hit.y - 20 - 14 - h < top) {
 		card.classList.add('below');
 		card.style.top = `${Math.max(top, Math.min(bottom - h, hit.y + 24))}px`;
@@ -1816,6 +1822,13 @@ rollDay(state);
 checkUnlocks();
 if (here().pendingCell === cellsOpen(here()) && here().km >= CELL_KM[cellsOpen(here())]) whenFree(() => chooseBiome(here().pendingCell));
 garden.maxFps = state.eco30 ? 30 : 0;
+// En paysage, le panneau du bas devient une colonne à droite : le jardin sait quelle part de l'écran il couvre.
+const measureInset = () => {
+	const app = $('#app').getBoundingClientRect(), r = $('#home').getBoundingClientRect();
+	garden.insetRight = r.width && r.left > app.left + 40 && r.right > app.right - 60 ? Math.max(0, app.right - r.left) : 0;
+};
+new ResizeObserver(measureInset).observe($('#app'));
+measureInset();
 $('#app').classList.toggle('no-fx', !fxOn());
 probeFx();
 garden.onActive = () => { $('#hud-day').textContent = cellName(here(), garden.active); };

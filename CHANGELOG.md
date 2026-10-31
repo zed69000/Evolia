@@ -3,6 +3,23 @@
 Chaque version, la plus récente en haut. Le site (evolia.sebastienalzamora.workers.dev) est toujours à jour ;
 le Play Store (tests internes) reçoit les versions indiquées « Play ».
 
+## 0.7.7 — 1er novembre 2026
+- **Des arbres repeints à l'aquarelle.**
+    - Un tronc qui ondule, avec des racines, une écorce tachetée claire et sombre.
+    - Il se divise en branches maîtresses qui portent des bouquets de feuillage.
+    - Chaque bouquet est fait de touches qui se chevauchent : un bord déchiqueté, de la lumière en haut à gauche, des masses sombres dessous, et des branches qui se devinent entre les bouquets.
+    - Les conifères (épicéa, pin cembro, mélèze) ont des étages en éventail aux pointes d'aiguilles.
+- **Un jardin nourricier.**
+    - Les arbres fruitiers et les petits fruits poussent bien plus souvent.
+    - Les fruits se voient mieux : plus nombreux, plus gros, avec un reflet.
+    - Nouvelles espèces : le prunier, le framboisier, le groseillier et le fraisier des bois. Le jardinier cueille aussi les prunes.
+- **Le mode paysage.**
+    - Le jardin prend toute la largeur, et le panneau du bas devient une colonne à droite.
+    - Le bandeau, les boutons et les bulles l'évitent, et la caméra centre ce qu'elle montre dans la partie visible.
+    - La carte des milieux et sa fiche s'affichent côte à côte.
+    - Les panneaux restent lisibles sur tablette et sur ordinateur, et l'appli tourne avec le téléphone.
+- **Petits défauts corrigés :** les bulles ne sautent plus de côté en apparaissant, leurs boutons tiennent sur moins de lignes, et le bouton « Un de plus » ne dépasse plus de la fiche d'un aménagement.
+
 ## 0.7.6 — 31 octobre 2026
 - **Des rivières peintes comme les mares.** Plus de tuyau régulier : l'eau est faite de lavis qui se chevauchent, avec la même couleur, le même bord sombre et irrégulier que les mares, une largeur qui varie, de l'herbe mouillée sur les berges et quelques reflets. Les ruisseaux du marais sont plus larges, font de vrais méandres et s'évasent en arrivant dans les mares.
 - **Des sentiers vivants :** largeur irrégulière, bords flous, terre plus ou moins usée.
