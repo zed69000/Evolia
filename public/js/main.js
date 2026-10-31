@@ -1077,6 +1077,8 @@ setInterval(() => {
 // ─── Aménager : cabane, banc, abris pour les animaux ──────────
 
 let placing = null; // { kind, item? } pendant qu'on choisit la place d'un objet
+// Aménager fige la vue : ni la croissance suivie, ni le guide, ni une découverte ne déplacent la caméra.
+garden.camLock = () => !!placing || $('#deco').classList.contains('open');
 
 /** L'objet qu'il faut d'abord poser ici pour pouvoir construire celui-ci (le potager vient avec la cabane), ou null. */
 function needsFirst(kind) {

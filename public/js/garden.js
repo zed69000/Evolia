@@ -334,6 +334,8 @@ export class Garden {
 
 	/** Glisse doucement la caméra vers un point du monde, au zoom donné. */
 	flyTo(cx, cy, z = this.cam.z) {
+		// Pendant qu'on aménage, la vue ne bouge que sous le doigt : rien ne l'emmène ailleurs.
+		if (this.camLock?.()) return;
 		this.camTarget = { cx, cy, z: Math.max(this.zMin(), Math.min(Z_MAX, z)) };
 	}
 
@@ -1441,7 +1443,8 @@ export class Garden {
 				this.moveGhostTo(this.ghostDrag, fx, fy);
 			}
 		}
-		if (this.following && this.current && now > (this.followPausedUntil ?? 0) && !this.dragging && this.pointers.size === 0) {
+		if (this.camLock?.() && this.camTarget) this.camTarget = null;
+		if (this.following && !this.camLock?.() && this.current && now > (this.followPausedUntil ?? 0) && !this.dragging && this.pointers.size === 0) {
 			const [hx, hy] = this.headOf(this.current);
 			this.camTarget = { cx: hx, cy: hy + 40, z: Math.max(1, this.cam.z) };
 		}
