@@ -504,6 +504,15 @@ export class Garden {
 		}
 		m.setTransform(S, 0, 0, S, cw / 2 - this.cam.cx * S, ch / 2 - this.cam.cy * S);
 		m.globalCompositeOperation = 'destination-out';
+		// Au littoral, la mer reste nette : la brume s'efface au-dessus du rivage.
+		if (this.biome === 'littoral' && !this.glyph) {
+			const prev = m.fillStyle, fade = m.createLinearGradient(0, 120, 0, 190);
+			fade.addColorStop(0, 'rgba(0,0,0,0.85)');
+			fade.addColorStop(1, 'rgba(0,0,0,0)');
+			m.fillStyle = fade;
+			m.fillRect(-1e5, -1e5, 2e5, 1e5 + 190);
+			m.fillStyle = prev;
+		}
 		m.globalAlpha = 0.55;
 		for (const i of this.lockedCells()) { m.beginPath(); this.tracePath(m, this.blob(i)); m.fill(); }
 		m.globalAlpha = 1;
@@ -621,6 +630,51 @@ export class Garden {
 	 * Une couche de bancs de brume sur tout l'écran. `k` : échelle des bancs ; `drift` : vitesse de dérive ;
 	 * `screen` : 0 = accrochée au monde (bouge avec la caméra), 1 = posée sur l'écran.
 	 */
+	/**
+	 * La lumière du soleil, comme dans un dessin animé à l'aquarelle : une lueur chaude venue d'en haut à gauche
+	 * (le côté d'où viennent les ombres), des rayons obliques qui respirent, une heure dorée matin et soir,
+	 * et quelques bancs de brume qui glissent sur le jardin au lever du jour.
+	 */
+	drawSunlight(ctx, cw, ch, S, hour, day, wk) {
+		const sunny = (SUNNY[wk] ?? 1) * day;
+		if (sunny < 0.05) return;
+		const alt = this.altitude ? this.altitude(hour) : 50 - Math.abs(hour - 13.5) * 9;
+		const golden = Math.max(0, Math.min(1, 1 - (alt - 2) / 16));
+		ctx.save();
+		ctx.setTransform(1, 0, 0, 1, 0, 0);
+		ctx.globalCompositeOperation = 'screen';
+		// La lueur : forte dans le coin du soleil, nulle à l'opposé ; dorée matin et soir.
+		const glow = ctx.createRadialGradient(-cw * 0.1, -ch * 0.15, 0, -cw * 0.1, -ch * 0.15, Math.hypot(cw, ch) * 0.95);
+		const warm = golden > 0.3 ? '255,196,120' : '255,236,190';
+		glow.addColorStop(0, `rgba(${warm},${(0.2 + 0.18 * golden) * sunny})`);
+		glow.addColorStop(0.45, `rgba(${warm},${(0.06 + 0.08 * golden) * sunny})`);
+		glow.addColorStop(1, `rgba(${warm},0)`);
+		ctx.fillStyle = glow;
+		ctx.fillRect(0, 0, cw, ch);
+		// Les rayons : de larges bandes obliques, très douces, qui s'allument et s'éteignent lentement.
+		const len = Math.hypot(cw, ch) * 1.3, ang = 0.62 + golden * 0.2;
+		ctx.translate(-cw * 0.08, -ch * 0.1);
+		ctx.rotate(ang);
+		for (let i = 0; i < 5; i++) {
+			const breathe = 0.5 + 0.5 * Math.sin(this.t * 0.18 + i * 1.9);
+			const off = (i - 1.2) * cw * 0.16, w = cw * (0.05 + 0.03 * ((i * 7) % 3));
+			const a = (0.05 + 0.05 * golden) * sunny * breathe;
+			const g = ctx.createLinearGradient(0, 0, len, 0);
+			g.addColorStop(0, `rgba(${warm},${a})`);
+			g.addColorStop(0.7, `rgba(${warm},${a * 0.4})`);
+			g.addColorStop(1, `rgba(${warm},0)`);
+			ctx.fillStyle = g;
+			ctx.beginPath();
+			ctx.moveTo(0, off - w * 0.2); ctx.lineTo(len, off - w); ctx.lineTo(len, off + w); ctx.lineTo(0, off + w * 0.2);
+			ctx.closePath();
+			ctx.fill();
+		}
+		ctx.restore();
+		// Brume du matin, entre le lever du soleil et le milieu de matinée, sauf par grand vent.
+		const morning = hour < 12 ? Math.max(0, Math.min(1, 1 - (alt - 4) / 18)) : 0;
+		if (morning > 0.05 && wk !== 'fog' && (this.weather.wind ?? 10) < 30) this.fogLayer(ctx, cw, ch, S, 0.24 * morning, 1.3, 0, 4);
+	}
+
 	fogLayer(ctx, cw, ch, S, alpha, k, screen, drift = 6) {
 		const tex = this.fogTexture();
 		const pat = ctx.createPattern(tex, 'repeat');
@@ -986,13 +1040,19 @@ export class Garden {
 		this.focusOn(d.x, d.y);
 	}
 
-	/** Une goutte de nectar part d'une fleur butinée vers le compteur (seulement quand on regarde de près). */
+	/**
+	 * Une goutte de nectar part d'une fleur butinée vers le collecteur le plus proche (seulement quand on regarde de près).
+	 * Elle ne va jamais à la bourse : la récolte attend qu'on la ramasse. Sans collecteur, elle perle sur les fleurs.
+	 */
 	nectarFrom(x, y) {
-		if (this.cam.z < 1 || !this.nectarTarget || this.t - (this.lastDrop ?? -9) < 0.7) return;
+		if (this.cam.z < 1 || this.t - (this.lastDrop ?? -9) < 0.7) return;
+		const jars = this.items.filter(it => it.kind === 'collecteur');
+		if (!jars.length) return;
+		const jar = jars.reduce((a, b) => (Math.hypot(b.x - x, b.y - y) < Math.hypot(a.x - x, a.y - y) ? b : a));
 		const v = this.view();
 		if (x < v.x0 || x > v.x0 + v.w || y < v.y0 || y > v.y0 + v.h) return;
 		this.lastDrop = this.t;
-		this.nectarDrops.push({ x, y, t: 0, dur: 1.1 + Math.random() * 0.4, wob: Math.random() * 6.28 });
+		this.nectarDrops.push({ x, y, t: 0, dur: 1.1 + Math.random() * 0.4, wob: Math.random() * 6.28, to: [jar.x, jar.y - 50] });
 	}
 
 	// ─── Gouttes de nectar à cueillir à la main ────────────────────
@@ -1052,6 +1112,23 @@ export class Garden {
 			ctx.restore();
 		}
 		ctx.globalAlpha = 1;
+	}
+
+	/** Quand le fermier est chez lui, un filet de fumée sort de la cheminée et part avec le vent. */
+	drawSmoke(ctx) {
+		const cab = this.items.find(it => it.kind === 'cabane');
+		const sp = cab && this.itemSprite('cabane', cab.rot, cab);
+		if (!sp?.smoke) return;
+		const [sx, sy] = sp.smoke;
+		for (let i = 0; i < 7; i++) {
+			const k = (this.t * 0.11 + i / 7) % 1;
+			const x = cab.x + sx + Math.sin(k * 4 + i) * 4 + k * k * 26, y = cab.y + sy - 4 - k * 64;
+			const r = 3.5 + k * 13, a = 0.32 * (1 - k) * Math.min(1, k * 6);
+			ctx.fillStyle = `rgba(238,234,226,${a.toFixed(3)})`;
+			ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+			ctx.fillStyle = `rgba(200,196,190,${(a * 0.5).toFixed(3)})`;
+			ctx.beginPath(); ctx.arc(x + r * 0.3, y + r * 0.3, r * 0.7, 0, Math.PI * 2); ctx.fill();
+		}
 	}
 
 	/** Au-dessus de chaque collecteur, une étiquette dorée : combien attend d'être récolté (elle bat quand c'est plein). */
@@ -1376,12 +1453,13 @@ export class Garden {
 		for (const i of this.insects) this.updateInsect(i, dt);
 		this.insects = this.insects.filter(i => !i.gone);
 		this.updateFarmer(dt);
+		this.updatePet(dt);
 		for (const p of this.particles) {
 			p.x += p.vx * dt; p.y += p.vy * dt; p.vy += 10 * dt; p.vx *= 0.98; p.life -= p.decay * dt;
 		}
 		this.particles = this.particles.filter(p => p.life > 0);
 		for (const d of this.nectarDrops) d.t += dt;
-		const arrived = this.nectarDrops.filter(d => d.t >= d.dur).length;
+		const arrived = this.nectarDrops.filter(d => d.t >= d.dur && !d.to).length;
 		if (arrived) { this.nectarDrops = this.nectarDrops.filter(d => d.t < d.dur); this.onNectar?.(arrived); }
 		for (const f of this.fireflies) {
 			f.a += (Math.random() - 0.5) * dt * 3;
@@ -1658,6 +1736,45 @@ export class Garden {
 		const r = ((it.rot ?? 0) * Math.PI) / 180, c = Math.cos(r), s = Math.sin(r);
 		const [x, y] = this.itemSprite('cabane', it.rot, it).door ?? [-1.5, 56];
 		return { x: it.x + x * c - y * s, y: it.y + (x * s + y * c) * 0.36 };
+	}
+
+	/**
+	 * Le chien ou le chat de la cabane. Le chien suit le fermier pas à pas ; le chat flâne près de la cabane.
+	 * Tous deux font de longues siestes au soleil, et rentrent avec le fermier le soir.
+	 */
+	updatePet(dt) {
+		const kind = { chien: 'dog', chat: 'cat' }[this.state.pet];
+		const cab = this.glyph || !kind ? null : this.items.find(it => it.kind === 'cabane');
+		if (!cab) { this.pet = null; return; }
+		const door = this.cabinDoor(cab), f = this.farmer;
+		let a = this.pet;
+		if (!a || a.kind !== kind) a = this.pet = { kind, p: {}, x: door.x + 14, y: door.y + 4, mode: 'sleep', t: 0, ph: 0, dir: 1, timer: 3 };
+		a.t += dt;
+		// La nuit, il dort à l'intérieur, comme son maître.
+		a.hidden = !!f?.hidden && (this.night() > 0.45 || this.precip() > 0.5);
+		if (a.hidden) { a.x = door.x + 14; a.y = door.y + 4; a.mode = 'sleep'; return; }
+		a.timer -= dt;
+		if (!a.goal && a.timer <= 0) {
+			const out = f && !f.hidden;
+			if (kind === 'dog' && out) a.goal = { x: f.x - f.dir * 16, y: f.y + 6 };
+			else if (Math.random() < (kind === 'cat' ? 0.55 : 0.4)) { a.mode = 'sleep'; a.timer = 8 + Math.random() * 14; }
+			else {
+				const ang = Math.random() * Math.PI * 2, r = 20 + Math.random() * (kind === 'cat' ? 60 : 90);
+				a.goal = { x: door.x + Math.cos(ang) * r, y: door.y + 10 + Math.abs(Math.sin(ang)) * r * 0.5 };
+			}
+			if (!a.goal && a.mode !== 'sleep') a.timer = 2;
+		}
+		// Le chien guette son maître : il se lève dès que celui-ci s'éloigne.
+		if (kind === 'dog' && f && !f.hidden && !a.goal && Math.hypot(f.x - a.x, f.y - a.y) > 46) a.goal = { x: f.x - f.dir * 16, y: f.y + 6 };
+		if (!a.goal) { if (a.mode === 'run') a.mode = 'stand'; return; }
+		const dx = a.goal.x - a.x, dy = a.goal.y - a.y, d = Math.hypot(dx, dy);
+		if (d < 2) { a.goal = null; a.mode = 'stand'; a.timer = 1.5 + Math.random() * 3; return; }
+		const step = Math.min(d, GAIT[kind].speed * dt);
+		a.x += (dx / d) * step;
+		a.y += (dy / d) * step;
+		a.ph += step / GAIT[kind].stride;
+		if (Math.abs(dx) > 0.5) a.dir = Math.sign(dx);
+		a.mode = 'run';
 	}
 
 	updateFarmer(dt) {
@@ -2287,10 +2404,10 @@ export class Garden {
 		// Ombres des animaux au sol
 		if (!glyph) {
 			ctx.fillStyle = 'rgba(30,50,20,0.13)';
-			for (const b of this.farmer && !this.farmer.hidden ? [...this.insects, this.farmer] : this.insects) {
+			for (const b of [...this.insects, ...[this.farmer, this.pet].filter(x => x && !x.hidden)]) {
 				const h = FLIGHT[b.kind] ?? (b.mode === 'perch' ? null : 24);
 				if (h == null || b.p.swim || b.behavior === 'trail') continue;
-				const big = { hedgehog: 2.6, frog: 1.8, marmot: 2.6, squirrel: 2, heron: 2.4, eagle: 5, gull: 3, crab: 1.8, rabbit: 3, hare: 3.4, roe: 6, chamois: 5.6, fox: 5, farmer: 3.4 }[b.kind] ?? 1;
+				const big = { hedgehog: 2.6, frog: 1.8, marmot: 2.6, squirrel: 2, heron: 2.4, eagle: 5, gull: 3, crab: 1.8, rabbit: 3, hare: 3.4, roe: 6, chamois: 5.6, fox: 5, farmer: 3.4, dog: 3.6, cat: 2.8 }[b.kind] ?? 1;
 				ctx.beginPath();
 				ctx.ellipse(b.x + h * 0.25, b.y + h, 4 * big, 1.8 * big, 0, 0, Math.PI * 2);
 				ctx.fill();
@@ -2312,6 +2429,7 @@ export class Garden {
 		for (const it of this.items) if (it !== this.lifted && it.x > v.x0 - 120 && it.x < v.x0 + v.w + 120 && it.y > v.y0 - 40 && it.y < v.y0 + v.h + 200) entities.push({ item: it, x: it.x, y: it.y });
 		if (!glyph) for (const b of this.insects) if (onGround(b)) entities.push({ critter: b, y: b.behavior === 'trail' ? -1e9 : b.y + 2 });
 		if (!glyph && this.farmer && !this.farmer.hidden) entities.push({ critter: this.farmer, y: this.farmer.y + 2 });
+		if (!glyph && this.pet && !this.pet.hidden) entities.push({ critter: this.pet, y: this.pet.y + 2 });
 		entities.sort((a, b) => a.y - b.y);
 
 		for (const e of entities) {
@@ -2417,6 +2535,9 @@ export class Garden {
 		const grade = [['#F2CFA8', 0.12 * (se.autumn ?? 0)], ['#CCD8EC', 0.16 * (se.winter ?? 0)], ['#EEF6DA', 0.05 * (se.spring ?? 0)]];
 		ctx.globalCompositeOperation = 'multiply';
 		for (const [c, a] of grade) if (a > 0.005) { ctx.fillStyle = rgba(c, a * day); ctx.fillRect(0, 0, cw, ch); }
+		ctx.globalCompositeOperation = 'source-over';
+		if (!glyph) this.drawSunlight(ctx, cw, ch, S, hour, day, wk);
+		ctx.globalCompositeOperation = 'multiply';
 		const grey = { overcast: 0.22, rain: 0.28, drizzle: 0.18, storm: 0.38, snow: 0.12, clouds: 0.08 }[wk] ?? 0;
 		if (grey) {
 			ctx.fillStyle = `rgba(130,140,152,${grey})`;
@@ -2478,6 +2599,7 @@ export class Garden {
 
 		if (!glyph && this.dew?.length) { world(); this.drawDew(ctx); }
 		if (!glyph && this.dewAll?.() && (this.dewAmount?.() ?? 0) >= 1) { world(); this.drawJarTags(ctx); }
+		if (!glyph && this.farmer?.hidden) { world(); this.drawSmoke(ctx); }
 
 		if (this.ghost) {
 			const { kind, x, y } = this.ghost, box = itemBox(kind, this.ghost.level), ok = this.canPlace(kind, x, y, this.lifted);
@@ -2692,10 +2814,13 @@ export class Garden {
 		const [txs, tys] = this.nectarTarget().map(v => v * this.dpr);
 		ctx.setTransform(1, 0, 0, 1, 0, 0);
 		for (const d of this.nectarDrops) {
+			// Une goutte butinée file vers son collecteur (dans le monde), une goutte récoltée vers la bourse (à l'écran).
+			const [txs_, tys_] = d.to ? [d.to[0] * S + tx, d.to[1] * S + ty] : [txs, tys];
 			const k = Math.min(1, d.t / d.dur), e = k * k * (3 - 2 * k);
 			const sx = d.x * S + tx, sy = d.y * S + ty;
-			const x = sx + (txs - sx) * e + Math.sin(k * Math.PI) * 40 * this.dpr * Math.cos(d.wob);
-			const y = sy + (tys - sy) * e - Math.sin(k * Math.PI) * 60 * this.dpr;
+			const arc = d.to ? 0.4 : 1;
+			const x = sx + (txs_ - sx) * e + Math.sin(k * Math.PI) * 40 * arc * this.dpr * Math.cos(d.wob);
+			const y = sy + (tys_ - sy) * e - Math.sin(k * Math.PI) * 60 * arc * this.dpr;
 			const r = (3.2 - 1.2 * k) * this.dpr;
 			ctx.globalAlpha = k < 0.1 ? k * 10 : 1;
 			ctx.fillStyle = 'rgba(244,194,62,0.35)';

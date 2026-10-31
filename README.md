@@ -84,7 +84,9 @@ Au-delà de 25 km/h rien ne pousse (vélo, voiture). Décor débloqué à 3, 6 e
 Aménager a trois onglets : Habitats (abris pour la faune, améliorables du niveau 1 au niveau 5 : chaque niveau
 compte comme un abri de plus, coûte 4, 12, 35 puis 100 fois le prix de base et demande 10, 30, 70 puis 150 km au
 total), Récolte (collecteur, cabane, potager) et Décoration. La cabane s'agrandit en cabane à auvent (15 km) puis
-en chalet (50 km), se peint en cinq couleurs, et loge un fermier ou une fermière, au choix.
+en chalet (50 km), se peint en cinq couleurs, et loge un fermier ou une fermière, au choix, avec un chien ou
+un chat. Quand le fermier est chez lui, la cheminée fume. Le nectar butiné attend dans les fleurs ou le
+collecteur : rien n'entre dans la bourse sans qu'on le récolte.
 
 Pas récoltés sans GPS : l'allure vient de la cadence (moins de 45 pas/min = ménage et petits pas → herbes folles,
 45-90 marche lente, 90-110 marche, 110-135 marche rapide, 135-155 jogging, au-delà course).

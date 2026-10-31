@@ -225,7 +225,7 @@ function squirrel(ctx, s) {
 function quadruped(ctx, s, k) {
 	const moving = s.mode === 'run';
 	const ph = s.ph ?? 0;
-	const graze = moving ? 0 : smooth(Math.max(0, Math.min(1, (Math.sin(s.t * 0.45) + 0.2) * 1.6)));
+	const graze = moving || k.noGraze ? 0 : smooth(Math.max(0, Math.min(1, (Math.sin(s.t * 0.45) + 0.2) * 1.6)));
 	const bob = moving ? Math.abs(Math.sin(ph * TAU * 2)) * k.bob : 0;
 	const by = -k.legH - bob;
 	const phase = k.trot ? [0, 0.5, 0.5, 0] : [0, 0.25, 0.5, 0.75]; // arrière G, avant G, arrière D, avant D
@@ -240,15 +240,27 @@ function quadruped(ctx, s, k) {
 	leg(2, false); leg(3, false);
 	// Queue (renard : grand panache ; cervidés : petite queue sur le miroir blanc).
 	if (k.tail) k.tail(ctx, -k.bodyL * 0.5, by - k.bodyH * 0.1, s);
-	ell(ctx, 0, by, k.bodyL * 0.52, k.bodyH * 0.5, 0, k.fur);
+	// Chien et chat : un ventre rentré entre la hanche et un poitrail plus profond.
+	ell(ctx, 0, by - (k.tuck ? k.bodyH * 0.08 : 0), k.bodyL * 0.52, k.bodyH * (k.tuck ? 0.4 : 0.5), 0, k.fur);
 	ell(ctx, -k.bodyL * 0.3, by - k.bodyH * 0.05, k.bodyL * 0.26, k.bodyH * 0.52, 0, k.fur);
-	ell(ctx, 0, by + k.bodyH * 0.28, k.bodyL * 0.38, k.bodyH * 0.2, 0, k.belly);
+	if (k.chest) ell(ctx, k.bodyL * 0.28, by + k.bodyH * 0.06, k.bodyL * 0.25, k.bodyH * 0.5 * k.chest, -0.1, k.fur);
+	// Ombre douce sous le ventre, lumière sur le dos (le soleil vient d'en haut à gauche).
+	if (k.tuck) {
+		ell(ctx, 0, by + k.bodyH * 0.22, k.bodyL * 0.45, k.bodyH * 0.18, 0, 'rgba(60,30,10,0.12)');
+		ell(ctx, -k.bodyL * 0.1, by - k.bodyH * 0.38, k.bodyL * 0.36, k.bodyH * 0.1, 0, 'rgba(255,245,225,0.22)');
+	}
+	if (k.stripes) {
+		ctx.strokeStyle = k.stripes; ctx.lineWidth = 1; ctx.lineCap = 'round';
+		for (let i = 0; i < 5; i++) { const x = -k.bodyL * 0.38 + i * k.bodyL * 0.16; ctx.beginPath(); ctx.moveTo(x, by - k.bodyH * 0.42); ctx.quadraticCurveTo(x + 1.2, by - k.bodyH * 0.1, x + 0.4, by + k.bodyH * 0.1); ctx.stroke(); }
+	}
+	if (k.chest) ell(ctx, k.bodyL * 0.3, by + k.bodyH * 0.38, k.bodyL * 0.14, k.bodyH * 0.22, 0, k.belly);
+	else ell(ctx, 0, by + k.bodyH * 0.28, k.bodyL * 0.38, k.bodyH * 0.2, 0, k.belly);
 	ell(ctx, -k.bodyL * 0.05, by - k.bodyH * 0.3, k.bodyL * 0.4, k.bodyH * 0.12, 0, 'rgba(255,248,235,0.14)');
 	if (k.rump) ell(ctx, -k.bodyL * 0.5, by - k.bodyH * 0.05, k.bodyH * 0.32, k.bodyH * 0.42, 0, k.rump);
 	leg(0, true); leg(1, true);
 	// Cou et tête : relevée, ou au ras du sol pour brouter.
 	const nx = k.bodyL * 0.42, ny = by - k.bodyH * 0.2;
-	const up = [nx + k.neck * 0.45, by - k.neck * 0.95];
+	const up = [nx + k.neck * (k.neckFwd ?? 0.45), by - k.neck * (k.neckFwd ? 0.75 : 0.95)];
 	const down = [nx + k.neck * 0.75, -k.head * 0.55];
 	const hx = up[0] + (down[0] - up[0]) * graze, hy = up[1] + (down[1] - up[1]) * graze + (moving ? Math.sin(ph * TAU * 2) * 0.6 : 0);
 	ctx.strokeStyle = k.fur;
@@ -258,6 +270,11 @@ function quadruped(ctx, s, k) {
 	ctx.moveTo(nx - 2, ny + 1);
 	ctx.quadraticCurveTo(nx + (hx - nx) * 0.3, hy + (ny - hy) * 0.6, hx - 1, hy + 0.8);
 	ctx.stroke();
+	if (k.collar) {
+		ctx.strokeStyle = k.collar; ctx.lineWidth = 1.4;
+		ctx.beginPath(); ctx.moveTo(hx - 3.2, hy + 0.6); ctx.lineTo(hx - 1.4, hy + 3.4); ctx.stroke();
+		ell(ctx, hx - 1.4, hy + 3.8, 0.8, 0.8, 0, '#E8C040');
+	}
 	k.headDraw(ctx, hx, hy, graze, s);
 }
 
@@ -334,6 +351,103 @@ const FOX = {
 		ctx.restore();
 	},
 };
+
+// ─── Le chien ou le chat de la cabane ───────────────────────────
+
+/** Une queue qui remue (chien) ou ondule lentement, dressée (chat). */
+const petTail = (len, w, col, tip, wag, up, droop = 0) => (ctx, x, y, s) => {
+	const a = -up + Math.sin(s.t * wag) * (s.mode === 'run' ? 0.15 : 0.35);
+	const ex = x - len * Math.cos(a), ey = y + len * Math.sin(a) * 0.9;
+	// Une queue effilée : un trait large à la base, plus fin au bout, qui pend puis remonte (droop).
+	for (const [lw, c] of [[w, col], [w * 0.55, 'rgba(255,240,215,0.25)']]) {
+		ctx.strokeStyle = c; ctx.lineWidth = lw; ctx.lineCap = 'round';
+		ctx.beginPath();
+		ctx.moveTo(x + 1, y);
+		ctx.quadraticCurveTo(x - len * 0.55, y + len * droop - len * 0.2 + Math.sin(a) * len * 0.3, ex, ey);
+		ctx.stroke();
+	}
+	if (tip) ell(ctx, x - len * Math.cos(a), y + len * Math.sin(a) * 0.9, w * 0.55, w * 0.55, 0, tip);
+};
+
+const DOG = {
+	// D'après une planche de marche : chien élancé, pattes longues, poitrail profond, ventre rentré, cou tendu en avant.
+	legH: 13, bodyL: 22, bodyH: 8, neck: 7.5, neckW: 5.4, head: 4.4, stride: 11, lift: 3.4, bob: 0.6, legW: 1.7, noGraze: true,
+	chest: 1.25, tuck: true, neckFwd: 0.9,
+	fur: '#C8904E', belly: '#E8CCA0', leg: '#C08848', legFar: '#9A6A38', hoof: null, rump: null,
+	tail: petTail(12, 2.2, '#B07A40', null, 6, -0.05, 0.75),
+	collar: '#C8483A', eye: [3.2, -1.3],
+	headDraw(ctx, x, y) {
+		ctx.save();
+		ctx.translate(x, y);
+		ctx.rotate(0.12);
+		ell(ctx, 1, 0, 4.3, 3.7, 0, '#C8904E');
+		ell(ctx, 0.2, -1.4, 3, 1.6, -0.2, 'rgba(255,240,210,0.22)');
+		// Museau franc, qui s'affine vers la truffe ; le dessous plus clair.
+		ctx.fillStyle = '#C8904E';
+		ctx.beginPath(); ctx.moveTo(2, -2.4); ctx.quadraticCurveTo(6.6, -2, 8.6, 0); ctx.quadraticCurveTo(7.2, 2.8, 2, 3.2); ctx.fill();
+		ctx.fillStyle = '#E8CCA0';
+		ctx.beginPath(); ctx.moveTo(2.6, 1.4); ctx.quadraticCurveTo(6.8, 1.4, 8.4, 0.9); ctx.quadraticCurveTo(7, 3, 2.6, 3.2); ctx.fill();
+		ell(ctx, 8.6, -0.1, 1.15, 1, 0, '#2A1E18');
+		ell(ctx, 8.3, -0.4, 0.35, 0.25, 0, 'rgba(255,255,255,0.6)');
+		ell(ctx, 3.2, -1.3, 0.8, 0.75, 0, '#1A1210');
+		ell(ctx, 3.4, -1.5, 0.25, 0.25, 0, 'rgba(255,255,255,0.8)');
+		// Oreille tombante, rabattue vers l'arrière.
+		ctx.fillStyle = '#8A5A2E';
+		ctx.beginPath(); ctx.moveTo(0.6, -2.4); ctx.quadraticCurveTo(-2.8, -1, -2.4, 3.6); ctx.quadraticCurveTo(-0.6, 2, 1.4, -1.4); ctx.fill();
+		ctx.restore();
+	},
+};
+
+const CAT = {
+	legH: 8.5, bodyL: 17, bodyH: 6.4, neck: 4, neckW: 4, head: 3.6, stride: 7.5, lift: 2.4, bob: 0.4, legW: 1.2, noGraze: true, tuck: true,
+	stripes: 'rgba(160,80,30,0.55)', eye: [2.4, -0.8],
+	fur: '#E0904A', belly: '#F6E4CC', leg: '#D8843E', legFar: '#B86A2E', hoof: null, rump: null,
+	tail: petTail(12, 2, '#D8843E', '#B86A2E', 1.6, 1.3, -0.2),
+	headDraw(ctx, x, y) {
+		ctx.save();
+		ctx.translate(x, y);
+		ell(ctx, 1.2, 0, 3.6, 3.2, 0, '#E0904A');
+		ell(ctx, 3.6, 1.1, 1.8, 1.4, 0, '#F6E4CC');
+		ell(ctx, 4.8, 0.6, 0.55, 0.45, 0, '#C86A6A');
+		ell(ctx, 2.4, -0.8, 0.75, 0.6, 0, '#4A6A2A');
+		ell(ctx, 2.5, -0.8, 0.25, 0.5, 0, '#1A1210');
+		for (const [ox, c] of [[-1.2, '#B86A2E'], [1.2, '#E0904A']]) {
+			ctx.fillStyle = c;
+			ctx.beginPath(); ctx.moveTo(ox - 1.6, -2.2); ctx.lineTo(ox, -5.6); ctx.lineTo(ox + 1.4, -2.4); ctx.fill();
+		}
+		// Rayures du tigré, sur le front.
+		ctx.strokeStyle = 'rgba(150,80,30,0.7)'; ctx.lineWidth = 0.5;
+		for (const k of [-0.6, 0.4]) { ctx.beginPath(); ctx.moveTo(k, -3); ctx.lineTo(k + 0.4, -1.4); ctx.stroke(); }
+		ctx.restore();
+	},
+};
+
+/** Le compagnon endormi, roulé en boule au soleil : la queue enroulée devant, la tête posée, les yeux fermés. */
+function curled(ctx, s, k) {
+	const br = 1 + Math.sin(s.t * 1.6) * 0.04, R = k.bodyL * 0.46, H = k.bodyH;
+	ell(ctx, 0, -H * 0.6, R, H * 0.7 * br, 0, k.fur);
+	ell(ctx, -R * 0.2, -H * 0.95, R * 0.6, H * 0.18, 0, 'rgba(255,245,225,0.22)');
+	ell(ctx, 0, -H * 0.12, R * 0.9, H * 0.16, 0, 'rgba(60,30,10,0.12)');
+	// La queue fait le tour par devant.
+	ctx.strokeStyle = k.leg; ctx.lineWidth = H * 0.32; ctx.lineCap = 'round';
+	ctx.beginPath(); ctx.ellipse(0, -H * 0.42, R * 1.02, H * 0.5, 0, 0.15, 2.7); ctx.stroke();
+	// La tête posée sur le devant, un peu penchée.
+	ctx.save();
+	ctx.translate(R * 0.55, -H * 0.55);
+	ctx.rotate(0.25);
+	ctx.scale(0.9, 0.9);
+	k.headDraw(ctx, 0, 0);
+	const [ex, ey] = k.eye;
+	ell(ctx, ex, ey, 1, 0.9, 0, k.fur);
+	ctx.strokeStyle = 'rgba(26,18,16,0.85)'; ctx.lineWidth = 0.5;
+	ctx.beginPath(); ctx.arc(ex, ey - 0.4, 0.8, 0.3, Math.PI - 0.3); ctx.stroke();
+	ctx.restore();
+}
+
+function pet(ctx, s, k) {
+	if (s.mode === 'sleep') return curled(ctx, s, k);
+	quadruped(ctx, s, k);
+}
 
 // ─── Le paysan du potager ─────────────────────────────────────────
 
@@ -456,6 +570,8 @@ export const BEASTS = {
 	chamois: (ctx, t, mode, p, s) => quadruped(ctx, s, CHAMOIS),
 	fox: (ctx, t, mode, p, s) => quadruped(ctx, s, FOX),
 	farmer: (ctx, t, mode, p, s) => farmer(ctx, s),
+	dog: (ctx, t, mode, p, s) => pet(ctx, s, DOG),
+	cat: (ctx, t, mode, p, s) => pet(ctx, s, CAT),
 };
 
 /** Allure de chaque bête : durée d'un bond ou longueur d'une foulée, vitesse au sol. */
@@ -467,4 +583,6 @@ export const GAIT = {
 	chamois: { stride: 16, speed: 14 },
 	fox: { stride: 20, speed: 30 },
 	farmer: { stride: 15, speed: 12 },
+	dog: { stride: 24, speed: 26 },
+	cat: { stride: 16, speed: 16 },
 };

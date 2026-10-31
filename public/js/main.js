@@ -100,6 +100,23 @@ function farmerName(the = false) {
 	return the ? (f ? 'La fermière' : 'Le fermier') : f ? 'une fermière' : 'un fermier';
 }
 
+const PETS = { chien: 'Un chien', chat: 'Un chat' };
+
+/** Le compagnon du fermier : un chien qui le suit partout, un chat qui fait la sieste, ou personne. */
+function choosePet(then) {
+	showModal(`<h2>Et un compagnon ?</h2><p>Un chien qui suit ${farmerName(true).toLowerCase()} partout, ou un chat qui flâne et fait la sieste au soleil.</p>
+		<div class="pet-pick"><div class="farmer-pick"><button class="btn ghost" data-pet="chien">Un chien</button><button class="btn ghost" data-pet="chat">Un chat</button></div>
+		<button class="btn ghost wide" data-pet="">Personne pour l’instant</button></div>`);
+	$('#modal').querySelector('.pet-pick').addEventListener('click', e => {
+		const b = e.target.closest('[data-pet]');
+		if (!b) return;
+		state.pet = b.dataset.pet || null;
+		persist(true);
+		$('#modal').hidden = true;
+		then?.();
+	});
+}
+
 /** Qui s'installe dans la cabane : on choisit à la première cabane, et on peut changer d'avis depuis la cabane. */
 function chooseFarmer(then) {
 	showModal(`<h2>Qui s’installe ?</h2><p>Quelqu’un vient vivre dans ta cabane et cultivera ton potager.</p>
@@ -1120,7 +1137,7 @@ $('#btn-place').addEventListener('click', () => {
 		const help = itemHelp(kind);
 		toast(`${ITEMS[kind].name} : installé${/^Une /.test(ITEMS[kind].name) ? 'e' : /^Des /.test(ITEMS[kind].name) ? 's' : ''}${help ? ` · ${help}` : ''}`, '#9A7448');
 		if (kind === 'cabane' && garden.items.filter(x => x.kind === 'cabane').length === 1) {
-			setTimeout(() => chooseFarmer(() => toast(`${farmerName(true)} s’installe : construis-lui un potager`, '#5F933E', () => openDeco('recolte'))), 1400);
+			setTimeout(() => chooseFarmer(() => choosePet(() => toast(`${farmerName(true)} s’installe : construis-lui un potager`, '#5F933E', () => openDeco('recolte')))), 1400);
 		}
 	}
 	sound.chime(2);
@@ -1149,7 +1166,7 @@ function tapItem(hit, card) {
 		: def.levels ? `<small class="item-tip">${def.levels.name[lv][0].toUpperCase() + def.levels.name[lv].slice(1)}, ${CABIN_STYLES[(it.style ?? 0) % CABIN_STYLES.length].name}. ${farmerName(true)} y vit.${nx ? nx.ok ? ` Agrandis-la en ${def.levels.name[nx.level]}.` : ` ${def.levels.name[nx.level][0].toUpperCase() + def.levels.name[nx.level].slice(1)} dès ${nx.km} km parcourus.` : ''}</small>`
 		: canLevel(it.kind) ? `<small class="item-tip">Niveau ${lv} sur ${MAX_LEVEL}, ${LEVEL_NAME[lv]} : il fait venir ${lv * def.power} ${def.power * lv > 1 ? 'membres' : 'membre'}.${nx ? nx.ok ? ` Au niveau ${nx.level}, un de plus${def.power > 1 ? ` (${def.power})` : ''}.` : ` Niveau ${nx.level} dès ${nx.km} km parcourus.` : ''}</small>` : '';
 	card.innerHTML = `<b>${def.name}</b>${def.text}${info}<small class="item-tip">Astuce : un appui long dessus le soulève directement.</small>
-		<div class="item-actions">${up ? `<button class="btn primary" data-upgrade ${(state.nectar ?? 0) < up ? 'disabled' : ''}>${def.levels ? 'Agrandir' : 'Améliorer'} (${fmtInt(up)})</button>` : ''}${def.levels ? '<button class="btn ghost" data-style>Couleur</button><button class="btn ghost" data-farmer-swap>' + (state.gardener === 'fermiere' ? 'Un fermier' : 'Une fermière') + '</button>' : ''}${def.turn ? '<button class="btn ghost" data-turn>Tourner</button>' : ''}<button class="btn ghost" data-move>Déplacer</button><button class="btn ghost" data-store>Ranger (+${fmtInt((it.paid ?? def.cost) + (it.spent ?? 0))})</button></div>`;
+		<div class="item-actions">${up ? `<button class="btn primary" data-upgrade ${(state.nectar ?? 0) < up ? 'disabled' : ''}>${def.levels ? 'Agrandir' : 'Améliorer'} (${fmtInt(up)})</button>` : ''}${def.levels ? '<button class="btn ghost" data-style>Couleur</button><button class="btn ghost" data-farmer-swap>' + (state.gardener === 'fermiere' ? 'Un fermier' : 'Une fermière') + '</button><button class="btn ghost" data-pet-swap>' + (state.pet === 'chien' ? 'Un chat' : state.pet === 'chat' ? 'Sans animal' : 'Un chien') + '</button>' : ''}${def.turn ? '<button class="btn ghost" data-turn>Tourner</button>' : ''}<button class="btn ghost" data-move>Déplacer</button><button class="btn ghost" data-store>Ranger (+${fmtInt((it.paid ?? def.cost) + (it.spent ?? 0))})</button></div>`;
 	card.classList.remove('link');
 	card.classList.add('actions');
 	card.onclick = e => {
@@ -1166,6 +1183,13 @@ function tapItem(hit, card) {
 			garden.popItem(it);
 			persist(true);
 			tapItem(hit, card);
+			return;
+		}
+		if (e.target.closest('[data-pet-swap]')) {
+			state.pet = state.pet === 'chien' ? 'chat' : state.pet === 'chat' ? null : 'chien';
+			persist(true);
+			toast(state.pet ? `${PETS[state.pet]} s’installe à la cabane` : 'Plus d’animal à la cabane', '#5F933E');
+			card.hidden = true;
 			return;
 		}
 		if (e.target.closest('[data-farmer-swap]')) {

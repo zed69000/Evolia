@@ -124,8 +124,9 @@ function roof(cx, cy, z, w, dp, rise, over, color, paint = null, gable = tone(co
 		faces: [
 			face([[cx - hw, cy + hd, z], [cx, cy + hd, top], [cx, cy - hd, top], [cx - hw, cy - hd, z]], nl, color, paint, [cx - hw, cy + hd, z], [0, -1, 0], [hw / L, 0, rise / L]),
 			face([[cx + hw, cy - hd, z], [cx, cy - hd, top], [cx, cy + hd, top], [cx + hw, cy + hd, z]], nr, color, paint, [cx + hw, cy - hd, z], [0, 1, 0], [-hw / L, 0, rise / L]),
-			face([[cx - hw + over, cy + hd - over, z], [cx + hw - over, cy + hd - over, z], [cx, cy + hd - over, top - over * rise / hw]], [0, 1, 0], gable),
-			face([[cx + hw - over, cy - hd + over, z], [cx - hw + over, cy - hd + over, z], [cx, cy - hd + over, top - over * rise / hw]], [0, -1, 0], gable),
+			// Les pignons ferment tout le débord du toit : sans eux, on voyait le sol à travers, sous l'avancée.
+			face([[cx - hw, cy + hd, z], [cx + hw, cy + hd, z], [cx, cy + hd, top]], [0, 1, 0], gable),
+			face([[cx + hw, cy - hd, z], [cx - hw, cy - hd, z], [cx, cy - hd, top]], [0, -1, 0], gable),
 		],
 	};
 }
@@ -431,11 +432,11 @@ function paintCabane(g, rot, level = 1, style = 0) {
 	const fy = V.turn([0, 1, 0])[1], ry = V.turn([1, 0, 0])[1];
 	const win = fy > 0.3 ? [winX + 11 - W / 2, D / 2, 49] : ry > 0.3 ? [W / 2 + 0.5, 0, 48] : ry < -0.3 ? [-W / 2 - 0.5, 0, 48] : null;
 	const top = V.at([0, 0, H + rise + 20])[1] - 10;
-	// Le seuil de la porte, avant rotation : le jardinier y entre et en sort.
-	const door = [doorX + doorW / 2 - W / 2, D / 2 + porch + 12];
-	if (!win) return { top, door };
+	// Le seuil de la porte, avant rotation : le jardinier y entre et en sort ; le haut de la cheminée, pour la fumée.
+	const door = [doorX + doorW / 2 - W / 2, D / 2 + porch + 12], smoke = V.at([28, -18, H + rise * 0.6 + 34]);
+	if (!win) return { top, door, smoke };
 	const [gx, gy] = V.at(win);
-	return { top, glow: gy, glowX: gx, door };
+	return { top, glow: gy, glowX: gx, door, smoke };
 }
 
 function paintAbri(g, rot) {

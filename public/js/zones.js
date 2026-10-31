@@ -110,14 +110,37 @@ function tileFeatures(biome, gx, gy) {
 	if (G.sun) for (let i = 0; i < 8; i++) washAt(0, ox + r.range(20, W - 20), oy + r.range(20, H), r.range(30, 60), r.range(18, 34), G.sun, { layers: 5, alpha: 0.035, edge: 0 });
 	if (G.rocks) for (let i = 0; i < 34; i++) { const s = r.range(6, 22); washAt(3, ox + r.range(0, W), oy + r.range(20, H), s, s * 0.6, r.pick(['#A8A498', '#BCB8AC', '#9A968A']), { layers: 7, alpha: 0.16, edge: 0.4 }); }
 
-	// La mer, en haut de la première rangée du littoral.
+	// La mer, en haut de la première rangée du littoral : du bleu profond au large au turquoise sur le sable,
+	// des reflets de lumière dans l'eau claire, puis plusieurs liserés d'écume et le sable mouillé.
 	if (sea) {
-		for (let i = 0; i < 14; i++) washAt(1, ox + r.range(0, W), oy + r.range(-30, 110), r.range(90, 160), r.range(40, 70), r.pick(['#6FAEC0', '#8FC4CC', '#5FA0B8']), { layers: 8, alpha: 0.1, edge: 0 });
-		out.push({ layer: 1, x0: ox, y0: oy - 10, x1: ox + W, y1: oy + 120, seed: 1, paint: g => { g.fillStyle = 'rgba(111,174,192,0.55)'; g.fillRect(ox, oy - 10, W, 130); } });
-		for (let i = 0; i < 10; i++) washAt(1, ox + r.range(0, W), oy + r.range(150, 190), r.range(60, 110), r.range(10, 18), '#CFC09A', { layers: 6, alpha: 0.1, edge: 0 });
-		for (const y of [120, 138, 156]) {
-			const y0 = oy + y + r.gauss() * 3, b0 = r.gauss() * 0.04, b1 = r.gauss() * 0.06;
-			add(3, ox + W / 2, y0, W / 2 + 30, (g, rr) => ribbon(g, curve(ox - 12, y0, b0, W + 24, b1, 20), 2.4, 1.6, '#FDFBF3', rr, 0.6));
+		out.push({ layer: 1, x0: ox, y0: oy - 10, x1: ox + W, y1: oy + 150, seed: 1, paint: g => {
+			const grd = g.createLinearGradient(0, oy - 10, 0, oy + 150);
+			grd.addColorStop(0, 'rgba(30,110,150,0.97)');
+			grd.addColorStop(0.45, 'rgba(56,160,182,0.93)');
+			grd.addColorStop(0.8, 'rgba(110,204,198,0.88)');
+			grd.addColorStop(1, 'rgba(160,220,206,0)');
+			g.fillStyle = grd;
+			g.fillRect(ox, oy - 10, W, 160);
+		} });
+		for (let i = 0; i < 14; i++) washAt(1, ox + r.range(0, W), oy + r.range(-30, 110), r.range(90, 160), r.range(30, 60), r.pick(['#3E8AAA', '#6FBCC4', '#5AA8BC']), { layers: 8, alpha: 0.08, edge: 0 });
+		// Reflets : un réseau de fines lignes claires, comme le soleil au fond de l'eau peu profonde.
+		for (let i = 0; i < 26; i++) {
+			const x = ox + r.range(0, W), y = oy + r.range(30, 125), w = r.range(14, 34);
+			add(2, x, y, w, (g, rr) => { for (let k = 0; k < 3; k++) ribbon(g, curve(x - w / 2, y + k * 3 + rr.gauss(), rr.gauss() * 0.4, w, rr.gauss() * 0.8, 6), 1, 0.4, '#E8FAF6', rr, 0.35); });
+		}
+		// Sable mouillé, plus sombre, au ras de l'eau.
+		for (let i = 0; i < 12; i++) washAt(1, ox + r.range(0, W), oy + r.range(146, 172), r.range(60, 110), r.range(8, 14), '#C8B488', { layers: 6, alpha: 0.12, edge: 0 });
+		// Liserés d'écume : un trait principal ondulé, puis deux plus fins et troués, plus au large.
+		for (const [y, w, al, gaps] of [[140, 3, 0.75, 0], [124, 2, 0.5, 0.3], [104, 1.6, 0.35, 0.5]]) {
+			const y0 = oy + y + r.gauss() * 3;
+			add(3, ox + W / 2, y0, W / 2 + 30, (g, rr) => {
+				let x = ox - 12;
+				while (x < ox + W + 12) {
+					const len = rr.range(50, 120);
+					if (rr() >= gaps) ribbon(g, curve(x, y0 + Math.sin(x * 0.02) * 4, rr.gauss() * 0.05, len, rr.gauss() * 0.08, 14), w, w * 0.5, '#FDFBF3', rr, al);
+					x += len + (gaps ? rr.range(10, 40) : 0);
+				}
+			});
 		}
 	}
 
@@ -459,21 +482,34 @@ function longFeatures(biome) {
 			if (m === 'path') {
 				const pts = meander(r, cx, cy, orient(gx !== 0, cx, cy), 70);
 				list.push(longItem(pts, 16, 'path', (g, rr) => {
-					// Un chemin de terre battue : des taches de terre qui se chevauchent (largeur inégale, bords doux),
-					// une bande d'herbe au milieu là où on ne marche pas, des cailloux, et l'herbe qui déborde sur les bords.
+					// Un chemin de terre blonde, bien lisible : un bord plus sombre où l'herbe le mord, la terre chaude,
+					// une bande plus claire au milieu, usée par les pas ; des pierres plates à demi enfoncées,
+					// des graviers, et des touffes d'herbe et de fleurs qui débordent sur les bords.
+					ribbon(g, pts, 27, 27, '#9A7E52', rr, 0.32);
+					ribbon(g, pts, 23, 23, '#D2B482', rr, 0.62);
+					ribbon(g, pts.map(([x, y]) => [x - 1, y - 1.5]), 11, 11, '#E8D4A6', rr, 0.4);
 					for (let i = 0; i < pts.length - 1; i++) {
 						const [x0, y0] = pts[i], [x1, y1] = pts[i + 1];
 						const n = Math.max(1, Math.round(Math.hypot(x1 - x0, y1 - y0) / 9));
 						for (let k = 0; k < n; k++) {
 							const t = k / n, x = x0 + (x1 - x0) * t, y = y0 + (y1 - y0) * t;
-							wash(g, x + rr.gauss() * 1.5, y + rr.gauss() * 1.5, rr.range(10, 15), rr.range(6, 9), '#C2A878', rr, { layers: 3, alpha: 0.13, edge: 0 });
+							wash(g, x + rr.gauss() * 3, y + rr.gauss() * 2, rr.range(5, 10), rr.range(3, 5), rr.pick(['#C4A274', '#DCC292', '#B8966A']), rr, { layers: 2, alpha: 0.14, edge: 0 });
 						}
 					}
-					ribbon(g, pts, 5, 5, '#8EA850', rr, 0.22);
-					for (let i = 1; i < pts.length; i += 1) {
+					for (let i = 1; i < pts.length; i++) {
 						const [x, y] = pts[i];
-						if (rr() < 0.5) wash(g, x + rr.gauss() * 7, y + rr.gauss() * 4, rr.range(1.2, 2.4), rr.range(0.9, 1.6), rr.pick(['#9A8A70', '#B8A888', '#7A6A58']), rr, { layers: 2, alpha: 0.5, edge: 0.3 });
-						for (const side of [-1, 1]) if (rr() < 0.6) wash(g, x + side * rr.range(11, 15), y + rr.gauss() * 4, rr.range(4, 8), rr.range(2, 3), '#6E9A42', rr, { layers: 3, alpha: 0.18, edge: 0 });
+						// Une pierre plate de temps en temps : un dessus clair, une ombre fraîche en bas.
+						if (rr() < 0.45) {
+							const px = x + rr.gauss() * 5, py = y + rr.gauss() * 3, s = rr.range(3.5, 6.5);
+							wash(g, px + 0.8, py + s * 0.35, s, s * 0.45, '#7A6A58', rr, { layers: 2, alpha: 0.2, edge: 0 });
+							wash(g, px, py, s, s * 0.55, rr.pick(['#C8BCA6', '#BDB09A', '#D4C8B2']), rr, { layers: 4, alpha: 0.55, edge: 0.4 });
+							wash(g, px - s * 0.25, py - s * 0.15, s * 0.45, s * 0.2, '#F2EADA', rr, { layers: 2, alpha: 0.35, edge: 0 });
+						}
+						if (rr() < 0.6) wash(g, x + rr.gauss() * 7, y + rr.gauss() * 4, rr.range(0.8, 1.6), rr.range(0.6, 1.2), rr.pick(['#9A8A70', '#B8A888', '#7A6A58']), rr, { layers: 2, alpha: 0.55, edge: 0.3 });
+						for (const side of [-1, 1]) {
+							if (rr() < 0.7) for (let k = 0; k < 3; k++) ribbon(g, curve(x + side * rr.range(9, 13), y + rr.gauss() * 4, -Math.PI / 2 + side * 0.3 + rr.gauss() * 0.3, rr.range(4, 8), rr.gauss() * 0.3, 3), 1.1, 0.3, rr.pick(['#6E9A42', '#7FAA48', '#5F8A3A']), rr, 0.75);
+							if (rr() < 0.12) wash(g, x + side * rr.range(11, 15), y + rr.gauss() * 4 - 5, 1.6, 1.4, rr.pick(['#FFFFFF', '#F2D24A', '#E87A9A']), rr, { layers: 2, alpha: 0.8, edge: 0.2 });
+						}
 					}
 				}, hash(biome, 'path', zi)));
 			}

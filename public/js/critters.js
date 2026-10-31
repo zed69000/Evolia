@@ -519,5 +519,5 @@ export function drawCritter(ctx, kind, t = 0, mode, params = {}, s = { t, mode, 
 }
 
 /** Taille d'affichage dans le jardin, et hauteur de vol (pour placer l'ombre au sol). */
-export const CRITTER_SIZE = { hoverfly: 1.2, beefly: 1.2, ant: 1.9, firebug: 1.3, snail: 1.4, grasshopper: 1.2, spider: 1.2, duck: 1.5, hedgehog: 1.6, frog: 1.4, tit: 1.4, bird: 1.4, ladybug: 1.2, squirrel: 1.3, rabbit: 1.4, hare: 1.5, roe: 2, chamois: 1.9, fox: 1.6, farmer: 2, marmot: 1.6, lizard: 1.2, heron: 1.8, owl: 1.5, eagle: 1.6, gull: 1.3, crab: 1.3, beetle: 1.2 };
-export const FLIGHT = { rabbit: 1, hare: 1, roe: 1, chamois: 1, fox: 1, farmer: 1, hoverfly: 24, beefly: 24, firebug: 2, snail: 2, grasshopper: 3, bee: 24, butterfly: 24, dragonfly: 24, frog: 6, hedgehog: 9, squirrel: 1, marmot: 7, lizard: 3, heron: 18, crab: 4, eagle: 160, gull: 110 };
+export const CRITTER_SIZE = { hoverfly: 1.2, beefly: 1.2, ant: 1.9, firebug: 1.3, snail: 1.4, grasshopper: 1.2, spider: 1.2, duck: 1.5, hedgehog: 1.6, frog: 1.4, tit: 1.4, bird: 1.4, ladybug: 1.2, squirrel: 1.3, rabbit: 1.4, hare: 1.5, roe: 2, chamois: 1.9, fox: 1.6, farmer: 2, dog: 1.7, cat: 1.6, marmot: 1.6, lizard: 1.2, heron: 1.8, owl: 1.5, eagle: 1.6, gull: 1.3, crab: 1.3, beetle: 1.2 };
+export const FLIGHT = { rabbit: 1, hare: 1, roe: 1, chamois: 1, fox: 1, farmer: 1, dog: 1, cat: 1, hoverfly: 24, beefly: 24, firebug: 2, snail: 2, grasshopper: 3, bee: 24, butterfly: 24, dragonfly: 24, frog: 6, hedgehog: 9, squirrel: 1, marmot: 7, lizard: 3, heron: 18, crab: 4, eagle: 160, gull: 110 };
