@@ -4,7 +4,7 @@
 // Coordonnées : chaque plante garde des coordonnées locales à sa parcelle (`c`, 0 par défaut) ;
 // le monde les décale de l'origine de la parcelle (colonne × PARCEL_W, rangée × PARCEL_H).
 
-import { rng, wash, rgba, mix, paperTexture, lerp } from './watercolor.js';
+import { rng, wash, rgba, mix, paperTexture, lerp, blurred } from './watercolor.js';
 import { PLANT_TYPES, DECOR, DECOR_PAINTERS, paintPlant, paintTurf, newVariant, lookOf } from './plants.js';
 import { drawCritter, CRITTER_SIZE, FLIGHT } from './critters.js';
 import { GAIT } from './beasts.js';
@@ -27,7 +27,8 @@ const FOG_FAR = 480, FOG_MAX = 0.95;
 // Combien de cases du sol gardées en détail (les autres, en version légère).
 const HI_TILES = 9;
 const STAGES = 30;
-const SWAY = { herbe: 0.09, fleur: 0.07, buisson: 0.02, arbre: 0.012 };
+// Le vent dans la végétation : l'herbe et les fleurs ondulent, les arbustes frémissent, la couronne des arbres balance.
+const SWAY = { herbe: 0.12, fleur: 0.09, buisson: 0.05, arbre: 0.05 };
 const MIN_Y = { herbe: 60, fleur: 100, buisson: 100, arbre: 220 };
 // Les arbres où le jardinier va cueillir, et la couleur de leurs fruits.
 const FRUIT_TREES = { pommier: '#D8402E', poirier: '#C8B848', merisier: '#B0283A', prunier: '#6A3A7A' };
@@ -653,8 +654,7 @@ export class Garden {
 		const soft = document.createElement('canvas');
 		soft.width = W; soft.height = H;
 		const sg = soft.getContext('2d');
-		sg.filter = 'blur(5px)';
-		sg.drawImage(c, 0, 0);
+		blurred(sg, 5, '#000', b => b.drawImage(c, 0, 0));
 		return (this.maskCache = { key, canvas: soft, x0, y0, x1, y1, k, W, H, inside });
 	}
 
@@ -695,10 +695,8 @@ export class Garden {
 		const next = document.createElement('canvas');
 		next.width = W; next.height = H;
 		const ng = next.getContext('2d');
-		ng.filter = 'blur(7px)';
 		ng.setTransform(k, 0, 0, k, -x0m * k, -y0m * k);
-		ng.fillStyle = '#000';
-		for (const i of this.lockedCells()) { ng.beginPath(); this.tracePath(ng, this.blob(i)); ng.fill(); }
+		blurred(ng, 7 / k, '#000', b => { for (const i of this.lockedCells()) { b.beginPath(); this.tracePath(b, this.blob(i)); b.fill(); } });
 		// 2. Les nuages, plus finement : en bordure du jardin, poussés vers l'extérieur ; plus loin, de grands lavis épars.
 		const kb = 1 / 4, x0 = mk.x0, y0 = mk.y0;
 		const cloud = document.createElement('canvas');
@@ -750,13 +748,11 @@ export class Garden {
 			g.restore();
 		};
 		// Sous les volutes, une bande de brume continue tout le long du bord : les nuages s'y posent au lieu de flotter seuls.
-		g.save();
-		g.filter = `blur(${Math.round(110 * kb)}px)`;
-		g.strokeStyle = 'rgba(250,251,250,0.55)';
-		g.lineWidth = 150;
-		g.lineCap = g.lineJoin = 'round';
-		for (const f of this.edges().fence) { g.beginPath(); f.run.forEach(([x, y], i) => (i ? g.lineTo(x, y) : g.moveTo(x, y))); g.stroke(); }
-		g.restore();
+		blurred(g, 110, 'rgba(250,251,250,0.55)', b => {
+			b.lineWidth = 150;
+			b.lineCap = b.lineJoin = 'round';
+			for (const f of this.edges().fence) { b.beginPath(); f.run.forEach(([x, y], i) => (i ? b.lineTo(x, y) : b.moveTo(x, y))); b.stroke(); }
+		});
 		for (const [x, y, rad, a, sy] of lobes) blot(x + rad * 0.05, y + rad * 0.22, rad, sy, '184,200,214', a * 0.7);
 		for (const [x, y, rad, a, sy] of lobes) blot(x, y - rad * 0.05, rad * 0.88, sy, '253,253,251', a);
 		return (this.rimCache = { key: mk.key, haze, next, cloud, x0, y0, x1: mk.x1, y1: mk.y1, k, kb });
@@ -2970,8 +2966,21 @@ export class Garden {
 			const k = age < 0.45 ? 1 + 0.14 * Math.sin((age / 0.45) * Math.PI) : 1;
 			world();
 			ctx.translate(e.x, e.y);
-			ctx.transform(k, 0, shear * k, k, 0, 0);
-			ctx.drawImage(img.canvas, -box.ax, -box.ay, box.w, box.h);
+			ctx.transform(k, 0, 0, k, 0, 0);
+			if (p.type === 'arbre') {
+				// Le tronc reste planté ; seule la couronne balance, à partir du haut du tronc (sans cassure au raccord).
+				const cut = -box.ay * 0.42;
+				ctx.save(); ctx.beginPath(); ctx.rect(-box.ax, cut, box.w, box.h); ctx.clip();
+				ctx.drawImage(img.canvas, -box.ax, -box.ay, box.w, box.h);
+				ctx.restore();
+				ctx.save(); ctx.beginPath(); ctx.rect(-box.ax - 40, -box.ay - 10, box.w + 80, box.ay * 0.58 + 10.5); ctx.clip();
+				ctx.translate(0, cut); ctx.transform(1, 0, shear, 1, 0, 0); ctx.translate(0, -cut);
+				ctx.drawImage(img.canvas, -box.ax, -box.ay, box.w, box.h);
+				ctx.restore();
+			} else {
+				ctx.transform(1, 0, shear, 1, 0, 0);
+				ctx.drawImage(img.canvas, -box.ax, -box.ay, box.w, box.h);
+			}
 		}
 
 		// Animaux en l'air et particules

@@ -3,6 +3,11 @@
 Chaque version, la plus récente en haut. Le site (evolia.sebastienalzamora.workers.dev) est toujours à jour ;
 le Play Store (tests internes) reçoit les versions indiquées « Play ».
 
+## 0.7.9 — 1er novembre 2026
+- **La brume est belle aussi sur iPhone.** Safari (avant iOS 18) ne savait pas flouter le dessin : la lisière y gardait des bords nets. Le flou passe maintenant par une technique qu'il comprend, et la terre des potagers en profite aussi.
+- **Un vent léger dans la végétation.** La couronne des arbres balance doucement, le tronc reste planté. Les arbustes frémissent, l'herbe et les fleurs ondulent un peu plus.
+- **Le bandeau en paysage :** une carte compacte en haut à gauche, et le cadeau du jour et l'œil réunis en haut à droite, au-dessus du panneau.
+
 ## 0.7.8 — 1er novembre 2026
 - **Des touffes d'herbe à l'aquarelle :** denses, en éventail, plusieurs verts (brins sombres derrière, clairs devant), une flaque de vert tendre au pied, et des épillets discrets une fois montées en graines.
 - **Une cabane comme dessinée à la main.** Les planches sont usées et d'une teinte chaque fois différente, avec leur fil et leurs nœuds, et les contours sont tracés à l'encre. Elle a maintenant une porte à écharpe en Z, du lierre qui grimpe à l'angle, de la mousse et de l'herbe sur le toit, une pierre devant la porte, des pots de fleurs, de l'herbe au pied des murs et une tache de terre autour.

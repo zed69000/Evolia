@@ -797,7 +797,7 @@ body:has(#modal:not([hidden])) .tip, body:has(.panel.open) .tip, body:has(#coach
 		left: auto; bottom: calc(env(safe-area-inset-bottom, 0px) + 10px); top: auto;
 		right: calc(env(safe-area-inset-right, 0px) + 10px);
 		width: min(360px, 42vw); box-sizing: border-box;
-		max-height: calc(100% - 20px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+		max-height: calc(100% - 70px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
 		padding: 14px;
 		border-radius: 24px;
 		overflow-y: auto;
@@ -805,9 +805,12 @@ body:has(#modal:not([hidden])) .tip, body:has(.panel.open) .tip, body:has(#coach
 	}
 	.sheet.off { transform: translateX(calc(100% + 30px)); }
 	.peek .sheet:not(.off) { transform: translateX(40px); }
-	#hud { right: calc(var(--side) + 10px); left: calc(env(safe-area-inset-left, 0px) + 12px); }
+	/* Le bandeau : une carte compacte en haut à gauche, pas une barre étirée sur toute la largeur. */
+	#hud { left: calc(env(safe-area-inset-left, 0px) + 12px); right: auto; width: min(430px, calc(100% - var(--side) - 30px)); box-sizing: border-box; }
 	.quest { left: calc(env(safe-area-inset-left, 0px) + 12px); }
-	.daily-chip, .peek-btn { right: calc(var(--side) + 10px); }
+	/* Le cadeau du jour et l'œil, côte à côte en haut à droite, au-dessus du panneau. */
+	.peek-btn { right: calc(env(safe-area-inset-right, 0px) + 10px); top: calc(env(safe-area-inset-top, 0px) + 12px); }
+	.daily-chip { right: calc(env(safe-area-inset-right, 0px) + 60px); top: calc(env(safe-area-inset-top, 0px) + 12px); }
 	#toasts { right: var(--side); }
 	.placing-bar { right: calc(var(--side) + 10px); left: calc(env(safe-area-inset-left, 0px) + 12px); }
 	.coach { left: auto; right: calc(env(safe-area-inset-right, 0px) + 10px); bottom: calc(env(safe-area-inset-bottom, 0px) + 10px); width: min(360px, 42vw); box-sizing: border-box; border-radius: 24px; max-height: calc(100% - 20px); overflow-y: auto; }
@@ -823,8 +826,7 @@ body:has(#modal:not([hidden])) .tip, body:has(.panel.open) .tip, body:has(#coach
 /* Paysage sur un téléphone (peu de hauteur) : tout un peu plus compact. */
 @media (orientation: landscape) and (min-width: 600px) and (max-height: 480px) {
 	#hud { top: calc(env(safe-area-inset-top, 0px) + 8px); }
-	.quest, .daily-chip { top: calc(env(safe-area-inset-top, 0px) + 70px); }
-	.peek-btn { top: calc(env(safe-area-inset-top, 0px) + 116px); }
+	.quest { top: calc(env(safe-area-inset-top, 0px) + 70px); }
 	#toasts { top: calc(env(safe-area-inset-top, 0px) + 112px); }
 	.zoom-info { top: calc(env(safe-area-inset-top, 0px) + 116px); }
 	.sheet .btn.primary { padding: 12px; }

@@ -4,7 +4,7 @@
 // Ceux qui ont un devant et un dos (banc, cabane…) se tournent par pas de 45° : ils sont construits en volumes
 // simples, projetés dans la même vue légèrement plongeante que le jardin.
 
-import { rng, wash, ribbon, curve, leaf, rgba } from './watercolor.js';
+import { rng, wash, ribbon, curve, leaf, rgba, blurred } from './watercolor.js';
 
 // km : kilomètres au total pour pouvoir le construire ; team : équipe de l'écosystème renforcée (power membres) ;
 // attracts : espèce dont il ajoute un individu visible ; turn : se tourne par pas de 45° ;
@@ -663,13 +663,7 @@ export const PLOT = { w: 130, h: 44 };
 export function paintSoil(g, seed) {
 	const d = rng(seed);
 	const W = PLOT.w, H = PLOT.h;
-	g.save();
-	g.filter = 'blur(3px)';
-	g.fillStyle = rgba('#6A4A2E', 0.95);
-	g.beginPath();
-	g.roundRect(-W / 2 - 6, -H / 2 - 5, W + 12, H + 10, 10);
-	g.fill();
-	g.restore();
+	blurred(g, 3, rgba('#6A4A2E', 0.95), b => { b.beginPath(); b.roundRect(-W / 2 - 6, -H / 2 - 5, W + 12, H + 10, 10); b.fill(); });
 	for (let i = 0; i < 10; i++) wash(g, d.range(-W / 2 + 6, W / 2 - 6), d.range(-H / 2 + 3, H / 2 - 3), d.range(8, 18), d.range(3, 6), d.pick(['#7E5A38', '#5A3E26', '#8A6644']), d, { layers: 3, alpha: 0.25, edge: 0 });
 	// Sillons, tous les 11 : ils tombent au même endroit d'une parcelle à l'autre.
 	g.strokeStyle = rgba('#3E2A18', 0.42);

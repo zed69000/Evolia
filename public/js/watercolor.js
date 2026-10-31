@@ -189,3 +189,20 @@ export function paperTexture(size = 256, seed = 7) {
 	}
 	return c;
 }
+
+/**
+ * Un flou qui marche partout : Safari (iOS avant la 18) ignore `ctx.filter`, et la brume y gardait des bords nets.
+ * On peint la forme loin hors de la toile et l'on n'en garde que l'ombre portée, ramenée à sa place : l'ombre, elle,
+ * est floue sur tous les navigateurs. `radius` : en unités du dessin ; `color` : la couleur (et l'opacité) du résultat.
+ */
+export function blurred(g, radius, color, draw) {
+	const T = g.getTransform(), s = Math.hypot(T.a, T.b) || 1, off = 1e5;
+	g.save();
+	g.shadowColor = color;
+	g.shadowBlur = radius * 2 * s;
+	g.shadowOffsetX = off;
+	g.translate(-off / s, 0);
+	g.fillStyle = g.strokeStyle = '#000';
+	draw(g);
+	g.restore();
+}
