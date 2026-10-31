@@ -1349,6 +1349,30 @@ $('#btn-place-turn').addEventListener('click', () => {
 	renderPlacing();
 });
 
+/**
+ * L'effet miniature (flou du haut et du bas, vignettage) : coupé d'office si le téléphone ne sait pas flouter
+ * derrière un calque, ou s'il peine avec (moins de 40 images par seconde quelques secondes après le lancement).
+ * Un choix fait dans les options l'emporte toujours.
+ */
+const canBlur = typeof CSS !== 'undefined' && (CSS.supports('backdrop-filter', 'blur(2px)') || CSS.supports('-webkit-backdrop-filter', 'blur(2px)'));
+const fxOn = () => state.fx ?? (canBlur && !state.fxSlow);
+function probeFx() {
+	if (state.fx != null || state.fxSlow || !fxOn()) return;
+	const samples = [];
+	const look = () => {
+		// Seulement appli au premier plan, jardin seul à l'écran, sans la limite à 30 images par seconde.
+		if (document.hidden || garden.maxFps || document.querySelector('.panel.open')) return setTimeout(look, 3000);
+		samples.push(garden.fps ?? 60);
+		if (samples.length < 4) return setTimeout(look, 1500);
+		const fps = samples.reduce((a, b) => a + b, 0) / samples.length;
+		if (fps >= 40) return;
+		state.fxSlow = true;
+		$('#app').classList.add('no-fx');
+		persist(true);
+	};
+	setTimeout(look, 12000);
+}
+
 /** Un collecteur a de la place : les gouttes qui attendaient sur les fleurs filent s'y ranger. */
 function fillFromDew(it) {
 	const before = groundOf(state), moved = drainGround(state, state.place);
@@ -1577,7 +1601,7 @@ function renderOptions() {
 		<label class="switch"><input type="checkbox" id="opt-music" ${sound.musicSettings.on ? 'checked' : ''}><i></i><span>Musique zen, jamais la même</span></label>
 		${sound.musicSettings.on ? `<input type="range" id="opt-music-vol" class="volume" min="0" max="1" step="0.05" value="${sound.musicSettings.vol}" aria-label="Volume de la musique">` : ''}
 		<h3>Effet miniature</h3>
-		<label class="switch"><input type="checkbox" id="opt-fx" ${state.fx !== false ? 'checked' : ''}><i></i><span>Haut et bas de l'écran un peu flous, bords adoucis : le jardin comme une maquette</span></label>
+		<label class="switch"><input type="checkbox" id="opt-fx" ${fxOn() ? 'checked' : ''}><i></i><span>Haut et bas de l'écran un peu flous, bords adoucis : le jardin comme une maquette</span></label>
 		<h3>Économie d'énergie</h3>
 		<label class="switch"><input type="checkbox" id="opt-eco" ${state.eco30 ? 'checked' : ''}><i></i><span>30 images par seconde : le téléphone chauffe moins, la batterie dure plus</span></label>
 		<h3>Ma partie</h3>
@@ -1668,7 +1692,7 @@ $('#options').addEventListener('click', async e => {
 $('#options').addEventListener('change', e => {
 	if (e.target.id === 'opt-fx') {
 		state.fx = e.target.checked;
-		$('#app').classList.toggle('no-fx', !state.fx);
+		$('#app').classList.toggle('no-fx', !fxOn());
 		persist(true);
 		return;
 	}
@@ -1792,7 +1816,8 @@ rollDay(state);
 checkUnlocks();
 if (here().pendingCell === cellsOpen(here()) && here().km >= CELL_KM[cellsOpen(here())]) whenFree(() => chooseBiome(here().pendingCell));
 garden.maxFps = state.eco30 ? 30 : 0;
-$('#app').classList.toggle('no-fx', state.fx === false);
+$('#app').classList.toggle('no-fx', !fxOn());
+probeFx();
 garden.onActive = () => { $('#hud-day').textContent = cellName(here(), garden.active); };
 announceSpecies(firstRun);
 updateSpeciesDot();

@@ -30,7 +30,7 @@ Chaque milieu a son sol, ses décors et ses espèces (142 en tout, dans `js/spec
 est son cœur : la forêt y a ses vieux arbres, le marais ses trois mares reliées par une rivière. Les parcelles suivantes
 prennent les coins du milieu (roselière, hêtraie…). D'un milieu à l'autre, le sol et le relief se fondent sans couture.
 Compléter l'herbier d'un milieu (toutes ses espèces) rapporte 500 nectar.
-Le terrain s'agrandit clairière par clairière : la suivante s'ouvre à 1 ; 2,5 ; 4,5 ; 7 ; 10… km au total (24 au plus).
+Le terrain s'agrandit clairière par clairière, bordé d'une lisière de brume à l'aquarelle (pas de clôture) : la suivante s'ouvre à 1 ; 2,5 ; 4,5 ; 7 ; 10… km au total (24 au plus).
 Aménager ne propose que ce qui convient au milieu de la parcelle regardée, et un objet ne se pose que là où il a sa place.
 Les anciennes parties (un jardin par lieu) sont converties : les lieux deviennent des parcelles mises bout à bout.
 

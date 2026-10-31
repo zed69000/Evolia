@@ -22,7 +22,9 @@ export function cellName(place, ci) {
 	const b = biomeOf(place, ci);
 	return zoneName(b, rankOf(place, ci), PLACE_BY_ID[b].name);
 }
-const FENCE_STEP = 34;
+// La lisière de brume : ses couleurs (blancs de papier, gris bleutés), et jusqu'où elle s'épaissit.
+const FOG_COLS = ['#FFFFFF', '#FFFFFF', '#F3F5F3', '#E6EBED', '#D8E0E4'];
+const FOG_FAR = 650;
 const STAGES = 30;
 const SWAY = { herbe: 0.09, fleur: 0.07, buisson: 0.02, arbre: 0.012 };
 const MIN_Y = { herbe: 60, fleur: 100, buisson: 100, arbre: 220 };
@@ -560,10 +562,19 @@ export class Garden {
 			m.fillStyle = 'rgba(232,226,204,0.72)';
 			m.fillRect(0, 0, cw, ch);
 		} else {
-			// Un voile léger, puis des bancs de brume peints qui dérivent lentement, accrochés au monde.
-			m.fillStyle = 'rgba(238,234,218,0.3)';
-			m.fillRect(0, 0, cw, ch);
-			this.fogLayer(m, cw, ch, S, 0.85, 1, 0);
+			// Le brouillard de la lisière (voile qui s'épaissit, nuages du bord), accroché au monde ; au-delà, dense.
+			// Puis des bancs de brume qui dérivent lentement par-dessus.
+			const rim = this.fogRim();
+			m.setTransform(S, 0, 0, S, cw / 2 - this.cam.cx * S, ch / 2 - this.cam.cy * S);
+			m.fillStyle = 'rgba(244,245,242,0.92)';
+			m.beginPath();
+			m.rect(-1e5, -1e5, 2e5, 2e5);
+			m.rect(rim.x0, rim.y0, rim.x1 - rim.x0, rim.y1 - rim.y0);
+			m.fill('evenodd');
+			m.drawImage(rim.haze, rim.x0, rim.y0, rim.x1 - rim.x0, rim.y1 - rim.y0);
+			m.drawImage(rim.cloud, rim.x0, rim.y0, rim.x1 - rim.x0, rim.y1 - rim.y0);
+			m.setTransform(1, 0, 0, 1, 0, 0);
+			this.fogLayer(m, cw, ch, S, 0.6, 1, 0);
 		}
 		m.setTransform(S, 0, 0, S, cw / 2 - this.cam.cx * S, ch / 2 - this.cam.cy * S);
 		m.globalCompositeOperation = 'destination-out';
@@ -602,7 +613,7 @@ export class Garden {
 		const open = this.openCells();
 		const key = open.join(',');
 		if (this.maskCache?.key === key) return this.maskCache;
-		const k = 1 / 8, pad = 160;
+		const k = 1 / 8, pad = FOG_FAR + 200;
 		let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
 		for (const i of open) for (const [x, y] of this.blob(i).pts) { x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x); y1 = Math.max(y1, y); }
 		x0 -= pad; y0 -= pad; x1 += pad; y1 += pad;
@@ -629,15 +640,79 @@ export class Garden {
 			if (j < W * (H - 1)) push(j + W);
 		}
 		for (let j = 0; j < W * H; j++) { px[j * 4] = px[j * 4 + 1] = px[j * 4 + 2] = 0; px[j * 4 + 3] = outside[j] ? 0 : 255; }
+		const inside = Uint8Array.from(outside, o => 1 - o);
 		g.setTransform(1, 0, 0, 1, 0, 0);
 		g.putImageData(img, 0, 0);
 		// Bord fondu : la forme est adoucie avant d'être agrandie.
 		const soft = document.createElement('canvas');
 		soft.width = W; soft.height = H;
 		const sg = soft.getContext('2d');
-		sg.filter = 'blur(3px)';
+		sg.filter = 'blur(5px)';
 		sg.drawImage(c, 0, 0);
-		return (this.maskCache = { key, canvas: soft, x0, y0, k });
+		return (this.maskCache = { key, canvas: soft, x0, y0, x1, y1, k, W, H, inside });
+	}
+
+	/**
+	 * La lisière du jardin : un brouillard peint à l'aquarelle, au lieu d'une clôture. Léger au bord des clairières
+	 * (on devine la campagne dessous), de plus en plus dense en s'éloignant ; sur le pourtour, de gros nuages aux bords
+	 * marqués, comme des lavis posés sur le papier. Peint une fois par forme du jardin.
+	 */
+	fogRim() {
+		const mk = this.gardenMask();
+		if (this.rimCache?.key === mk.key) return this.rimCache;
+		const { W, H, inside, k } = mk;
+		// Distance au jardin (en cases de la forme basse résolution), en deux passes.
+		const D = new Float32Array(W * H);
+		for (let j = 0; j < W * H; j++) D[j] = inside[j] ? 0 : 1e9;
+		const S2 = Math.SQRT2;
+		for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+			const j = y * W + x;
+			if (x > 0) D[j] = Math.min(D[j], D[j - 1] + 1);
+			if (y > 0) D[j] = Math.min(D[j], D[j - W] + 1, x > 0 ? D[j - W - 1] + S2 : 1e9, x < W - 1 ? D[j - W + 1] + S2 : 1e9);
+		}
+		for (let y = H - 1; y >= 0; y--) for (let x = W - 1; x >= 0; x--) {
+			const j = y * W + x;
+			if (x < W - 1) D[j] = Math.min(D[j], D[j + 1] + 1);
+			if (y < H - 1) D[j] = Math.min(D[j], D[j + W] + 1, x < W - 1 ? D[j + W + 1] + S2 : 1e9, x > 0 ? D[j + W - 1] + S2 : 1e9);
+		}
+		// 1. Le voile, d'après la distance.
+		const haze = document.createElement('canvas');
+		haze.width = W; haze.height = H;
+		const hg = haze.getContext('2d'), img = hg.createImageData(W, H);
+		for (let j = 0; j < W * H; j++) {
+			const t = Math.min(1, D[j] / k / FOG_FAR), a = inside[j] ? 0 : 0.26 + 0.68 * t * t * (3 - 2 * t);
+			img.data[j * 4] = 244; img.data[j * 4 + 1] = 245; img.data[j * 4 + 2] = 242; img.data[j * 4 + 3] = a * 255;
+		}
+		hg.putImageData(img, 0, 0);
+		// 2. Les nuages, plus finement : en bordure du jardin, poussés vers l'extérieur ; plus loin, de grands lavis épars.
+		const kb = 1 / 4, x0 = mk.x0, y0 = mk.y0;
+		const cloud = document.createElement('canvas');
+		cloud.width = Math.ceil((mk.x1 - x0) * kb); cloud.height = Math.ceil((mk.y1 - y0) * kb);
+		const g = cloud.getContext('2d'), r = rng(9090);
+		g.setTransform(kb, 0, 0, kb, -x0 * kb, -y0 * kb);
+		for (const f of this.edges().fence) {
+			const run = f.run;
+			for (let i = 1; i < run.length; i++) {
+				const [ax, ay] = run[i - 1], [bx, by] = run[i], L = Math.hypot(bx - ax, by - ay) || 1;
+				let nx = -(by - ay) / L, ny = (bx - ax) / L;
+				for (let d = 0; d < L; d += 46) {
+					const px = ax + ((bx - ax) * d) / L, py = ay + ((by - ay) * d) / L;
+					if (this.inOpen(px + nx * 40, py + ny * 40)) { nx = -nx; ny = -ny; }
+					for (let n = 0; n < 2; n++) {
+						const out = r.range(30, 130), rx = r.range(45, 115);
+						wash(g, px + nx * out + r.gauss() * 14, py + ny * out + r.gauss() * 10, rx, rx * r.range(0.55, 0.8), r.pick(FOG_COLS), r, { layers: 5, alpha: 0.16, edge: 0.22 });
+					}
+				}
+			}
+		}
+		for (let i = 0; i < 160; i++) {
+			const x = x0 + r() * (mk.x1 - x0), y = y0 + r() * (mk.y1 - y0);
+			const j = Math.floor((y - y0) * k) * W + Math.floor((x - x0) * k);
+			if (!(D[j] / k > 180)) continue;
+			const rx = r.range(140, 280);
+			wash(g, x, y, rx, rx * r.range(0.5, 0.75), r.pick(FOG_COLS), r, { layers: 4, alpha: 0.08, edge: 0.3 });
+		}
+		return (this.rimCache = { key: mk.key, haze, cloud, x0, y0, x1: mk.x1, y1: mk.y1, k, kb });
 	}
 
 	/** Calque des ombres portées, à la taille de l'écran. */
@@ -2671,9 +2746,6 @@ export class Garden {
 		if (!glyph) this.drawStreams(ctx, v, gx0, gx1, gy0, gy1);
 		this.drawMist(ctx, world, cw, ch);
 		this.trimTiles();
-		this.drawNextOutline(ctx, v);
-		// La clôture suit le bord des clairières ; elle recule à chaque nouvelle parcelle.
-		this.drawFence(ctx, v);
 
 		// Ombres de nuages, plus denses par temps couvert.
 		const cloudy = { clouds: 1.5, overcast: 2.2, rain: 2, drizzle: 2, storm: 2.6, snow: 1.6, fog: 0.4 }[wk] ?? 1;
@@ -3027,86 +3099,19 @@ export class Garden {
 		return runs;
 	}
 
-	/**
-	 * Tracés de la clôture et des pointillés, calculés une fois (ils ne changent qu'à l'ouverture d'une parcelle) :
-	 * morceaux de bord, piquets et points, chacun avec sa boîte pour ne dessiner que ce qui est à l'écran.
-	 */
+	/** Le pourtour des clairières ouvertes, calculé une fois par forme du jardin : la brume de la lisière s'y pose. */
 	edges() {
 		const n = cellsOpen(this.place), key = `${n}`;
 		if (this.edgeCache?.key === key) return this.edgeCache;
 		const open = this.openCells();
-		const along = (run, step) => {
-			const out = [];
-			let acc = 0;
-			for (let k = 1; k < run.length; k++) {
-				const [x0, y0] = run[k - 1], [x1, y1] = run[k];
-				const len = Math.hypot(x1 - x0, y1 - y0);
-				for (let d = (step - acc) % step; d < len; d += step) out.push([x0 + ((x1 - x0) * d) / len, y0 + ((y1 - y0) * d) / len]);
-				acc = (acc + len) % step;
-			}
-			return out;
-		};
 		const box = pts => {
 			const xs = pts.map(p => p[0]), ys = pts.map(p => p[1]);
 			return { x0: Math.min(...xs), x1: Math.max(...xs), y0: Math.min(...ys), y1: Math.max(...ys) };
 		};
 		const fence = [];
-		for (const i of open) for (const run of this.outerRuns(i, open.filter(j => j !== i))) fence.push({ run, posts: along(run, FENCE_STEP), ...box(run) });
-		const dots = [];
-		for (const i of this.lockedCells()) for (const run of this.outerRuns(i, open)) dots.push(...along(run, 14));
-		this.edgeCache = { key, fence, dots };
+		for (const i of open) for (const run of this.outerRuns(i, open.filter(j => j !== i))) fence.push({ run, ...box(run) });
+		this.edgeCache = { key, fence };
 		return this.edgeCache;
-	}
-
-	/** Pointillés autour de la prochaine clairière, là où elle sort des clairières ouvertes. */
-	drawNextOutline(ctx, v) {
-		ctx.fillStyle = 'rgba(140,112,70,0.7)';
-		const r = this.glyph ? 5 : 2.2;
-		ctx.beginPath();
-		for (const [x, y] of this.edges().dots) {
-			if (x < v.x0 - 10 || x > v.x0 + v.w + 10 || y < v.y0 - 10 || y > v.y0 + v.h + 10) continue;
-			ctx.moveTo(x + r, y);
-			ctx.arc(x, y, r, 0, Math.PI * 2);
-		}
-		ctx.fill();
-	}
-
-	/** Clôture en bois sur le pourtour des clairières ouvertes : deux lisses et des piquets. */
-	drawFence(ctx, v) {
-		const glyph = this.glyph;
-		ctx.lineCap = 'round';
-		ctx.lineJoin = 'round';
-		const seen = this.edges().fence.filter(f => f.x1 > v.x0 - 30 && f.x0 < v.x0 + v.w + 30 && f.y1 > v.y0 - 40 && f.y0 < v.y0 + v.h + 30);
-		const line = (run, dx, dy) => {
-			ctx.moveTo(run[0][0] + dx, run[0][1] + dy);
-			for (let k = 1; k < run.length; k++) ctx.lineTo(run[k][0] + dx, run[k][1] + dy);
-		};
-		ctx.strokeStyle = 'rgba(40,50,25,0.18)';
-		ctx.lineWidth = glyph ? 10 : 5;
-		ctx.beginPath();
-		for (const f of seen) line(f.run, 3, 4);
-		ctx.stroke();
-		ctx.strokeStyle = '#9A7448';
-		ctx.lineWidth = glyph ? 7 : 3;
-		ctx.beginPath();
-		for (const f of seen) { line(f.run, 0, 0); if (!glyph) line(f.run, 0, -8); }
-		ctx.stroke();
-		if (glyph) return;
-		// Piquets : ombre, poteau, tête, chacun en un seul tracé.
-		const posts = [];
-		for (const f of seen) for (const [x, y] of f.posts) if (x > v.x0 - 10 && x < v.x0 + v.w + 10 && y > v.y0 - 30 && y < v.y0 + v.h + 10) posts.push([x, y]);
-		ctx.fillStyle = 'rgba(40,50,25,0.2)';
-		ctx.beginPath();
-		for (const [x, y] of posts) { ctx.moveTo(x + 7, y + 3); ctx.ellipse(x + 3, y + 3, 4, 2, 0, 0, Math.PI * 2); }
-		ctx.fill();
-		ctx.fillStyle = '#8A6238';
-		ctx.beginPath();
-		for (const [x, y] of posts) ctx.roundRect(x - 3.2, y - 18, 6.4, 20, 2);
-		ctx.fill();
-		ctx.fillStyle = '#B48A58';
-		ctx.beginPath();
-		for (const [x, y] of posts) { ctx.moveTo(x + 3.2, y - 18); ctx.ellipse(x, y - 18, 3.2, 1.6, 0, 0, Math.PI * 2); }
-		ctx.fill();
 	}
 
 	/** Étiquettes : en vue d'ensemble, chaque parcelle ; toujours, ce qu'il faut pour ouvrir la suivante. */
