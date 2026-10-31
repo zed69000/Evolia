@@ -3,6 +3,10 @@
 Chaque version, la plus récente en haut. Le site (evolia.sebastienalzamora.workers.dev) est toujours à jour ;
 le Play Store (tests internes) reçoit les versions indiquées « Play ».
 
+## 0.6.37 — 31 octobre 2026
+- **On construit pour de vrai.** Un objet posé ou amélioré se monte sous nos yeux. La poussière se soulève, la silhouette de l'objet apparaît en transparence, puis il monte du sol au rythme de trois coups de marteau. Un petit rebond, des étincelles et des feuilles, et une cloche terminent le chantier.
+- **Des gouttes de nectar bien séparées.** Elles ne se posent plus les unes sur les autres, et chacune affiche ce qu'elle rapporte (« +52 »).
+
 ## 0.6.36 — 31 octobre 2026
 - **Le guide commence par la bourse de nectar**, dès l'arrivée, puis présente les espèces.
 - **Une bulle quand le collecteur déborde :** elle propose de l'améliorer (400, puis 1 000 nectar) ou d'en poser un deuxième.

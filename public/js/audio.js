@@ -466,6 +466,14 @@ export class Soundscape {
 		this.note(out, t, f * 2.76, f * 2.76, 0.12, 0.004);
 	}
 
+	/** Un coup de marteau sur du bois : un « toc » sec et court, un peu différent à chaque fois. */
+	knock(k = 0) {
+		if (!this.ctx || this.ctx.state !== 'running') return;
+		const out = this.voice((Math.random() - 0.5) * 0.5, 1), t = this.ctx.currentTime + 0.01, f = 420 + k * 40 + Math.random() * 30;
+		this.note(out, t, f, f * 0.6, 0.09, 0.05, 'triangle');
+		this.note(out, t, f * 3.1, f * 2.2, 0.035, 0.008, 'square');
+	}
+
 	chime(size = 1) {
 		if (!this.ctx || this.ctx.state !== 'running') return;
 		const out = this.voice(0, 1), t = this.ctx.currentTime + 0.02;

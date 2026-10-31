@@ -21,6 +21,9 @@ const FENCE_STEP = 34;
 const STAGES = 30;
 const SWAY = { herbe: 0.09, fleur: 0.07, buisson: 0.02, arbre: 0.012 };
 const MIN_Y = { herbe: 60, fleur: 100, buisson: 100, arbre: 220 };
+// Construire un objet : la durée, et les instants des coups de marteau.
+const BUILD_TIME = 1.25, BUILD_TAPS = [0.2, 0.5, 0.8];
+const smoothstep = k => k * k * (3 - 2 * k);
 // Les vieux arbres déjà là en arrivant (cœur du lieu, sur les bords pour laisser la place au milieu).
 const OLD_TREES = {
 	foret: [[55, 300], [365, 330], [40, 600], [385, 660], [60, 930], [360, 1000], [160, 1110], [250, 250]],
@@ -106,6 +109,7 @@ export class Garden {
 		this.tileJobs = new Map();
 		this.insects = [];
 		this.particles = [];
+		this.builds = []; // chantiers en cours : un objet qu'on vient de poser se monte sous nos yeux
 		this.drops = [];
 		this.nectarDrops = []; // gouttes de nectar qui volent d'une fleur jusqu'au compteur
 		this.pdata = {};
@@ -120,6 +124,7 @@ export class Garden {
 		this.t = 0;
 		this.flash = 0;
 		this.popAt = {};
+		this.buildAt = {};
 		this.nextPopulate = 0;
 		this.onTap = null;
 		this.pointers = new Map();
@@ -1021,7 +1026,7 @@ export class Garden {
 		const it = { id: uid(), kind, x: Math.round(x), y: Math.round(y), rot, at: Date.now(), ...(kind === 'potager' ? { km0: this.state.totals.distance / 1000 } : {}) };
 		this.items.push(it);
 		this.clearUnder(it);
-		this.popItem(it);
+		this.popItem(it, true);
 		return it;
 	}
 
@@ -1044,10 +1049,87 @@ export class Garden {
 		}
 	}
 
-	popItem(it) {
+	/**
+	 * Un objet apparaît. `build` : on le construit sous nos yeux (posé ou amélioré) ; un nuage de poussière,
+	 * l'objet qui monte du sol au rythme de coups de marteau, un petit rebond, puis des étincelles et des feuilles.
+	 * Sinon (déplacé, tourné), un simple rebond.
+	 */
+	popItem(it, build = false) {
 		this.popAt[`item:${it.id}`] = this.t;
-		this.burst(it.x, it.y - 20, 22, '#F4C23E');
 		this.nextPopulate = 0;
+		if (!build) { this.burst(it.x, it.y - 20, 22, '#F4C23E'); return; }
+		this.buildAt[it.id] = this.t;
+		const box = itemBox(it.kind, it.level);
+		this.builds.push({ it, t0: this.t, w: Math.min(box.w, 260), h: box.h, taps: 0, done: false });
+		this.dust(it.x, it.y, Math.min(box.w, 260) * 0.45, 14);
+	}
+
+	/** Poussière soulevée au sol, en petits nuages qui gonflent et s'effacent. */
+	dust(x, y, rad, n) {
+		for (let i = 0; i < n; i++) {
+			const a = Math.random() * Math.PI * 2, d = rad * (0.5 + Math.random() * 0.6);
+			this.particles.push({
+				puff: true, x: x + Math.cos(a) * d, y: y + Math.sin(a) * d * 0.3,
+				vx: Math.cos(a) * (12 + Math.random() * 18), vy: -4 - Math.random() * 8,
+				life: 1, decay: 0.9 + Math.random() * 0.5, size: 4 + Math.random() * 5,
+				color: pick(['#D8C8A4', '#E4D6B6', '#C8B48C']),
+			});
+		}
+	}
+
+	/** Le chantier avance : trois coups de marteau (un peu de poussière à chaque fois), puis la fête à la fin. */
+	updateBuilds() {
+		for (const b of this.builds) {
+			const age = this.t - b.t0;
+			while (b.taps < BUILD_TAPS.length && age >= BUILD_TAPS[b.taps]) {
+				const side = (Math.random() - 0.5) * b.w * 0.7;
+				this.dust(b.it.x + side, b.it.y, 10, 5);
+				this.onBuildTap?.(b.taps);
+				b.taps++;
+			}
+			if (!b.done && age >= BUILD_TIME) {
+				b.done = true;
+				const cx = b.it.x, cy = b.it.y - Math.min(b.h, 200) * 0.5;
+				this.burst(cx, cy, 26, '#F4C23E');
+				for (let i = 0; i < 14; i++) {
+					this.particles.push({
+						x: cx + (Math.random() - 0.5) * b.w * 0.5, y: cy + (Math.random() - 0.5) * 30,
+						vx: (Math.random() - 0.5) * 70, vy: -30 - Math.random() * 50,
+						life: 1, decay: 0.45 + Math.random() * 0.3, size: 2 + Math.random() * 1.6,
+						color: pick(['#7FAA48', '#A3BD57', '#F08A3C', '#FDF7E7']),
+					});
+				}
+				this.onBuildDone?.(b.it);
+			}
+		}
+		this.builds = this.builds.filter(b => this.t - b.t0 < BUILD_TIME + 0.6);
+	}
+
+	/**
+	 * Un objet en construction : sa silhouette en transparence, et la partie déjà montée, du sol vers le haut,
+	 * avec un liseré doré là où l'on travaille ; à la fin, un petit rebond.
+	 */
+	drawBuilding(ctx, sp, box, age) {
+		const rise = smoothstep(Math.min(1, Math.max(0, (age - 0.12) / (BUILD_TIME - 0.3))));
+		const after = age - (BUILD_TIME - 0.18), bounce = after > 0 ? Math.sin(Math.min(1, after / 0.45) * Math.PI) * 0.07 : 0;
+		ctx.globalAlpha = 0.2 * (1 - rise);
+		ctx.drawImage(sp.canvas, -box.ax, -box.ay, box.w, box.h);
+		ctx.globalAlpha = 1;
+		const cut = -box.ay + box.h * (1 - rise);
+		ctx.save();
+		ctx.beginPath();
+		ctx.rect(-box.ax - 20, cut, box.w + 40, box.h * rise + 40);
+		ctx.clip();
+		ctx.scale(1 - bounce * 0.5, 1 + bounce);
+		ctx.drawImage(sp.canvas, -box.ax, -box.ay, box.w, box.h);
+		ctx.restore();
+		if (rise > 0.02 && rise < 0.98) {
+			ctx.globalAlpha = 0.55 * Math.sin(rise * Math.PI);
+			ctx.strokeStyle = '#F4C23E';
+			ctx.lineWidth = 2.5;
+			ctx.beginPath(); ctx.moveTo(-box.ax * 0.8, cut); ctx.lineTo(box.w - box.ax * 1.2, cut); ctx.stroke();
+			ctx.globalAlpha = 1;
+		}
 	}
 
 	decorSprite(key) {
@@ -1105,12 +1187,16 @@ export class Garden {
 		this.dew ??= [];
 		while (this.dew.length > want) this.dew.pop();
 		if (this.dew.length >= want) return;
-		const flowers = [];
-		for (const P of Object.values(this.pdata)) for (const p of P.flowers) flowers.push(p);
-		for (let i = this.dew.length; i < want && flowers.length; i++) {
-			const p = pick(flowers);
-			const [x, y] = this.headOf(p);
-			this.dew.push({ x: x + (Math.random() - 0.5) * 6, y: y + 4, ph: Math.random() * 6.28, born: this.t });
+		// Une goutte par fleur, et jamais l'une sur l'autre : chacune se voit, avec ce qu'elle rapporte.
+		const gap = 42 * Math.max(1, 1.3 / this.cam.z);
+		const free = (x, y) => this.dew.every(d => Math.hypot(d.x - x, (d.y - y) * 1.8) > gap);
+		const heads = [];
+		for (const P of Object.values(this.pdata)) for (const p of P.flowers) heads.push(this.headOf(p));
+		while (this.dew.length < want) {
+			const room = heads.filter(([x, y]) => free(x, y + 4));
+			if (!room.length) break;
+			const [x, y] = pick(room);
+			this.dew.push({ x, y: y + 4, ph: Math.random() * 6.28, born: this.t });
 		}
 	}
 
@@ -1126,8 +1212,9 @@ export class Garden {
 	}
 
 	drawDew(ctx) {
-		// Assez grosses pour se voir et se toucher, quel que soit le zoom.
+		// Assez grosses pour se voir et se toucher, quel que soit le zoom ; sous chacune, ce qu'elle rapporte.
 		const z = Math.max(1, 1.3 / this.cam.z);
+		const share = Math.round((this.dewAmount?.() ?? 0) / Math.max(1, this.dew.length));
 		for (const d of this.dew) {
 			const a = Math.min(1, (this.t - d.born) * 2), bob = Math.sin(this.t * 2.4 + d.ph) * 1.5 * z;
 			const pulse = 0.75 + 0.25 * Math.sin(this.t * 3 + d.ph);
@@ -1149,6 +1236,16 @@ export class Garden {
 			ctx.stroke();
 			ctx.fillStyle = 'rgba(255,250,220,0.9)';
 			ctx.beginPath(); ctx.arc(-1.3, -3.6, 1.2, 0, Math.PI * 2); ctx.fill();
+			if (share >= 1) {
+				ctx.font = 'bold 6.5px Nunito, sans-serif';
+				ctx.textAlign = 'center';
+				ctx.lineJoin = 'round';
+				ctx.lineWidth = 2;
+				ctx.strokeStyle = 'rgba(110,60,10,0.85)';
+				ctx.strokeText(`+${share}`, 0, 8.5);
+				ctx.fillStyle = '#FFF4C8';
+				ctx.fillText(`+${share}`, 0, 8.5);
+			}
 			ctx.restore();
 		}
 		ctx.globalAlpha = 1;
@@ -1524,8 +1621,11 @@ export class Garden {
 		this.insects = this.insects.filter(i => !i.gone);
 		this.updateFarmer(dt);
 		this.updatePet(dt);
+		this.updateBuilds();
 		for (const p of this.particles) {
-			p.x += p.vx * dt; p.y += p.vy * dt; p.vy += 10 * dt; p.vx *= 0.98; p.life -= p.decay * dt;
+			p.x += p.vx * dt; p.y += p.vy * dt; p.life -= p.decay * dt;
+			// La poussière gonfle et ralentit ; le reste retombe.
+			if (p.puff) { p.size += 16 * dt; p.vx *= 0.94; p.vy *= 0.94; } else { p.vy += 10 * dt; p.vx *= 0.98; }
 		}
 		this.particles = this.particles.filter(p => p.life > 0);
 		for (const d of this.nectarDrops) d.t += dt;
@@ -2521,6 +2621,12 @@ export class Garden {
 					ctx.fill();
 					continue;
 				}
+				const built = this.t - (this.buildAt[it.id] ?? -9);
+				if (built < BUILD_TIME + 0.45) {
+					ctx.translate(e.x, e.y);
+					this.drawBuilding(ctx, this.itemSprite(it.kind, it.rot, it), box, built);
+					continue;
+				}
 				const age = this.t - (this.popAt[`item:${it.id}`] ?? -9);
 				const k = age < 0.6 ? 0.7 + 0.3 * Math.min(1, age / 0.35) + 0.08 * Math.sin(Math.min(1, age / 0.6) * Math.PI) : 1;
 				ctx.translate(e.x, e.y);
@@ -2588,7 +2694,7 @@ export class Garden {
 		world();
 		if (!glyph) for (const b of this.insects) if (!onGround(b) && !b.p.swim) this.drawInsect(ctx, b);
 		for (const p of this.particles) {
-			ctx.globalAlpha = Math.max(0, p.life);
+			ctx.globalAlpha = Math.max(0, p.life) * (p.puff ? 0.45 : 1);
 			ctx.fillStyle = p.color;
 			ctx.beginPath();
 			ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);

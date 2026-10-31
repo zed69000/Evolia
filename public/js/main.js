@@ -79,6 +79,9 @@ const places = new PlacesMap($('#map'), state, travel);
 // La récolte en attente : sans collecteur, elle perle sur les fleurs ; avec, elle remplit les jarres.
 // Avec un collecteur, quelques gouttes restent visibles sur les fleurs : on voit que la récolte attend, et en toucher une vide tout.
 garden.dewAmount = () => groundOf(state);
+// Le chantier d'un objet posé : un « toc » à chaque coup de marteau, une petite cloche à la fin.
+garden.onBuildTap = k => sound.knock(k);
+garden.onBuildDone = () => sound.chime(2);
 garden.jarAmount = () => jarOf(state);
 garden.nectarFill = () => jarOf(state) / Math.max(1, jarCap(state));
 
@@ -1166,7 +1169,7 @@ function levelUp(it) {
 	state.nectar -= nx.cost;
 	it.level = nx.level;
 	it.spent = (it.spent ?? 0) + nx.cost;
-	garden.popItem(it);
+	garden.popItem(it, true);
 	garden.nextPopulate = 0;
 	const own = ITEMS[it.kind].levels;
 	toast(own ? `Ta cabane devient un${own.name[it.level] === 'chalet' ? '' : 'e'} ${own.name[it.level]} !` : `${ITEMS[it.kind].name} : niveau ${it.level}, ${LEVEL_NAME[it.level]}`, '#5F933E');
