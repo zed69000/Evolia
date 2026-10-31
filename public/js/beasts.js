@@ -470,90 +470,207 @@ function pet(ctx, s, k) {
 	quadruped(ctx, s, k);
 }
 
-// ─── Le paysan du potager ─────────────────────────────────────────
+// ─── Le jardinier ou la jardinière ─────────────────────────────────
 
-const SKIN = '#E8B898';
+const SKIN = '#E8B898', SKIN_SH = '#C9967A';
+const LEG1 = 6.9, LEG2 = 6.7, STRIDE = 8;
 
-/** Paysan : marche (avec ou sans brouette), ratisse, arrose. Origine aux pieds. */
-function farmer(ctx, s) {
-	const t = s.t, mode = s.mode;
-	const walk = mode === 'run' || mode === 'barrow';
-	const ph = (s.ph ?? 0) * TAU;
-	const sw = walk ? Math.sin(ph) : 0;
-	const bob = walk ? Math.abs(Math.cos(ph)) * 0.8 : 0;
-	const rake = mode === 'rake' ? Math.sin(t * 2.4) : 0;
-	const water = mode === 'water';
-	const hipY = -15 - bob, shY = -27 - bob;
-	const lean = mode === 'rake' ? 0.12 : mode === 'barrow' ? 0.14 : 0.03;
-	// La fermière : chemise rose, longue natte, une fleur au chapeau, pas de barbe.
-	const fem = !!s.fem, shirt = fem ? '#D0607A' : '#C8643E', sleeve = fem ? '#B84E68' : '#B85A3A';
-	const legs = (sign, color) => {
-		const a = sw * 0.45 * sign;
-		const kneeA = a + (walk ? Math.max(0, -Math.sin(ph + (sign > 0 ? 0 : Math.PI))) * 0.5 : 0) - 0.05;
-		limb(ctx, 0, hipY, a, 7.6, kneeA - 0.15, 7.4, 3.4, 3, color);
-		const [dx1, dy1] = dir(a), [dx2, dy2] = dir(kneeA - 0.15);
-		const fx = dx1 * 7.6 + dx2 * 7.4, fy = hipY + dy1 * 7.6 + dy2 * 7.4;
-		ell(ctx, fx + 1.2, fy + 0.4, 2.6, 1.4, 0, '#C88A3A');
-	};
-	legs(-1, '#3E5E78');
-	// Bras du fond.
-	const armBack = walk && mode !== 'barrow' ? -sw * 0.5 : mode === 'barrow' ? 0.9 : mode === 'rake' ? 0.6 + rake * 0.35 : 0.2;
-	limb(ctx, -0.6, shY + 1.5, armBack, 5.6, armBack + 0.4, 5.2, 2.6, 2.2, sleeve);
-	legs(1, '#4E6E88');
+/** Bras en deux segments : manche jusqu'au coude (retroussée), avant-bras et main nus. Renvoie la main. */
+function arm(ctx, x, y, a1, a2, sleeve) {
+	const [dx1, dy1] = dir(a1), [dx2, dy2] = dir(a2);
+	const ex = x + dx1 * 4.6, ey = y + dy1 * 4.6, hx = ex + dx2 * 4.2, hy = ey + dy2 * 4.2;
+	ctx.lineCap = 'round';
+	ctx.strokeStyle = SKIN_SH; ctx.lineWidth = 1.7;
+	ctx.beginPath(); ctx.moveTo(ex, ey); ctx.lineTo(hx, hy); ctx.stroke();
+	ctx.strokeStyle = sleeve; ctx.lineWidth = 2.5;
+	ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + dx1 * 4.9, y + dy1 * 4.9); ctx.stroke();
+	ell(ctx, hx + dx2 * 0.5, hy + dy2 * 0.5, 1.05, 1.15, 0, SKIN);
+	return [hx + dx2 * 0.6, hy + dy2 * 0.6];
+}
+
+/** Jambe : pantalon, puis une botte qui pointe vers l'avant (talon relevé si `tip`). */
+function leg(ctx, hx, hy, fx, fy, color, tip = 0) {
+	ikLeg(ctx, hx, hy, fx, fy - 0.9, LEG1, LEG2, -1, 3.1, 2.5, color);
 	ctx.save();
-	ctx.translate(0, hipY);
-	ctx.rotate(lean);
-	// Salopette, chemise, tête et chapeau de paille.
-	ell(ctx, 0.2, -6.2, 4.2, 7.2, 0, shirt);
-	ctx.fillStyle = '#5E8AA8';
-	ctx.beginPath(); ctx.roundRect(-3.8, -7.2, 7.8, 8.6, 2); ctx.fill();
-	ctx.fillRect(-2.6, -11, 1.2, 4); ctx.fillRect(1.6, -11, 1.2, 4);
-	if (fem) {
-		// La natte, derrière la tête, qui se balance un peu en marchant.
-		ctx.strokeStyle = '#7A4A2A'; ctx.lineWidth = 2.2; ctx.lineCap = 'round';
-		ctx.beginPath(); ctx.moveTo(-1.8, -15); ctx.quadraticCurveTo(-4.2 - sw * 0.8, -11, -3.6 - sw * 1.2, -7); ctx.stroke();
-		ell(ctx, -3.6 - sw * 1.2, -6.6, 1, 0.8, 0, '#E8B860');
-	}
-	ell(ctx, 0.9, -15.4, 3.4, 3.6, 0, SKIN);
-	ell(ctx, -1.6, -15.6, fem ? 2 : 1.6, fem ? 2.8 : 2.4, 0, '#7A4A2A');
-	if (!fem) ell(ctx, 1.8, -12.6, 2.2, 1.3, 0.2, '#8A5A34');
-	ell(ctx, 2.6, -16, 0.45, 0.5, 0, '#1A1210');
-	ell(ctx, 4.2, -15, 0.8, 0.7, 0, '#E0A080');
-	ell(ctx, 3.2, -14.4, 0.7, 0.4, 0, '#C87A60');
-	ell(ctx, 0.6, -18.2, 7.2, 1.7, 0, '#E8B860');
-	ell(ctx, 0.4, -19.6, 3.6, 2.4, 0, '#E8B860');
-	ell(ctx, 0.4, -18.8, 3.6, 0.7, 0, shirt);
-	if (fem) { ell(ctx, 3.4, -19, 1.2, 1.2, 0, '#F2F0E8'); ell(ctx, 3.4, -19, 0.5, 0.5, 0, '#F2C230'); }
+	ctx.translate(fx, fy);
+	ctx.rotate(-tip);
+	ctx.fillStyle = '#5A3A22';
+	ctx.beginPath(); ctx.roundRect(-1.4, -2.2, 3.1, 2.2, 0.8); ctx.fill();
+	ell(ctx, 1.4, -0.75, 1.9, 0.85, 0, '#5A3A22');
+	ctx.fillStyle = '#2E1E14'; ctx.fillRect(-1.5, -0.35, 4.9, 0.55);
 	ctx.restore();
-	// Bras proche et outil.
-	const sx = Math.sin(lean) * -12 + 0.4, sy = shY + 2;
+}
+
+/**
+ * Le jardinier, de profil (tourné vers +x, pieds en y = 0) : marche (seul, avec la brouette ou avec son animal),
+ * ratisse, arrose, se repose debout, s'assoit sur un banc, cueille des fruits dans un arbre, contemple le jardin.
+ */
+function farmer(ctx, s) {
+	const t = s.t, mode = s.mode, fem = !!s.fem;
+	const C = fem
+		? { shirt: '#D0607A', sh: '#B04C64', legs: '#4E6A86', legsFar: '#3E566E', hair: '#7A4A2A' }
+		: { shirt: '#C8643E', sh: '#A84E30', legs: '#5E8AA8', legsFar: '#48708C', hair: '#6A4428' };
+	const walk = mode === 'run' || mode === 'barrow' || mode === 'stroll';
+	const ph = s.ph ?? 0;
+	const breath = Math.sin(t * 1.7) * 0.18;
+	let hipX = 0, hipY = -14.15 + breath * 0.3, lean = 0.03, head = 0;
+	let feet = [[-1.1, 0, 0], [1.3, 0, 0]];
+	if (walk) {
+		const f0 = gaitFoot(ph, STRIDE, 2), f1 = gaitFoot(ph + 0.5, STRIDE, 2);
+		feet = [[f0[0], f0[1], f0[1] < -0.2 ? 0.25 : 0], [f1[0], f1[1], f1[1] < -0.2 ? 0.25 : 0]];
+		hipY = -14 + Math.cos(ph * TAU * 2) * 0.4;
+		lean = mode === 'barrow' ? 0.16 : 0.06;
+	} else if (mode === 'rake') lean = 0.18 + Math.sin(t * 2.4) * 0.05;
+	else if (mode === 'water') lean = 0.12;
+	else if (mode === 'sit') {
+		// Assis sur le banc : les jambes pendent et se balancent doucement.
+		hipX = -0.6; hipY = -13.6; lean = -0.06;
+		const k = Math.sin(t * 1.3) * 0.6;
+		feet = [[5.6 + k, -2.6, -0.2], [6.6 - k, -2.4, -0.2]];
+	} else if (mode === 'pick') {
+		// Sur la pointe des pieds pour attraper un fruit, puis on redescend.
+		const up = Math.max(0, Math.sin(t * 1.6));
+		hipY = -14.15 - up * 0.9; lean = -0.12; head = -0.35;
+		feet = [[-0.8, 0, up * 0.5], [1.2, 0, up * 0.5]];
+	} else if (mode === 'gaze') {
+		// On souffle un peu : poids sur une jambe, le regard au loin, une légère oscillation.
+		hipX = Math.sin(t * 0.6) * 0.3; lean = -0.04; head = -0.12 + Math.sin(t * 0.4) * 0.06;
+		feet = [[-1.6, 0, 0], [1.8, 0, 0]];
+	}
+	const swing = walk ? Math.sin(ph * TAU) : 0;
+	// La jambe et le bras du fond, plus sombres.
+	leg(ctx, hipX - 0.4, hipY, feet[0][0], feet[0][1], C.legsFar, feet[0][2]);
+	ctx.save();
+	ctx.translate(hipX, hipY);
+	ctx.rotate(lean);
+	const shX = -0.4, shY = -8.4;
+	const back = mode === 'gaze' ? [-0.5, -1.6] : mode === 'pick' ? [0.25, 1.2] : mode === 'sit' ? [0.4, 1.3]
+		: mode === 'barrow' ? [0.9, 1.1] : mode === 'rake' ? [0.7, 1.4] : mode === 'water' ? [0.2, 0.5] : walk ? [swing * 0.5, swing * 0.5 + 0.35] : [0.08, 0.2];
+	const bh = arm(ctx, shX + 0.6, shY + 0.6, back[0], back[1], C.sh);
+	// Un panier au bras : pendant la cueillette, et en rapportant les fruits.
+	if (mode === 'pick' || s.basket) basket(ctx, bh[0], bh[1], s.basket);
+	ctx.restore();
+	leg(ctx, hipX + 0.4, hipY, feet[1][0], feet[1][1], C.legs, feet[1][2]);
+
+	ctx.save();
+	ctx.translate(hipX, hipY);
+	ctx.rotate(lean);
+	// Le buste : une chemise qui suit le dos et la poitrine, ceinture ou salopette, puis la tête.
+	ctx.fillStyle = C.shirt;
+	ctx.beginPath();
+	ctx.moveTo(-2.8, 0.6);
+	ctx.bezierCurveTo(-3.5, -3.5, -3.6, -6.6, -2.4, -8.8);
+	ctx.quadraticCurveTo(-0.6, -9.9, 1.6, -9.2);
+	ctx.bezierCurveTo(3.2, -7.4, 3.3, -4.4, 2.9, -2);
+	ctx.lineTo(2.7, 0.6);
+	ctx.closePath();
+	ctx.fill();
+	if (fem) {
+		// Tablier clair noué dans le dos.
+		ctx.fillStyle = '#EFE6CE';
+		ctx.beginPath(); ctx.moveTo(0.6, -6.4); ctx.lineTo(3, -6.2); ctx.quadraticCurveTo(3.6, -1, 3.4, 4.6); ctx.lineTo(0.4, 4.4); ctx.closePath(); ctx.fill();
+		ctx.strokeStyle = '#D8CCB0'; ctx.lineWidth = 0.5;
+		ctx.beginPath(); ctx.moveTo(0.6, -2); ctx.lineTo(-2.9, -1.6); ctx.stroke();
+	} else {
+		// Salopette : le plastron, une bretelle, une poche.
+		ctx.fillStyle = C.legs;
+		ctx.beginPath(); ctx.moveTo(-2.6, 0.8); ctx.lineTo(-2.4, -2.2); ctx.lineTo(0.2, -2.4); ctx.lineTo(0.4, -6.4); ctx.lineTo(2.9, -6.2); ctx.quadraticCurveTo(3.2, -2, 2.8, 0.8); ctx.closePath(); ctx.fill();
+		ctx.strokeStyle = C.legs; ctx.lineWidth = 0.9;
+		ctx.beginPath(); ctx.moveTo(0.8, -6.3); ctx.quadraticCurveTo(-0.6, -8.6, -2.2, -8.2); ctx.stroke();
+		ctx.fillStyle = C.legsFar; ctx.fillRect(1.1, -5.2, 1.4, 1.2);
+		ell(ctx, 0.9, -6, 0.35, 0.35, 0, '#E8C060');
+	}
+	// Le cou et la tête (de profil : nez, oreille, œil, sourcil), cheveux, barbe, chapeau de paille.
+	ctx.save();
+	ctx.translate(0.4, -9.6);
+	ctx.rotate(head);
+	ctx.fillStyle = SKIN_SH; ctx.fillRect(-0.4, -1.4, 1.6, 1.8);
+	ell(ctx, 0.6, -3.4, 2.2, 2.45, 0, SKIN);
+	ell(ctx, 2.75, -3.3, 0.55, 0.62, 0.3, SKIN);
+	ell(ctx, 2.15, -1.9, 0.6, 0.3, 0, '#C07860');
+	ell(ctx, 1.6, -3.9, 0.32, 0.38, 0, '#2A1C14');
+	ctx.strokeStyle = C.hair; ctx.lineWidth = 0.35; ctx.lineCap = 'round';
+	ctx.beginPath(); ctx.moveTo(1.1, -4.6); ctx.lineTo(2.2, -4.5); ctx.stroke();
+	ell(ctx, -0.5, -3.3, 0.6, 0.85, 0, SKIN_SH);
+	ell(ctx, -1.05, -3.8, 1.25, 1.9, 0.15, C.hair);
+	if (fem) {
+		// La natte, qui se balance en marchant.
+		ctx.strokeStyle = C.hair; ctx.lineWidth = 1.5;
+		ctx.beginPath(); ctx.moveTo(-1.4, -2.6); ctx.quadraticCurveTo(-2.6 - swing * 0.6, 0, -2.3 - swing, 2.6); ctx.stroke();
+		ell(ctx, -2.3 - swing, 2.9, 0.6, 0.5, 0, '#E8B860');
+	} else {
+		ctx.fillStyle = C.hair;
+		ctx.beginPath(); ctx.moveTo(-0.2, -2.6); ctx.quadraticCurveTo(0.6, -0.4, 2.3, -1.2); ctx.quadraticCurveTo(2.6, -1.6, 2.2, -1.9); ctx.quadraticCurveTo(1, -1.2, 0.2, -2.8); ctx.fill();
+	}
+	ell(ctx, 0.5, -5.6, 4.6, 0.95, -0.04, '#D8A850');
+	ell(ctx, 0.3, -6.5, 2.4, 1.5, 0, '#E8C060');
+	ctx.fillStyle = fem ? '#D0607A' : '#8A5A34'; ctx.fillRect(-2.05, -5.95, 4.7, 0.6);
+	if (fem) { ell(ctx, 2.4, -6.2, 0.9, 0.9, 0, '#F2F0E8'); ell(ctx, 2.4, -6.2, 0.38, 0.38, 0, '#F2C230'); }
+	ctx.restore();
+	// Le bras proche, et ce qu'il tient.
+	const rk = Math.sin(t * 2.4);
 	if (mode === 'rake') {
-		const a = 0.75 + rake * 0.35;
-		const [hx, hy] = limb(ctx, sx, sy, a, 5.4, a + 0.6, 5, 2.6, 2.2, shirt);
-		const tx = hx + 16 * Math.cos(0.5 + rake * 0.18), ty = hy + 16 * Math.sin(0.5 + rake * 0.18);
-		ctx.strokeStyle = '#8A5A2E'; ctx.lineWidth = 1.1;
-		ctx.beginPath(); ctx.moveTo(hx - 6 * Math.cos(0.5), hy - 6 * Math.sin(0.5)); ctx.lineTo(tx, Math.min(ty, -0.5)); ctx.stroke();
-		ctx.strokeStyle = '#4A3A2E'; ctx.lineWidth = 0.8;
-		ctx.beginPath(); ctx.moveTo(tx - 1, -1.2); ctx.lineTo(tx + 4.5, -1.2);
-		for (let i = 0; i < 5; i++) { ctx.moveTo(tx - 0.6 + i * 1.2, -1.2); ctx.lineTo(tx - 0.6 + i * 1.2, 0.4); }
+		const a = 0.85 + rk * 0.35;
+		const [hx, hy] = arm(ctx, 0.6, shY + 0.6, a, a + 0.55, C.shirt);
+		ctx.restore();
+		const w = toWorld(hipX, hipY, lean, hx, hy);
+		const tx = w[0] + 15 * Math.cos(0.55 + rk * 0.18), ty = w[1] + 15 * Math.sin(0.55 + rk * 0.18);
+		ctx.strokeStyle = '#8A5A2E'; ctx.lineWidth = 0.9;
+		ctx.beginPath(); ctx.moveTo(w[0] - 5 * Math.cos(0.55), w[1] - 5 * Math.sin(0.55)); ctx.lineTo(tx, Math.min(ty, -0.5)); ctx.stroke();
+		ctx.strokeStyle = '#4A3A2E'; ctx.lineWidth = 0.7;
+		ctx.beginPath(); ctx.moveTo(tx - 1, -1.2); ctx.lineTo(tx + 4.2, -1.2);
+		for (let i = 0; i < 5; i++) { ctx.moveTo(tx - 0.6 + i * 1.15, -1.2); ctx.lineTo(tx - 0.6 + i * 1.15, 0.4); }
 		ctx.stroke();
-		ell(ctx, hx, hy, 1.2, 1.2, 0, SKIN);
-	} else if (water) {
-		const [hx, hy] = limb(ctx, sx, sy, 1.2, 5.4, 1.5, 5, 2.6, 2.2, shirt);
-		ell(ctx, hx + 2.6, hy + 1.6, 3.4, 2.6, 0, '#7A9AA8');
-		ctx.strokeStyle = '#7A9AA8'; ctx.lineWidth = 1;
-		ctx.beginPath(); ctx.moveTo(hx + 5, hy + 1); ctx.lineTo(hx + 10, hy + 3.6); ctx.stroke();
+		return;
+	}
+	if (mode === 'water') {
+		const [hx, hy] = arm(ctx, 0.6, shY + 0.6, 1.25, 1.55, C.shirt);
+		ctx.restore();
+		const [wx, wy] = toWorld(hipX, hipY, lean, hx, hy);
+		ell(ctx, wx + 2.4, wy + 1.8, 3, 2.3, 0, '#7A9AA8');
+		ell(ctx, wx + 1.4, wy + 0.6, 1.6, 0.5, 0, '#5E7E8C');
+		ctx.strokeStyle = '#7A9AA8'; ctx.lineWidth = 0.9;
+		ctx.beginPath(); ctx.moveTo(wx + 4.6, wy + 1.2); ctx.lineTo(wx + 9.4, wy + 3.8); ctx.stroke();
 		ctx.fillStyle = 'rgba(150,200,230,0.7)';
 		for (let i = 0; i < 4; i++) {
 			const u = (t * 2.2 + i / 4) % 1;
-			ctx.beginPath(); ctx.arc(hx + 10.5 + u * 2, hy + 4 + u * (-(hy + 4)), 0.5, 0, TAU); ctx.fill();
+			ctx.beginPath(); ctx.arc(wx + 9.8 + u * 2, wy + 4 + u * -(wy + 4), 0.45, 0, TAU); ctx.fill();
 		}
-	} else if (mode === 'barrow') {
-		const [hx, hy] = limb(ctx, sx, sy, 0.95, 5.6, 1.15, 5.2, 2.6, 2.2, shirt);
-		barrow(ctx, hx, hy, s);
-	} else {
-		limb(ctx, sx, sy, walk ? sw * 0.5 : -0.1, 5.6, (walk ? sw * 0.5 : -0.1) + 0.3, 5.2, 2.6, 2.2, shirt);
+		return;
 	}
+	if (mode === 'barrow') {
+		const [hx, hy] = arm(ctx, 0.6, shY + 0.6, 0.95, 1.15, C.shirt);
+		ctx.restore();
+		const [wx, wy] = toWorld(hipX, hipY, lean, hx, hy);
+		barrow(ctx, wx, wy, s);
+		return;
+	}
+	const front = mode === 'gaze' ? [-0.45, -1.7] : mode === 'sit' ? [0.55, 1.45]
+		: mode === 'pick' ? [Math.PI - 0.45 + Math.sin(t * 1.6) * 0.18, Math.PI - 0.25 + Math.sin(t * 1.6) * 0.25]
+		: walk ? [-swing * 0.5, -swing * 0.5 + 0.35] : [0.05, 0.18 + breath * 0.2];
+	const [hx, hy] = arm(ctx, 0.6, shY + 0.6, front[0], front[1], C.shirt);
+	// Un fruit dans la main levée, de temps en temps.
+	if (mode === 'pick' && Math.sin(t * 1.6) > 0.6) ell(ctx, hx, hy - 0.8, 0.9, 1, 0, s.fruit ?? '#D8402E');
+	ctx.restore();
+	// La laisse du chien, tenue par la main proche pendant la promenade (le garden la prolonge jusqu'au collier).
+	if (mode === 'stroll') s.hand = toWorld(hipX, hipY, lean, hx, hy);
+}
+
+/** Un point du buste (repère tourné de `lean` autour de la hanche) ramené dans le repère du personnage. */
+function toWorld(hipX, hipY, lean, x, y) {
+	const c = Math.cos(lean), sn = Math.sin(lean);
+	return [hipX + x * c - y * sn, hipY + x * sn + y * c];
+}
+
+/** Panier d'osier tenu par l'anse ; plein de fruits au retour. */
+function basket(ctx, hx, hy, full) {
+	ctx.strokeStyle = '#8A5A2E'; ctx.lineWidth = 0.5;
+	ctx.beginPath(); ctx.arc(hx, hy + 2.2, 2.2, Math.PI * 1.05, Math.PI * 1.95); ctx.stroke();
+	ctx.fillStyle = '#B88A4E';
+	ctx.beginPath(); ctx.moveTo(hx - 2.6, hy + 2.2); ctx.lineTo(hx + 2.6, hy + 2.2); ctx.lineTo(hx + 1.9, hy + 4.6); ctx.lineTo(hx - 1.9, hy + 4.6); ctx.closePath(); ctx.fill();
+	ctx.strokeStyle = '#8A6234'; ctx.lineWidth = 0.3;
+	ctx.beginPath(); ctx.moveTo(hx - 2.3, hy + 3.2); ctx.lineTo(hx + 2.3, hy + 3.2); ctx.moveTo(hx - 2.1, hy + 4); ctx.lineTo(hx + 2.1, hy + 4); ctx.stroke();
+	if (full) for (const [x, c] of [[-1.3, '#D8402E'], [0, '#E05A34'], [1.3, '#C8B848']]) ell(ctx, hx + x, hy + 1.8, 0.95, 0.9, 0, c);
 }
 
 /** Brouette pleine de terre et de jeunes pousses, tenue par les poignées en (hx, hy). */
@@ -603,7 +720,7 @@ export const GAIT = {
 	roe: { stride: 18, speed: 16 },
 	chamois: { stride: 16, speed: 14 },
 	fox: { stride: 20, speed: 30 },
-	farmer: { stride: 15, speed: 12 },
+	farmer: { stride: 27, speed: 18 },
 	dog: { stride: 24, speed: 26 },
 	cat: { stride: 16, speed: 16 },
 };

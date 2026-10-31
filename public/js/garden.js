@@ -8,7 +8,7 @@ import { rng, wash, rgba, mix, paperTexture, lerp } from './watercolor.js';
 import { PLANT_TYPES, DECOR, DECOR_PAINTERS, paintPlant, paintTurf, newVariant, lookOf } from './plants.js';
 import { drawCritter, CRITTER_SIZE, FLIGHT } from './critters.js';
 import { GAIT } from './beasts.js';
-import { SPECIES, PLACE_BY_ID } from './species.js';
+import { SPECIES, PLACE_BY_ID, speciesOf } from './species.js';
 import { PARCEL_W, PARCEL_H, CELLS, CELL_KM, GROUND, zoneOf, zoneName, tileSteps, keepOut } from './zones.js';
 import { newPlace } from './state.js';
 import { ITEMS, ITEM_PAINTERS, attracted, paintSoil, PLOT, paintAdorn, canLevel, itemBox, LINK, linkEnds } from './deco.js';
@@ -21,6 +21,8 @@ const FENCE_STEP = 34;
 const STAGES = 30;
 const SWAY = { herbe: 0.09, fleur: 0.07, buisson: 0.02, arbre: 0.012 };
 const MIN_Y = { herbe: 60, fleur: 100, buisson: 100, arbre: 220 };
+// Les arbres où le jardinier va cueillir, et la couleur de leurs fruits.
+const FRUIT_TREES = { pommier: '#D8402E', poirier: '#C8B848', merisier: '#B0283A' };
 // Construire un objet : la durée, et les instants des coups de marteau.
 const BUILD_TIME = 1.25, BUILD_TAPS = [0.2, 0.5, 0.8];
 const smoothstep = k => k * k * (3 - 2 * k);
@@ -1937,8 +1939,9 @@ export class Garden {
 			}
 			if (!a.goal && a.mode !== 'sleep') a.timer = 2;
 		}
-		// Le chien guette son maître : il se lève dès que celui-ci s'éloigne.
-		if (kind === 'dog' && f && !f.hidden && !a.goal && Math.hypot(f.x - a.x, f.y - a.y) > 46) a.goal = { x: f.x - f.dir * 16, y: f.y + 6 };
+		// Le chien guette son maître : il se lève dès que celui-ci s'éloigne. En promenade, chien ou chat le suivent de près.
+		const walkies = f && !f.hidden && f.mode === 'stroll';
+		if ((kind === 'dog' || walkies) && f && !f.hidden && Math.hypot(f.x - a.x, f.y - a.y) > (walkies ? 22 : 46)) a.goal = { x: f.x - f.dir * (walkies ? 28 : 16), y: f.y + (walkies ? -4 : 4) };
 		if (!a.goal) { if (a.mode === 'run') a.mode = 'stand'; return; }
 		const dx = a.goal.x - a.x, dy = a.goal.y - a.y, d = Math.hypot(dx, dy);
 		if (d < 2) { a.goal = null; a.mode = 'stand'; a.timer = 1.5 + Math.random() * 3; return; }
@@ -1970,7 +1973,18 @@ export class Garden {
 				const task = f.goal.task;
 				f.goal = null;
 				f.carry = task === 'fetch' ? !f.carry : f.carry;
-				if (task === 'in') { f.hidden = true; f.mode = 'stand'; f.timer = 2; if (!home) f.restUntil = f.t + 40 + Math.random() * 70; return; }
+				if (task === 'in') { f.hidden = true; f.basket = false; f.mode = 'stand'; f.timer = 2; if (!home) f.restUntil = f.t + 40 + Math.random() * 70; return; }
+				if (task === 'stroll') {
+					const next = f.route?.shift();
+					if (next) { f.goal = { ...next, task: 'stroll' }; return; }
+					f.mode = 'stand'; f.timer = 1.5; return;
+				}
+				if (task === 'sit' || task === 'pick' || task === 'gaze') {
+					f.mode = task;
+					f.dir = f.face ?? f.dir;
+					f.timer = task === 'sit' ? 12 + Math.random() * 10 : task === 'pick' ? 7 + Math.random() * 4 : 7 + Math.random() * 6;
+					return;
+				}
 				if (task === 'harvest') { f.mode = 'rake'; f.harvesting = f.bed; f.dir = f.face ?? f.dir; f.timer = 4.5; return; }
 				if (task === 'fetch') { f.mode = 'stand'; f.timer = 1.2; return; }
 				f.mode = task;
@@ -1978,13 +1992,14 @@ export class Garden {
 				f.timer = task === 'rake' ? 6 + Math.random() * 6 : task === 'water' ? 4 + Math.random() * 4 : 2 + Math.random() * 3;
 				return;
 			}
-			const step = Math.min(d, GAIT.farmer.speed * (f.carry ? 0.8 : 1) * dt);
+			const stroll = f.goal.task === 'stroll';
+			const step = Math.min(d, GAIT.farmer.speed * (f.carry ? 0.8 : stroll ? 0.7 : 1) * dt);
 			f.x += (dx / d) * step;
 			f.y += (dy / d) * step;
 			f.ph += step / GAIT.farmer.stride;
 			f.dist = (f.dist ?? 0) + step;
 			if (Math.abs(dx) > 0.5) f.dir = Math.sign(dx);
-			f.mode = f.carry ? 'barrow' : 'run';
+			f.mode = f.carry ? 'barrow' : stroll ? 'stroll' : 'run';
 			return;
 		}
 		// En arrosant, il aide ce qui pousse autour de lui.
@@ -1999,6 +2014,13 @@ export class Garden {
 		}
 		f.timer -= dt;
 		if (f.timer > 0) return;
+		// Cueillette finie : quelques fruits tombent, le panier est plein, on le rapporte à la cabane.
+		if (f.mode === 'pick') {
+			f.basket = true;
+			this.burst(f.x + f.dir * 10, f.y - 40, 8, f.fruit);
+			f.goal = { x: door.x, y: door.y, task: 'in' };
+			return;
+		}
 		// Récolte finie : la parcelle est ressemée, et le panier rapporte du nectar.
 		if (f.harvesting) {
 			const bed = f.harvesting;
@@ -2028,6 +2050,8 @@ export class Garden {
 			f.face = -side;
 			return;
 		}
+		// Entre deux travaux, un moment pour soi : un banc, des fruits à cueillir, une pause, une promenade avec son animal.
+		if (!f.carry && Math.random() < 0.4 && this.leisure(f, door)) return;
 		// Brouette : un aller-retour au tas de compost (ou à la cabane) de temps en temps, puis il repart au potager.
 		const compost = this.items.find(it => it.kind === 'compost');
 		if (beds.length && (f.carry || Math.random() < 0.22)) {
@@ -2045,6 +2069,47 @@ export class Garden {
 		const side = Math.random() < 0.5 ? -1 : 1;
 		f.goal = { x: door.x + side * (50 + Math.random() * 50), y: door.y + 25 + Math.random() * 30, task: Math.random() < 0.7 ? 'rake' : 'stand' };
 		f.face = side;
+	}
+
+	/** Les arbres fruitiers adultes du lieu, avec leur position au sol et la couleur de leurs fruits. */
+	fruitTrees() {
+		const out = [];
+		for (const p of this.place.plants) {
+			if (p.type !== 'arbre' || p.growth < 1) continue;
+			const sp = speciesOf(p), col = FRUIT_TREES[sp];
+			const P = this.pdata[cellOf(p)];
+			if (col && P) out.push({ x: P.ox + p.x, y: P.oy + p.y, fruit: col });
+		}
+		return out;
+	}
+
+	/** Choisit un moment de détente pour le jardinier ; faux s'il n'y a rien à faire de ce genre ici. */
+	leisure(f, door) {
+		const options = [];
+		const bench = pick(this.items.filter(it => it.kind === 'banc'));
+		if (bench) options.push(() => { f.goal = { x: bench.x, y: bench.y + 2, task: 'sit' }; f.face = Math.random() < 0.5 ? 1 : -1; });
+		const trees = (this.season?.winter ?? 0) > 0.5 ? [] : this.fruitTrees();
+		if (trees.length) options.push(() => {
+			const tr = pick(trees), side = Math.random() < 0.5 ? -1 : 1;
+			f.goal = { x: tr.x + side * 16, y: tr.y + 4, task: 'pick' };
+			f.face = -side;
+			f.fruit = tr.fruit;
+		});
+		options.push(() => {
+			const a = Math.random() * Math.PI * 2, r = 60 + Math.random() * 90;
+			f.goal = { x: door.x + Math.cos(a) * r, y: door.y + 30 + Math.abs(Math.sin(a)) * r * 0.6, task: 'gaze' };
+			f.face = Math.random() < 0.5 ? 1 : -1;
+		});
+		if (this.pet) options.push(() => {
+			// Une boucle tranquille autour de la cabane, l'animal sur les talons.
+			const R = 90 + Math.random() * 60, a0 = Math.random() * Math.PI * 2;
+			f.route = [1, 2, 3, 4].map(k => ({ x: door.x + Math.cos(a0 + k * 1.5) * R, y: door.y + 40 + Math.abs(Math.sin(a0 + k * 1.5)) * R * 0.7 }));
+			f.route.push({ x: door.x + 20, y: door.y + 24 });
+			f.goal = { ...f.route.shift(), task: 'stroll' };
+		});
+		if (!options.length) return false;
+		pick(options)();
+		return true;
 	}
 
 	updateInsect(b, dt) {
@@ -3067,6 +3132,16 @@ export class Garden {
 		if (b.kind === 'hare') b.winter = (this.season?.winter ?? 0) > 0.5;
 		drawCritter(ctx, b.kind, b.t, b.mode, b.p, b);
 		ctx.restore();
+		// En promenade, une laisse souple relie la main du jardinier au collier du chien.
+		const pet = this.pet;
+		if (b === pet && pet.kind === 'dog' && this.farmer?.mode === 'stroll' && this.farmer.hand) {
+			const f = this.farmer, fk = CRITTER_SIZE.farmer, pk = CRITTER_SIZE.dog;
+			const hx = f.x + f.hand[0] * f.dir * fk, hy = f.y + f.hand[1] * fk;
+			const cx = pet.x + pet.dir * 9 * pk, cy = pet.y - 13 * pk;
+			ctx.strokeStyle = 'rgba(120,40,30,0.85)';
+			ctx.lineWidth = 1.2;
+			ctx.beginPath(); ctx.moveTo(hx, hy); ctx.quadraticCurveTo((hx + cx) / 2, Math.max(hy, cy) + 12, cx, cy); ctx.stroke();
+		}
 	}
 
 	/** File de fourmis : la moitié va vers la nourriture, l'autre revient au nid. */

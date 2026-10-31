@@ -3,6 +3,16 @@
 Chaque version, la plus récente en haut. Le site (evolia.sebastienalzamora.workers.dev) est toujours à jour ;
 le Play Store (tests internes) reçoit les versions indiquées « Play ».
 
+## 0.6.38 — 31 octobre 2026
+- **Un fermier, une fermière plus vrais.**
+    - Des proportions humaines, des bottes, une chemise aux manches retroussées, des mains, un vrai profil (nez, oreille, barbe ou natte) et un tablier pour la fermière.
+    - Une marche plus naturelle : les genoux plient vers l'avant, le corps balance, les pieds ne glissent plus.
+- **Des moments pour soi**, entre deux travaux :
+    - s'asseoir sur un banc (les jambes se balancent) ;
+    - cueillir des fruits dans les pommiers, poiriers et merisiers, sur la pointe des pieds, et rapporter le panier plein à la cabane ;
+    - souffler un peu en contemplant le jardin, les mains dans le dos ;
+    - se promener avec son animal : le chien en laisse, le chat sur les talons.
+
 ## 0.6.37 — 31 octobre 2026
 - **On construit pour de vrai.** Un objet posé ou amélioré se monte sous nos yeux. La poussière se soulève, la silhouette de l'objet apparaît en transparence, puis il monte du sol au rythme de trois coups de marteau. Un petit rebond, des étincelles et des feuilles, et une cloche terminent le chantier.
 - **Des gouttes de nectar bien séparées.** Elles ne se posent plus les unes sur les autres, et chacune affiche ce qu'elle rapporte (« +52 »).
