@@ -250,6 +250,7 @@ garden.onTap = hit => {
 			const jar = garden.items.find(x => x.kind === 'collecteur');
 			garden.takeDew(hit.dew);
 			if (jar) garden.pourFrom(jar);
+			state.collectedJar = true;
 			const v = collect(state.pending);
 			if (v >= 1) toast(`+${fmtInt(v)} nectar récolté`, '#E3A33A');
 			return;
@@ -297,9 +298,10 @@ function tapCritter(hit, card) {
 // Trois gestes, un par un : marcher un peu, installer un collecteur, récolter le nectar. Chacune rapporte un peu de nectar.
 
 const MISSIONS = [
-	{ id: 'walk', text: 'Marche 300 m', help: 'Active le suivi et bouge : chaque pas compte, même à la maison.', done: () => state.totals.distance >= 300 },
-	{ id: 'collector', text: 'Installe un collecteur de nectar', help: 'Aménager › Un collecteur de nectar : il garde la récolte de tes butineurs.', done: () => hasCollector(state), go: () => openDeco('recolte') },
-	{ id: 'collect', text: 'Récolte ton nectar', help: 'Touche le collecteur (ou les gouttes dorées sur les fleurs) quand il y a du nectar.', done: () => !!state.collectedOnce, go: () => { const it = Object.values(state.places).flatMap(p => p.items ?? []).find(i => i.kind === 'collecteur'); if (it && state.place) garden.focusOn(it.x, it.y); } },
+	{ id: 'walk', text: 'Marche 300 m', help: 'Active le suivi et bouge : chaque pas compte, même à la maison, et rapporte du nectar.', done: () => state.totals.distance >= 300 },
+	{ id: 'collect', text: 'Cueille les gouttes de nectar', help: 'Tes butineurs déposent du nectar en gouttes dorées sur les fleurs : touche-les pour le cueillir.', done: () => !!state.collectedOnce, go: () => focusDew() },
+	{ id: 'collector', text: 'Installe un collecteur de nectar', help: 'Aménager › Récolte › Un collecteur de nectar : il garde la récolte pour toi.', done: () => hasCollector(state), go: () => openDeco('recolte') },
+	{ id: 'jar', text: 'Vide ton collecteur', help: 'Quand l’étiquette dorée apparaît au-dessus du collecteur, touche-le pour tout récupérer.', done: () => !!state.collectedJar, go: () => focusJar() },
 ];
 const MISSION_REWARD = 30;
 
@@ -335,6 +337,98 @@ $('#mission').addEventListener('click', () => {
 	toast(m.help, '#5F933E');
 	m.go?.();
 });
+
+// ─── Le guide : chaque nouveauté expliquée au bon moment ────────
+// Une bulle à la fois, posée près du bouton ou de l'endroit concerné, qui s'illumine. Elle s'efface quand on
+// touche « Compris » ou le bouton lui-même, et ne revient plus. Rien ne s'affiche par-dessus une page ouverte.
+
+const owned = kind => Object.values(state.places).some(p => (p.items ?? []).some(i => i.kind === kind));
+const ownedAny = cat => Object.values(state.places).some(p => (p.items ?? []).some(i => ITEMS[i.kind]?.cat === cat));
+const totalKm = () => state.totals.distance / 1000;
+
+const TIPS = [
+	{ id: 'purse', target: '#hud-steps', when: () => state.totals.distance > 0 || (state.nectar ?? 0) >= 1,
+		title: 'Ta bourse de nectar', text: 'Tes pas te rapportent du nectar directement : 1 pour 5 m. Dessous, ce que tes animaux ont récolté et qui t’attend.' },
+	{ id: 'dew', target: '#hud-steps', when: () => !hasCollector(state) && (state.pending ?? 0) >= 2, show: () => focusDew(),
+		title: 'Du nectar sur les fleurs', text: 'Tes butineurs déposent leur récolte en gouttes dorées sur les fleurs. Touche-les pour la cueillir : sinon elle attend, sans entrer dans ta bourse.' },
+	{ id: 'deco', target: '#btn-deco', when: () => (state.nectar ?? 0) >= 60 && !hasCollector(state),
+		title: 'Aménager', text: 'Tu as de quoi poser un collecteur : il garde la récolte de tes butineurs, plus besoin de cueillir les gouttes une à une.' },
+	{ id: 'jar', target: '#hud-steps', when: () => hasCollector(state) && (state.pending ?? 0) >= 5, show: () => focusJar(),
+		title: 'Ton collecteur se remplit', text: 'L’étiquette au-dessus montre ce qu’il contient. Touche-le pour tout récupérer. Plein, il ne garde plus rien : passe le vider, ou améliore-le.' },
+	{ id: 'eco', target: '#btn-eco', when: () => Object.keys(state.species).length >= 2,
+		title: 'Ton écosystème', text: 'Les animaux découverts travaillent pour toi, même appli fermée : ils font pousser le jardin et récoltent du nectar. Quand tu bouges, ils travaillent trois fois plus.' },
+	{ id: 'species', target: '#btn-species', when: () => Object.keys(state.species).length >= 1,
+		title: 'Les espèces', text: 'Chaque plante et chaque animal découvert a sa fiche : son rôle dans la nature, et comment l’aider chez toi.' },
+	{ id: 'habitats', target: '#btn-deco', when: () => ownedAny('habitat') || ((state.nectar ?? 0) >= 40 && hasCollector(state)),
+		title: 'Des abris pour la faune', text: 'Dans Aménager › Habitats : chaque abri renforce une équipe d’animaux. Plutôt que d’en poser partout, améliore-les, ils accueillent plus de monde.' },
+	{ id: 'level', target: '#btn-deco', when: () => ownedAny('habitat') && totalKm() >= 10,
+		title: 'Tes abris peuvent grandir', text: 'Avec 10 km parcourus, tes habitats passent au niveau 2. Touche-en un au jardin, ou ouvre Aménager, pour l’améliorer.' },
+	{ id: 'cabane', target: '#btn-deco', when: () => totalKm() >= 5 && !owned('cabane'),
+		title: 'Une cabane !', text: 'Avec 5 km parcourus, tu peux poser une cabane (Aménager › Récolte). Un fermier ou une fermière s’y installe et cultivera ton potager.' },
+	{ id: 'potager', target: '#btn-deco', when: () => owned('cabane') && !owned('potager'),
+		title: 'Le potager', text: 'Pose des carrés de potager près de la cabane, côte à côte : les légumes poussent quand tu marches, et chaque récolte rapporte du nectar.' },
+	{ id: 'journal', target: '#btn-journal', when: () => (state.walks?.length ?? 0) >= 1,
+		title: 'Ton carnet', text: 'Tes sorties, tes kilomètres de la semaine et ce qu’ils ont fait pousser.' },
+	{ id: 'places', target: '#hud-day', when: () => Object.keys(state.places).length >= 2,
+		title: 'Un nouveau lieu', text: 'Touche le nom du lieu, en haut, pour voyager : chaque lieu a ses plantes, ses animaux et son écosystème.' },
+	{ id: 'daily', target: '#daily', when: () => totalKm() >= 1,
+		title: 'Les défis du jour', text: 'Chaque jour, un cadeau et trois petits défis. Bouger quelques jours de suite fait grossir le cadeau.' },
+];
+
+let tipShown = null, lastTipEnd = 0;
+
+/** La goutte de nectar la plus proche du centre de la vue, ou à défaut une fleur du jardin. */
+function focusDew() {
+	const d = garden.dew?.[0];
+	if (d) garden.focusOn(d.x, d.y);
+}
+function focusJar() {
+	const it = garden.items.find(i => i.kind === 'collecteur');
+	if (it) garden.focusOn(it.x, it.y - 40);
+}
+
+/** Montre la prochaine explication utile, quand rien d'autre n'est ouvert. */
+function nextTip() {
+	if (tipShown || Date.now() - lastTipEnd < 20000 || placing || !$('#modal').hidden || !$('#coach').hidden || document.querySelector('.panel.open') || session) return;
+	const done = (state.tips ??= {});
+	const tip = TIPS.find(t => !done[t.id] && t.when());
+	if (!tip) return;
+	const target = $(tip.target);
+	if (!target || target.offsetParent === null) return;
+	tipShown = tip;
+	tip.show?.();
+	target.classList.add('tip-glow');
+	const el = $('#tip');
+	el.innerHTML = `<b>${tip.title}</b><p>${tip.text}</p><button class="btn primary small" data-tip-ok>Compris</button>`;
+	el.hidden = false;
+	// La bulle se place au-dessus d'un bouton du bas, ou sous un élément du haut ; sa pointe vise le bouton.
+	const r = target.getBoundingClientRect(), app = $('#app').getBoundingClientRect();
+	const below = r.top < app.height / 2;
+	const w = Math.min(320, app.width - 24);
+	const left = Math.max(12, Math.min(app.width - w - 12, r.left - app.left + r.width / 2 - w / 2));
+	el.style.width = `${w}px`;
+	el.style.left = `${left}px`;
+	el.style.top = below ? `${r.bottom - app.top + 12}px` : '';
+	el.style.bottom = below ? '' : `${app.bottom - r.top + 12}px`;
+	el.classList.toggle('below', below);
+	el.style.setProperty('--arrow', `${r.left - app.left + r.width / 2 - left}px`);
+	sound.chime(1);
+}
+
+function endTip() {
+	if (!tipShown) return;
+	(state.tips ??= {})[tipShown.id] = Date.now();
+	$(tipShown.target)?.classList.remove('tip-glow');
+	$('#tip').hidden = true;
+	tipShown = null;
+	lastTipEnd = Date.now();
+	persist();
+}
+
+$('#tip').addEventListener('click', e => { if (e.target.closest('[data-tip-ok]')) endTip(); });
+// Toucher le bouton éclairé vaut « Compris ».
+document.addEventListener('click', e => { if (tipShown && e.target.closest(tipShown.target)) endTip(); }, true);
+setInterval(nextTip, 2500);
 
 /**
  * Toucher l'objectif : quand il faut des espèces, on dit lesquelles chercher et comment, en commençant par le lieu
@@ -764,7 +858,7 @@ async function playHarvest(res, source) {
 	addBoost(state, res.groups.reduce((n, g) => n + g.minutes * (g.act.id === 'menage' || g.act.id === 'marche-lente' ? 2 : 3), 0));
 	renderHud();
 	closeModal();
-	toast(`${fmtInt(res.steps)} pas récoltés pendant ton absence`, '#A3BD57');
+	toast(`${fmtInt(res.steps)} pas pendant ton absence · +${fmtInt(res.distance / 5)} nectar dans ta bourse`, '#A3BD57');
 	garden.setFollow(true);
 	const rows = [], events = [];
 	for (const g of res.groups.sort((a, b) => b.effort - a.effort)) {
@@ -789,6 +883,7 @@ async function playHarvest(res, source) {
 	showModal(`<div class="modal-body">
 		<h2>Pendant ton absence</h2>
 		<p>${fmtInt(res.steps)} pas · ${fmt(res.distance / 1000)} km, comptés par ${source.label}. Même le ménage fait pousser ton jardin.</p>
+		<p class="harvest-info">Tes pas t’ont rapporté <b>+${fmtInt(res.distance / 5)} nectar</b>, directement dans ta bourse (1 pour 5 m). La récolte de tes animaux, elle, t’attend ${hasCollector(state) ? 'dans ton collecteur' : 'en gouttes sur les fleurs'}.</p>
 		<ul class="harvest-rows">${rows.join('')}</ul>${decor ? `<div class="chips">${decor}</div>` : ''}
 		${idleNote ? `<p>Et ton écosystème a travaillé :</p>${idleNote}` : ''}</div>
 		<div class="modal-foot"><button class="btn primary" data-close>Voir mon jardin</button></div>`);
@@ -1157,6 +1252,7 @@ function tapItem(hit, card) {
 	// Un collecteur plein (même un peu) se vide d'un seul geste.
 	if (it.kind === 'collecteur' && (state.pending ?? 0) >= 1) {
 		garden.pourFrom(it);
+		state.collectedJar = true;
 		toast(`+${fmtInt(collect(state.pending))} nectar récolté`, '#E3A33A');
 		return;
 	}
@@ -1390,7 +1486,12 @@ $('#btn-options').addEventListener('click', openOptions);
 $('#btn-species').addEventListener('click', () => species.open());
 $('#btn-eco').addEventListener('click', () => eco.open());
 $('#status').addEventListener('click', () => { if (!session) eco.open(); });
-$('#hud').addEventListener('click', e => { if (e.target.closest('#hud-steps')) { if (!session) eco.open(); return; } places.open(); });
+$('#hud').addEventListener('click', e => {
+	if (!e.target.closest('#hud-steps')) return places.open();
+	if ((state.pending ?? 0) < 1) { if (!session) eco.open(); return; }
+	if (hasCollector(state)) { focusJar(); toast('Ta récolte t’attend dans le collecteur : touche-le pour la vider', '#E3A33A'); }
+	else { focusDew(); toast('Ta récolte perle sur les fleurs : touche les gouttes dorées', '#E3A33A'); }
+});
 setInterval(() => { if (!document.hidden) renderHud(); }, 2000);
 $('#modal').addEventListener('click', e => {
 	const sp = e.target.closest('[data-open-sp]');

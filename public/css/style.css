@@ -742,3 +742,13 @@ html, body {
 .hud-purse small.full { color: #C0442F; animation: quest-pulse 1.6s ease-in-out infinite; }
 .farmer-pick { display: flex; gap: 10px; margin-top: 12px; }
 .farmer-pick .btn { flex: 1; margin: 0; }
+
+/* Le guide : une bulle près du bouton concerné, qui s'illumine doucement. */
+.tip { position: absolute; z-index: 35; padding: 12px 14px; border-radius: 18px; font-size: 14px; line-height: 1.4; animation: toast-in .4s cubic-bezier(.2, .8, .2, 1); }
+.tip b { display: block; font-family: Courgette, cursive; font-weight: 400; font-size: 19px; color: var(--foret); margin-bottom: 2px; }
+.tip p { margin: 0 0 10px; color: var(--encre); }
+.tip .btn { float: right; }
+.tip::after { content: ''; position: absolute; left: calc(var(--arrow, 50%) - 8px); bottom: -8px; border: 8px solid transparent; border-bottom: 0; border-top-color: var(--papier); }
+.tip.below::after { bottom: auto; top: -8px; border: 8px solid transparent; border-top: 0; border-bottom-color: var(--papier); }
+.tip-glow { animation: tip-glow 1.4s ease-in-out infinite; }
+@keyframes tip-glow { 0%, 100% { box-shadow: 0 0 0 0 rgba(240, 138, 60, .55); } 50% { box-shadow: 0 0 0 9px rgba(240, 138, 60, 0); } }
