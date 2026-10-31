@@ -3,6 +3,9 @@
 Chaque version, la plus récente en haut. Le site (evolia.sebastienalzamora.workers.dev) est toujours à jour ;
 le Play Store (tests internes) reçoit les versions indiquées « Play ».
 
+## 0.7.5 — 31 octobre 2026
+- **Sentiers et ruisseaux qui se fondent dans le terrain.** Leurs bouts ne finissent plus en pointe ni par un bord net : ils pâlissent et s'effacent doucement, avec quelques trous d'usure, et l'herbe pousse par-dessus les sentiers. La source du marais naît de la même façon.
+
 ## 0.7.4 — 31 octobre 2026
 - **Plus aucun raccord dans le paysage.**
     - Les bas-fonds humides du marais, la mousse de la forêt et la couleur des ombres se fondent d'un milieu à l'autre : ils s'arrêtaient net sur la frontière, ce qui dessinait un trait droit, surtout sous la brume.

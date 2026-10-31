@@ -562,8 +562,8 @@ function reliefSteps(at, gx, gy) {
 }
 
 // ─── Ruisseaux et sentiers ─────────────────────────────────────
-// Ils traversent leur parcelle de bord à bord, et s'amincissent aux deux bouts : une source, une perte, un chemin
-// qui se perd dans l'herbe. Ils ne débordent jamais sur une autre parcelle (qui peut être d'un autre milieu).
+// Ils traversent leur parcelle de bord à bord, et se fondent dans le terrain à leurs deux bouts (effacés en dégradé) : une source, une perte,
+// un chemin qui se perd dans l'herbe. Ils ne débordent jamais sur une autre parcelle (qui peut être d'un autre milieu).
 
 /** Ligne qui serpente d'un bord à l'autre de la parcelle, verticale ou horizontale. */
 function across(r, ox, oy, W, H, top, vertical, amp) {
@@ -580,33 +580,79 @@ function across(r, ox, oy, W, H, top, vertical, amp) {
 	return pts;
 }
 
-/** Un ruban qui s'amincit aux deux bouts (sur un huitième de sa longueur). */
-function tapered(g, pts, w, col, rr, alpha) {
-	const n = pts.length, e = Math.max(2, Math.round(n / 8));
-	ribbon(g, pts.slice(0, e + 1), w * 0.15, w, col, rr, alpha);
-	ribbon(g, pts.slice(e, n - e), w, w, col, rr, alpha);
-	ribbon(g, pts.slice(n - e - 1), w, w * 0.15, col, rr, alpha);
+/** Les bouts d'un tracé : le cinquième de ses points de chaque côté, qui se fondent dans le terrain. */
+const endsOf = n => Math.max(2, Math.round(n / 5));
+
+/**
+ * Peint un tracé (sentier, ruisseau) à part, puis efface ses bouts `tips` en dégradé, avec quelques trous d'usure :
+ * il se fond dans le terrain, sans pointe ni bord net. `fade` : longueur du fondu.
+ */
+function softEnds(g, item, tips, fade, rr, draw, after) {
+	const T = g.getTransform(), k = Math.hypot(T.a, T.b);
+	const x0 = item.x0, y0 = item.y0, W = item.x1 - x0, H = item.y1 - y0;
+	const c = document.createElement('canvas');
+	c.width = Math.max(1, Math.ceil(W * k)); c.height = Math.max(1, Math.ceil(H * k));
+	const o = c.getContext('2d');
+	o.setTransform(k, 0, 0, k, -x0 * k, -y0 * k);
+	draw(o);
+	o.globalCompositeOperation = 'destination-out';
+	for (const [x, y, dx, dy] of tips) {
+		// Plein effacement au bout, aucun à `fade` pas de là, en suivant une courbe douce.
+		const grd = o.createRadialGradient(x, y, 0, x, y, fade);
+		grd.addColorStop(0, 'rgba(0,0,0,1)');
+		grd.addColorStop(0.35, 'rgba(0,0,0,0.8)');
+		grd.addColorStop(0.7, 'rgba(0,0,0,0.3)');
+		grd.addColorStop(1, 'rgba(0,0,0,0)');
+		o.fillStyle = grd;
+		o.fillRect(x - fade, y - fade, fade * 2, fade * 2);
+		// L'usure : de petits trous, plus nombreux vers le bout (l'herbe reprend, la terre affleure par places).
+		for (let q = 0; q < 22; q++) {
+			const t = Math.pow(rr(), 1.6), px = x + dx * t * fade + rr.gauss() * 9, py = y + dy * t * fade + rr.gauss() * 6;
+			o.fillStyle = `rgba(0,0,0,${0.55 * (1 - t)})`;
+			o.beginPath(); o.ellipse(px, py, rr.range(3, 9), rr.range(2, 6), rr() * 3, 0, Math.PI * 2); o.fill();
+		}
+	}
+	g.drawImage(c, x0, y0, W, H);
+	after?.();
+}
+
+/** Les deux bouts d'un tracé, chacun avec la direction qui rentre vers le milieu. */
+function tipsOf(pts) {
+	const n = pts.length, dir = (a, b) => { const L = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1; return [(b[0] - a[0]) / L, (b[1] - a[1]) / L]; };
+	return [[...pts[0], ...dir(pts[0], pts[Math.min(n - 1, 3)])], [...pts[n - 1], ...dir(pts[n - 1], pts[Math.max(0, n - 4)])]];
+}
+
+/** Des touffes d'herbe qui poussent sur les bouts d'un sentier : il disparaît sous elles. */
+function overgrow(g, pts, rr, w) {
+	const n = pts.length, e = endsOf(n);
+	for (const i of [...Array(e + 1).keys(), ...Array.from({ length: e + 1 }, (_, k) => n - 1 - k)]) {
+		const [x, y] = pts[i], far = i <= e ? 1 - i / e : 1 - (n - 1 - i) / e;
+		for (let q = 0; q < 2 + far * 4; q++) {
+			const px = x + rr.gauss() * w * 0.4, py = y + rr.gauss() * w * 0.25;
+			for (let k = 0; k < 3; k++) ribbon(g, curve(px + rr.gauss() * 2, py, -Math.PI / 2 + rr.gauss() * 0.35, rr.range(4, 9), rr.gauss() * 0.3, 3), 1.1, 0.3, rr.pick(['#6E9A42', '#7FAA48', '#5F8A3A']), rr, 0.7);
+		}
+	}
 }
 
 function crossing(kind, r, ox, oy, W, H, top, seed) {
 	if (kind === 'brook') {
 		const pts = across(r, ox, oy, W, H, top, r() < 0.65, 90);
-		return longItem(pts, 30, 'river', (g, rr) => {
-			tapered(g, pts, 48, '#7FAA48', rr, 0.3);
-			tapered(g, pts, 24, '#7FB8C8', rr, 0.75);
-			tapered(g, pts.map(([x, y]) => [x - 3, y - 2]), 5, '#E8F4F4', rr, 0.45);
-		}, seed);
+		const item = longItem(pts, 30, 'river', (g, rr) => softEnds(g, item, tipsOf(pts), 130, rr, o => {
+			ribbon(o, pts, 48, 48, '#7FAA48', rr, 0.3);
+			ribbon(o, pts, 24, 24, '#7FB8C8', rr, 0.75);
+			ribbon(o, pts.map(([x, y]) => [x - 3, y - 2]), 5, 5, '#E8F4F4', rr, 0.45);
+		}), seed);
+		return item;
 	}
 	const pts = across(r, ox, oy, W, H, top, r() < 0.5, 60);
-	return longItem(pts, 16, 'path', (g, rr) => {
+	const item = longItem(pts, 16, 'path', (g0, rr) => softEnds(g0, item, tipsOf(pts), 120, rr, g => {
 		// Un chemin de terre blonde, bien lisible : un bord plus sombre où l'herbe le mord, la terre chaude,
 		// une bande plus claire au milieu, usée par les pas ; des pierres plates à demi enfoncées,
 		// des graviers, et des touffes d'herbe et de fleurs qui débordent sur les bords.
-		tapered(g, pts, 27, '#9A7E52', rr, 0.32);
-		tapered(g, pts, 23, '#D2B482', rr, 0.62);
-		tapered(g, pts.map(([x, y]) => [x - 1, y - 1.5]), 11, '#E8D4A6', rr, 0.4);
-		const e = Math.max(2, Math.round(pts.length / 8));
-		for (let i = e; i < pts.length - e; i++) {
+		ribbon(g, pts, 27, 27, '#9A7E52', rr, 0.32);
+		ribbon(g, pts, 23, 23, '#D2B482', rr, 0.62);
+		ribbon(g, pts.map(([x, y]) => [x - 1, y - 1.5]), 11, 11, '#E8D4A6', rr, 0.4);
+		for (let i = 0; i < pts.length; i++) {
 			const [x0, y0] = pts[i], [x1, y1] = pts[i + 1] ?? pts[i];
 			const n = Math.max(1, Math.round(Math.hypot(x1 - x0, y1 - y0) / 9));
 			for (let k = 0; k < n; k++) {
@@ -626,7 +672,8 @@ function crossing(kind, r, ox, oy, W, H, top, seed) {
 				if (rr() < 0.12) wash(g, x0 + side * rr.range(11, 15), y0 + rr.gauss() * 4 - 5, 1.6, 1.4, rr.pick(['#FFFFFF', '#F2D24A', '#E87A9A']), rr, { layers: 2, alpha: 0.8, edge: 0.2 });
 			}
 		}
-	}, seed);
+	}, () => overgrow(g0, pts, rr, 23)), seed);
+	return item;
 }
 
 // Le marais (dans sa parcelle cœur) : une rivière descend du haut de la parcelle jusqu'à la mare aux grenouilles,
@@ -648,18 +695,14 @@ function stream({ from: [x0, y0], to: [x1, y1], w, amp, seed, spring }, ox, oy) 
 		const d = (amp * Math.sin(t * L / 520 + p1) + amp * 0.35 * Math.sin(t * L / 170 + p2)) * fade;
 		pts.push([ox + x0 + (x1 - x0) * t + d * (y1 - y0) / L, oy + y0 + (y1 - y0) * t - d * (x1 - x0) / L]);
 	}
-	// La rivière d'arrivée naît en source au bord de la parcelle : elle s'élargit en descendant.
-	const draw = (g, P, Wd, col, rr, al) => {
-		if (!spring) return ribbon(g, P, Wd, Wd, col, rr, al);
-		const e = Math.max(2, Math.round(P.length / 4));
-		ribbon(g, P.slice(0, e + 1), Wd * 0.2, Wd, col, rr, al);
-		ribbon(g, P.slice(e), Wd, Wd, col, rr, al);
+	// Les bouts finissent sous les mares ; la rivière d'arrivée, elle, naît d'une source qui se fond dans le sol.
+	const paint = (g, rr) => {
+		ribbon(g, pts, w * 2, w * 2, '#6E9A5A', rr, 0.3);
+		ribbon(g, pts, w, w, '#7FB8C8', rr, 0.78);
+		ribbon(g, pts.map(([x, y]) => [x - 2, y - 1.5]), w * 0.22, w * 0.22, '#E8F4F4', rr, 0.45);
 	};
-	return longItem(pts, w * 0.8 + 6, 'river', (g, rr) => {
-		draw(g, pts, w * 2, '#6E9A5A', rr, 0.3);
-		draw(g, pts, w, '#7FB8C8', rr, 0.78);
-		draw(g, pts.map(([x, y]) => [x - 2, y - 1.5]), w * 0.22, '#E8F4F4', rr, 0.45);
-	}, hash('marais', 'stream', seed));
+	const item = longItem(pts, w * 0.8 + 6, 'river', spring ? (g, rr) => softEnds(g, item, tipsOf(pts).slice(0, 1), 110, rr, o => paint(o, rr)) : paint, hash('marais', 'stream', seed));
+	return item;
 }
 
 function longItem(pts, r, kind, paint, seed) {
