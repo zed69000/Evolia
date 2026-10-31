@@ -3,7 +3,7 @@
 Chaque version, la plus récente en haut. Le site (evolia.sebastienalzamora.workers.dev) est toujours à jour ;
 le Play Store (tests internes) reçoit les versions indiquées « Play ».
 
-## 0.6.35 — 31 octobre 2026
+## 0.6.35 — 31 octobre 2026 · Play
 - **Des biomes qui ressemblent à leur nom.**
     - **Forêt :** on y arrive sous de vieux arbres, sur un sol d'humus couvert de feuilles, de fougères et de mousse.
     - **Montagne :** c'est un alpage vert semé de vrais rochers.
