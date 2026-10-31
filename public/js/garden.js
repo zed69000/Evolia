@@ -22,8 +22,7 @@ export function cellName(place, ci) {
 	const b = biomeOf(place, ci);
 	return zoneName(b, rankOf(place, ci), PLACE_BY_ID[b].name);
 }
-// La lisière de brume : ses couleurs (blancs de papier, gris bleutés), et jusqu'où elle s'épaissit.
-const FOG_COLS = ['#FFFFFF', '#FFFFFF', '#F3F5F3', '#E6EBED', '#D8E0E4'];
+// La lisière de brume : jusqu'où elle s'épaissit.
 const FOG_FAR = 650;
 const STAGES = 30;
 const SWAY = { herbe: 0.09, fleur: 0.07, buisson: 0.02, arbre: 0.012 };
@@ -566,13 +565,12 @@ export class Garden {
 			// Puis des bancs de brume qui dérivent lentement par-dessus.
 			const rim = this.fogRim();
 			m.setTransform(S, 0, 0, S, cw / 2 - this.cam.cx * S, ch / 2 - this.cam.cy * S);
-			m.fillStyle = 'rgba(244,245,242,0.92)';
+			m.fillStyle = 'rgba(247,248,246,0.94)';
 			m.beginPath();
 			m.rect(-1e5, -1e5, 2e5, 2e5);
 			m.rect(rim.x0, rim.y0, rim.x1 - rim.x0, rim.y1 - rim.y0);
 			m.fill('evenodd');
 			m.drawImage(rim.haze, rim.x0, rim.y0, rim.x1 - rim.x0, rim.y1 - rim.y0);
-			m.drawImage(rim.cloud, rim.x0, rim.y0, rim.x1 - rim.x0, rim.y1 - rim.y0);
 			m.setTransform(1, 0, 0, 1, 0, 0);
 			this.fogLayer(m, cw, ch, S, 0.6, 1, 0);
 		}
@@ -599,6 +597,10 @@ export class Garden {
 			// Tout l'intérieur du jardin, poches entre les clairières comprises, au bord déjà fondu.
 			const mk = this.gardenMask();
 			m.drawImage(mk.canvas, mk.x0, mk.y0, mk.canvas.width / mk.k, mk.canvas.height / mk.k);
+			// Les nuages du bord, posés après : leurs volutes débordent un peu sur les clairières et dessinent la lisière.
+			const rim = this.fogRim();
+			m.globalCompositeOperation = 'source-over';
+			m.drawImage(rim.cloud, rim.x0, rim.y0, rim.x1 - rim.x0, rim.y1 - rim.y0);
 		}
 		ctx.setTransform(1, 0, 0, 1, 0, 0);
 		ctx.drawImage(this.mist, 0, 0, sw, sh);
@@ -681,7 +683,7 @@ export class Garden {
 		const hg = haze.getContext('2d'), img = hg.createImageData(W, H);
 		for (let j = 0; j < W * H; j++) {
 			const t = Math.min(1, D[j] / k / FOG_FAR), a = inside[j] ? 0 : 0.26 + 0.68 * t * t * (3 - 2 * t);
-			img.data[j * 4] = 244; img.data[j * 4 + 1] = 245; img.data[j * 4 + 2] = 242; img.data[j * 4 + 3] = a * 255;
+			img.data[j * 4] = 247; img.data[j * 4 + 1] = 248; img.data[j * 4 + 2] = 246; img.data[j * 4 + 3] = a * 255;
 		}
 		hg.putImageData(img, 0, 0);
 		// 2. Les nuages, plus finement : en bordure du jardin, poussés vers l'extérieur ; plus loin, de grands lavis épars.
@@ -690,27 +692,44 @@ export class Garden {
 		cloud.width = Math.ceil((mk.x1 - x0) * kb); cloud.height = Math.ceil((mk.y1 - y0) * kb);
 		const g = cloud.getContext('2d'), r = rng(9090);
 		g.setTransform(kb, 0, 0, kb, -x0 * kb, -y0 * kb);
+		// Un lobe de nuage : une ombre bleutée à peine décalée vers le bas, puis le blanc par-dessus. Pas de contour :
+		// le bord se fond, comme un lavis d'eau claire sur le papier.
+		const lobe = (x, y, rad, a) => {
+			// L'ombre (bleu-gris, comme le dessous d'un nuage), puis le corps, plus petit et remonté : un liseré bleuté reste en bas.
+			for (const [dx, dy, col, al, kr] of [[rad * 0.06, rad * 0.26, '176,194,210', a * 0.85, 1], [0, -rad * 0.04, '253,253,251', a, 0.86]]) {
+				const rr = rad * kr;
+				const grd = g.createRadialGradient(x + dx, y + dy, 0, x + dx, y + dy, rr);
+				grd.addColorStop(0, `rgba(${col},${al})`);
+				grd.addColorStop(0.6, `rgba(${col},${al * 0.75})`);
+				grd.addColorStop(1, `rgba(${col},0)`);
+				g.fillStyle = grd;
+				g.save();
+				g.translate(x + dx, y + dy); g.scale(1, 0.72); g.translate(-x - dx, -y - dy);
+				g.fillRect(x + dx - rr, y + dy - rr, rr * 2, rr * 2);
+				g.restore();
+			}
+		};
+		// Sur le pourtour : des lobes poussés vers l'extérieur, qui se chevauchent en grandes volutes.
 		for (const f of this.edges().fence) {
 			const run = f.run;
 			for (let i = 1; i < run.length; i++) {
 				const [ax, ay] = run[i - 1], [bx, by] = run[i], L = Math.hypot(bx - ax, by - ay) || 1;
 				let nx = -(by - ay) / L, ny = (bx - ax) / L;
-				for (let d = 0; d < L; d += 46) {
+				for (let d = 0; d < L; d += 70) {
 					const px = ax + ((bx - ax) * d) / L, py = ay + ((by - ay) * d) / L;
 					if (this.inOpen(px + nx * 40, py + ny * 40)) { nx = -nx; ny = -ny; }
-					for (let n = 0; n < 2; n++) {
-						const out = r.range(30, 130), rx = r.range(45, 115);
-						wash(g, px + nx * out + r.gauss() * 14, py + ny * out + r.gauss() * 10, rx, rx * r.range(0.55, 0.8), r.pick(FOG_COLS), r, { layers: 5, alpha: 0.16, edge: 0.22 });
-					}
+					// Le centre du lobe reste dehors, son bord vient mordre un peu sur la clairière.
+					const rad = r.range(80, 150), out = rad * r.range(0.55, 0.9);
+					lobe(px + nx * out + r.gauss() * 14, py + ny * out + r.gauss() * 10, rad, r.range(0.5, 0.8));
 				}
 			}
 		}
-		for (let i = 0; i < 160; i++) {
+		// Plus loin, de grands lobes épars : la brume n'est jamais tout à fait plate.
+		for (let i = 0; i < 140; i++) {
 			const x = x0 + r() * (mk.x1 - x0), y = y0 + r() * (mk.y1 - y0);
 			const j = Math.floor((y - y0) * k) * W + Math.floor((x - x0) * k);
-			if (!(D[j] / k > 180)) continue;
-			const rx = r.range(140, 280);
-			wash(g, x, y, rx, rx * r.range(0.5, 0.75), r.pick(FOG_COLS), r, { layers: 4, alpha: 0.08, edge: 0.3 });
+			if (!(D[j] / k > 220)) continue;
+			lobe(x, y, r.range(180, 320), r.range(0.25, 0.45));
 		}
 		return (this.rimCache = { key: mk.key, haze, cloud, x0, y0, x1: mk.x1, y1: mk.y1, k, kb });
 	}

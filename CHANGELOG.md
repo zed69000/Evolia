@@ -3,6 +3,9 @@
 Chaque version, la plus récente en haut. Le site (evolia.sebastienalzamora.workers.dev) est toujours à jour ;
 le Play Store (tests internes) reçoit les versions indiquées « Play ».
 
+## 0.7.2 — 31 octobre 2026
+- **Une brume plus belle.** Les nuages de la lisière sont repeints : des volutes blanches, douces, sans contour, avec un dessous bleuté comme de vrais nuages. Elles débordent un peu sur le bord des clairières pour les encadrer, et la brume blanchit en s'éloignant.
+
 ## 0.7.1 — 31 octobre 2026
 - **Plus de clôture : une lisière de brume.** Le jardin se perd dans un brouillard peint à l'aquarelle : léger au bord des clairières (on devine la campagne dessous), de plus en plus blanc en s'éloignant, avec de gros nuages aux bords doux tout autour. Il recule à chaque nouvelle parcelle.
 - **L'effet miniature se règle tout seul :** il est coupé d'office sur un téléphone qui ne sait pas faire le flou, ou qui devient moins fluide avec (moins de 40 images par seconde). Un choix fait dans les options l'emporte toujours.
