@@ -80,6 +80,39 @@ garden.dewAmount = () => groundOf(state);
 garden.jarAmount = () => jarOf(state);
 garden.nectarFill = () => jarOf(state) / Math.max(1, jarCap(state));
 
+/**
+ * La cagnotte : quand on récolte, la bourse ne saute pas d'un coup, elle grimpe. Un flot de gouttes part du collecteur
+ * (ou de la fleur), chacune tinte un peu plus haut que la précédente en arrivant, puis un grand « +N » et une gerbe dorée.
+ * Plus la récolte est grosse, plus ça dure (jusqu'à 3 s).
+ */
+let purseAnim = null;
+const shownNectar = () => {
+	if (!purseAnim) return state.nectar ?? 0;
+	const k = Math.min(1, (performance.now() - purseAnim.t0) / purseAnim.dur);
+	// Départ doux, montée régulière, arrivée qui ralentit : comme le compteur d'une cagnotte.
+	return purseAnim.from + (purseAnim.to - purseAnim.from) * k * k * (3 - 2 * k);
+};
+function jackpot(v, x, y) {
+	if (v < 1) return;
+	const big = v >= 40;
+	const dur = big ? Math.min(3000, 900 + Math.log10(v) * 600) : 600;
+	const drops = big ? Math.min(36, 8 + Math.round(v / 15)) : 3;
+	purseAnim = { from: (purseAnim ? shownNectar() : (state.nectar ?? 0) - v), to: state.nectar ?? 0, t0: performance.now() + 500, dur, drops, got: 0 };
+	garden.pourFrom({ x, y }, drops, dur / 1000, y);
+	garden.floatText(x, y - 20, `+${fmtInt(v)}`);
+	if (big) $('#hud-steps').classList.add('jackpot');
+	const step = () => {
+		const el = $('#hud-steps .nectar');
+		if (el) el.textContent = fmtInt(shownNectar());
+		if (purseAnim && performance.now() < purseAnim.t0 + purseAnim.dur) return requestAnimationFrame(step);
+		purseAnim = null;
+		$('#hud-steps').classList.remove('jackpot');
+		if (big) { sound.chime(3); garden.burst(x, y - 30, 30, '#F4C23E'); }
+		renderHud();
+	};
+	requestAnimationFrame(step);
+}
+
 /** Faire passer de la récolte en attente au compteur : celle du sol (`ground`) ou celle des collecteurs. */
 function collect(amount, ground = false) {
 	const v = Math.max(0, Math.min(ground ? groundOf(state) : jarOf(state), amount));
@@ -159,7 +192,7 @@ function renderHud() {
 	// La bourse de nectar, bien en vue ; dessous, ce qui attend d'être récolté (dans les fleurs ou le collecteur).
 	// Plein : le collecteur ne prend plus rien, ou sans collecteur, les fleurs sont chargées.
 	const pend = Math.floor(state.pending ?? 0), full = hasCollector(state) ? jarOf(state) >= jarCap(state) : groundOf(state) >= 30;
-	$('#hud-steps').innerHTML = `<span class="nectar${boostLeft(state) ? ' boost' : ''}">${fmtInt(state.nectar ?? 0)}</span>`
+	$('#hud-steps').innerHTML = `<span class="nectar${boostLeft(state) ? ' boost' : ''}">${fmtInt(shownNectar())}</span>`
 		+ `<small class="${full ? 'full' : pend >= 1 ? 'wait' : ''}">${pend >= 1 ? `+${fmtInt(pend)} à récolter` : 'nectar'}</small>`;
 	const k = Math.min(1, km / state.goalKm);
 	$('#ring-fg').style.strokeDashoffset = String(113.1 * (1 - k));
@@ -248,8 +281,8 @@ garden.onTap = hit => {
 	if (placing) return movePlacing(hit);
 	if (!hit) { card.hidden = true; return; }
 	if (hit.dew) {
-		const v = collect(garden.takeDew(hit.dew), true);
-		if (v >= 1) toast(`+${fmtInt(v)} nectar cueilli`, '#E3A33A');
+		const d = hit.dew, v = collect(garden.takeDew(d), true);
+		if (v >= 1) jackpot(v, d.x, d.y);
 		return;
 	}
 	if (hit.item) return tapItem(hit, card);
@@ -1023,7 +1056,9 @@ garden.nectarTarget = () => {
 	const r = el.getBoundingClientRect();
 	return [r.left - c.left + 6, r.top - c.top + r.height / 2];
 };
-garden.onNectar = () => {
+garden.onNectar = n => {
+	// Chaque goutte qui arrive tinte, un peu plus haut à mesure que la cagnotte monte.
+	if (purseAnim) { purseAnim.got += n; sound.drip(Math.min(1, purseAnim.got / purseAnim.drops)); }
 	const el = $('#hud-steps .nectar');
 	if (!el) return;
 	el.classList.remove('bump');
@@ -1250,9 +1285,8 @@ function tapItem(hit, card) {
 	const it = hit.item, def = ITEMS[it.kind];
 	// Un collecteur plein (même un peu) se vide d'un seul geste.
 	if (it.kind === 'collecteur' && jarOf(state) >= 1) {
-		garden.pourFrom(it);
 		state.collectedJar = true;
-		toast(`+${fmtInt(collect(jarOf(state)))} nectar récolté`, '#E3A33A');
+		jackpot(collect(jarOf(state)), it.x, it.y - 40);
 		return;
 	}
 	const lv = it.level ?? 1, nx = nextLevel(it);

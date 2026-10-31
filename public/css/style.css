@@ -754,3 +754,6 @@ html, body {
 @keyframes tip-glow { 0%, 100% { box-shadow: 0 0 0 0 rgba(240, 138, 60, .55); } 50% { box-shadow: 0 0 0 9px rgba(240, 138, 60, 0); } }
 /* Une fenêtre ou une page ouverte cache la bulle du guide, qui revient ensuite. */
 body:has(#modal:not([hidden])) .tip, body:has(.panel.open) .tip, body:has(#coach:not([hidden])) .tip { display: none; }
+/* La cagnotte : la bourse rayonne pendant que le nectar y coule. */
+.hud-purse.jackpot { animation: jackpot .5s ease-in-out infinite alternate; }
+@keyframes jackpot { from { box-shadow: 0 0 0 0 rgba(244, 194, 62, .7); background: #FBEFC8; } to { box-shadow: 0 0 18px 6px rgba(244, 194, 62, .55); background: #FFE7A0; } }

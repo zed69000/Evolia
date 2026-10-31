@@ -1177,9 +1177,37 @@ export class Garden {
 	}
 
 	/** Vider un collecteur : le nectar en sort en gouttes qui filent au compteur. */
-	pourFrom(it) {
-		for (let k = 0; k < 8; k++) this.nectarDrops.push({ x: it.x + (Math.random() - 0.5) * 16, y: it.y - 40, t: -k * 0.07, dur: 1 + Math.random() * 0.4, wob: Math.random() * 6.28 });
-		this.burst(it.x, it.y - 50, 14, '#F4C23E');
+	/** Vider un collecteur (ou une goutte) : `n` gouttes s'en échappent l'une après l'autre pendant `span` secondes. */
+	pourFrom(it, n = 8, span = 0.56, y = it.y - 40) {
+		for (let k = 0; k < n; k++) this.nectarDrops.push({ x: it.x + (Math.random() - 0.5) * 16, y, t: -(k / n) * span, dur: 0.9 + Math.random() * 0.4, wob: Math.random() * 6.28 });
+		this.burst(it.x, y - 10, 14, '#F4C23E');
+	}
+
+	/** Un grand « +N » doré qui jaillit au-dessus d'un point du monde, puis s'envole et s'efface. */
+	floatText(x, y, text) {
+		(this.floats ??= []).push({ x, y, text, t0: this.t });
+	}
+
+	drawFloats(ctx) {
+		this.floats = (this.floats ?? []).filter(f => this.t - f.t0 < 1.8);
+		const z = Math.max(1, 1.2 / this.cam.z);
+		for (const f of this.floats) {
+			const k = (this.t - f.t0) / 1.8, pop = k < 0.15 ? 0.6 + (k / 0.15) * 0.6 : 1.2 - Math.min(0.2, (k - 0.15) * 0.5);
+			ctx.save();
+			ctx.translate(f.x, f.y - k * 60);
+			ctx.scale(z * pop, z * pop);
+			ctx.globalAlpha = k > 0.7 ? (1 - k) / 0.3 : 1;
+			ctx.font = '800 24px Nunito, sans-serif';
+			ctx.textAlign = 'center';
+			ctx.textBaseline = 'middle';
+			ctx.lineWidth = 5;
+			ctx.strokeStyle = 'rgba(255,250,232,0.95)';
+			ctx.strokeText(f.text, 0, 0);
+			ctx.fillStyle = '#D88A10';
+			ctx.fillText(f.text, 0, 0);
+			ctx.restore();
+		}
+		ctx.globalAlpha = 1;
 	}
 
 	burst(x, y, n, color) {
@@ -2622,6 +2650,7 @@ export class Garden {
 		if (!glyph && this.dew?.length) { world(); this.drawDew(ctx); }
 		if (!glyph && (this.jarAmount?.() ?? 0) >= 1) { world(); this.drawJarTags(ctx); }
 		if (!glyph && this.farmer?.hidden) { world(); this.drawSmoke(ctx); }
+		if (this.floats?.length) { world(); this.drawFloats(ctx); }
 
 		if (this.ghost) {
 			const { kind, x, y } = this.ghost, box = itemBox(kind, this.ghost.level), ok = this.canPlace(kind, x, y, this.lifted);

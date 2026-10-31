@@ -457,6 +457,15 @@ export class Soundscape {
 	}
 
 	/** Cloche douce pour un bon moment : `size` 1 (une plante a poussé) à 3 (nouveau lieu). */
+	/** Une goutte qui tombe dans la bourse : une note claire, de plus en plus aiguë à mesure que la cagnotte monte (k : 0 → 1). */
+	drip(k = 0) {
+		if (!this.ctx || this.ctx.state !== 'running') return;
+		const out = this.voice((Math.random() - 0.5) * 0.4, 1), t = this.ctx.currentTime + 0.01;
+		const f = NOTES[Math.min(NOTES.length - 1, Math.floor(k * NOTES.length))] * 2;
+		this.note(out, t, f, f * 1.01, 0.35, 0.018);
+		this.note(out, t, f * 2.76, f * 2.76, 0.12, 0.004);
+	}
+
 	chime(size = 1) {
 		if (!this.ctx || this.ctx.state !== 'running') return;
 		const out = this.voice(0, 1), t = this.ctx.currentTime + 0.02;
