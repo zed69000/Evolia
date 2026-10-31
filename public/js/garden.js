@@ -24,6 +24,8 @@ export function cellName(place, ci) {
 }
 // La lisière de brume : jusqu'où elle s'épaissit.
 const FOG_FAR = 480, FOG_MAX = 0.95;
+// Combien de cases du sol gardées en détail (les autres, en version légère).
+const HI_TILES = 9;
 const STAGES = 30;
 const SWAY = { herbe: 0.09, fleur: 0.07, buisson: 0.02, arbre: 0.012 };
 const MIN_Y = { herbe: 60, fleur: 100, buisson: 100, arbre: 220 };
@@ -528,12 +530,12 @@ export class Garden {
 		}
 	}
 
-	/** Garde en mémoire au plus 8 cases détaillées et 30 légères, les plus récemment vues. */
+	/** Garde en mémoire au plus HI_TILES cases détaillées et 30 légères, les plus récemment vues. */
 	trimTiles() {
 		if (this.bgs.size < 30) return;
 		const hi = [], lo = [];
 		for (const [k, t] of this.bgs) (k.endsWith(':lo') ? lo : hi).push([k, t.used]);
-		for (const [list, max] of [[hi, 8], [lo, 30]]) {
+		for (const [list, max] of [[hi, HI_TILES], [lo, 30]]) {
 			if (list.length <= max) continue;
 			list.sort((a, b) => b[1] - a[1]);
 			for (const [k] of list.slice(max)) this.bgs.delete(k);
@@ -714,6 +716,8 @@ export class Garden {
 					const px = ax + ((bx - ax) * d) / L, py = ay + ((by - ay) * d) / L;
 					if (this.inOpen(px + nx * 40, py + ny * 40)) { nx = -nx; ny = -ny; }
 					if (r() < 0.15) continue;
+					// Pas de nuage sur la prochaine parcelle, à demi dégagée : il y flotterait comme une boule de coton.
+					if (this.lockedCells().some(c => this.inBlob(this.blob(c), px + nx * 60, py + ny * 60, -80))) continue;
 					const n = r() < 0.3 ? 2 + Math.floor(r() * 2) : 1;
 					for (let q = 0; q < n; q++) {
 						// Le centre reste dehors ; le bord vient mordre un peu sur la clairière.
@@ -727,8 +731,10 @@ export class Garden {
 		for (let i = 0; i < 160; i++) {
 			const x = x0 + r() * (mk.x1 - x0), y = y0 + r() * (mk.y1 - y0);
 			const j = Math.floor((y - y0) * k) * W + Math.floor((x - x0) * k);
-			if (!(D[j] / k > 220)) continue;
-			lobes.push([x, y, r.range(150, 340), r.range(0.2, 0.45), r.range(0.55, 0.8)]);
+			// Seulement dans la brume qui s'épaissit, et jamais près du bord de l'image (un lobe coupé y ferait un trait net).
+			const rad = r.range(150, 300);
+			if (!(D[j] / k > 220 && D[j] / k < FOG_FAR) || x - rad < x0 || x + rad > mk.x1 || y - rad < y0 || y + rad > mk.y1) continue;
+			lobes.push([x, y, rad, r.range(0.2, 0.4), r.range(0.55, 0.8)]);
 		}
 		const blot = (x, y, rr, sy, col, al) => {
 			const grd = g.createRadialGradient(x, y, 0, x, y, rr);
@@ -2741,9 +2747,11 @@ export class Garden {
 		// Peintures en attente (sol, plantes) : quelques millisecondes par image, jamais d'écran figé.
 		this.workTiles(5);
 		this.paintUntil = performance.now() + 6;
-		const lo = this.cam.z < 0.6;
 		const gx0 = Math.floor((v.x0 - 10) / PARCEL_W), gx1 = Math.floor((v.x0 + v.w + 10) / PARCEL_W);
 		const gy0 = Math.floor((v.y0 - 10) / PARCEL_H), gy1 = Math.floor((v.y0 + v.h + 10) / PARCEL_H);
+		// Toutes les cases à l'écran dans la même version : de loin, ou s'il y en a plus que la mémoire n'en garde
+		// en détail (9), toutes légères. Une case nette à côté d'une floue dessinait un trait droit dans le paysage.
+		const lo = this.cam.z < 0.6 || (gx1 - gx0 + 1) * (gy1 - gy0 + 1) > HI_TILES;
 		world();
 		// Chaque tuile déborde d'un pixel d'écran sur la suivante : sans ça, un fin trait clair apparaît aux raccords.
 		const seam = 1.5 / this.scale;
@@ -2753,10 +2761,7 @@ export class Garden {
 			else { ctx.fillStyle = this.groundColor(GROUND[this.tileAt(gx, gy).biome].base); ctx.fillRect(gx * PARCEL_W, gy * PARCEL_H, PARCEL_W, PARCEL_H); }
 		}
 		if (!glyph) this.drawStreams(ctx, v, gx0, gx1, gy0, gy1);
-		this.drawMist(ctx, world, cw, ch);
-		this.trimTiles();
-
-		// Ombres de nuages, plus denses par temps couvert.
+		// Ombres de nuages, plus denses par temps couvert. Sous la brume : elles assombrissent le sol, jamais le brouillard.
 		const cloudy = { clouds: 1.5, overcast: 2.2, rain: 2, drizzle: 2, storm: 2.6, snow: 1.6, fog: 0.4 }[wk] ?? 1;
 		if (day > 0) {
 			ctx.globalCompositeOperation = 'multiply';
@@ -2772,6 +2777,9 @@ export class Garden {
 			ctx.globalCompositeOperation = 'source-over';
 			ctx.globalAlpha = 1;
 		}
+
+		this.drawMist(ctx, world, cw, ch);
+		this.trimTiles();
 
 		// La terre des potagers, à même le sol : les parcelles voisines se soudent en un seul champ.
 		if (!glyph) for (const it of this.items) {

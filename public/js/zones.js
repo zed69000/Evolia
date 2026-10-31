@@ -474,11 +474,20 @@ function weights(at, gx, gy, x, y) {
 	return w;
 }
 
+/**
+ * Le relief mélangé en un point : hauteur, lumière, couleur de l'ombre, éclat des pentes au soleil, et la part de
+ * forêt (mousse) et de marais (bas-fonds humides). Tout est pondéré : rien ne s'arrête net sur une frontière.
+ */
 function mixed(at, gx, gy, x, y) {
 	const w = weights(at, gx, gy, x, y);
-	let h = 0, light = 0;
-	for (const [b, k] of Object.entries(w)) { h += k * heightAt(b, x, y); light += k * RELIEF[b].light; }
-	return { h, light, own: w[at(gx, gy).biome] };
+	let h = 0, light = 0, lit = 0;
+	const shade = [0, 0, 0];
+	for (const [b, k] of Object.entries(w)) {
+		const R = RELIEF[b], sh = R.shade ?? [30, 44, 40];
+		h += k * heightAt(b, x, y); light += k * R.light; lit += k * (R.lit ?? 1);
+		for (let c = 0; c < 3; c++) shade[c] += k * sh[c];
+	}
+	return { h, light, lit, shade, moss: w.foret ?? 0, damp: w.marais ?? 0, own: w[at(gx, gy).biome] };
 }
 
 /** Ombrage des pentes (lumière venue d'en haut à gauche), en une petite image lissée posée sur la case. */
@@ -486,10 +495,10 @@ function reliefSteps(at, gx, gy) {
 	// La grille déborde d'un pas tout autour : le lissage ne voit jamais le bord de la case (pas de couture).
 	const biome = at(gx, gy).biome, W = PARCEL_W, H = PARCEL_H, ox = gx * W, oy = gy * H;
 	const R = RELIEF[biome], step = 12, nx = Math.ceil(W / step) + 3, ny = Math.ceil(H / step) + 3, gx0 = ox - step, gy0 = oy - step;
-	const hs = new Float32Array(nx * ny), ls = new Float32Array(nx * ny), owns = new Float32Array(nx * ny);
+	const hs = new Float32Array(nx * ny), ls = new Float32Array(nx * ny), owns = new Float32Array(nx * ny), ms = [];
 	for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
 		const m = mixed(at, gx, gy, gx0 + i * step, gy0 + j * step);
-		hs[j * nx + i] = m.h; ls[j * nx + i] = m.light; owns[j * nx + i] = m.own;
+		hs[j * nx + i] = m.h; ls[j * nx + i] = m.light; owns[j * nx + i] = m.own; ms[j * nx + i] = m;
 	}
 	const hAt = (i, j) => hs[Math.max(0, Math.min(ny - 1, j)) * nx + Math.max(0, Math.min(nx - 1, i))];
 	const steps = [];
@@ -500,11 +509,11 @@ function reliefSteps(at, gx, gy) {
 		for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
 			const dx = (hAt(i + 1, j) - hAt(i - 1, j)) / (2 * step), dy = (hAt(i, j + 1) - hAt(i, j - 1)) / (2 * step);
 			// Pente éclairée (face au nord-ouest) : plus claire ; pente à l'ombre : plus sombre.
-			const k = j * nx + i, s = Math.max(-1, Math.min(1, (dx * 0.7 + dy * 0.7) * -420 * ls[k])), h = hs[k], o = owns[k];
-			let r = 255, gg = 250, b = 228, a = s > 0 ? s * 85 * (R.lit ?? 1) : 0;
-			if (s < 0) { [r, gg, b] = R.shade ?? [30, 44, 40]; a = -s * 150; }
-			if (R.moss && h < -0.35) { r = 40; gg = 72; b = 38; a = Math.max(a, Math.min(70, (-0.35 - h) * 160) * o); }
-			if (R.damp && h < -0.12) { r = 60; gg = 96; b = 84; a = Math.max(a, Math.min(60, (-0.12 - h) * 300) * o); }
+			const k = j * nx + i, s = Math.max(-1, Math.min(1, (dx * 0.7 + dy * 0.7) * -420 * ls[k])), h = hs[k], m = ms[k];
+			let r = 255, gg = 250, b = 228, a = s > 0 ? s * 85 * m.lit : 0;
+			if (s < 0) { [r, gg, b] = m.shade; a = -s * 150; }
+			if (m.moss && h < -0.35) { r = 40; gg = 72; b = 38; a = Math.max(a, Math.min(70, (-0.35 - h) * 160) * m.moss); }
+			if (m.damp && h < -0.12) { r = 60; gg = 96; b = 84; a = Math.max(a, Math.min(60, (-0.12 - h) * 300) * m.damp); }
 			img.data[k * 4] = r; img.data[k * 4 + 1] = gg; img.data[k * 4 + 2] = b; img.data[k * 4 + 3] = a;
 		}
 		c.getContext('2d').putImageData(img, 0, 0);

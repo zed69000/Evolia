@@ -3,6 +3,13 @@
 Chaque version, la plus récente en haut. Le site (evolia.sebastienalzamora.workers.dev) est toujours à jour ;
 le Play Store (tests internes) reçoit les versions indiquées « Play ».
 
+## 0.7.4 — 31 octobre 2026
+- **Plus aucun raccord dans le paysage.**
+    - Les bas-fonds humides du marais, la mousse de la forêt et la couleur des ombres se fondent d'un milieu à l'autre : ils s'arrêtaient net sur la frontière, ce qui dessinait un trait droit, surtout sous la brume.
+    - Toutes les cases du sol à l'écran sont dans la même version (détaillée ou légère) : une case nette à côté d'une floue faisait une ligne.
+    - Les ombres des nuages qui passent ne tachent plus le brouillard.
+    - Plus de nuage isolé qui flotte sur la prochaine parcelle.
+
 ## 0.7.3 — 31 octobre 2026
 - **La brume, encore plus douce.** Plus aucun trait net dans le brouillard (ni droit au loin, ni autour de la prochaine parcelle). Les nuages du bord ont des tailles et des écarts variés, se posent sur une bande de brume continue au lieu de flotter seuls, et forment une seule masse. Le brouillard s'épaissit plus vite : on ne voit plus de taches sombres au loin.
 - **Plus de vol d'oiseaux** qui traversait l'écran.
