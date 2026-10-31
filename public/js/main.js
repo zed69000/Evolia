@@ -392,7 +392,8 @@ const ownedAny = cat => Object.values(state.places).some(p => (p.items ?? []).so
 const totalKm = () => state.totals.distance / 1000;
 
 const TIPS = [
-	{ id: 'purse', target: '#hud-steps', when: () => state.totals.distance > 0 || (state.nectar ?? 0) >= 1,
+	// La bourse d'abord, dès l'arrivée : tout le reste du guide en découle.
+	{ id: 'purse', target: '#hud-steps', when: () => true,
 		title: 'Ta bourse de nectar', text: 'Le nectar sert à aménager ton jardin. Tes pas en produisent (1 pour 5 m), tes animaux aussi : il se dépose sur les fleurs, et tu le cueilles. Dessous, ce qui t’attend.' },
 	{ id: 'dew', target: '#hud-steps', when: () => groundOf(state) >= 2, show: () => focusDew(),
 		title: 'Du nectar sur les fleurs', text: 'Tes butineurs déposent leur récolte en gouttes dorées sur les fleurs. Touche-les pour la cueillir : sinon elle attend, sans entrer dans ta bourse.' },
@@ -400,9 +401,12 @@ const TIPS = [
 		title: 'Aménager', text: 'Tu as de quoi poser un collecteur : il garde la récolte de tes butineurs, plus besoin de cueillir les gouttes une à une.' },
 	{ id: 'jar', target: '#hud-steps', when: () => jarOf(state) >= 5, show: () => focusJar(),
 		title: 'Ton collecteur se remplit', text: 'L’étiquette au-dessus montre ce qu’il contient. Touche-le pour tout récupérer. Plein, il ne prend plus rien : le nectar reste au sol, en gouttes sur les fleurs. Vide-le, ou améliore-le.' },
+	{ id: 'jarup', target: '#hud-steps', show: () => focusJar(),
+		when: () => hasCollector(state) && jarOf(state) >= jarCap(state) && groundOf(state) >= 100 && garden.items.some(it => it.kind === 'collecteur' && (it.level ?? 1) < 3),
+		title: 'Ton collecteur déborde', text: 'Ta récolte ne tient plus dans ton collecteur : le reste attend en gouttes sur les fleurs. Touche le collecteur au jardin pour l’améliorer (il garde 400, puis 1 000 nectar), ou poses-en un deuxième.' },
 	{ id: 'eco', target: '#btn-eco', when: () => !!state.tips?.purse && SPECIES.some(sp => sp.kind === 'animal' && state.species[sp.id]),
 		title: 'Ton écosystème', text: 'Les animaux découverts travaillent pour toi, même appli fermée : ils font pousser le jardin et récoltent du nectar. Quand tu bouges, ils travaillent trois fois plus.' },
-	{ id: 'species', target: '#btn-species', when: () => Object.keys(state.species).length >= 1,
+	{ id: 'species', target: '#btn-species', when: () => !!state.tips?.purse && Object.keys(state.species).length >= 1,
 		title: 'Les espèces', text: 'Chaque plante et chaque animal découvert a sa fiche : son rôle dans la nature, et comment l’aider chez toi.' },
 	{ id: 'habitats', target: '#btn-deco', when: () => ownedAny('habitat') || ((state.nectar ?? 0) >= 40 && hasCollector(state)),
 		title: 'Des abris pour la faune', text: 'Dans Aménager › Habitats : chaque abri renforce une équipe d’animaux, et chaque niveau d’abri relève de 3 % ce que ton écosystème peut produire. Améliore-les plutôt que d’en poser partout.' },

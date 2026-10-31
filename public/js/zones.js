@@ -81,8 +81,11 @@ export function zoneOf(biome, ci) {
 	return list[(ci - 1) % list.length];
 }
 
+/** Le nom d'un coin ; quand la liste recommence (au-delà de 6 ou 7 parcelles), on va « plus loin ». */
 export function zoneName(biome, ci, placeName) {
-	return zoneOf(biome, ci)?.name ?? placeName;
+	const zone = zoneOf(biome, ci);
+	if (!zone) return placeName;
+	return Math.floor((ci - 1) / ZONES[biome].length) ? `${zone.name}, plus loin` : zone.name;
 }
 
 // ─── Le sol ────────────────────────────────────────────────────

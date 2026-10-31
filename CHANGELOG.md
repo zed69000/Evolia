@@ -3,6 +3,11 @@
 Chaque version, la plus récente en haut. Le site (evolia.sebastienalzamora.workers.dev) est toujours à jour ;
 le Play Store (tests internes) reçoit les versions indiquées « Play ».
 
+## 0.6.36 — 31 octobre 2026
+- **Le guide commence par la bourse de nectar**, dès l'arrivée, puis présente les espèces.
+- **Une bulle quand le collecteur déborde :** elle propose de l'améliorer (400, puis 1 000 nectar) ou d'en poser un deuxième.
+- **Les coins ne se répètent plus :** quand la liste recommence, la parcelle s'appelle par exemple « Le champ de coquelicots, plus loin ».
+
 ## 0.6.35 — 31 octobre 2026 · Play
 - **Des biomes qui ressemblent à leur nom.**
     - **Forêt :** on y arrive sous de vieux arbres, sur un sol d'humus couvert de feuilles, de fougères et de mousse.
