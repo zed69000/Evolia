@@ -1524,6 +1524,9 @@ export class Garden {
 			let want = this.state.species[sp.id] && ok(c.when) ? Math.round((c.count(this.state) + (this.idleBonus?.(sp) ?? 0)) * scale) + attracted(place, sp.id) : 0;
 			// Sous la pluie ou la neige, les insectes volants se mettent à l'abri.
 			if (wet && FLYERS.has(c.kind)) want = 0;
+			// Les oiseaux et les mammifères restent peu nombreux : une nuée de merles ou de lièvres ferait désordre.
+			const most = { bird: 4, tit: 4, hare: 4, rabbit: 4, roe: 3, chamois: 3, fox: 2, squirrel: 3, heron: 2, owl: 1, eagle: 1, gull: 4, duck: 4 }[c.kind];
+			if (most) want = Math.min(want, most);
 			const active = this.insects.filter(i => i.sp === sp.id && !i.leaving);
 			for (let k = active.length; k < want; k++) {
 				let b = null;
@@ -2917,8 +2920,10 @@ export class Garden {
 		let best = null, bestD = 16 / Math.min(1, this.cam.z);
 		for (const b of this.insects) {
 			const pts = b.behavior === 'trail' ? (b.pos ?? []) : [[b.x, b.y]];
+			// Les oiseaux et les gros animaux se touchent plus facilement : leur corps dépasse leur point d'ancrage.
+			const big = (CRITTER_SIZE[b.kind] ?? 1) >= 1.4 ? 1.6 : 1;
 			for (const [x, y] of pts) {
-				const d = Math.hypot(x - wx, y - wy);
+				const d = Math.hypot(x - wx, (y - 6 * big) - wy) / big;
 				if (d < bestD) { bestD = d; best = b; }
 			}
 		}

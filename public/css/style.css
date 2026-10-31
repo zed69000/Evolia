@@ -752,3 +752,5 @@ html, body {
 .tip.below::after { bottom: auto; top: -8px; border: 8px solid transparent; border-top: 0; border-bottom-color: var(--papier); }
 .tip-glow { animation: tip-glow 1.4s ease-in-out infinite; }
 @keyframes tip-glow { 0%, 100% { box-shadow: 0 0 0 0 rgba(240, 138, 60, .55); } 50% { box-shadow: 0 0 0 9px rgba(240, 138, 60, 0); } }
+/* Une fenêtre ou une page ouverte cache la bulle du guide, qui revient ensuite. */
+body:has(#modal:not([hidden])) .tip, body:has(.panel.open) .tip, body:has(#coach:not([hidden])) .tip { display: none; }

@@ -158,7 +158,7 @@ function renderHud() {
 	// La bourse de nectar, bien en vue ; dessous, ce qui attend d'être récolté (dans les fleurs ou le collecteur).
 	const pend = Math.floor(state.pending ?? 0), full = pend >= nectarCapacity(state);
 	$('#hud-steps').innerHTML = `<span class="nectar${boostLeft(state) ? ' boost' : ''}">${fmtInt(state.nectar ?? 0)}</span>`
-		+ `<small class="${full ? 'full' : pend >= 1 ? 'wait' : ''}">${full ? 'réserve pleine !' : pend >= 1 ? `+${fmtInt(pend)} à récolter` : 'nectar'}</small>`;
+		+ `<small class="${full ? 'full' : pend >= 1 ? 'wait' : ''}">${pend >= 1 ? `+${fmtInt(pend)} à récolter` : 'nectar'}</small>`;
 	const k = Math.min(1, km / state.goalKm);
 	$('#ring-fg').style.strokeDashoffset = String(113.1 * (1 - k));
 }
@@ -348,7 +348,7 @@ const totalKm = () => state.totals.distance / 1000;
 
 const TIPS = [
 	{ id: 'purse', target: '#hud-steps', when: () => state.totals.distance > 0 || (state.nectar ?? 0) >= 1,
-		title: 'Ta bourse de nectar', text: 'Tes pas te rapportent du nectar directement : 1 pour 5 m. Dessous, ce que tes animaux ont récolté et qui t’attend.' },
+		title: 'Ta bourse de nectar', text: 'Le nectar sert à aménager ton jardin. Tes pas en produisent (1 pour 5 m), tes animaux aussi : il se dépose sur les fleurs, et tu le cueilles. Dessous, ce qui t’attend.' },
 	{ id: 'dew', target: '#hud-steps', when: () => !hasCollector(state) && (state.pending ?? 0) >= 2, show: () => focusDew(),
 		title: 'Du nectar sur les fleurs', text: 'Tes butineurs déposent leur récolte en gouttes dorées sur les fleurs. Touche-les pour la cueillir : sinon elle attend, sans entrer dans ta bourse.' },
 	{ id: 'deco', target: '#btn-deco', when: () => (state.nectar ?? 0) >= 60 && !hasCollector(state),
@@ -511,7 +511,9 @@ function addMeters(m) {
 		}
 	}
 	here().km += m / 1000;
-	state.nectar = (state.nectar ?? 0) + m / 5;
+	// Le nectar de la marche se dépose comme celui des butineurs : en gouttes sur les fleurs, ou dans le collecteur.
+	// Il n'est pas limité par la réserve : ce qu'on a gagné en marchant ne se perd jamais.
+	state.pending = (state.pending ?? 0) + m / 5;
 	if (markActive(state)) {
 		const s = state.daily.streak;
 		toast(s > 1 ? `Jour actif : ${s} jours de suite !` : 'Jour actif : ta série commence', '#F08A3C', () => showDaily());
@@ -805,7 +807,7 @@ function showRecap(w, duration, matured) {
 		const r = rates(state, state.place);
 		const mins = Math.min(360, (duration / 60) * BOOST_PER_MIN);
 		const flowers = ((r.grow.fleur ?? 0) * (BOOST_MULT - 1) * mins) / 60 / PLANT_TYPES.fleur.cost;
-		ecoLine = `<p class="eco-gain">Ton écosystème profite de ta sortie : <b>+${fmtInt(w.distance / 5)} nectar</b> et production <b>×${BOOST_MULT}</b> pendant ${fmtMin(mins)}${flowers >= 0.5 ? `, soit environ ${fmtInt(flowers)} fleur${flowers >= 1.5 ? 's' : ''} en plus grâce à tes pollinisateurs` : ''}.</p>`;
+		ecoLine = `<p class="eco-gain">Ton écosystème profite de ta sortie : <b>+${fmtInt(w.distance / 5)} nectar à récolter</b> et production <b>×${BOOST_MULT}</b> pendant ${fmtMin(mins)}${flowers >= 0.5 ? `, soit environ ${fmtInt(flowers)} fleur${flowers >= 1.5 ? 's' : ''} en plus grâce à tes pollinisateurs` : ''}.</p>`;
 	}
 	showModal(`
 		<h2>${title}</h2><p>Voici ce qui a poussé grâce à toi.</p>
@@ -852,13 +854,13 @@ async function playHarvest(res, source) {
 	state.totals.distance += res.distance;
 	here().km += res.distance / 1000;
 	state.totals.steps += res.steps;
-	state.nectar = (state.nectar ?? 0) + res.distance / 5;
+	state.pending = (state.pending ?? 0) + res.distance / 5;
 	// L'élan des pas relus vaut celui d'une marche suivie en direct : 3 min par minute de vraie marche,
 	// 2 min par minute de petits pas (ménage, marche lente).
 	addBoost(state, res.groups.reduce((n, g) => n + g.minutes * (g.act.id === 'menage' || g.act.id === 'marche-lente' ? 2 : 3), 0));
 	renderHud();
 	closeModal();
-	toast(`${fmtInt(res.steps)} pas pendant ton absence · +${fmtInt(res.distance / 5)} nectar dans ta bourse`, '#A3BD57');
+	toast(`${fmtInt(res.steps)} pas pendant ton absence · +${fmtInt(res.distance / 5)} nectar à récolter`, '#A3BD57');
 	garden.setFollow(true);
 	const rows = [], events = [];
 	for (const g of res.groups.sort((a, b) => b.effort - a.effort)) {
@@ -883,7 +885,7 @@ async function playHarvest(res, source) {
 	showModal(`<div class="modal-body">
 		<h2>Pendant ton absence</h2>
 		<p>${fmtInt(res.steps)} pas · ${fmt(res.distance / 1000)} km, comptés par ${source.label}. Même le ménage fait pousser ton jardin.</p>
-		<p class="harvest-info">Tes pas t’ont rapporté <b>+${fmtInt(res.distance / 5)} nectar</b>, directement dans ta bourse (1 pour 5 m). La récolte de tes animaux, elle, t’attend ${hasCollector(state) ? 'dans ton collecteur' : 'en gouttes sur les fleurs'}.</p>
+		<p class="harvest-info">Tes pas t’ont rapporté <b>+${fmtInt(res.distance / 5)} nectar</b> (1 pour 5 m). Avec la récolte de tes animaux, il t’attend ${hasCollector(state) ? 'dans ton collecteur : touche-le pour tout récupérer' : 'en gouttes dorées sur les fleurs : touche-les pour le cueillir'}.</p>
 		<ul class="harvest-rows">${rows.join('')}</ul>${decor ? `<div class="chips">${decor}</div>` : ''}
 		${idleNote ? `<p>Et ton écosystème a travaillé :</p>${idleNote}` : ''}</div>
 		<div class="modal-foot"><button class="btn primary" data-close>Voir mon jardin</button></div>`);
@@ -1060,7 +1062,7 @@ function renderZoomInfo() {
 	card.innerHTML = `<div class="zi-head"><b>Récolte du nectar</b>${x > 1 ? `<span class="zi-boost">élan ×${x} · ${fmtMin(boostLeft(state) / 60000)}</span>` : ''}</div>
 		<div class="zi-total"><span class="nectar">${live.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span><small>à récolter · +${fmt(r.nectar * x, 1)}/h ici</small></div>
 		${rows ? `<ul>${rows}</ul>` : '<p>Découvre des pollinisateurs : ils récoltent le nectar pour toi.</p>'}
-		<p class="zi-move">En marchant : +1 nectar tous les 5 m${x === 1 ? ', et la récolte triple ensuite' : ''}.</p>
+		<p class="zi-move">En marchant : +1 nectar à récolter tous les 5 m${x === 1 ? ', et la récolte triple ensuite' : ''}.</p>
 		${growing ? `<p class="zi-grow">${plantName(growing)} · ${Math.floor(growing.growth * 100)} %</p>` : ''}`;
 }
 setInterval(renderZoomInfo, 250);
