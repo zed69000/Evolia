@@ -73,7 +73,12 @@ function persist(now = false) {
 	else saveTimer = setTimeout(() => save(state), 3000);
 }
 
-const species = new Encyclopedia($('#species'), state, () => { persist(); updateSpeciesDot(); });
+const species = new Encyclopedia($('#species'), state, e => {
+	// La première lecture d'une fiche rapporte un peu de nectar, directement dans la bourse.
+	if (e?.reward) { state.nectar = (state.nectar ?? 0) + e.reward; renderHud(); sound.chime?.(1); }
+	persist();
+	updateSpeciesDot();
+});
 const places = new PlacesMap($('#map'), state, showBiome);
 // Aider une équipe de l'écosystème, c'est poser l'objet qui l'attire (s'il est débloqué et payable), sinon voir la liste.
 // La récolte en attente : sans collecteur, elle perle sur les fleurs ; avec, elle remplit les jarres.

@@ -3,6 +3,9 @@
 Chaque version, la plus récente en haut. Le site (evolia.sebastienalzamora.workers.dev) est toujours à jour ;
 le Play Store (tests internes) reçoit les versions indiquées « Play ».
 
+## 0.7.31 — 1er novembre 2026
+- **Lire une fiche rapporte du nectar.** La première fois qu'on ouvre la fiche d'une espèce découverte, on gagne +10 nectar, tout de suite dans la bourse. L'étiquette des espèces pas encore lues l'annonce (« Nouveau · +10 »), et la fiche le confirme.
+
 ## 0.7.30 — 1er novembre 2026
 - **Le nectar d'une sortie suit l'effort.** Un kilomètre de marche à 5 km/h rapporte toujours 200 nectar ; un kilomètre de course à 10 km/h en rapporte maintenant environ 420 (une heure de course ≈ 4 200, contre 1 000 pour une heure de marche), et la montée compte aussi. Les pas relus à la réouverture suivent la même règle. Le vélo garde sa part réduite (comme pour la progression).
 - **Le plafond de l'écosystème suit l'effort** des 7 derniers jours, compté en kilomètres de marche équivalents : une semaine sportive laisse l'écosystème produire bien plus qu'une semaine de petites marches. Le sport reste le moteur du jeu, même quand l'écosystème tourne à plein.

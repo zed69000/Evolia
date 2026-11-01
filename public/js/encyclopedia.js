@@ -81,6 +81,9 @@ export function thumbCopy(sp, size, locked) {
 	return copy;
 }
 
+// Lire la fiche d'une espèce qu'on vient de découvrir rapporte un peu de nectar : on apprend à la connaître.
+export const READ_REWARD = 10;
+
 const esc = s => s.replace(/[&<>"]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
 
 export class Encyclopedia {
@@ -124,7 +127,7 @@ export class Encyclopedia {
 			const known = !!st.species[s.id];
 			const fresh = known && !st.speciesSeen?.[s.id];
 			return `<button class="sp-card${known ? '' : ' locked'}" data-sp="${s.id}">
-					${fresh ? '<span class="sp-new">Nouveau</span>' : ''}
+					${fresh ? `<span class="sp-new">Nouveau · +${READ_REWARD}</span>` : ''}
 					<span class="sp-thumb" data-thumb="${s.id}"></span>
 					<span class="sp-name">${known ? esc(s.name) : '???'}</span>
 				</button>`;
@@ -179,9 +182,10 @@ export class Encyclopedia {
 		const s = SPECIES.find(x => x.id === id);
 		this.filter = s.place;
 		const known = !!this.state.species[id];
+		let reward = 0;
 		if (known) {
 			this.state.speciesSeen ??= {};
-			if (!this.state.speciesSeen[id]) { this.state.speciesSeen[id] = true; this.onChange?.(); }
+			if (!this.state.speciesSeen[id]) { this.state.speciesSeen[id] = true; reward = READ_REWARD; this.onChange?.({ reward }); }
 		}
 		const date = known ? new Date(this.state.species[id]).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' }) : '';
 		this.panel.innerHTML = `
@@ -190,6 +194,7 @@ export class Encyclopedia {
 				<div class="sp-hero" id="sp-hero"></div>
 				<span class="chip">${KINDS[s.kind]}</span> <span class="chip">${PLACE_BY_ID[s.place].name}</span>
 				<h2>${known ? esc(s.name) : 'Espèce inconnue'}</h2>
+				${reward ? `<p class="sp-reward">+${reward} nectar pour avoir lu sa fiche</p>` : ''}
 				${known ? `<p class="latin">${esc(s.latin)}</p>
 					<h3>Son rôle</h3><p>${esc(s.role)}</p>
 					<div class="sp-help"><h3>Comment l'aider</h3><p>${esc(s.help)}</p></div>

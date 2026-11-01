@@ -356,6 +356,7 @@ html, body {
 .sp-section small { font-size: 12px; color: var(--doux); font-weight: 700; }
 .sp-name { font-size: 12px; font-weight: 800; color: var(--foret); line-height: 1.2; text-align: center; }
 .sp-card.locked .sp-name { color: #B5AE95; }
+.sp-reward { display: inline-block; margin: 0 0 8px; padding: 4px 10px; border-radius: 999px; background: #FCEBC4; color: #8A5A10; font-weight: 800; font-size: 13px; }
 .sp-new { position: absolute; top: 6px; right: 6px; background: var(--elan); color: #fff; font-size: 10px; font-weight: 800; padding: 2px 6px; border-radius: 8px; }
 .sp-detail { text-align: center; }
 .sp-detail h2 { margin: 8px 0 0; }
