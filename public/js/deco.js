@@ -33,9 +33,12 @@ export const ITEMS = {
 	muret: { cat: 'habitat', name: 'Un muret de pierres sèches', cost: 140, km: 10, team: 'regulateur', power: 2, attracts: 'lezard', turn: true, text: 'Des pierres posées sans mortier, qui gardent la chaleur : lézards, orvets et papillons s’y abritent. Pose plusieurs tronçons bout à bout pour en faire un long mur.', box: { w: 190, h: 90, ax: 95, ay: 66 } },
 	pas: { cat: 'deco', name: 'Des pas japonais', cost: 20, km: 0, turn: true, text: 'Quelques pierres plates dans l’herbe, pour flâner sans tasser le sol. Mets-en plusieurs à la suite pour tracer une allée.', box: { w: 150, h: 60, ax: 75, ay: 32 } },
 	epouvantail: { cat: 'deco', name: 'Un épouvantail', cost: 80, km: 6, text: 'Chapeau de paille et chemise à carreaux : il veille sur le potager, et les oiseaux s’y posent quand même.', box: { w: 100, h: 160, ax: 50, ay: 148 } },
+	poulailler: { cat: 'recolte', name: 'Un poulailler', cost: 160, km: 7, turn: true, needs: 'cabane', team: 'regulateur', power: 1, text: 'Des poules et leur coq picorent autour : elles mangent limaces et insectes, grattent la terre et rentrent dormir à la nuit. Elles pondent quand tu marches, et ton jardinier ramasse les œufs. Agrandis-le pour accueillir plus de poules ou de coqs.', box: { w: 150, h: 140, ax: 75, ay: 112 },
+		levels: { max: 3, cost: [0, 0, 400, 1200], km: [0, 0, 12, 25], name: ['', 'petit poulailler', 'poulailler', 'grand poulailler'], seats: [0, 4, 6, 8] },
+		boxes: [null, null, { w: 180, h: 145, ax: 90, ay: 115 }, { w: 230, h: 150, ax: 115, ay: 118 }] },
 	arche: { cat: 'deco', name: 'Une arche de roses', cost: 120, km: 14, turn: true, team: 'pollinisateur', power: 1, attracts: 'paon-du-jour', text: 'Un passage fleuri pour les papillons.', box: { w: 170, h: 190, ax: 85, ay: 172 } },
 };
-export const ITEM_ORDER = ['collecteur', 'banc', 'pas', 'massif', 'bois', 'pierres', 'mangeoire', 'nichoir', 'lanterne', 'compost', 'hotel', 'sandarium', 'mare', 'cabane', 'potager', 'abri', 'ruche', 'epouvantail', 'bain', 'haie', 'muret', 'arche'];
+export const ITEM_ORDER = ['collecteur', 'banc', 'pas', 'massif', 'bois', 'pierres', 'mangeoire', 'nichoir', 'lanterne', 'compost', 'hotel', 'sandarium', 'mare', 'cabane', 'potager', 'poulailler', 'abri', 'ruche', 'epouvantail', 'bain', 'haie', 'muret', 'arche'];
 
 /**
  * Chaque milieu a ses aménagements : une ruche n'a rien à faire au fond d'un marais, ni un épouvantail sur la dune.
@@ -54,6 +57,7 @@ const BIOMES = {
 	ruche: ['prairie', 'montagne'],
 	bain: ['prairie', 'foret'],
 	potager: ['prairie'],
+	poulailler: ['prairie'],
 	sandarium: ['prairie', 'littoral', 'montagne'],
 	haie: ['prairie', 'foret', 'marais'],
 	muret: ['prairie', 'montagne', 'littoral'],
@@ -572,6 +576,37 @@ function paintAbri(g, rot) {
 	return { top: -40 };
 }
 
+function paintPoulailler(g, rot, lv = 1) {
+	const d = rng(61), W = 56 + (lv - 1) * 18;
+	shade(g, d, 60 + (lv - 1) * 14, 14);
+	// De la paille et de la terre grattée au pied.
+	for (let i = 0; i < 10; i++) wash(g, d.range(-46, 46), d.range(-4, 10), d.range(6, 14), d.range(2, 4), d.pick(['#D8B868', '#C8A050', '#9A7A50']), d, { layers: 3, alpha: 0.35, edge: 0.2 });
+	const front = (g2, d2) => {
+		planksV(W, 30, 8, '#6A4428')(g2, d2);
+		// La trappe des poules et une petite fenêtre grillagée.
+		g2.fillStyle = rgba('#1E140C', 0.92);
+		g2.beginPath(); g2.roundRect(8, -14, 11, 14, 2); g2.fill();
+		for (let wx = 34; wx + 14 <= W - 4; wx += 22) {
+			g2.fillStyle = rgba('#2A2018', 0.85); g2.fillRect(wx, -24, 14, 10);
+			g2.strokeStyle = rgba('#C8C0B0', 0.7); g2.lineWidth = 0.6;
+			for (let x = wx + 2; x < wx + 14; x += 3) { g2.beginPath(); g2.moveTo(x, -24); g2.lineTo(x, -14); g2.stroke(); }
+		}
+	};
+	const side = (g2, d2) => planksV(34, 30, 8, '#6A4428')(g2, d2);
+	const tiles = (g2, d2) => { for (let i = 0; i < 8 + lv * 3; i++) wash(g2, d2.range(4, W + 4), d2.range(-30, -4), d2.range(4, 9), 2, d2.pick(['#7A2E22', '#A8443A', '#8A3A2A']), d2, { layers: 3, alpha: 0.4, edge: 0.2 }); };
+	const post = (x, y) => box(x, y, 0, 3.4, 3.4, 16, '#5A3A22');
+	build(g, d, rot, [
+		post(-W / 2 + 3, -14), post(W / 2 - 3, -14), post(-W / 2 + 3, 14), post(W / 2 - 3, 14),
+		box(0, 0, 16, W, 34, 30, '#C8965A', { front, back: side, left: side, right: side }),
+		roof(0, 0, 46, W, 34, 16, 5, '#9A3E2E', tiles, '#B88A54'),
+		// Au grand poulailler, un pondoir accolé sur le côté, sous son petit toit.
+		...(lv >= 3 ? [box(W / 2 + 8, 0, 14, 16, 24, 14, '#B88A54', { front: side }), roof(W / 2 + 8, 0, 28, 16, 24, 6, 2, '#9A3E2E', null, '#B88A54')] : []),
+		// La petite échelle de bois qui descend de la trappe.
+		box(-12, 26, 0, 10, 18, 3, '#7A5232'),
+	]);
+	return { top: -78 };
+}
+
 function paintRuche(g) {
 	const d = rng(48);
 	shade(g, d, 36, 9);
@@ -944,7 +979,7 @@ export function paintAdorn(g, kind, level, front) {
 export const ITEM_PAINTERS = {
 	banc: paintBanc, massif: paintMassif, bois: paintBois, pierres: paintPierres, mangeoire: paintMangeoire, nichoir: paintNichoir,
 	lanterne: paintLanterne, compost: paintCompost, hotel: paintHotel, mare: paintMare, cabane: paintCabane, potager: paintPotager, collecteur: paintCollecteur, abri: paintAbri,
-	ruche: paintRuche, bain: paintBain, arche: paintArche, sandarium: paintSandarium, haie: paintHaie, muret: paintMuret, pas: paintPas, epouvantail: paintEpouvantail,
+	ruche: paintRuche, poulailler: paintPoulailler, bain: paintBain, arche: paintArche, sandarium: paintSandarium, haie: paintHaie, muret: paintMuret, pas: paintPas, epouvantail: paintEpouvantail,
 };
 
 /**

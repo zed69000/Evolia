@@ -3,6 +3,13 @@
 Chaque version, la plus récente en haut. Le site (evolia.sebastienalzamora.workers.dev) est toujours à jour ;
 le Play Store (tests internes) reçoit les versions indiquées « Play ».
 
+## 0.7.17 — 1er novembre 2026
+- **Un poulailler** (Aménager › Récolte, dès 7 km, une fois la cabane posée) : un coq et trois poules picorent autour, grattent la terre, courent gober un criquet ou un carabe, et rentrent dormir à la nuit tombée ou sous la pluie. Le coq chante le matin.
+- **Agrandis-le** : petit poulailler (4 places), poulailler (6, dès 12 km), grand poulailler (8, dès 25 km, avec un pondoir accolé). Il s'élargit à chaque niveau.
+- **Choisis tes bêtes** : touche le poulailler pour ajouter une poule ou un coq (40 nectar) tant qu'il reste de la place, ou en retirer un.
+- **Des œufs à récolter** : chaque poule pond en marchant (un et demi par kilomètre). Quand il y en a assez, ton jardinier va les ramasser et les rapporte dans son panier : 8 nectar l'œuf.
+- **Le chat chasse** : quand un papillon, un criquet ou un carabe passe près de lui, il le traque à pas lents, s'arrête, repart… puis bondit. La proie s'échappe presque toujours (le papillon remonte, le criquet saute), et il reste à la regarder filer.
+
 ## 0.7.16 — 1er novembre 2026
 - **Les oiseaux qui planent ne suivent plus le zoom.** Leur cercle était calé sur l'écran : en zoomant, ils se déplaçaient avec la vue, et tous tournaient autour du même point, à la même vitesse, comme liés. Chacun a maintenant son propre cercle, fixé dans le jardin et qui dérive lentement avec le vent, son rayon, sa vitesse et son sens.
 - Zoomer ou dézoomer ne fait plus apparaître ou partir les grands animaux, les rapaces et les hirondelles.

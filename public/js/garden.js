@@ -1213,13 +1213,19 @@ export class Garden {
 		return [first.x + Math.round((x - first.x) / PLOT.w) * PLOT.w, first.y + Math.round((y - first.y) / PLOT.h) * PLOT.h];
 	}
 
+	/** Œufs prêts à ramasser au poulailler : chaque poule en pond un et demi par kilomètre, trois au plus en attente. */
+	eggsOf(it) {
+		const hens = it.flock?.hens ?? 3;
+		return Math.max(0, Math.min(hens * 3, Math.floor((this.state.totals.distance / 1000 - (it.km0 ?? 0)) * hens * 1.5)));
+	}
+
 	/** Pousse des légumes d'une parcelle (0 → 1) : ils mûrissent en 2,5 km parcourus. */
 	bedStage(it) {
 		return Math.max(0, Math.min(1, (this.state.totals.distance / 1000 - (it.km0 ?? 0)) / 2.5));
 	}
 
 	placeItem(kind, x, y, rot = 0) {
-		const it = { id: uid(), kind, x: Math.round(x), y: Math.round(y), rot, at: Date.now(), ...(kind === 'potager' ? { km0: this.state.totals.distance / 1000 } : {}) };
+		const it = { id: uid(), kind, x: Math.round(x), y: Math.round(y), rot, at: Date.now(), ...(kind === 'potager' || kind === 'poulailler' ? { km0: this.state.totals.distance / 1000 } : {}), ...(kind === 'poulailler' ? { flock: { hens: 3, roosters: 1 } } : {}) };
 		this.items.push(it);
 		this.clearUnder(it);
 		this.popItem(it, true);
@@ -1910,6 +1916,7 @@ export class Garden {
 		this.insects = this.insects.filter(i => !i.gone);
 		this.updateFarmer(dt);
 		this.updatePet(dt);
+		this.updateHens(dt);
 		this.updateBuilds();
 		for (const p of this.particles) {
 			p.x += p.vx * dt; p.y += p.vy * dt; p.life -= p.decay * dt;
@@ -2242,6 +2249,45 @@ export class Garden {
 		a.hidden = !!f?.hidden && (this.night() > 0.45 || this.precip() > 0.5);
 		if (a.hidden) { a.x = door.x + 14; a.y = door.y + 4; a.mode = 'sleep'; return; }
 		a.timer -= dt;
+		// Le chat chasse : il repère un papillon ou un criquet, le traque à pas lents, bondit… et le rate souvent.
+		// Ensuite il reste assis à le regarder s'enfuir, la queue qui fouette.
+		if (kind === 'cat' && !(f && !f.hidden && f.mode === 'stroll')) {
+			if (a.pounce != null) {
+				a.pounce += dt / 0.5;
+				const b = a.hunt, u = Math.min(1, a.pounce);
+				a.lift = Math.sin(u * Math.PI) * 9;
+				if (b) { const gy = b.y + (FLIGHT[b.kind] ?? 0); a.x += (b.x - a.x) * Math.min(1, dt * 6); a.y += (gy - a.y) * Math.min(1, dt * 6); }
+				a.mode = 'run'; a.ph += dt * 3;
+				if (u >= 1) {
+					if (b && !b.gone) {
+						// La proie s'échappe : le papillon remonte d'un coup d'aile, le criquet saute.
+						if (b.behavior === 'hop') b.timer = 0;
+						else { b.y -= 26; b.target = null; b.mode = b.behavior === 'flutter' ? 'wander' : b.mode; b.timer = 2; }
+					}
+					a.pounce = null; a.lift = 0; a.hunt = null; a.goal = null; a.mode = 'stand'; a.timer = 2.5 + Math.random() * 4;
+				}
+				return;
+			}
+			if (!a.hunt && !a.goal && a.timer <= 0 && Math.random() < 0.45) a.hunt = this.preyNear(a);
+			if (a.hunt) {
+				const b = a.hunt;
+				if (b.gone || b.leaving || b.hidden) { a.hunt = null; a.timer = 1; }
+				else {
+					const gx = b.x - (b.x > a.x ? 6 : -6), gy = b.y + (FLIGHT[b.kind] ?? 0), d = Math.hypot(gx - a.x, gy - a.y);
+					if (d < 22) { a.pounce = 0; a.dir = Math.sign(b.x - a.x) || a.dir; return; }
+					if (d > 260) { a.hunt = null; a.timer = 1; }
+					else {
+						// À l'affût : il avance lentement, s'arrête, repart.
+						const creep = Math.sin(a.t * 1.7) > -0.3 ? GAIT.cat.speed * 0.45 : 0, step = Math.min(d, creep * dt);
+						a.x += ((gx - a.x) / d) * step; a.y += ((gy - a.y) / d) * step;
+						a.ph += step / GAIT.cat.stride;
+						a.dir = Math.sign(gx - a.x) || a.dir;
+						a.mode = step > 0 ? 'run' : 'stand';
+						return;
+					}
+				}
+			}
+		}
 		if (!a.goal && a.timer <= 0) {
 			const out = f && !f.hidden;
 			if (kind === 'dog' && out) a.goal = { x: f.x - f.dir * 16, y: f.y + 6 };
@@ -2264,6 +2310,73 @@ export class Garden {
 		a.ph += step / GAIT[kind].stride;
 		if (Math.abs(dx) > 0.5) a.dir = Math.sign(dx);
 		a.mode = 'run';
+	}
+
+	/**
+	 * Le poulailler : un coq et trois poules picorent autour, grattent la terre, courent après un criquet ou un
+	 * carabe qui passe, et rentrent à la nuit tombée (ou sous la pluie). Le coq chante le matin.
+	 */
+	updateHens(dt) {
+		const coops = this.glyph ? [] : this.items.filter(it => it.kind === 'poulailler');
+		this.hens = (this.hens ?? []).filter(h => coops.includes(h.coop));
+		// Autant de poules et de coqs que le poulailler en accueille ; chacun garde son plumage.
+		const COQS = [{ rooster: true, body: '#C8602A', wing: '#7A2E1A', neck: '#E8A040' }, { rooster: true, body: '#F2EEE6', wing: '#D8D2C8', neck: '#E8C060' }];
+		const POULES = [{ body: '#A8582A', wing: '#7A3A1A' }, { body: '#F2EEE6', wing: '#D8D2C8' }, { body: '#3A3430', wing: '#24201E', neck: '#4A4038' }, { body: '#C8904A', wing: '#9A6A30' }];
+		for (const c of coops) {
+			const fl = c.flock ?? { hens: 3, roosters: 1 };
+			for (const [rooster, want, looks] of [[true, fl.roosters, COQS], [false, fl.hens, POULES]]) {
+				const mine = this.hens.filter(h => h.coop === c && !!h.p.rooster === rooster);
+				for (let k = mine.length; k < want; k++) this.hens.push({ kind: 'hen', p: looks[k % looks.length], coop: c, x: c.x + (Math.random() - 0.5) * 60, y: c.y + 14 + Math.random() * 20, mode: 'stand', t: Math.random() * 10, ph: 0, dir: Math.random() < 0.5 ? -1 : 1, timer: Math.random() * 3 });
+				for (const h of mine.slice(want)) this.hens.splice(this.hens.indexOf(h), 1);
+			}
+		}
+		const home = this.night() > 0.45 || this.precip() > 0.5, hour = this.hour();
+		for (const h of this.hens) {
+			h.t += dt;
+			const door = { x: h.coop.x - 12, y: h.coop.y + 22 };
+			if (home) {
+				if (h.hidden) continue;
+				h.goal = door;
+			} else if (h.hidden) { h.hidden = false; h.x = door.x; h.y = door.y; h.goal = null; }
+			h.timer -= dt;
+			if (!h.goal && h.timer <= 0) {
+				const r = Math.random();
+				// Une petite bête qui passe au sol : la poule court la gober.
+				const prey = this.insects.find(b => !b.leaving && ['grasshopper', 'beetle', 'firebug', 'snail', 'ants'].includes(b.kind) && Math.hypot(b.x - h.x, b.y - h.y) < 90);
+				if (prey && r < 0.4) h.goal = { x: prey.x, y: prey.y, prey };
+				else if (h.p.rooster && hour > 5.5 && hour < 8.5 && r < 0.35) { h.mode = 'crow'; h.timer = 2.2; }
+				else if (r < 0.6) { h.mode = 'peck'; h.timer = 1.2 + Math.random() * 2.5; }
+				else {
+					const a = Math.random() * Math.PI * 2, d = 20 + Math.random() * 90;
+					h.goal = { x: h.coop.x + Math.cos(a) * d, y: h.coop.y + 20 + Math.abs(Math.sin(a)) * d * 0.6 };
+				}
+			}
+			if (!h.goal) { if (h.mode === 'run') h.mode = 'stand'; continue; }
+			const dx = h.goal.x - h.x, dy = h.goal.y - h.y, d = Math.hypot(dx, dy);
+			if (d < 2) {
+				if (h.goal === door || (home && h.goal.x === door.x)) h.hidden = true;
+				// Elle picore là où la bête était ; celle-ci a souvent filé.
+				if (h.goal.prey && h.goal.prey.behavior === 'hop') h.goal.prey.timer = 0;
+				h.goal = null; h.mode = 'peck'; h.timer = 1 + Math.random() * 2;
+				continue;
+			}
+			const sp = GAIT.hen.speed * (h.goal.prey ? 2.2 : home ? 1.5 : 1), step = Math.min(d, sp * dt);
+			h.x += (dx / d) * step; h.y += (dy / d) * step;
+			h.ph += step / GAIT.hen.stride;
+			if (Math.abs(dx) > 0.5) h.dir = Math.sign(dx);
+			h.mode = 'run';
+		}
+	}
+
+	/** Une petite bête que le chat pourrait chasser, près de lui. */
+	preyNear(a, r = 170) {
+		let best = null, bd = r;
+		for (const b of this.insects) {
+			if (b.leaving || b.hidden || !['butterfly', 'moth', 'grasshopper', 'beetle', 'hoverfly', 'firebug', 'dragonfly', 'mouse'].includes(b.kind)) continue;
+			const d = Math.hypot(b.x - a.x, b.y + (FLIGHT[b.kind] ?? 0) - a.y);
+			if (d < bd) { bd = d; best = b; }
+		}
+		return best;
 	}
 
 	updateFarmer(dt) {
@@ -2299,6 +2412,7 @@ export class Garden {
 					return;
 				}
 				if (task === 'harvest') { f.mode = 'rake'; f.harvesting = f.bed; f.dir = f.face ?? f.dir; f.timer = 4.5; return; }
+				if (task === 'eggs') { f.mode = 'stand'; f.collecting = f.coop; f.timer = 3; return; }
 				if (task === 'fetch') { f.mode = 'stand'; f.timer = 1.2; return; }
 				f.mode = task;
 				f.dir = f.face ?? f.dir;
@@ -2334,6 +2448,19 @@ export class Garden {
 			f.goal = { x: door.x, y: door.y, task: 'in' };
 			return;
 		}
+		// Les œufs ramassés vont dans le panier, rapporté à la cabane.
+		if (f.collecting) {
+			const coop = f.collecting, n = this.items.includes(coop) ? this.eggsOf(coop) : 0;
+			f.collecting = null;
+			if (n) {
+				coop.km0 = this.state.totals.distance / 1000;
+				f.basket = 'eggs';
+				this.burst(coop.x, coop.y - 20, 8, '#F4EEDC');
+				this.onEggs?.(coop, n);
+				f.goal = { x: door.x, y: door.y, task: 'in' };
+				return;
+			}
+		}
 		// Récolte finie : la parcelle est ressemée, et le panier rapporte du nectar.
 		if (f.harvesting) {
 			const bed = f.harvesting;
@@ -2355,6 +2482,13 @@ export class Garden {
 		}
 		f.hidden = false;
 		const beds = this.items.filter(it => it.kind === 'potager');
+		const coop = this.items.find(it => it.kind === 'poulailler' && this.eggsOf(it) >= Math.max(2, it.flock?.hens ?? 3));
+		if (coop && !f.carry && !f.basket) {
+			f.goal = { x: coop.x + 22, y: coop.y + 20, task: 'eggs' };
+			f.coop = coop;
+			f.face = -1;
+			return;
+		}
 		const ripe = beds.find(b => this.bedStage(b) >= 1);
 		if (ripe && !f.carry) {
 			const side = Math.random() < 0.5 ? -1 : 1;
@@ -3005,6 +3139,7 @@ export class Garden {
 		if (!glyph) for (const b of this.insects) if (onGround(b)) entities.push({ critter: b, y: b.behavior === 'trail' ? -1e9 : b.y + 2 });
 		if (!glyph && this.farmer && !this.farmer.hidden) entities.push({ critter: this.farmer, y: this.farmer.y + 2 });
 		if (!glyph && this.pet && !this.pet.hidden) entities.push({ critter: this.pet, y: this.pet.y + 2 });
+		if (!glyph) for (const h of this.hens ?? []) if (!h.hidden) entities.push({ critter: h, y: h.y + 2 });
 		entities.sort((a, b) => a.y - b.y);
 
 		for (const e of entities) {
@@ -3408,7 +3543,7 @@ export class Garden {
 		if (b.hidden) return;
 		if (b.behavior === 'trail') return this.drawTrail(ctx, b);
 		ctx.save();
-		ctx.translate(b.x, b.y);
+		ctx.translate(b.x, b.y - (b.lift ?? 0));
 		const k = CRITTER_SIZE[b.kind] ?? 1;
 		if (b.kind === 'swallow' || b.behavior === 'soar') {
 			const vx = b.x - (b.px ?? b.x), vy = b.y - (b.py ?? b.y);

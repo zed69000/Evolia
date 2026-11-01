@@ -799,7 +799,8 @@ function basket(ctx, hx, hy, full) {
 	ctx.beginPath(); ctx.moveTo(hx - 2.6, hy + 2.2); ctx.lineTo(hx + 2.6, hy + 2.2); ctx.lineTo(hx + 1.9, hy + 4.6); ctx.lineTo(hx - 1.9, hy + 4.6); ctx.closePath(); ctx.fill();
 	ctx.strokeStyle = '#8A6234'; ctx.lineWidth = 0.3;
 	ctx.beginPath(); ctx.moveTo(hx - 2.3, hy + 3.2); ctx.lineTo(hx + 2.3, hy + 3.2); ctx.moveTo(hx - 2.1, hy + 4); ctx.lineTo(hx + 2.1, hy + 4); ctx.stroke();
-	if (full) for (const [x, c] of [[-1.3, '#D8402E'], [0, '#E05A34'], [1.3, '#C8B848']]) ell(ctx, hx + x, hy + 1.8, 0.95, 0.9, 0, c);
+	if (full === 'eggs') for (const [x, c] of [[-1.2, '#F4EEDC'], [0, '#E8D0A8'], [1.2, '#F8F4EA']]) ell(ctx, hx + x, hy + 1.8, 0.8, 1, 0, c);
+	else if (full) for (const [x, c] of [[-1.3, '#D8402E'], [0, '#E05A34'], [1.3, '#C8B848']]) ell(ctx, hx + x, hy + 1.8, 0.95, 0.9, 0, c);
 }
 
 /** Brouette pleine de terre et de jeunes pousses, tenue par les poignées en (hx, hy). */
@@ -826,6 +827,60 @@ function barrow(ctx, hx, hy, s) {
 	ctx.stroke();
 }
 
+// ─── Les poules et le coq ───────────────────────────────────────
+
+/**
+ * Poule ou coq de profil (tourné vers +x, pattes au sol en y = 0). Les pattes d'oiseau plient vers l'arrière
+ * (ce qu'on prend pour un genou est la cheville) ; la tête pique vers le sol pour picorer.
+ */
+function chicken(ctx, s, p) {
+	const t = s.t, walk = s.mode === 'run', peck = s.mode === 'peck' ? Math.max(0, Math.sin(t * 7)) : 0;
+	const crow = s.mode === 'crow';
+	const k = p.rooster ? 1.15 : 1, ph = s.ph ?? 0;
+	ctx.save(); ctx.scale(k, k);
+	const body = p.body ?? '#A8582A', wing = p.wing ?? '#8A4420', legC = '#E8B040';
+	// Les pattes.
+	for (const [o, far] of [[0.5, true], [0, false]]) {
+		const [fx, fy] = walk ? gaitFoot(ph + o, 5, 1.6) : [o ? -0.8 : 0.8, 0];
+		ikLeg(ctx, -0.6 + (far ? -0.4 : 0), -4.6, fx, fy - 0.3, 2.6, 2.5, -1, 0.8, 0.6, far ? '#C8902A' : legC);
+		ctx.strokeStyle = far ? '#C8902A' : legC; ctx.lineWidth = 0.45; ctx.lineCap = 'round';
+		ctx.beginPath(); ctx.moveTo(fx - 1.2, fy); ctx.lineTo(fx + 1.8, fy); ctx.stroke();
+	}
+	const bob = walk ? Math.abs(Math.sin(ph * TAU)) * 0.5 : 0;
+	ctx.translate(0, -bob);
+	// La queue : une touffe relevée chez la poule, de grandes faucilles vert sombre chez le coq.
+	if (p.rooster) {
+		ctx.lineCap = 'round';
+		for (const [a, c, w] of [[0.9, '#1E3A2A', 1.6], [1.25, '#2A4A30', 1.4], [0.6, '#16281E', 1.3]]) {
+			ctx.strokeStyle = c; ctx.lineWidth = w;
+			ctx.beginPath(); ctx.moveTo(-4.5, -8); ctx.quadraticCurveTo(-8 - a * 2, -16 - a * 2, -10 - a * 2, -7 + a * 2); ctx.stroke();
+		}
+	} else {
+		ctx.fillStyle = wing;
+		ctx.beginPath(); ctx.moveTo(-3.5, -7); ctx.quadraticCurveTo(-7.5, -13, -6.8, -8); ctx.quadraticCurveTo(-6.6, -5.5, -4, -5.4); ctx.fill();
+	}
+	ell(ctx, 0, -7, 5.6, 4, 0, body);
+	ell(ctx, -0.6, -7.4, 3.6, 2.2, -0.15, wing);
+	ell(ctx, 0.6, -5, 3.6, 1.6, 0, 'rgba(255,240,215,0.18)');
+	// Le cou et la tête.
+	const hx = 4.2 + peck * 3.4, hy = (crow ? -14 : -11.6) + peck * 8.6;
+	ctx.strokeStyle = p.neck ?? body; ctx.lineWidth = 3.2; ctx.lineCap = 'round';
+	ctx.beginPath(); ctx.moveTo(2.6, -8.6); ctx.lineTo(hx - 0.3, hy + 0.6); ctx.stroke();
+	ctx.save(); ctx.translate(hx, hy); ctx.rotate(peck * 1.1 - (crow ? 0.5 : 0));
+	ell(ctx, 0, 0, 1.9, 1.7, 0, p.neck ?? body);
+	// La crête, les barbillons, le bec et l'œil.
+	ctx.fillStyle = '#D8302A';
+	const cr = p.rooster ? 1.5 : 0.9;
+	for (const x of [-0.8, 0.2, 1.1]) { ctx.beginPath(); ctx.arc(x, -1.6, cr * 0.65, 0, TAU); ctx.fill(); }
+	ell(ctx, 1.4, 1.6, 0.6, cr * 0.9, 0, '#D8302A');
+	ctx.fillStyle = '#E8B040';
+	ctx.beginPath(); ctx.moveTo(1.6, -0.6); ctx.lineTo(crow ? 3.6 : 3.3, crow ? -0.6 : 0); ctx.lineTo(1.6, 0.5); ctx.fill();
+	if (crow) { ctx.beginPath(); ctx.moveTo(1.6, 0.5); ctx.lineTo(3.2, 1.2); ctx.lineTo(1.6, 0.9); ctx.fill(); }
+	ell(ctx, 0.6, -0.4, 0.38, 0.38, 0, '#1A1210');
+	ctx.restore();
+	ctx.restore();
+}
+
 const LAPIN = { fur: '#9C8466', dark: '#7A644A', belly: '#E8DCC8' };
 const LIEVRE = { fur: '#A88A5E', dark: '#806640', belly: '#E8DCC0', hare: true };
 
@@ -841,6 +896,7 @@ export const BEASTS = {
 	badger: (ctx, t, mode, p, s) => quadruped(ctx, s, BADGER),
 	farmer: (ctx, t, mode, p, s) => farmer(ctx, s),
 	dog: (ctx, t, mode, p, s) => pet(ctx, s, DOG),
+	hen: (ctx, t, mode, p, s) => chicken(ctx, s, p),
 	cat: (ctx, t, mode, p, s) => pet(ctx, s, CAT),
 };
 
@@ -858,4 +914,5 @@ export const GAIT = {
 	farmer: { stride: 27, speed: 18 },
 	dog: { stride: 24, speed: 26 },
 	cat: { stride: 16, speed: 16 },
+	hen: { stride: 6, speed: 12 },
 };

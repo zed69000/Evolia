@@ -169,6 +169,15 @@ function chooseFarmer(then) {
 	});
 }
 
+// Le jardinier ramasse les œufs du poulailler : chacun vaut un peu de nectar.
+garden.onEggs = (coop, n) => {
+	const gain = n * 8;
+	state.nectar = (state.nectar ?? 0) + gain;
+	toast(`${farmerName(true)} a ramassé ${n} œuf${n > 1 ? 's' : ''} · +${gain} nectar`, '#5F933E');
+	renderHud();
+	persist();
+};
+
 // Le jardinier récolte une parcelle mûre : un panier de légumes, en nectar.
 garden.onHarvest = () => {
 	state.nectar = (state.nectar ?? 0) + 60;
@@ -1199,6 +1208,21 @@ function needsFirst(kind) {
 const ownedCount = kind => Object.values(state.places).reduce((a, p) => a + (p.items ?? []).filter(i => i.kind === kind).length, 0);
 const priceOf = kind => itemCost(kind, ownedCount(kind));
 
+// ─── Le poulailler ───────────────────────────────────────────
+const BIRD_COST = 40;
+const coopSeats = it => ITEMS.poulailler.levels.seats[it.level ?? 1];
+function coopTip(it, lv, nx) {
+	const L = ITEMS.poulailler.levels, fl = it.flock ?? { hens: 3, roosters: 1 }, eggs = garden.eggsOf(it);
+	const who = `${fl.hens} poule${fl.hens > 1 ? 's' : ''}${fl.roosters ? ` et ${fl.roosters} coq${fl.roosters > 1 ? 's' : ''}` : ''}`;
+	return `<small class="item-tip">${L.name[lv][0].toUpperCase() + L.name[lv].slice(1)} : ${who}, ${coopSeats(it)} places. ${eggs ? `${eggs} œuf${eggs > 1 ? 's' : ''} à ramasser.` : 'Marche un peu : les poules pondent.'}${nx ? nx.ok ? ` Agrandis-le en ${L.name[nx.level]} (${L.seats[nx.level]} places).` : ` ${L.name[nx.level][0].toUpperCase() + L.name[nx.level].slice(1)} dès ${nx.km} km parcourus.` : ''}</small>`;
+}
+function coopButtons(it) {
+	const fl = it.flock ?? { hens: 3, roosters: 1 }, free = fl.hens + fl.roosters < coopSeats(it), poor = (state.nectar ?? 0) < BIRD_COST;
+	return (free ? `<button class="btn ghost" data-bird="hens" data-add="1" ${poor ? 'disabled' : ''}>+ Une poule (${BIRD_COST})</button><button class="btn ghost" data-bird="roosters" data-add="1" ${poor ? 'disabled' : ''}>+ Un coq (${BIRD_COST})</button>` : '')
+		+ (fl.roosters ? '<button class="btn ghost" data-bird="roosters" data-add="0">Un coq de moins</button>' : '')
+		+ (fl.hens > 1 ? '<button class="btn ghost" data-bird="hens" data-add="0">Une poule de moins</button>' : '');
+}
+
 /** Le prochain niveau d'un habitat posé : son prix, ou ce qui manque (kilomètres), ou null s'il est au plus haut. */
 function nextLevel(it) {
 	const lv = it.level ?? 1, own = ITEMS[it.kind].levels, km = state.totals.distance / 1000;
@@ -1218,7 +1242,7 @@ function levelUp(it) {
 	garden.popItem(it, true);
 	garden.nextPopulate = 0;
 	const own = ITEMS[it.kind].levels;
-	toast(own ? `Ta cabane devient un${own.name[it.level] === 'chalet' ? '' : 'e'} ${own.name[it.level]} !` : `${ITEMS[it.kind].name} : niveau ${it.level}, ${LEVEL_NAME[it.level]}`, '#5F933E');
+	toast(it.kind === 'poulailler' ? `Ton poulailler s’agrandit : ${own.name[it.level]}, ${own.seats[it.level]} places !` : own ? `Ta cabane devient un${own.name[it.level] === 'chalet' ? '' : 'e'} ${own.name[it.level]} !` : `${ITEMS[it.kind].name} : niveau ${it.level}, ${LEVEL_NAME[it.level]}`, '#5F933E');
 	sound.chime(3);
 	renderHud();
 	persist(true);
@@ -1403,10 +1427,11 @@ function tapItem(hit, card) {
 	const lv = it.level ?? 1, nx = nextLevel(it);
 	const up = it.kind === 'collecteur' && lv < 3 ? COLLECTOR_UPGRADE[lv + 1] : nx?.ok ? nx.cost : 0;
 	const info = it.kind === 'collecteur' ? `<small class="item-tip">Niveau ${lv} · garde ${COLLECTOR_CAP[lv]} nectar${up ? ` (niveau ${lv + 1} : ${COLLECTOR_CAP[lv + 1]})` : ''}. Réserve totale : ${fmtInt(nectarCapacity(state))}.</small>`
+		: it.kind === 'poulailler' ? coopTip(it, lv, nx)
 		: def.levels ? `<small class="item-tip">${def.levels.name[lv][0].toUpperCase() + def.levels.name[lv].slice(1)}, ${CABIN_STYLES[(it.style ?? 0) % CABIN_STYLES.length].name}. ${farmerName(true)} y vit.${nx ? nx.ok ? ` Agrandis-la en ${def.levels.name[nx.level]}.` : ` ${def.levels.name[nx.level][0].toUpperCase() + def.levels.name[nx.level].slice(1)} dès ${nx.km} km parcourus.` : ''}</small>`
 		: canLevel(it.kind) ? `<small class="item-tip">Niveau ${lv} sur ${MAX_LEVEL}, ${LEVEL_NAME[lv]} : il fait venir ${lv * def.power} ${def.power * lv > 1 ? 'membres' : 'membre'}.${nx ? nx.ok ? ` Au niveau ${nx.level}, un de plus${def.power > 1 ? ` (${def.power})` : ''}.` : ` Niveau ${nx.level} dès ${nx.km} km parcourus.` : ''}</small>` : '';
 	card.innerHTML = `<b>${def.name}</b>${def.text}${info}<small class="item-tip">Astuce : un appui long dessus le soulève directement.</small>
-		<div class="item-actions">${up ? `<button class="btn primary" data-upgrade ${(state.nectar ?? 0) < up ? 'disabled' : ''}>${def.levels ? 'Agrandir' : 'Améliorer'} (${fmtInt(up)})</button>` : ''}${def.levels ? '<button class="btn ghost" data-style>Couleur</button><button class="btn ghost" data-farmer-swap>' + (state.gardener === 'fermiere' ? 'Un fermier' : 'Une fermière') + '</button><button class="btn ghost" data-pet-swap>' + (state.pet === 'chien' ? 'Un chat' : state.pet === 'chat' ? 'Sans animal' : 'Un chien') + '</button>' : ''}${def.turn ? '<button class="btn ghost" data-turn>Tourner</button>' : ''}<button class="btn ghost" data-move>Déplacer</button><button class="btn ghost" data-store>Ranger (+${fmtInt((it.paid ?? def.cost) + (it.spent ?? 0))})</button></div>`;
+		<div class="item-actions">${up ? `<button class="btn primary" data-upgrade ${(state.nectar ?? 0) < up ? 'disabled' : ''}>${def.levels ? 'Agrandir' : 'Améliorer'} (${fmtInt(up)})</button>` : ''}${it.kind === 'poulailler' ? coopButtons(it) : ''}${it.kind === 'cabane' ? '<button class="btn ghost" data-style>Couleur</button><button class="btn ghost" data-farmer-swap>' + (state.gardener === 'fermiere' ? 'Un fermier' : 'Une fermière') + '</button><button class="btn ghost" data-pet-swap>' + (state.pet === 'chien' ? 'Un chat' : state.pet === 'chat' ? 'Sans animal' : 'Un chien') + '</button>' : ''}${def.turn ? '<button class="btn ghost" data-turn>Tourner</button>' : ''}<button class="btn ghost" data-move>Déplacer</button><button class="btn ghost" data-store>Ranger (+${fmtInt((it.paid ?? def.cost) + (it.spent ?? 0))})</button></div>`;
 	card.classList.remove('link');
 	card.classList.add('actions');
 	card.onclick = e => {
@@ -1437,6 +1462,17 @@ function tapItem(hit, card) {
 			persist(true);
 			toast(`${farmerName(true)} s’installe dans la cabane`, '#5F933E');
 			card.hidden = true;
+			return;
+		}
+		const bird = e.target.closest('[data-bird]');
+		if (bird) {
+			// Une poule ou un coq de plus (s'il reste une place), ou un de moins.
+			const fl = (it.flock ??= { hens: 3, roosters: 1 }), key = bird.dataset.bird, add = bird.dataset.add === '1';
+			if (add && (state.nectar ?? 0) >= BIRD_COST && fl.hens + fl.roosters < coopSeats(it)) { state.nectar -= BIRD_COST; it.spent = (it.spent ?? 0) + BIRD_COST; fl[key]++; }
+			else if (!add && fl[key] > 0) fl[key]--;
+			card.hidden = true;
+			renderHud();
+			persist(true);
 			return;
 		}
 		if (e.target.closest('[data-upgrade]') && up && it.kind !== 'collecteur') { card.hidden = true; levelUp(it); return; }
