@@ -841,3 +841,11 @@ body:has(#modal:not([hidden])) .tip, body:has(.panel.open) .tip, body:has(#coach
 	.zoom-info { top: calc(env(safe-area-inset-top, 0px) + 116px); }
 	.sheet .btn.primary { padding: 12px; }
 }
+
+/* Les sauvegardes, dans Options */
+.slots { list-style: none; margin: 0 0 10px; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.slots li { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 10px 12px; border-radius: 14px; background: var(--papier-2); flex-wrap: wrap; }
+.slots li.on { outline: 1.5px solid var(--foret); background: #E9F0D6; }
+.slots li small { display: block; color: var(--doux); font-size: 12px; }
+.slots .slot-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.slots .slot-actions .btn { width: auto; }

@@ -1,6 +1,6 @@
 // Interface : bandeau, suivi automatique du mouvement, récolte des pas, récap, carnet, biodiversité, tutoriel.
 
-import { load, save, reset, allPlants, biomeKm, heartOf, ACTIVITIES, ACTIVITY_BY_ID, MAX_SPEED_KMH, activityFor, effortFor, hikeFor, HIKE_WINDOW, dayKey, todayMeters, addDistance, STEP_LENGTH_M, effortMix } from './state.js';
+import { slots, slotSummary, createSlot, useSlot, renameSlot, deleteSlot, load, save, reset, allPlants, biomeKm, heartOf, ACTIVITIES, ACTIVITY_BY_ID, MAX_SPEED_KMH, activityFor, effortFor, hikeFor, HIKE_WINDOW, dayKey, todayMeters, addDistance, STEP_LENGTH_M, effortMix } from './state.js';
 import { Garden, CELLS, CELL_KM, cellsOpen, cellName } from './garden.js';
 import { PlacesMap } from './map.js';
 import { PLANT_TYPES, DECOR, plantName } from './plants.js';
@@ -1610,6 +1610,29 @@ function showRestore() {
 	};
 }
 
+// ─── Plusieurs sauvegardes ───────────────────────────────────
+
+const esc = t => String(t).replace(/[&<>"]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
+
+/** La liste des parties dans Options : la partie en cours, et les autres à reprendre, renommer ou effacer. */
+function slotsHtml() {
+	const s = slots();
+	return `<ul class="slots">${s.list.map(x => {
+		const on = x.id === s.active, sum = on ? { km: state.totals.distance / 1000, species: Object.keys(state.species).length } : slotSummary(x.id);
+		return `<li class="${on ? 'on' : ''}"><div><b>${esc(x.name)}</b>${on ? ' <span class="chip">en cours</span>' : ''}<small>${sum ? `${fmt(sum.km, 1)} km · ${sum.species} espèces` : 'jardin neuf'}</small></div>
+			<div class="slot-actions">${on ? '' : `<button class="btn primary small" data-slot="${x.id}" data-do="play">Jouer</button>`}<button class="btn ghost small" data-slot="${x.id}" data-do="rename">Renommer</button>${on ? '' : `<button class="btn ghost small danger" data-slot="${x.id}" data-do="delete">Effacer</button>`}</div></li>`;
+	}).join('')}</ul>`;
+}
+
+/** Passe à une autre partie : on garde celle en cours, puis on recharge le jeu sur l'autre. */
+function switchSlot(id) {
+	clearTimeout(saveTimer);
+	save(state);
+	resetting = true;
+	useSlot(id);
+	location.reload();
+}
+
 // ─── Rappels (appli Android) ───────────────────────────────────
 
 /** Une fois les premières missions finies, on propose les rappels, une seule fois. */
@@ -1676,6 +1699,11 @@ function renderOptions() {
 		<p class="empty">Ton jardin est gardé sur ce téléphone. Garde-en une copie (un code à coller dans tes notes ou à t'envoyer) : elle le ramène après un changement de téléphone. ${backupAge(state)}</p>
 		<button class="btn ghost wide" id="opt-backup">Garder une copie de ma partie</button>
 		<button class="btn ghost wide" id="opt-restore">Restaurer une partie</button>
+		<h3>Mes sauvegardes</h3>
+		<p class="empty">Plusieurs jardins sur ce téléphone, pour comparer ou essayer : passe de l'un à l'autre quand tu veux. Tes pas vont dans la partie en cours.</p>
+		${slotsHtml()}
+		<button class="btn ghost wide" id="opt-slot-copy">Dupliquer la partie en cours</button>
+		<button class="btn ghost wide" id="opt-slot-new">Commencer une nouvelle partie</button>
 		${canNotify() ? `<h3>Rappels</h3>
 		<label class="switch"><input type="checkbox" id="opt-notify" ${state.notify ? 'checked' : ''}><i></i><span>Collecteur plein, cadeau du jour, série à garder</span></label>` : ''}
 		<h3>Aide</h3>
@@ -1726,6 +1754,23 @@ $('#options').addEventListener('click', async e => {
 	if (id === 'opt-harvest-now') { closeOptions(); maybeHarvest(); }
 	if (id === 'opt-coach') { closeOptions(); coach(0); }
 	if (id === 'opt-backup') showBackup();
+	// Les sauvegardes : changer, dupliquer, commencer, renommer, effacer.
+	const sl = e.target.closest('[data-slot]');
+	if (sl) {
+		const sid = sl.dataset.slot, what = sl.dataset.do, cur = slots().list.find(x => x.id === sid);
+		if (what === 'play') return switchSlot(sid);
+		if (what === 'rename') { const n = prompt('Nom de cette partie :', cur?.name ?? ''); if (n?.trim()) { renameSlot(sid, n.trim().slice(0, 40)); renderOptions(); } }
+		if (what === 'delete' && confirm(`Effacer « ${cur?.name} » ? Ce jardin sera perdu.`)) { deleteSlot(sid); renderOptions(); }
+		return;
+	}
+	if (id === 'opt-slot-copy') {
+		const n = prompt('Nom de la copie :', `${slots().list.find(x => x.id === slots().active)?.name ?? 'Ma partie'} (copie)`);
+		if (n?.trim()) { save(state); createSlot(n.trim().slice(0, 40), state); toast('Copie créée : choisis-la dans la liste pour y jouer', '#5F933E'); renderOptions(); }
+	}
+	if (id === 'opt-slot-new') {
+		const n = prompt('Nom de la nouvelle partie :', `Partie ${slots().list.length + 1}`);
+		if (n?.trim()) switchSlot(createSlot(n.trim().slice(0, 40)));
+	}
 	if (id === 'opt-restore') showRestore();
 	if (id === 'dev-hour-real') { garden.hourOverride = null; renderOptions(); }
 	if (id === 'dev-sim') {

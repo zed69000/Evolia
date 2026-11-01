@@ -3,6 +3,9 @@
 Chaque version, la plus récente en haut. Le site (evolia.sebastienalzamora.workers.dev) est toujours à jour ;
 le Play Store (tests internes) reçoit les versions indiquées « Play ».
 
+## 0.7.22 — 1er novembre 2026
+- **Plusieurs sauvegardes** (Options › Mes sauvegardes) : plusieurs jardins sur le même téléphone, pour comparer ou essayer. Chaque partie montre ses kilomètres et ses espèces ; on passe de l'une à l'autre d'un geste (« Jouer »), on duplique la partie en cours, on commence une nouvelle partie, on renomme ou on efface les autres. Ta partie actuelle devient « Ma partie », sans rien perdre. Les pas vont dans la partie en cours.
+
 ## 0.7.21 — 1er novembre 2026
 - **Randonnée et trail**, reconnus grâce au dénivelé pendant une sortie suivie au GPS. À allure de marche, dès qu'on a monté 25 m en dix minutes (ou sur une pente moyenne de 6 %), c'est une **randonnée** ; à allure de course, un **trail**. Ils continuent dans les descentes et les courts replats, tant que ça monte ou que ça descend encore. La randonnée compte plus d'effort que la marche, le trail plus que la course, et tous deux font pousser des arbres.
 - Le bilan s'appelle « Belle randonnée ! » ou « Quel trail ! » quand la sortie s'est faite surtout en montée et en descente, avec les mètres de montée.

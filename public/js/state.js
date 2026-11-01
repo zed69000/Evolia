@@ -181,9 +181,60 @@ function mergePlaces(s) {
 	return s;
 }
 
+// ─── Plusieurs sauvegardes ───────────────────────────────────────
+// Chaque partie a sa clé ; la première garde l'ancienne clé, pour que les jardins existants ne bougent pas.
+const SLOTS_KEY = 'evolia.slots';
+const keyOf = id => (id === 'main' ? KEY : `${KEY}.${id}`);
+
+/** La liste des parties de ce téléphone et celle qui est en cours. */
+export function slots() {
+	try {
+		const s = JSON.parse(localStorage.getItem(SLOTS_KEY));
+		if (s?.list?.length && s.list.some(x => x.id === s.active)) return s;
+	} catch (e) { /* pas encore de liste */ }
+	return { active: 'main', list: [{ id: 'main', name: 'Ma partie', at: Date.now() }] };
+}
+const writeSlots = s => { try { localStorage.setItem(SLOTS_KEY, JSON.stringify(s)); } catch (e) { /* idem */ } };
+
+/** Ce qu'on montre d'une partie dans la liste : kilomètres, espèces, dernière fois qu'on y a joué. */
+export function slotSummary(id) {
+	try {
+		const s = JSON.parse(localStorage.getItem(keyOf(id)));
+		return s ? { km: (s.totals?.distance ?? 0) / 1000, species: Object.keys(s.species ?? {}).length, nectar: s.nectar ?? 0 } : null;
+	} catch (e) { return null; }
+}
+
+/** Une nouvelle partie : vide, ou copie d'un jardin (`from`). Renvoie son identifiant. */
+export function createSlot(name, from = null) {
+	const s = slots(), id = Math.random().toString(36).slice(2, 9);
+	s.list.push({ id, name, at: Date.now() });
+	writeSlots(s);
+	if (from) try { localStorage.setItem(keyOf(id), JSON.stringify(from)); } catch (e) { /* idem */ }
+	return id;
+}
+/** La partie à charger au prochain démarrage. */
+export function useSlot(id) {
+	const s = slots();
+	if (!s.list.some(x => x.id === id)) return;
+	s.active = id;
+	writeSlots(s);
+}
+export function renameSlot(id, name) {
+	const s = slots(), it = s.list.find(x => x.id === id);
+	if (it && name) { it.name = name; writeSlots(s); }
+}
+/** Efface une partie (jamais celle en cours). */
+export function deleteSlot(id) {
+	const s = slots();
+	if (id === s.active) return;
+	s.list = s.list.filter(x => x.id !== id);
+	writeSlots(s);
+	try { localStorage.removeItem(keyOf(id)); } catch (e) { /* idem */ }
+}
+
 export function load() {
 	try {
-		const raw = localStorage.getItem(KEY);
+		const raw = localStorage.getItem(keyOf(slots().active));
 		if (raw) return mergePlaces(migrate({ ...fresh(), v: 1, ...JSON.parse(raw) }));
 	} catch (e) { /* stockage indisponible : on repart d'un jardin neuf */ }
 	return fresh();
@@ -193,11 +244,11 @@ export function load() {
 export const allPlants = s => Object.values(s.places).flatMap(p => p.plants);
 
 export function save(state) {
-	try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) { /* idem */ }
+	try { localStorage.setItem(keyOf(slots().active), JSON.stringify(state)); } catch (e) { /* idem */ }
 }
 
 export function reset() {
-	try { localStorage.removeItem(KEY); } catch (e) { /* idem */ }
+	try { localStorage.removeItem(keyOf(slots().active)); } catch (e) { /* idem */ }
 }
 
 export function dayNumber(state) {
