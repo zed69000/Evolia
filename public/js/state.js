@@ -54,9 +54,40 @@ export function hikeFor(log, now, wasHiking) {
 	return climb >= 25 || (dist >= 150 && climb / dist >= 0.06);
 }
 
+// ─── L'effort, d'après l'énergie dépensée ─────────────────────────
+// Intensité de chaque allure en METs (multiples de la dépense au repos), d'après le Compendium des activités
+// physiques : [vitesse en km/h, METs], interpolés entre les points.
+const MET_WALK = [[2, 2.3], [3, 2.8], [4, 3], [5, 3.8], [6, 4.8], [6.8, 5.5], [7.5, 7], [8, 8.3]];
+const MET_RUN = [[6.4, 6], [8, 8.3], [9.7, 9.8], [11.3, 11], [12.9, 11.8], [14.5, 12.8], [16.1, 14.5], [17.7, 16], [19.3, 19], [22.5, 23]];
+const MET_BIKE = [[10, 3.5], [16, 6.8], [20.5, 8], [23.5, 10], [27, 12], [32, 15.8]];
+const interp = (table, x) => {
+	if (x <= table[0][0]) return table[0][1];
+	for (let i = 1; i < table.length; i++) if (x <= table[i][0]) {
+		const [x0, y0] = table[i - 1], [x1, y1] = table[i];
+		return y0 + ((y1 - y0) * (x - x0)) / (x1 - x0);
+	}
+	return table[table.length - 1][1];
+};
+const RUNS = new Set(['jogging', 'course', 'course-rapide', 'sprint', 'trail']);
+/** METs d'une activité à une vitesse donnée. */
+export function metFor(act, speedKmh) {
+	if (act.indoor) return 2.5;
+	if (act.bike) return interp(MET_BIKE, speedKmh);
+	return interp(RUNS.has(act.id) ? MET_RUN : MET_WALK, speedKmh);
+}
+// Un kilomètre de marche à 5 km/h vaut 125 points d'effort, comme avant ; tout le reste en découle.
+const EFFORT_PER_MET_HOUR = 125 / ((3.8 - 1) * 0.2);
+
+/**
+ * L'effort d'un bout de chemin : l'énergie dépensée au-delà du repos (METs − 1, multipliés par la durée), plus un
+ * bonus d'intensité de 5 % par MET au-delà de 4. Juste (une heure de course vaut environ quatre heures de
+ * marche, comme dans la réalité), et les sports qui dépensent beaucoup gagnent un peu plus encore. La montée
+ * s'ajoute à part (1 m gravi ≈ 8 à 10 m de plat).
+ */
 export function effortFor(distanceM, speedKmh, act) {
-	const speedFactor = Math.max(0.5, Math.min(1.5, speedKmh / act.base));
-	return (distanceM / 10) * act.mult * speedFactor;
+	const v = Math.max(1, speedKmh), met = metFor(act, v);
+	const hours = distanceM / 1000 / v;
+	return (met - 1) * hours * EFFORT_PER_MET_HOUR * (1 + 0.05 * Math.max(0, met - 4));
 }
 
 export const STEP_LENGTH_M = 0.75;

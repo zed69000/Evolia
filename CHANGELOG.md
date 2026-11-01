@@ -3,6 +3,10 @@
 Chaque version, la plus récente en haut. Le site (evolia.sebastienalzamora.workers.dev) est toujours à jour ;
 le Play Store (tests internes) reçoit les versions indiquées « Play ».
 
+## 0.7.29 — 1er novembre 2026
+- **Un effort juste, d'après l'énergie dépensée.** Chaque allure a son intensité en METs, tirée du Compendium des activités physiques (marche, course, vélo) ; l'effort compté est l'énergie dépensée au-delà du repos, et les sports intenses gagnent un bonus de 5 % par MET au-delà de 4. Un kilomètre de marche à 5 km/h vaut toujours autant.
+- Ce que ça change, par heure : marche lente +40 % (elle était sous-payée), marche et marche rapide presque pareil, jogging +24 %, course +10 %, course rapide −10 %, sprint −29 % (il était surpayé), vélo −9 %, petits pas à la maison ×2 (ils étaient très sous-payés). La montée garde sa règle (1 m gravi ≈ 8 à 10 m de plat, comme l'équivalence de Scarf).
+
 ## 0.7.28 — 1er novembre 2026
 - **Vu de loin, ce qui t'attend.** Quand tu dézoomes, des pastilles flottent au-dessus de ce qui mérite qu'on y aille : collecteur avec du nectar (orange quand il est plein), poulailler avec des œufs, potager mûr, gouttes de nectar à cueillir (par parcelle). Touche une pastille : la vue zoome dessus. Quand plusieurs se chevauchent, elles se regroupent (« 3 à voir ») et la vue se rapproche.
 
