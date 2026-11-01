@@ -3,6 +3,11 @@
 Chaque version, la plus récente en haut. Le site (evolia.sebastienalzamora.workers.dev) est toujours à jour ;
 le Play Store (tests internes) reçoit les versions indiquées « Play ».
 
+## 0.7.25 — 1er novembre 2026
+Corrections trouvées grâce à une trace prise sur iPhone (site web).
+- **Le compteur de pas du téléphone s'active enfin sur iPhone.** Safari n'accepte la demande d'accès au capteur de mouvement qu'au moment où le doigt se relève ; le jeu la faisait quand il touchait l'écran, et elle était refusée sans rien dire : aucun pas n'était compté par le capteur. Elle se fait maintenant au bon moment, et Options propose « Activer le compteur de pas du téléphone » s'il est encore éteint.
+- **Plus de fausse marche au retour de l'écran.** Après une pause du GPS (écran éteint), le jeu reprenait l'ancienne vitesse et comptait un petit écart de position comme de la marche (et lançait une balade). La vitesse repart maintenant de la mesure, et quand le signal est imprécis, un écart doit être plus grand pour compter.
+
 ## 0.7.24 — 1er novembre 2026
 - **Trace à la demande** (panneau de débogage) : « ● Trace » démarre un enregistrement détaillé, « ■ Arrêter la trace » le termine, « Copier la trace » met tout en texte à coller dans un message. Chaque ligne a l'heure (en secondes depuis le début) : chaque point GPS (position, précision, altitude, vitesse, âge), chaque paquet de pas de l'accéléromètre (cadence, retenu ou non), chaque mesure et la décision du jeu (activité, mètres comptés), l'écran caché ou visible, le début et la fin des balades. La trace est gardée sur le téléphone même si l'appli se ferme, jusqu'à 4 000 lignes.
 

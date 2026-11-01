@@ -666,7 +666,7 @@ async function enableTracking(gesture = false) {
 			if (await MotionTracker.permit()) {
 				tracking.motion = new MotionTracker(onSample, classifyCadence);
 				tracking.motion.start();
-			}
+			} else if (!tracking.motionRefused) { tracking.motionRefused = true; debugLog('Accéléromètre refusé ou indisponible'); }
 		}
 	}
 	if (!tracking.gps && GpsTracker.available()) {
@@ -687,8 +687,13 @@ async function resumeTracking() {
 	let granted = true;
 	try { granted = (await navigator.permissions?.query({ name: 'geolocation' }))?.state !== 'prompt'; } catch (e) { /* navigateur sans API : on tente */ }
 	if (granted) enableTracking(false);
-	// Sur iPhone, l'accéléromètre attend le premier toucher.
-	document.addEventListener('pointerdown', () => { if (state.tracking) enableTracking(true); }, { once: true });
+	// Sur iPhone, l'accéléromètre attend un vrai geste : Safari n'accepte la demande qu'au moment où le doigt se
+	// relève (« click »), pas quand il touche l'écran. On réessaie à chaque toucher tant qu'il n'est pas actif.
+	const ask = () => {
+		if (tracking.motion) { document.removeEventListener('click', ask, true); return; }
+		if (state.tracking) enableTracking(true);
+	};
+	document.addEventListener('click', ask, true);
 }
 
 function onGpsStatus(st) {
@@ -1752,6 +1757,7 @@ function renderOptions() {
 			${src ? '' : isApp() ? ' Les pas faits appli fermée ne sont pas relus : autorise-le ci-dessous.' : " Dans l'appli mobile, les pas faits appli fermée sont aussi relus."}</p>
 		${src ? harvestHtml(src) : ''}
 		${state.tracking ? '' : '<button class="btn ghost wide" id="btn-track-2">Activer le suivi</button>'}
+		${state.tracking && !tracking.motion && 'DeviceMotionEvent' in window ? '<button class="btn ghost wide" id="btn-motion">Activer le compteur de pas du téléphone</button>' : ''}
 		${isApp() && !src ? '<button class="btn ghost wide" id="opt-harvest">Relire les pas faits appli fermée</button>' : ''}
 		<h3>Le ciel</h3>
 		<p class="empty">${sky.label()} · lever ${fmtHour(garden.sun.rise)}, coucher ${fmtHour(garden.sun.set)}.
@@ -1824,6 +1830,7 @@ $('#options').addEventListener('click', async e => {
 	const id = e.target.id;
 	if (id === 'btn-sky') { await sky.locate(true); persist(true); renderOptions(); }
 	if (id === 'btn-track-2') { enableTracking(true); sky.locate(true); renderOptions(); }
+	if (id === 'btn-motion') { await enableTracking(true); toast(tracking.motion ? 'Compteur de pas activé' : 'Le téléphone a refusé le compteur de pas : Réglages › Safari › Mouvement et orientation', tracking.motion ? '#5F933E' : '#C0442F'); renderOptions(); }
 	if (id === 'opt-harvest') { state.harvestDeclined = false; closeOptions(); offerHarvest(); }
 	if (id === 'opt-harvest-now') { closeOptions(); maybeHarvest(); }
 	if (id === 'opt-coach') { closeOptions(); coach(0); }

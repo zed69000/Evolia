@@ -50,9 +50,11 @@ export class GpsTracker {
 		// l'allure : on repart de là, et ce sont les pas comptés par le téléphone qui rattrapent la sortie.
 		if (dt > 90) { this.onStatus({ kind: 'gap', seconds: dt }); this.last = { coords: c, t: pos.timestamp }; this.speed = 0; this.altRef = null; return; }
 		// En dessous de quelques mètres, c'est le bruit du GPS, pas un déplacement.
-		if (dist < Math.max(3, c.accuracy * 0.25) || dt <= 0) return;
+		if (dist < Math.max(3, c.accuracy * 0.5) || dt <= 0) return;
 		const measured = c.speed != null && c.speed >= 0 ? c.speed * 3.6 : (dist / dt) * 3.6;
-		this.speed = this.speed ? this.speed * 0.6 + measured * 0.4 : measured;
+		// Après un silence de plus de 20 s (écran éteint, GPS en pause), l'ancienne vitesse ne vaut plus rien : on
+		// repart de la mesure, sinon un petit écart de position au retour passait pour de la marche.
+		this.speed = this.speed && dt <= 20 ? this.speed * 0.6 + measured * 0.4 : measured;
 		this.last = { coords: c, t: pos.timestamp };
 		this.drop = 0;
 		const climb = this.climb(c);
