@@ -3,6 +3,10 @@
 Chaque version, la plus récente en haut. Le site (evolia.sebastienalzamora.workers.dev) est toujours à jour ;
 le Play Store (tests internes) reçoit les versions indiquées « Play ».
 
+## 0.7.34 — 1er novembre 2026
+- **Vu de très loin, les aménagements gardent leur vraie image** (cabane, poulailler, ruche, mare…) au lieu de simples rectangles : on reconnaît son jardin et on s'y repère.
+- La pastille des œufs disparaît (elle prêtait à confusion) : le nombre d'œufs, leur valeur et le passage du jardinier sont dans la bulle du poulailler.
+
 ## 0.7.33 — 1er novembre 2026
 - **Un œuf vaut 15 nectar** (au lieu de 8) : le poulailler rapporte enfin de quoi valoir son prix.
 - **On sait qui ramasse les œufs.** Toucher la pastille 🥚 (vue dézoomée) l'explique : « 9 œufs : le fermier viendra les chercher (+135 nectar) ». La bulle du poulailler le dit aussi.

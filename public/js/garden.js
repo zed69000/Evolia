@@ -1588,8 +1588,9 @@ export class Garden {
 	}
 
 	/**
-	 * Ce qui mérite qu'on y aille, vu de loin : collecteurs qui ont du nectar, poulaillers avec des œufs, potagers
-	 * mûrs, gouttes de nectar à cueillir (regroupées par parcelle). Coordonnées du monde.
+	 * Ce qui mérite qu'on y aille, vu de loin : collecteurs qui ont du nectar, potagers mûrs, gouttes de nectar à
+	 * cueillir (regroupées par parcelle). Les œufs n'y sont pas : le jardinier les ramasse seul (voir la bulle du
+	 * poulailler). Coordonnées du monde.
 	 */
 	poiList() {
 		const out = [];
@@ -1597,9 +1598,6 @@ export class Garden {
 			if (it.kind === 'collecteur') {
 				const js = this.jarStock?.(it) ?? { v: 0, cap: 1 };
 				if (js.v >= 1) out.push({ x: it.x, y: it.y - 60, icon: '🍯', label: `+${Math.floor(js.v)}`, hot: js.v >= js.cap - 0.5, rank: js.v >= js.cap - 0.5 ? 3 : 2 });
-			} else if (it.kind === 'poulailler') {
-				const n = this.eggsOf(it);
-				if (n >= 1) out.push({ x: it.x, y: it.y - 50, icon: '🥚', label: `${n}`, rank: 1, eggs: n });
 			} else if (it.kind === 'potager' && this.bedStage(it) >= 1) out.push({ x: it.x, y: it.y - 20, icon: '🥕', label: 'mûr', rank: 1 });
 		}
 		const drops = new Map();
@@ -3255,11 +3253,9 @@ export class Garden {
 			if (e.item) {
 				const it = e.item, box = itemBox(it.kind, it.level);
 				world();
+				// Vue d'ensemble : l'objet garde sa vraie image (une cabane reste une cabane), pour qu'on se repère.
 				if (glyph) {
-					ctx.fillStyle = 'rgba(122,84,52,0.9)';
-					ctx.beginPath();
-					ctx.roundRect(e.x - box.w * 0.3, e.y - box.h * 0.45, box.w * 0.6, box.h * 0.45, 4);
-					ctx.fill();
+					ctx.drawImage(this.itemSprite(it.kind, it.rot, it).canvas, e.x - box.ax, e.y - box.ay, box.w, box.h);
 					continue;
 				}
 				const built = this.t - (this.buildAt[it.id] ?? -9);
