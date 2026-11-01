@@ -373,6 +373,46 @@ const FOX = {
 	},
 };
 
+// Le cerf élaphe : grand, brun-roux, une crinière sombre au cou et de grands bois ramifiés.
+const CERF = {
+	...ROE, legH: 22, bodyL: 31, bodyH: 14, neck: 16, neckW: 7, head: 7, stride: 11, fur: '#8A5A34', belly: '#A87A50', leg: '#6A4428', legFar: '#4E321E', rump: '#E8D8B8',
+	headDraw(ctx, x, y, graze) {
+		ctx.save();
+		ctx.translate(x, y);
+		ctx.rotate(0.25 + graze * 0.9);
+		ell(ctx, 2.6, 0, 5, 3.6, 0, '#7A4E2C');
+		ell(ctx, 6.4, 1, 3, 2, 0.15, '#8A5A34');
+		ell(ctx, 9, 1.2, 1, 0.9, 0, '#1E1612');
+		ell(ctx, 3, -1.1, 0.9, 0.9, 0, '#1A1210');
+		ell(ctx, -1, -4, 1.6, 3, -0.5, '#7A4E2C');
+		ctx.strokeStyle = '#6A4E36'; ctx.lineWidth = 1.1; ctx.lineCap = 'round';
+		ctx.beginPath();
+		ctx.moveTo(1, -3); ctx.quadraticCurveTo(-2, -10, -1, -16);
+		ctx.moveTo(-0.6, -7); ctx.lineTo(2.6, -9);
+		ctx.moveTo(-1.6, -11); ctx.lineTo(1.8, -13.4);
+		ctx.moveTo(-1, -16); ctx.lineTo(-3.6, -17.6); ctx.moveTo(-1, -16); ctx.lineTo(1, -18.4);
+		ctx.stroke();
+		ctx.restore();
+	},
+};
+
+// Le daim : pelage roux tacheté de blanc, bois en palette.
+const DAIM = {
+	...ROE, legH: 18, bodyL: 27, bodyH: 12, fur: '#B8763A', belly: '#E8D0A8', rump: '#F4EEE2', stripes: null,
+	headDraw(ctx, x, y, graze, s) {
+		ROE.headDraw(ctx, x, y, graze, s);
+		ctx.save();
+		ctx.translate(x, y);
+		ctx.rotate(0.25 + graze * 0.9);
+		ctx.fillStyle = '#7A5A3A';
+		ctx.beginPath(); ctx.moveTo(0.4, -6); ctx.lineTo(-2.4, -11); ctx.lineTo(1.6, -10.4); ctx.lineTo(2.4, -8); ctx.fill();
+		ctx.restore();
+	},
+	tail(ctx, x, y) {
+		for (const [dx, dy] of [[6, -4], [10, -5], [14, -4.4], [8, -2], [12, -2.4], [16, -2]]) ell(ctx, x + dx, y + dy, 0.9, 0.7, 0, '#F4EEE2');
+	},
+};
+
 // Le sanglier : trapu, la tête en coin, une crinière de soies sur le dos, le groin au ras du sol.
 const BOAR = {
 	legH: 10.5, bodyL: 27, bodyH: 13, neck: 4, neckW: 9, head: 6, stride: 8, lift: 2.6, bob: 0.5, legW: 2.4, trot: true, neckFwd: 1.2,
@@ -756,6 +796,7 @@ export const BEASTS = {
 	chamois: (ctx, t, mode, p, s) => quadruped(ctx, s, p.ibex ? IBEX : CHAMOIS),
 	fox: (ctx, t, mode, p, s) => quadruped(ctx, s, FOX),
 	boar: (ctx, t, mode, p, s) => quadruped(ctx, s, BOAR),
+	deer: (ctx, t, mode, p, s) => quadruped(ctx, s, p.fallow ? DAIM : CERF),
 	badger: (ctx, t, mode, p, s) => quadruped(ctx, s, BADGER),
 	farmer: (ctx, t, mode, p, s) => farmer(ctx, s),
 	dog: (ctx, t, mode, p, s) => pet(ctx, s, DOG),
@@ -771,6 +812,7 @@ export const GAIT = {
 	chamois: { stride: 16, speed: 14 },
 	fox: { stride: 20, speed: 30 },
 	boar: { stride: 16, speed: 22 },
+	deer: { stride: 20, speed: 18 },
 	badger: { stride: 11, speed: 12 },
 	farmer: { stride: 27, speed: 18 },
 	dog: { stride: 24, speed: 26 },

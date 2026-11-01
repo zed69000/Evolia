@@ -26,7 +26,7 @@ Puis ouvrir http://localhost:8642/?dev=1
 
 Depuis la 0.7, tous les milieux vivent dans le même jardin : chaque parcelle a le sien, choisi à son ouverture.
 Prairie (départ), marais (8 km et 10 espèces), forêt (20 km, 24), montagne (45 km, 40), littoral (80 km, 55).
-Chaque milieu a son sol, ses décors et ses espèces (152 en tout, dans `js/species.js`). La première parcelle d'un milieu
+Chaque milieu a son sol, ses décors et ses espèces (331 en tout, dans `js/species.js`). La première parcelle d'un milieu
 est son cœur : la forêt y a ses vieux arbres, le marais ses trois mares reliées par une rivière. Les parcelles suivantes
 prennent les coins du milieu (roselière, hêtraie…). D'un milieu à l'autre, le sol et le relief se fondent sans couture.
 Compléter l'herbier d'un milieu (toutes ses espèces) rapporte 500 nectar.

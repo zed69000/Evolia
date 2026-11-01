@@ -46,6 +46,31 @@ const POND_SIZE = { pond: 1, bigpond: 1.65, mare2: 1, mare3: 1.15 };
 const POND_PADS = [[40, -10], [58, 10], [-60, 14], [-20, 24], [10, -26]];
 /** Un nombre stable tiré d'un nom et d'un créneau : pour tirer au sort sans que ça clignote. */
 const idHash = (id, slot) => [...id].reduce((h, c) => Math.imul(h ^ c.charCodeAt(0), 16777619), 2166136261 ^ slot) >>> 0;
+/**
+ * Guilde d'un animal (d'après le guide naturaliste) : sert à limiter combien on en voit à la fois, et à savoir
+ * qui hiberne. Places par guilde pour une parcelle à l'écran (davantage quand on en voit plusieurs).
+ */
+const guildOf = c => {
+	const k = c.kind, b = c.behavior;
+	if (['roe', 'fox', 'boar', 'badger', 'deer', 'chamois'].includes(k)) return 'grands';
+	if (['hare', 'rabbit', 'squirrel', 'marmot'].includes(k)) return 'rongeurs';
+	if (k === 'bat') return 'chauves-souris';
+	if (k === 'owl') return 'rapaces-nuit';
+	if (k === 'eagle' || (k === 'gull' && b === 'soar')) return 'planeurs';
+	if (k === 'bird' || k === 'tit') return 'oiseaux';
+	if (k === 'heron' || k === 'duck') return 'eau';
+	if (k === 'frog' || (k === 'lizard' && b === 'pond')) return 'amphibiens';
+	if (k === 'lizard' || k === 'snake') return 'reptiles';
+	if (k === 'dragonfly' && b === 'water') return 'libellules';
+	if (k === 'butterfly' || (k === 'moth' && b === 'flutter')) return 'papillons';
+	if (b === 'flower') return 'butineurs';
+	if (k === 'grasshopper') return 'criquets';
+	if (k === 'mouse' || k === 'weasel' || k === 'hedgehog') return 'petits-mammiferes';
+	if (k === 'snail' || k === 'worm') return 'escargots';
+	return 'petites-betes';
+};
+const GUILD_ROOM = { grands: 1, rongeurs: 2, 'chauves-souris': 2, 'rapaces-nuit': 1, planeurs: 1, oiseaux: 3, eau: 3, amphibiens: 3, reptiles: 1, libellules: 3, papillons: 3, butineurs: 6, criquets: 3, 'petits-mammiferes': 1, escargots: 2, 'petites-betes': 3 };
+const SLEEPS = new Set(['chauves-souris', 'amphibiens', 'reptiles', 'libellules', 'papillons', 'butineurs', 'criquets', 'escargots', 'petites-betes']);
 const FLYERS = new Set(['bee', 'butterfly', 'dragonfly', 'hoverfly', 'beefly', 'bat', 'moth']);
 // Niveaux de détail selon le zoom : formes simples, aquarelle, aquarelle détaillée.
 const GLYPH_Z = 0.5, DETAIL_Z = 1.6, DETAIL_DENSITY = 2.2;
@@ -1950,28 +1975,47 @@ export class Garden {
 		if (!visible.length) return;
 		// Un effectif par espèce pour tout le jardin ; chaque animal s'installe dans une parcelle visible de son milieu.
 		const scale = Math.min(2, 1 + (visible.length - 1) * 0.35), present = biomesIn(place);
-		// La nuit, les grands mammifères ne défilent pas tous ensemble : deux espèces au plus, qui changent au fil
-		// de la nuit (environ toutes les quatre minutes).
-		const BIG = ['roe', 'fox', 'boar', 'badger'], slot = Math.floor(this.t / 240);
-		const bigOk = new Set(dusk ? SPECIES.filter(sp => sp.kind === 'animal' && BIG.includes(sp.critter.kind) && present.has(sp.place) && this.state.species[sp.id])
-			.map(sp => sp.id).sort((a, b) => idHash(a, slot) - idHash(b, slot)).slice(0, 2) : []);
+		// Comme dans la nature, on ne voit jamais tout le monde à la fois : chaque guilde (butineurs, papillons,
+		// criquets, oiseaux, chauves-souris, grands mammifères…) a une place limitée à l'écran, et ses espèces se
+		// relaient par fenêtres de quelques minutes. Les saisons, le vent et le froid règlent qui sort.
+		const se = this.season ?? {}, winter = (se.winter ?? 0) > 0.5, lateAutumn = (se.autumn ?? 0) > 0.7;
+		const windy = (this.weather.wind ?? 10) > 32, cold = (this.weather.temp ?? 15) < 8;
+		const want = new Map();
 		for (const sp of SPECIES) {
 			if (sp.kind !== 'animal' || !present.has(sp.place) || !sp.critter.behavior) continue;
-			const c = sp.critter;
-			let want = this.state.species[sp.id] && ok(c.when) ? Math.round((c.count(this.state) + (this.idleBonus?.(sp) ?? 0)) * scale) + attracted(place, sp.id) : 0;
-			if (dusk && BIG.includes(c.kind) && !bigOk.has(sp.id)) want = 0;
-			// Sous la pluie ou la neige, les insectes volants se mettent à l'abri.
-			if (wet && FLYERS.has(c.kind)) want = 0;
-			// Les oiseaux et les mammifères restent peu nombreux : une nuée de merles ou de lièvres ferait désordre.
-			const most = { bird: 4, tit: 4, hare: 4, rabbit: 4, roe: 3, chamois: 3, fox: 2, squirrel: 3, heron: 2, owl: 1, eagle: 1, gull: 4, duck: 4, bat: 3, boar: 3, badger: 1 }[c.kind];
-			if (most) want = Math.min(want, most);
+			const c = sp.critter, g = guildOf(c);
+			let n = this.state.species[sp.id] && ok(c.when) ? Math.round((c.count(this.state) + (this.idleBonus?.(sp) ?? 0)) * scale) + attracted(place, sp.id) : 0;
+			// Sous la pluie ou la neige, par grand vent ou par froid, les insectes volants se mettent à l'abri.
+			if ((wet || windy || cold) && FLYERS.has(c.kind)) n = 0;
+			// L'hiver, insectes, reptiles, amphibiens et chauves-souris hibernent, et les migrateurs sont partis ;
+			// à la fin de l'automne, les papillons et les orthoptères se font rares.
+			if (winter && (SLEEPS.has(g) || c.migrant)) n = 0;
+			if (lateAutumn && (g === 'papillons' || g === 'criquets') && idHash(sp.id, 1) % 3) n = 0;
+			const most = { bird: 4, tit: 4, hare: 4, rabbit: 4, roe: 3, chamois: 3, fox: 2, squirrel: 3, heron: 2, owl: 1, eagle: 1, gull: 4, duck: 4, bat: 3, boar: 3, badger: 1, deer: 3 }[c.kind];
+			if (most) n = Math.min(n, most);
+			if (n > 0) want.set(sp, n);
+		}
+		const slot = Math.floor(this.t / 150);
+		const byGuild = new Map();
+		for (const sp of want.keys()) { const g = guildOf(sp.critter); if (!byGuild.has(g)) byGuild.set(g, []); byGuild.get(g).push(sp); }
+		for (const [g, list] of byGuild) {
+			// Les espèces de la guilde passent à tour de rôle ; la place restante revient aux suivantes.
+			// La nuit, la vie est plus discrète : moins de petites bêtes à la fois.
+			const calm = night && SLEEPS.has(g) ? 0.6 : 1;
+			let room = Math.max(1, Math.round((GUILD_ROOM[g] ?? 4) * (g === 'grands' ? 1 : scale) * calm));
+			list.sort((a, b) => idHash(a.id, slot) - idHash(b.id, slot));
+			for (const sp of list) { const n = Math.min(want.get(sp), room); want.set(sp, n); room -= n; }
+		}
+		for (const sp of SPECIES) {
+			if (sp.kind !== 'animal' || !present.has(sp.place) || !sp.critter.behavior) continue;
+			const n = want.get(sp) ?? 0;
 			const active = this.insects.filter(i => i.sp === sp.id && !i.leaving);
-			for (let k = active.length; k < want; k++) {
+			for (let k = active.length; k < n; k++) {
 				let b = null;
 				for (const ci of visible.filter(ci => this.biomeOf(ci) === sp.place).sort(() => Math.random() - 0.5)) if ((b = this.newCritter(sp, this.pdata[ci]))) break;
 				if (b) this.insects.push(b);
 			}
-			for (let k = active.length; k > want; k--) active[k - 1].leaving = true;
+			for (let k = active.length; k > n; k--) active[k - 1].leaving = true;
 		}
 		// La petite vie sans nom ne se redistribue que si la vue ou le moment changent (ou de temps en temps).
 		const key = `${visible.join(',')}|${night}|${dusk}|${wet}`;
@@ -2671,12 +2715,13 @@ export class Garden {
 					b.k = Math.min(1, b.k + dt * 1.8);
 					b.x = lerp(b.fx, b.tx, b.k);
 					b.y = lerp(b.fy, b.ty, b.k) - Math.sin(b.k * Math.PI) * 22;
-					if (b.k >= 1) { b.mode = 'walk'; b.timer = 2 + Math.random() * 4; }
+					if (b.k >= 1) { b.mode = 'walk'; b.timer = 8 + Math.random() * 16; }
 					return;
 				}
 				b.timer -= dt;
-				b.x += Math.cos(b.t * 0.5) * 2 * dt;
-				if (b.timer <= 0) {
+				// Dérangé par le jardinier ou son chien qui passe tout près, il saute aussitôt.
+				const near = [this.farmer, this.pet].some(a => a && !a.hidden && Math.hypot(a.x - b.x, a.y - b.y) < 40);
+				if (b.timer <= 0 || (near && b.timer > 0.5)) {
 					const a = Math.random() * Math.PI * 2, d = 25 + Math.random() * 35;
 					let tx = b.x + Math.cos(a) * d, ty = b.y + Math.sin(a) * d * 0.6;
 					if (Math.hypot(tx - b.home.x, ty - b.home.y) > 140) { tx = b.home.x; ty = b.home.y + 8; }

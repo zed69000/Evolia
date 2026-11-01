@@ -3,6 +3,14 @@
 Chaque version, la plus récente en haut. Le site (evolia.sebastienalzamora.workers.dev) est toujours à jour ;
 le Play Store (tests internes) reçoit les versions indiquées « Play ».
 
+## 0.7.14 — 1er novembre 2026
+**179 nouvelles espèces d'animaux**, choisies dans un guide naturaliste des prairies d'Europe (Europe de l'Ouest et du centre), chacune vérifiée absente du jeu avant d'être ajoutée. 331 espèces en tout.
+- **Prairie :** 21 papillons de jour (machaon, vulcain, belle-dame, demi-deuil, myrtil, tabac d'Espagne…), 13 papillons de nuit et zygènes (moro-sphinx, sphinx tête-de-mort, écaille martre…), grillons, criquets et sauterelles, 13 abeilles sauvages, bourdons et guêpes (xylocope, osmies, frelon…), coléoptères (cétoine dorée, carabe doré, hanneton…), punaises, araignées (épeire fasciée, thomise…), escargots et limace, campagnol, mulot, musaraigne, belette, fouine, cinq chauves-souris, 25 oiseaux (alouette, chardonneret, rougegorge, huppe, hirondelle, crécerelle, buse, effraie, chevêche…), orvet, coronelle, vipère aspic et lézard des souches.
+- **Marais :** demoiselles et libellules (agrions, anax, aeschne…), papillons des zones humides, criquets, araignées d'eau, putois et loutre, vanneau, bécassine, busard, aigrette, cigogne, hibou des marais, couleuvre à collier, rainette, crapauds, alyte, sonneur et triton crêté.
+- **Forêt et montagne :** cerf, daim, martre ; hermine, lézard vivipare, vipère péliade, dectique et criquet des genévriers.
+- **Nouveaux dessins :** petits rongeurs, mustélidés, serpents, cerf et daim ; bourdons, guêpes, punaises, araignées, coléoptères, grenouilles, chouettes, rapaces et échassiers prennent les couleurs de chaque espèce.
+- **Un jardin qui vit comme la nature** (règles du guide, pour toutes les espèces) : chaque groupe (butineurs, papillons, criquets, oiseaux, chauves-souris…) a une place limitée à l'écran, et ses espèces se relaient toutes les deux à trois minutes ; un seul grand mammifère à la fois ; la nuit, moins de petites bêtes à la fois. L'hiver, insectes, reptiles, amphibiens et chauves-souris hibernent et les migrateurs sont partis ; papillons et criquets se font rares en fin d'automne ; les insectes ne volent pas par grand vent ni par froid. Les criquets restent posés et ne sautent que de temps en temps, ou quand le jardinier passe.
+
 ## 0.7.13 — 1er novembre 2026
 Le bestiaire a été relu avec un guide naturaliste des prairies d'Europe.
 - **De vrais vers luisants.** La femelle, sans ailes, brille posée au pied des herbes de la prairie : une lueur vert-jaune qui respire lentement ; un mâle plus discret vole parfois autour. Ils ne brillent qu'à la belle saison (plus en automne ni en hiver), et ne flottent plus partout sur l'écran.
