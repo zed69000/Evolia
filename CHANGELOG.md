@@ -3,7 +3,7 @@
 Chaque version, la plus récente en haut. Le site (evolia.sebastienalzamora.workers.dev) est toujours à jour ;
 le Play Store (tests internes) reçoit les versions indiquées « Play ».
 
-## 0.7.27 — 1er novembre 2026
+## 0.7.27 — 1er novembre 2026 · Play
 D'après une trace de course sur iPhone :
 - **Plus de « vélo » fantôme.** Quand la précision du GPS change d'un coup, la position saute de plusieurs mètres en une seconde ; ce saut n'est plus pris pour un déplacement à 24 km/h. Et tant que le téléphone sent des pas, on est à pied : jamais classé vélo.
 - La trace note aussi les pas comptés par le téléphone quand le GPS a la priorité.
