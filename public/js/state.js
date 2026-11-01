@@ -309,6 +309,17 @@ export function todayMeters(state) {
 	return state.days[dayKey()] ?? 0;
 }
 
+// Le nectar d'une sortie à pied suit l'effort : 125 points d'effort (1 km de marche à 5 km/h) font 200 nectar,
+// comme avant ; l'effort d'un jour, rapporté en « mètres de marche » (×8), règle aussi le plafond de l'écosystème.
+export const NECTAR_PER_EFFORT = 200 / 125;
+export const WALK_M_PER_EFFORT = 1000 / 125;
+
+/** Ajoute l'effort fait aujourd'hui (ou un autre jour, `key`). */
+export function addDayEffort(state, effort, key = dayKey()) {
+	state.effortDays ??= {};
+	state.effortDays[key] = (state.effortDays[key] ?? 0) + effort;
+}
+
 export function addDistance(state, meters) {
 	const k = dayKey();
 	state.days[k] = (state.days[k] ?? 0) + meters;

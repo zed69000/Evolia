@@ -6,7 +6,7 @@ import { SPECIES, PLACE_BY_ID, PLACE_IN } from './species.js';
 import { thumbCopy } from './encyclopedia.js';
 import { PLANT_TYPES } from './plants.js';
 import { ITEMS, itemPower, fitsPlace } from './deco.js';
-import { dayKey } from './state.js';
+import { dayKey, WALK_M_PER_EFFORT } from './state.js';
 import { CELLS, PARCEL_W, PARCEL_H } from './zones.js';
 
 // Production par membre et par heure (effort par type de plante, nectar), et bonus sur toute la production.
@@ -73,8 +73,8 @@ export function addBoost(state, minutes) {
 }
 
 /**
- * L'écosystème entretient, le sport fait grandir : ce que les bêtes produisent seules est plafonné par ce que
- * la personne a bougé ces 7 derniers jours. Par jour, au plus la moitié de l'effort de sa marche moyenne en
+ * L'écosystème entretient, le sport fait grandir : ce que les bêtes produisent seules est plafonné par l'effort
+ * fait ces 7 derniers jours (compté en mètres de marche équivalents). Par jour, au plus la moitié de l'effort de sa marche moyenne en
  * croissance, et autant de nectar que sa marche moyenne ; un plancher (1,5 km par jour) pour qui marche peu.
  * Les habitats relèvent ce plafond, puis l'élan triple le tout.
  */
@@ -82,7 +82,10 @@ export function activityBudget(state, now = Date.now()) {
 	let sum = 0;
 	const age = Math.max(1, Math.min(7, Math.ceil((now - (state.createdAt ?? now)) / 86400000)));
 	for (let i = 0; i < age; i++) {
-		sum += state.days?.[dayKey(new Date(now - i * 86400000))] ?? 0;
+		// L'effort du jour, en mètres de marche équivalents (une heure de course pèse bien plus qu'une heure de
+		// marche) ; pour les jours d'avant ce calcul, les mètres parcourus.
+		const k = dayKey(new Date(now - i * 86400000)), e = state.effortDays?.[k];
+		sum += e != null ? e * WALK_M_PER_EFFORT : state.days?.[k] ?? 0;
 	}
 	const meters = sum / age;
 	const k = 1 + habitatBonus(state);

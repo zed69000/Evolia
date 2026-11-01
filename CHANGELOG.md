@@ -3,6 +3,10 @@
 Chaque version, la plus récente en haut. Le site (evolia.sebastienalzamora.workers.dev) est toujours à jour ;
 le Play Store (tests internes) reçoit les versions indiquées « Play ».
 
+## 0.7.30 — 1er novembre 2026
+- **Le nectar d'une sortie suit l'effort.** Un kilomètre de marche à 5 km/h rapporte toujours 200 nectar ; un kilomètre de course à 10 km/h en rapporte maintenant environ 420 (une heure de course ≈ 4 200, contre 1 000 pour une heure de marche), et la montée compte aussi. Les pas relus à la réouverture suivent la même règle. Le vélo garde sa part réduite (comme pour la progression).
+- **Le plafond de l'écosystème suit l'effort** des 7 derniers jours, compté en kilomètres de marche équivalents : une semaine sportive laisse l'écosystème produire bien plus qu'une semaine de petites marches. Le sport reste le moteur du jeu, même quand l'écosystème tourne à plein.
+
 ## 0.7.29 — 1er novembre 2026
 - **Un effort juste, d'après l'énergie dépensée.** Chaque allure a son intensité en METs, tirée du Compendium des activités physiques (marche, course, vélo) ; l'effort compté est l'énergie dépensée au-delà du repos, et les sports intenses gagnent un bonus de 5 % par MET au-delà de 4. Un kilomètre de marche à 5 km/h vaut toujours autant.
 - Ce que ça change, par heure : marche lente +40 % (elle était sous-payée), marche et marche rapide presque pareil, jogging +24 %, course +10 %, course rapide −10 %, sprint −29 % (il était surpayé), vélo −9 %, petits pas à la maison ×2 (ils étaient très sous-payés). La montée garde sa règle (1 m gravi ≈ 8 à 10 m de plat, comme l'équivalence de Scarf).

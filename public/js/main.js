@@ -1,6 +1,6 @@
 // Interface : bandeau, suivi automatique du mouvement, récolte des pas, récap, carnet, biodiversité, tutoriel.
 
-import { slots, slotSummary, createSlot, useSlot, renameSlot, deleteSlot, load, save, reset, allPlants, biomeKm, heartOf, ACTIVITIES, ACTIVITY_BY_ID, MAX_SPEED_KMH, activityFor, effortFor, hikeFor, HIKE_WINDOW, dayKey, todayMeters, addDistance, STEP_LENGTH_M, effortMix } from './state.js';
+import { NECTAR_PER_EFFORT, addDayEffort, slots, slotSummary, createSlot, useSlot, renameSlot, deleteSlot, load, save, reset, allPlants, biomeKm, heartOf, ACTIVITIES, ACTIVITY_BY_ID, MAX_SPEED_KMH, activityFor, effortFor, hikeFor, HIKE_WINDOW, dayKey, todayMeters, addDistance, STEP_LENGTH_M, effortMix } from './state.js';
 import { Garden, CELLS, CELL_KM, cellsOpen, cellName } from './garden.js';
 import { PlacesMap } from './map.js';
 import { PLANT_TYPES, DECOR, plantName } from './plants.js';
@@ -573,7 +573,8 @@ function growMix(plant, effort) {
 	return effortMix(plant).flatMap(([type, share]) => garden.addEffort(type, effort * share));
 }
 
-function addMeters(m) {
+/** `nectar` : ce que rapportent ces mètres (par défaut 1 pour 5 m ; une sortie le calcule d'après l'effort). */
+function addMeters(m, nectar = m / 5) {
 	const before = state.totals.distance / 1000;
 	addDistance(state, m);
 	// Un nouvel aménagement devient possible (la cabane à 5 km…).
@@ -587,7 +588,7 @@ function addMeters(m) {
 	here().km += m / 1000;
 	// Le nectar de la marche se dépose comme celui des butineurs : en gouttes sur les fleurs, ou dans le collecteur.
 	// Il n'est pas limité par la réserve : ce qu'on a gagné en marchant ne se perd jamais.
-	addWaiting(state, m / 5, false, state.place);
+	addWaiting(state, nectar, false, state.place);
 	if (markActive(state)) {
 		const s = state.daily.streak;
 		toast(s > 1 ? `Jour actif : ${s} jours de suite !` : 'Jour actif : ta série commence', '#F08A3C', () => showDaily());
@@ -761,10 +762,14 @@ function onSample(s) {
 	if (act.bike) session.bike = (session.bike ?? 0) + s.dist;
 	// Les mètres faits en randonnée ou en trail, pour le titre du bilan.
 	if (act.hike) session.hike = { ...(session.hike ?? {}), [act.id]: (session.hike?.[act.id] ?? 0) + s.dist };
-	addMeters(s.dist * (act.counts ?? 1));
 	// Chaque mètre gravi vaut une dizaine de mètres à plat.
 	if (s.climb > 0 && !act.bike) session.climb = (session.climb ?? 0) + s.climb;
 	const effort = effortFor(s.dist, s.speedKmh, act) + (s.climb > 0 && !act.bike ? s.climb * act.mult : 0);
+	// À pied, le nectar suit l'effort (montée comprise) ; à vélo, il garde sa part réduite, comme la progression.
+	const nectar = act.bike ? (s.dist * (act.counts ?? 1)) / 5 : effort * NECTAR_PER_EFFORT;
+	session.nectar = (session.nectar ?? 0) + nectar;
+	addMeters(s.dist * (act.counts ?? 1), nectar);
+	addDayEffort(state, effort);
 	session.effort += effort;
 	state.totals.effort += effort;
 	addEffortXp(effort);
@@ -949,7 +954,7 @@ function showRecap(w, duration, matured) {
 		const r = rates(state, state.place);
 		const mins = Math.min(360, (duration / 60) * BOOST_PER_MIN);
 		const flowers = ((r.grow.fleur ?? 0) * (BOOST_MULT - 1) * mins) / 60 / PLANT_TYPES.fleur.cost;
-		ecoLine = `<p class="eco-gain">Ton écosystème profite de ta sortie : <b>+${fmtInt(w.distance / 5)} nectar à récolter</b> et production <b>×${BOOST_MULT}</b> pendant ${fmtMin(mins)}${flowers >= 0.5 ? `, soit environ ${fmtInt(flowers)} fleur${flowers >= 1.5 ? 's' : ''} en plus grâce à tes pollinisateurs` : ''}.</p>`;
+		ecoLine = `<p class="eco-gain">Ton écosystème profite de ta sortie : <b>+${fmtInt(w.nectar ?? w.distance / 5)} nectar à récolter</b> et production <b>×${BOOST_MULT}</b> pendant ${fmtMin(mins)}${flowers >= 0.5 ? `, soit environ ${fmtInt(flowers)} fleur${flowers >= 1.5 ? 's' : ''} en plus grâce à tes pollinisateurs` : ''}.</p>`;
 	}
 	showModal(`
 		<h2>${title}</h2><p>Voici ce qui a poussé grâce à toi.</p>
@@ -998,13 +1003,16 @@ async function playHarvest(res, source) {
 	state.totals.distance += res.distance;
 	here().km += res.distance / 1000;
 	state.totals.steps += res.steps;
-	addWaiting(state, res.distance / 5, false, state.place);
+	// Le nectar des pas relus suit leur effort, réparti sur les jours où ils ont été faits.
+	const effortAll = res.groups.reduce((a, g) => a + g.effort, 0), nectar = effortAll * NECTAR_PER_EFFORT;
+	for (const [k, m] of Object.entries(res.days)) if (res.distance > 0) addDayEffort(state, (effortAll * m) / res.distance, k);
+	addWaiting(state, nectar, false, state.place);
 	// L'élan des pas relus vaut celui d'une marche suivie en direct : 3 min par minute de vraie marche,
 	// 2 min par minute de petits pas (ménage, marche lente).
 	addBoost(state, res.groups.reduce((n, g) => n + g.minutes * (g.act.id === 'menage' || g.act.id === 'marche-lente' ? 2 : 3), 0));
 	renderHud();
 	closeModal();
-	toast(`${fmtInt(res.steps)} pas pendant ton absence · +${fmtInt(res.distance / 5)} nectar à récolter`, '#A3BD57');
+	toast(`${fmtInt(res.steps)} pas pendant ton absence · +${fmtInt(nectar)} nectar à récolter`, '#A3BD57');
 	garden.setFollow(true);
 	const rows = [], events = [];
 	for (const g of res.groups.sort((a, b) => b.effort - a.effort)) {
@@ -1029,7 +1037,7 @@ async function playHarvest(res, source) {
 	showModal(`<div class="modal-body">
 		<h2>Pendant ton absence</h2>
 		<p>${fmtInt(res.steps)} pas · ${fmt(res.distance / 1000)} km, comptés par ${source.label}. Même le ménage fait pousser ton jardin.</p>
-		<p class="harvest-info">Tes pas t’ont rapporté <b>+${fmtInt(res.distance / 5)} nectar</b> (1 pour 5 m). Avec la récolte de tes animaux, il t’attend ${hasCollector(state) ? 'dans ton collecteur : touche-le pour tout récupérer' : 'en gouttes dorées sur les fleurs : touche-les pour le cueillir'}.</p>
+		<p class="harvest-info">Tes pas t’ont rapporté <b>+${fmtInt(nectar)} nectar</b>, selon l’effort fourni. Avec la récolte de tes animaux, il t’attend ${hasCollector(state) ? 'dans ton collecteur : touche-le pour tout récupérer' : 'en gouttes dorées sur les fleurs : touche-les pour le cueillir'}.</p>
 		<ul class="harvest-rows">${rows.join('')}</ul>${decor ? `<div class="chips">${decor}</div>` : ''}
 		${idleNote ? `<p>Et ton écosystème a travaillé :</p>${idleNote}` : ''}</div>
 		<div class="modal-foot"><button class="btn primary" data-close>Voir mon jardin</button></div>`);
