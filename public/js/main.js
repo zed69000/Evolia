@@ -1263,13 +1263,13 @@ const coopSeats = it => ITEMS.poulailler.levels.seats[it.level ?? 1];
 function coopTip(it, lv, nx) {
 	const L = ITEMS.poulailler.levels, fl = it.flock ?? { hens: 3, roosters: 1 }, eggs = garden.eggsOf(it);
 	const who = `${fl.hens} poule${fl.hens > 1 ? 's' : ''}${fl.roosters ? ` et ${fl.roosters} coq${fl.roosters > 1 ? 's' : ''}` : ''}`;
-	return `<small class="item-tip">${L.name[lv][0].toUpperCase() + L.name[lv].slice(1)} : ${who}, ${coopSeats(it)} places. ${eggs ? `${eggs} œuf${eggs > 1 ? 's' : ''} à ramasser.` : 'Marche un peu : les poules pondent.'}${nx ? nx.ok ? ` Agrandis-le en ${L.name[nx.level]} (${L.seats[nx.level]} places).` : ` ${L.name[nx.level][0].toUpperCase() + L.name[nx.level].slice(1)} dès ${nx.km} km parcourus.` : ''}</small>`;
+	return `<small class="item-tip">${L.name[lv][0].toUpperCase() + L.name[lv].slice(1)} · ${fl.hens + fl.roosters}/${coopSeats(it)} places · ${eggs ? `${eggs} œuf${eggs > 1 ? 's' : ''} à ramasser` : 'les poules pondent quand tu marches'}${fl.hens + fl.roosters < coopSeats(it) ? ` · une bête de plus : ${BIRD_COST} nectar` : ''}${nx && !nx.ok ? ` · ${L.seats[nx.level]} places dès ${nx.km} km` : ''}</small>`;
 }
+/** Poules et coqs sur une ligne : − nombre + (ajouter coûte un peu de nectar, tant qu'il reste de la place). */
 function coopButtons(it) {
 	const fl = it.flock ?? { hens: 3, roosters: 1 }, free = fl.hens + fl.roosters < coopSeats(it), poor = (state.nectar ?? 0) < BIRD_COST;
-	return (free ? `<button class="btn ghost" data-bird="hens" data-add="1" ${poor ? 'disabled' : ''}>+ Une poule (${BIRD_COST})</button><button class="btn ghost" data-bird="roosters" data-add="1" ${poor ? 'disabled' : ''}>+ Un coq (${BIRD_COST})</button>` : '')
-		+ (fl.roosters ? '<button class="btn ghost" data-bird="roosters" data-add="0">Un coq de moins</button>' : '')
-		+ (fl.hens > 1 ? '<button class="btn ghost" data-bird="hens" data-add="0">Une poule de moins</button>' : '');
+	const row = (key, label, min) => `<span class="coop-step"><b>${label}</b><button data-bird="${key}" data-add="0" ${fl[key] <= min ? 'disabled' : ''}>−</button><i>${fl[key]}</i><button data-bird="${key}" data-add="1" ${!free || poor ? 'disabled' : ''}>+</button></span>`;
+	return `<div class="coop-row">${row('hens', 'Poules', 1)}${row('roosters', 'Coqs', 0)}</div>`;
 }
 
 /** Le prochain niveau d'un habitat posé : son prix, ou ce qui manque (kilomètres), ou null s'il est au plus haut. */
@@ -1493,8 +1493,13 @@ function tapItem(hit, card) {
 		: it.kind === 'poulailler' ? coopTip(it, lv, nx)
 		: def.levels ? `<small class="item-tip">${def.levels.name[lv][0].toUpperCase() + def.levels.name[lv].slice(1)}, ${CABIN_STYLES[(it.style ?? 0) % CABIN_STYLES.length].name}. ${farmerName(true)} y vit.${nx ? nx.ok ? ` Agrandis-la en ${def.levels.name[nx.level]}.` : ` ${def.levels.name[nx.level][0].toUpperCase() + def.levels.name[nx.level].slice(1)} dès ${nx.km} km parcourus.` : ''}</small>`
 		: canLevel(it.kind) ? `<small class="item-tip">Niveau ${lv} sur ${MAX_LEVEL}, ${LEVEL_NAME[lv]} : il fait venir ${lv * def.power} ${def.power * lv > 1 ? 'membres' : 'membre'}.${nx ? nx.ok ? ` Au niveau ${nx.level}, un de plus${def.power > 1 ? ` (${def.power})` : ''}.` : ` Niveau ${nx.level} dès ${nx.km} km parcourus.` : ''}</small>` : '';
-	card.innerHTML = `<b>${def.name}</b>${def.text}${info}<small class="item-tip">Astuce : un appui long dessus le soulève directement.</small>
-		<div class="item-actions">${up ? `<button class="btn primary" data-upgrade ${(state.nectar ?? 0) < up ? 'disabled' : ''}>${def.levels ? 'Agrandir' : 'Améliorer'} (${fmtInt(up)})</button>` : ''}${it.kind === 'poulailler' ? coopButtons(it) : ''}${it.kind === 'cabane' ? '<button class="btn ghost" data-style>Couleur</button><button class="btn ghost" data-farmer-swap>' + (state.gardener === 'fermiere' ? 'Un fermier' : 'Une fermière') + '</button><button class="btn ghost" data-pet-swap>' + (state.pet === 'chien' ? 'Un chat' : state.pet === 'chat' ? 'Sans animal' : 'Un chien') + '</button>' : ''}${def.turn ? '<button class="btn ghost" data-turn>Tourner</button>' : ''}<button class="btn ghost" data-move>Déplacer</button><button class="btn ghost" data-store>Ranger (+${fmtInt((it.paid ?? def.cost) + (it.spent ?? 0))})</button></div>`;
+	// Une bulle courte : la première phrase de la description (le reste est dans Aménager), l'astuce de l'appui long
+	// seulement les trois premières fois.
+	// Le poulailler, la cabane et le collecteur montrent surtout leur état : pas besoin de les redécrire.
+	const short = ['poulailler', 'cabane', 'collecteur'].includes(it.kind) ? '' : def.text.split(/(?<=[.!?…])\s/)[0];
+	const tip = (state.longPressTips ?? 0) < 3 ? (state.longPressTips = (state.longPressTips ?? 0) + 1, '<small class="item-tip">Astuce : un appui long dessus le soulève directement.</small>') : '';
+	card.innerHTML = `<b>${def.name}</b>${short}${info}${tip}
+		${it.kind === 'poulailler' ? coopButtons(it) : ''}<div class="item-actions">${up ? `<button class="btn primary" data-upgrade ${(state.nectar ?? 0) < up ? 'disabled' : ''}>${def.levels ? 'Agrandir' : 'Améliorer'} (${fmtInt(up)})</button>` : ''}${it.kind === 'cabane' ? '<button class="btn ghost" data-style>Couleur</button><button class="btn ghost" data-farmer-swap>' + (state.gardener === 'fermiere' ? 'Un fermier' : 'Une fermière') + '</button><button class="btn ghost" data-pet-swap>' + (state.pet === 'chien' ? 'Un chat' : state.pet === 'chat' ? 'Sans animal' : 'Un chien') + '</button>' : ''}${def.turn ? '<button class="btn ghost" data-turn>Tourner</button>' : ''}<button class="btn ghost" data-move>Déplacer</button><button class="btn ghost" data-store>Ranger (+${fmtInt((it.paid ?? def.cost) + (it.spent ?? 0))})</button></div>`;
 	card.classList.remove('link');
 	card.classList.add('actions');
 	card.onclick = e => {
@@ -1533,9 +1538,10 @@ function tapItem(hit, card) {
 			const fl = (it.flock ??= { hens: 3, roosters: 1 }), key = bird.dataset.bird, add = bird.dataset.add === '1';
 			if (add && (state.nectar ?? 0) >= BIRD_COST && fl.hens + fl.roosters < coopSeats(it)) { state.nectar -= BIRD_COST; it.spent = (it.spent ?? 0) + BIRD_COST; fl[key]++; }
 			else if (!add && fl[key] > 0) fl[key]--;
-			card.hidden = true;
 			renderHud();
 			persist(true);
+			// La bulle reste ouverte, mise à jour : on peut ajouter plusieurs poules d'affilée.
+			tapItem(hit, card);
 			return;
 		}
 		if (e.target.closest('[data-upgrade]') && up && it.kind !== 'collecteur') { card.hidden = true; levelUp(it); return; }
