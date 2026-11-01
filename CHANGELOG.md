@@ -3,6 +3,10 @@
 Chaque version, la plus récente en haut. Le site (evolia.sebastienalzamora.workers.dev) est toujours à jour ;
 le Play Store (tests internes) reçoit les versions indiquées « Play ».
 
+## 0.7.11 — 1er novembre 2026
+- **La nuit, le jardin vit.** Avant, seuls quatre animaux sortaient la nuit, et seulement une fois découverts : un jardin neuf restait désert. Maintenant, des petits papillons de nuit tournent autour des lanternes et de la fenêtre de la cabane, et volettent au-dessus des fleurs, dès la première nuit.
+- **Quatre nouvelles espèces de nuit :** la pipistrelle commune (une chauve-souris qui file d'une nuée d'insectes à l'autre et en attrape au passage) et le sphinx du liseron (un grand papillon de nuit qui butine en vol stationnaire) dans la prairie ; le murin de Daubenton, qui chasse au ras des mares, dans le marais ; le hibou grand-duc, avec ses aigrettes et ses yeux orange, en montagne. 150 espèces en tout.
+
 ## 0.7.10 — 1er novembre 2026
 - **Correctif important :** le jardin pouvait se figer sur un aplat vert. Il suffisait d'avoir une mare (celle du marais, ou une petite mare posée) sur la gauche du jardin : l'animation de ses ronds dans l'eau plantait. C'est corrigé, et une image ratée ne peut plus jamais figer le jeu.
 - **Après une vraie balade** (300 m ou plus), son bilan s'ouvre de lui-même : kilomètres, ce qui a poussé, le nectar gagné et l'élan. Avant, ce n'était qu'un petit message.

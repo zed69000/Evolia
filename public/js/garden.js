@@ -44,7 +44,7 @@ const OLD_TREES = {
 // L'eau des mares (décors), pour ses reflets : taille relative à la mare de la prairie.
 const POND_SIZE = { pond: 1, bigpond: 1.65, mare2: 1, mare3: 1.15 };
 const POND_PADS = [[40, -10], [58, 10], [-60, 14], [-20, 24], [10, -26]];
-const FLYERS = new Set(['bee', 'butterfly', 'dragonfly', 'hoverfly', 'beefly']);
+const FLYERS = new Set(['bee', 'butterfly', 'dragonfly', 'hoverfly', 'beefly', 'bat', 'moth']);
 // Niveaux de détail selon le zoom : formes simples, aquarelle, aquarelle détaillée.
 const GLYPH_Z = 0.5, DETAIL_Z = 1.6, DETAIL_DENSITY = 2.2;
 const Z_MAX = 3.2;
@@ -1955,7 +1955,7 @@ export class Garden {
 			// Sous la pluie ou la neige, les insectes volants se mettent à l'abri.
 			if (wet && FLYERS.has(c.kind)) want = 0;
 			// Les oiseaux et les mammifères restent peu nombreux : une nuée de merles ou de lièvres ferait désordre.
-			const most = { bird: 4, tit: 4, hare: 4, rabbit: 4, roe: 3, chamois: 3, fox: 2, squirrel: 3, heron: 2, owl: 1, eagle: 1, gull: 4, duck: 4 }[c.kind];
+			const most = { bird: 4, tit: 4, hare: 4, rabbit: 4, roe: 3, chamois: 3, fox: 2, squirrel: 3, heron: 2, owl: 1, eagle: 1, gull: 4, duck: 4, bat: 3 }[c.kind];
 			if (most) want = Math.min(want, most);
 			const active = this.insects.filter(i => i.sp === sp.id && !i.leaving);
 			for (let k = active.length; k < want; k++) {
@@ -1991,6 +1991,14 @@ export class Garden {
 				const x = P.ox + PARCEL_W * (0.3 + Math.random() * 0.4), y = P.oy + PARCEL_H * (0.3 + Math.random() * 0.4);
 				if (this.inOpen(x, y)) spots.push({ x, y });
 			}
+			if (night) {
+				for (const it of this.items) {
+					if (this.cellAt(it.x, it.y) !== ci) continue;
+					const sp = this.itemSprite(it.kind, it.rot, it);
+					if (sp.glow != null) this.ambient.push({ x: it.x + (sp.glowX ?? 0), y: it.y + sp.glow + 36, kind: 'moth', n: 3 + Math.floor(Math.random() * 3), r: 12, ph: Math.random() * 100 });
+				}
+				for (const p of [...P.flowers].sort(() => Math.random() - 0.5).slice(0, 2)) this.ambient.push({ x: P.ox + p.x, y: P.oy + p.y + 10, kind: 'moth', n: 1 + Math.floor(Math.random() * 2), r: 22, ph: Math.random() * 100 });
+			}
 			for (const s of spots) {
 				const mosq = s.water && (dusk || night);
 				if (night && !mosq) continue;
@@ -2010,6 +2018,14 @@ export class Garden {
 				if (s.kind === 'gnat') {
 					ctx.fillStyle = 'rgba(46,40,30,0.55)';
 					ctx.fillRect(x - 0.65, y - 0.65, 1.3, 1.3);
+				} else if (s.kind === 'moth') {
+					// Petit papillon de nuit pâle, ailes qui battent, attiré par la lumière.
+					const f = 0.4 + 0.6 * Math.abs(Math.sin(t * 22 + i * 1.7));
+					ctx.fillStyle = 'rgba(238,228,206,0.85)';
+					ctx.beginPath(); ctx.ellipse(x - 1.1, y, 1.5 * f, 1.1, 0.4, 0, Math.PI * 2); ctx.fill();
+					ctx.beginPath(); ctx.ellipse(x + 1.1, y, 1.5 * f, 1.1, -0.4, 0, Math.PI * 2); ctx.fill();
+					ctx.fillStyle = 'rgba(120,100,80,0.8)';
+					ctx.fillRect(x - 0.3, y - 0.8, 0.6, 1.8);
 				} else {
 					// Moustique : un corps fin, de longues pattes à peine visibles, des ailes qui vibrent.
 					const dir = Math.cos(t * 1.1 + a) > 0 ? 1 : -1;
@@ -2076,6 +2092,8 @@ export class Garden {
 				const mx = (a.x + b.x) / 2 + (Math.random() - 0.5) * 80, my = (a.y + b.y) / 2 + (Math.random() - 0.5) * 40;
 				return { ...base, x: a.x, y: a.y, mode: 'walk', path: [[a.x, a.y + 6], [mx, my], [b.x, b.y + 4]], n: 11 };
 			}
+			case 'bat':
+				return { ...base, x: side, y: y - 60, mode: 'fly', timer: 0 };
 			case 'soar':
 				return { ...base, x: P.ox + PARCEL_W / 2, y, mode: 'soar', ang: Math.random() * 6.28, r: 90 + Math.random() * 60 };
 			case 'flower':
@@ -2653,6 +2671,29 @@ export class Garden {
 			}
 			case 'trail': {
 				if (b.leaving) b.gone = true;
+				return;
+			}
+			case 'bat': {
+				// Vol vif et brisé : elle file d'une nuée d'insectes à l'autre (papillons autour des lanternes,
+				// moustiques sur l'eau), en avale un au passage, puis repart ailleurs.
+				if (b.leaving) return flyAway();
+				b.timer -= dt;
+				if (b.timer <= 0 || b.tx == null) {
+					const w = b.p.water ? this.water(b.ci) : null;
+					const swarms = (this.ambient ?? []).filter(s => s.n > 0 && this.cellAt(s.x, s.y) === b.ci);
+					b.prey = swarms.length && Math.random() < 0.6 ? pick(swarms) : null;
+					if (b.prey) { b.tx = b.prey.x + (Math.random() - 0.5) * 30; b.ty = b.prey.y - 40; }
+					else if (w) { b.tx = w.x + (Math.random() - 0.5) * w.rx * 1.6; b.ty = w.y - 20 + (Math.random() - 0.5) * w.ry; }
+					else { b.tx = P.ox + PARCEL_W * (0.15 + Math.random() * 0.7); b.ty = P.oy + PARCEL_H * (0.15 + Math.random() * 0.7); }
+					b.timer = 0.8 + Math.random() * 1.6;
+				}
+				b.x += Math.sin(b.t * 9 + b.timer) * 26 * dt;
+				b.y += Math.cos(b.t * 7.3) * 18 * dt;
+				if (flyTo(b.tx, b.ty, 130, 40) < 6) {
+					if (b.prey && Math.random() < 0.5) b.prey.n = Math.max(1, b.prey.n - 1);
+					b.prey = null; b.timer = 0;
+				}
+				b.ang = Math.atan2(b.ty - b.y, b.tx - b.x);
 				return;
 			}
 			case 'soar': {

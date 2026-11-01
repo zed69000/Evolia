@@ -418,7 +418,75 @@ const DRAW = {
 		ctx.beginPath(); ctx.moveTo(10, -22 + nod); ctx.lineTo(17, -20.8 + nod); ctx.lineTo(10, -20.6 + nod); ctx.fill();
 	},
 
-	owl(ctx, t) {
+	/** Chauve-souris en vol, vue de dessus : des ailes de peau tendue sur les doigts, qui battent vite. */
+	bat(ctx, t, mode, p) {
+		const u = Math.sin(t * 16), span = 0.45 + 0.55 * Math.abs(u), sw = u * 1.5;
+		const fur = p.light ? '#6E5848' : '#4A3A30', skin = p.light ? 'rgba(92,76,62,0.92)' : 'rgba(64,50,42,0.92)';
+		for (const side of [-1, 1]) {
+			const Y = y => side * y * span;
+			ctx.fillStyle = skin;
+			ctx.beginPath();
+			ctx.moveTo(1.5, side * 1.5);
+			ctx.quadraticCurveTo(4, Y(4), 3.4 + sw, Y(7));
+			ctx.quadraticCurveTo(2.5 + sw, Y(10), 0.5 + sw, Y(13));
+			// Bord de fuite festonné, entre les doigts.
+			ctx.quadraticCurveTo(-0.6, Y(10.5), -1.6, Y(11.6));
+			ctx.quadraticCurveTo(-2.2, Y(9), -3.8, Y(9.4));
+			ctx.quadraticCurveTo(-3.6, Y(6.5), -5.2, Y(6));
+			ctx.quadraticCurveTo(-4.4, Y(3), -3.6, side * 1.2);
+			ctx.closePath();
+			ctx.fill();
+			ctx.strokeStyle = 'rgba(30,22,18,0.5)';
+			ctx.lineWidth = 0.35;
+			ctx.beginPath();
+			ctx.moveTo(3.4 + sw, Y(7)); ctx.lineTo(-1.6, Y(11.6));
+			ctx.moveTo(3.4 + sw, Y(7)); ctx.lineTo(-3.8, Y(9.4));
+			ctx.moveTo(3.4 + sw, Y(7)); ctx.lineTo(-5.2, Y(6));
+			ctx.stroke();
+		}
+		ctx.fillStyle = fur;
+		ell(ctx, -1, 0, 3.6, 2);
+		ell(ctx, 2.9, 0, 1.6, 1.5);
+		ctx.beginPath(); ctx.moveTo(3.2, -1); ctx.lineTo(5, -2); ctx.lineTo(3.8, -0.2); ctx.fill();
+		ctx.beginPath(); ctx.moveTo(3.2, 1); ctx.lineTo(5, 2); ctx.lineTo(3.8, 0.2); ctx.fill();
+	},
+
+	/** Papillon de nuit, vu de dessus : des ailes en triangle, grises, et les ailes du dessous rosées. */
+	moth(ctx, t, mode, p) {
+		const flap = mode === 'hover' ? 0.45 + 0.55 * Math.abs(Math.sin(t * 30)) : 0.3 + 0.7 * Math.abs(Math.sin(t * 18));
+		ctx.save();
+		ctx.scale(1, flap);
+		ctx.globalAlpha = 0.95;
+		for (const side of [-1, 1]) {
+			ctx.fillStyle = p.w2 ?? '#D88A9A';
+			ctx.beginPath(); ctx.moveTo(-1, 0); ctx.lineTo(-5, side * 5); ctx.lineTo(-2.5, side * 6.4); ctx.closePath(); ctx.fill();
+			ctx.fillStyle = p.w1 ?? '#8A8070';
+			ctx.beginPath(); ctx.moveTo(1.5, 0); ctx.lineTo(-3, side * 8.5); ctx.lineTo(0.5, side * 8); ctx.lineTo(2.5, side * 1); ctx.closePath(); ctx.fill();
+			ctx.fillStyle = p.spot ?? '#3A3028';
+			ell(ctx, -0.5, side * 5, 0.6, 1.6, side * 0.4);
+		}
+		ctx.restore();
+		ctx.globalAlpha = 1;
+		ctx.fillStyle = '#5A4A3A';
+		ell(ctx, -1.5, 0, 4.2, 1.2);
+		ctx.fillStyle = '#D88A9A';
+		for (const x of [-4, -2.4, -0.8]) ell(ctx, x, 0, 0.45, 1.1);
+		ctx.fillStyle = '#4A3C30';
+		ell(ctx, 3, 0, 1.3, 1.2);
+	},
+
+	owl(ctx, t, mode, p = {}) {
+		if (p.big) {
+			// Le grand-duc : plus grand, plus roux, et ses deux aigrettes de plumes.
+			ctx.save();
+			ctx.scale(1.3, 1.3);
+			ctx.fillStyle = '#8A6038';
+			ctx.beginPath(); ctx.moveTo(-4.5, -9); ctx.lineTo(-3.4, -13); ctx.lineTo(-2, -9.5); ctx.fill();
+			ctx.beginPath(); ctx.moveTo(4.5, -9); ctx.lineTo(3.4, -13); ctx.lineTo(2, -9.5); ctx.fill();
+			DRAW.owl(ctx, t, mode, { eyes: '#F09A2A' });
+			ctx.restore();
+			return;
+		}
 		const blink = (t % 4) < 0.15;
 		ctx.fillStyle = '#7A5A3A';
 		ell(ctx, 0, 0, 6, 8);
@@ -427,6 +495,7 @@ const DRAW = {
 		ctx.fillStyle = '#C8A878';
 		ell(ctx, -2.2, -6, 2.3, 2.3);
 		ell(ctx, 2.2, -6, 2.3, 2.3);
+		if (p.eyes && !blink) { ctx.fillStyle = p.eyes; ell(ctx, -2.2, -6, 1.7, 1.7); ell(ctx, 2.2, -6, 1.7, 1.7); }
 		ctx.fillStyle = '#1A1210';
 		if (!blink) { ell(ctx, -2.2, -6, 1.2, 1.2); ell(ctx, 2.2, -6, 1.2, 1.2); }
 		ctx.fillStyle = '#5A4028';
@@ -521,5 +590,5 @@ export function drawCritter(ctx, kind, t = 0, mode, params = {}, s = { t, mode, 
 }
 
 /** Taille d'affichage dans le jardin, et hauteur de vol (pour placer l'ombre au sol). */
-export const CRITTER_SIZE = { hoverfly: 1.2, beefly: 1.2, ant: 1.9, firebug: 1.3, snail: 1.4, grasshopper: 1.2, spider: 1.2, duck: 1.5, hedgehog: 1.6, frog: 1.4, tit: 1.4, bird: 1.4, ladybug: 1.2, squirrel: 1.3, rabbit: 1.4, hare: 1.5, roe: 2, chamois: 1.9, fox: 1.6, farmer: 2, dog: 1.7, cat: 1.6, marmot: 1.6, lizard: 1.2, heron: 1.8, owl: 1.5, eagle: 1.6, gull: 1.3, crab: 1.3, beetle: 1.2 };
-export const FLIGHT = { rabbit: 1, hare: 1, roe: 1, chamois: 1, fox: 1, farmer: 1, dog: 1, cat: 1, hoverfly: 24, beefly: 24, firebug: 2, snail: 2, grasshopper: 3, bee: 24, butterfly: 24, dragonfly: 24, frog: 6, hedgehog: 9, squirrel: 1, marmot: 7, lizard: 3, heron: 18, crab: 4, eagle: 160, gull: 110 };
+export const CRITTER_SIZE = { hoverfly: 1.2, beefly: 1.2, ant: 1.9, firebug: 1.3, snail: 1.4, grasshopper: 1.2, spider: 1.2, duck: 1.5, hedgehog: 1.6, frog: 1.4, tit: 1.4, bird: 1.4, ladybug: 1.2, squirrel: 1.3, rabbit: 1.4, hare: 1.5, roe: 2, chamois: 1.9, fox: 1.6, farmer: 2, dog: 1.7, cat: 1.6, marmot: 1.6, lizard: 1.2, heron: 1.8, owl: 1.5, eagle: 1.6, bat: 1.4, moth: 1.7, gull: 1.3, crab: 1.3, beetle: 1.2 };
+export const FLIGHT = { rabbit: 1, hare: 1, roe: 1, chamois: 1, fox: 1, farmer: 1, dog: 1, cat: 1, hoverfly: 24, beefly: 24, firebug: 2, snail: 2, grasshopper: 3, bee: 24, butterfly: 24, dragonfly: 24, frog: 6, hedgehog: 9, squirrel: 1, marmot: 7, lizard: 3, heron: 18, crab: 4, eagle: 160, gull: 110, bat: 46, moth: 24 };
