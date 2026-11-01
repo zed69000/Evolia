@@ -1168,7 +1168,52 @@ export class Garden {
 	 * Peut-on poser cet objet ici : dans une clairière ouverte, dans un milieu où il a sa place, pas dans l'eau
 	 * ni sur un sentier, pas sur un autre objet.
 	 */
+	/** Coin haut-gauche de la parcelle d'une plante. */
+	cellOriginOf(p) { return cellOrigin(cellOf(p)); }
+
+	/** Replante une plante adulte au point (x, y) du monde : elle change de parcelle si besoin. */
+	replant(p, x, y) {
+		const ci = this.cellAt(x, y), [ox, oy] = cellOrigin(ci);
+		p.c = ci;
+		p.x = Math.round(x - ox);
+		p.y = Math.round(y - oy);
+		// En le reposant, l'arbre s'écrase un peu puis se redresse, et perd quelques feuilles.
+		this.replantAt = { id: p.id, t: this.t };
+		// Les feuilles partent du feuillage : vers le haut de l'arbre (ou de l'arbuste).
+		const big = p.type === 'arbre', color = this.glyphColor(p), box = PLANT_TYPES[p.type].box, hx = x, hy = y - box.ay * (big ? 0.62 : 0.45);
+		for (let i = 0; i < (big ? 12 : 7); i++) {
+			this.particles.push({
+				x: hx + (Math.random() - 0.5) * (big ? 60 : 30), y: hy + (Math.random() - 0.3) * (big ? 40 : 18),
+				vx: (Math.random() - 0.5) * 30, vy: -8 - Math.random() * 18, life: 1, decay: 0.32 + Math.random() * 0.2,
+				size: 3.4 + Math.random() * 2.2, color, leaf: true, rot: Math.random() * 6.28, spin: (Math.random() - 0.5) * 5, ph: Math.random() * 6.28,
+			});
+		}
+	}
+
+	/** Le cadre de ce qu'on déplace : un objet, ou un arbre (arbuste) qu'on replante ailleurs. */
+	ghostBox(kind, level, plant) {
+		return kind === 'plant' ? PLANT_TYPES[plant.type].box : itemBox(kind, level);
+	}
+
+	/** Un arbre ou un arbuste adulte peut-il être replanté ici ? Dans une clairière ouverte, hors de l'eau et des
+	 * chemins, loin des objets et à bonne distance des autres arbres et arbustes. */
+	canPlacePlant(p, x, y) {
+		const sp = PLANT_TYPES[p.type].spacing, ci = this.cellAt(x, y);
+		if (ci < 0 || ci >= cellsOpen(this.place) || !this.inOpen(x, y, sp * 0.3) || keepOut(this.at, x, y, sp * 0.3)) return false;
+		for (const key of Object.keys(DECOR)) {
+			const d = DECOR[key], pos = d.rad && this.decorVisible(key) && this.decorPos(key);
+			if (pos && Math.hypot(pos.x - x, (pos.y - y) * 1.25) < d.rad * 0.8 + sp * 0.3) return false;
+		}
+		for (const q of this.place.plants) {
+			if (q === p || (q.type !== 'arbre' && q.type !== 'buisson')) continue;
+			const [ox, oy] = cellOrigin(cellOf(q));
+			if (Math.hypot(ox + q.x - x, (oy + q.y - y) * 1.3) < (sp + PLANT_TYPES[q.type].spacing) * 0.45) return false;
+		}
+		return !this.items.some(it => Math.hypot(it.x - x, (it.y - y) * 1.3) < sp * 0.4 + itemBox(it.kind, it.level).w * 0.35);
+	}
+
 	canPlace(kind, x, y, except = null) {
+		if (kind === 'plant') return this.canPlacePlant(except, x, y);
 		const r = itemBox(kind, except?.level).w * 0.35;
 		if (!this.inOpen(x, y, r * 0.6) || keepOut(this.at, x, y, r * 0.5)) return false;
 		if (!fitsPlace(kind, this.biomeAtWorld(x, y))) return false;
@@ -1847,7 +1892,7 @@ export class Garden {
 
 	/** Le doigt prend l'objet à poser : s'il touche l'objet, il le tient par là ; sinon l'objet saute sous le doigt. */
 	grabGhost(drag, x, y) {
-		const [wx, wy] = this.toWorld(x, y), g = this.ghost, box = itemBox(g.kind, g.level);
+		const [wx, wy] = this.toWorld(x, y), g = this.ghost, box = this.ghostBox(g.kind, g.level, g.plant);
 		const on = wx > g.x - box.w * 0.6 && wx < g.x + box.w * 0.6 && wy > g.y - box.ay - 10 && wy < g.y + 30;
 		drag.ghost = true;
 		drag.off = on ? [g.x - wx, g.y - wy] : [0, 0];
@@ -1994,7 +2039,10 @@ export class Garden {
 		for (const p of this.particles) {
 			p.x += p.vx * dt; p.y += p.vy * dt; p.life -= p.decay * dt;
 			// La poussière gonfle et ralentit ; le reste retombe.
-			if (p.puff) { p.size += 16 * dt; p.vx *= 0.94; p.vy *= 0.94; } else { p.vy += 10 * dt; p.vx *= 0.98; }
+			if (p.puff) { p.size += 16 * dt; p.vx *= 0.94; p.vy *= 0.94; }
+			// Une feuille tombe lentement en se balançant et en tournant.
+			else if (p.leaf) { p.vy = Math.min(16, p.vy + 22 * dt); p.x += Math.sin(this.t * 3 + p.ph) * 14 * dt; p.rot += p.spin * dt; }
+			else { p.vy += 10 * dt; p.vx *= 0.98; }
 		}
 		this.particles = this.particles.filter(p => p.life > 0);
 		for (const d of this.nectarDrops) d.t += dt;
@@ -3233,6 +3281,7 @@ export class Garden {
 			entities.push({ decor: key, x: d.x, y: d.y });
 		}
 		for (const p of place.plants) {
+			if (p === this.lifted) continue;
 			const [wx, wy] = plantPos(p), box = PLANT_TYPES[p.type].box;
 			if (wx + box.w < v.x0 || wx - box.w > v.x0 + v.w || wy - box.ay > v.y0 + v.h + 20 || wy + 30 < v.y0) continue;
 			entities.push({ plant: p, x: wx, y: wy });
@@ -3323,9 +3372,12 @@ export class Garden {
 			const shear = this.wind(e.x) * SWAY[p.type] * (0.4 + 0.6 * (s.stage / STAGES));
 			const age = this.t - (this.meta.get(p.id)?.pop ?? -9);
 			const k = age < 0.45 ? 1 + 0.14 * Math.sin((age / 0.45) * Math.PI) : 1;
+			// Tout juste replanté : il s'écrase un peu en touchant le sol, puis se redresse en rebondissant.
+			const ra = this.replantAt?.id === p.id ? this.t - this.replantAt.t : 9;
+			const sq = ra < 0.7 ? Math.sin((ra / 0.7) * Math.PI * 2) * 0.1 * (1 - ra / 0.7) : 0;
 			world();
 			ctx.translate(e.x, e.y);
-			ctx.transform(k, 0, 0, k, 0, 0);
+			ctx.transform(k * (1 + sq), 0, 0, k * (1 - sq), 0, 0);
 			if (p.type === 'arbre') {
 				// Le tronc reste planté ; seule la couronne balance, à partir du haut du tronc (sans cassure au raccord).
 				const cut = -box.ay * 0.42;
@@ -3349,7 +3401,8 @@ export class Garden {
 			ctx.globalAlpha = Math.max(0, p.life) * (p.puff ? 0.45 : 1);
 			ctx.fillStyle = p.color;
 			ctx.beginPath();
-			ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+			if (p.leaf) ctx.ellipse(p.x, p.y, p.size, p.size * 0.45, p.rot, 0, Math.PI * 2);
+			else ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
 			ctx.fill();
 		}
 		ctx.globalAlpha = 1;
@@ -3449,16 +3502,17 @@ export class Garden {
 		if (this.floats?.length) { world(); this.drawFloats(ctx); }
 
 		if (this.ghost) {
-			const { kind, x, y } = this.ghost, box = itemBox(kind, this.ghost.level), ok = this.canPlace(kind, x, y, this.lifted);
+			const { kind, x, y } = this.ghost, box = this.ghostBox(kind, this.ghost.level, this.ghost.plant), ok = this.canPlace(kind, x, y, this.lifted);
 			world();
 			ctx.globalAlpha = 0.6;
-			ctx.drawImage(this.itemSprite(kind, this.ghost.rot, this.lifted?.kind === 'potager' ? null : this.lifted).canvas, x - box.ax, y - box.ay, box.w, box.h);
+			const img = kind === 'plant' ? this.spriteFor(this.ghost.plant, false)?.canvas : this.itemSprite(kind, this.ghost.rot, this.lifted?.kind === 'potager' ? null : this.lifted).canvas;
+			if (img) ctx.drawImage(img, x - box.ax, y - box.ay, box.w, box.h);
 			ctx.globalAlpha = 1;
 			ctx.strokeStyle = ok ? 'rgba(95,147,62,0.9)' : 'rgba(192,68,47,0.9)';
 			ctx.lineWidth = 2.5 / this.cam.z;
 			ctx.setLineDash([6 / this.cam.z, 5 / this.cam.z]);
 			ctx.beginPath();
-			ctx.ellipse(x, y, box.w * 0.42, box.w * 0.14, 0, 0, Math.PI * 2);
+			ctx.ellipse(x, y, box.w * (kind === 'plant' ? 0.25 : 0.42), box.w * (kind === 'plant' ? 0.08 : 0.14), 0, 0, Math.PI * 2);
 			ctx.stroke();
 			ctx.setLineDash([]);
 			ctx.fillStyle = ok ? 'rgba(95,147,62,0.18)' : 'rgba(192,68,47,0.14)';

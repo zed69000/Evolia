@@ -352,8 +352,13 @@ garden.onTap = hit => {
 	card.innerHTML = `<b>${plantName(p)}</b>${pct >= 100 ? 'En pleine forme' : `Pousse à ${pct} %`}
 		<div class="bar"><i style="width:${pct}%"></i></div>Née le ${born}
 		${known ? '<span class="more">Son rôle dans la nature ›</span>' : ''}`;
+	// Un arbre ou un arbuste adulte peut être replanté ailleurs.
+	if (pct >= 100 && (p.type === 'arbre' || p.type === 'buisson')) card.insertAdjacentHTML('beforeend', '<div class="item-actions"><button class="btn ghost" data-move-plant>Déplacer</button></div>');
 	card.classList.toggle('link', known);
-	card.onclick = known ? () => { card.hidden = true; species.open(id); } : null;
+	card.onclick = e => {
+		if (e.target.closest('[data-move-plant]')) { card.hidden = true; startMovingPlant(p); return; }
+		if (known) { card.hidden = true; species.open(id); }
+	};
 	placeCard(card, hit);
 };
 
@@ -1409,6 +1414,20 @@ garden.onLongPress = hit => {
 	return true;
 };
 
+/** Replanter un arbre ou un arbuste adulte : on le fait glisser comme un objet, puis on le pose. */
+function startMovingPlant(p) {
+	closeDeco();
+	placing = { kind: 'plant', item: p };
+	garden.lifted = p;
+	const [ox, oy] = garden.cellOriginOf(p);
+	garden.ghost = { kind: 'plant', plant: p, x: ox + p.x, y: oy + p.y, rot: 0 };
+	$('#btn-place-turn').hidden = true;
+	$('#placing-name').textContent = `Déplacer : ${plantName(p).toLowerCase()}`;
+	$('#app').classList.add('placing');
+	$('#placing').hidden = false;
+	renderPlacing();
+}
+
 function endPlacing() {
 	placing = null;
 	garden.ghost = null;
@@ -1420,6 +1439,14 @@ function endPlacing() {
 $('#btn-place').addEventListener('click', () => {
 	const { kind, item } = placing, { x, y, rot } = garden.ghost;
 	if (!garden.canPlace(kind, x, y, item)) return;
+	if (kind === 'plant') {
+		garden.replant(item, x, y);
+		toast(`${plantName(item)} : replanté ici`, '#5F933E');
+		sound.chime(1);
+		endPlacing();
+		persist(true);
+		return;
+	}
 	if (item) {
 		item.x = Math.round(x); item.y = Math.round(y); item.rot = rot;
 		garden.clearUnder(item);

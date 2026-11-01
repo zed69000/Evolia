@@ -3,6 +3,10 @@
 Chaque version, la plus récente en haut. Le site (evolia.sebastienalzamora.workers.dev) est toujours à jour ;
 le Play Store (tests internes) reçoit les versions indiquées « Play ».
 
+## 0.7.35 — 1er novembre 2026
+- **Replanter un arbre ou un arbuste adulte.** Sa fiche (touche-le) propose « Déplacer » : on le fait glisser comme un aménagement, la place s'affiche en vert si elle est libre (dans une clairière, hors de l'eau et des chemins, loin des objets et des autres arbres), et on le pose. Il peut changer de parcelle.
+- En le reposant, il s'écrase un peu puis se redresse en rebondissant, et perd quelques feuilles qui tombent en virevoltant.
+
 ## 0.7.34 — 1er novembre 2026
 - **Vu de très loin, les aménagements gardent leur vraie image** (cabane, poulailler, ruche, mare…) au lieu de simples rectangles : on reconnaît son jardin et on s'y repère.
 - La pastille des œufs disparaît (elle prêtait à confusion) : le nombre d'œufs, leur valeur et le passage du jardinier sont dans la bulle du poulailler.
