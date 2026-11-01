@@ -3,6 +3,10 @@
 Chaque version, la plus récente en haut. Le site (evolia.sebastienalzamora.workers.dev) est toujours à jour ;
 le Play Store (tests internes) reçoit les versions indiquées « Play ».
 
+## 0.7.19 — 1er novembre 2026
+- **La page Espèces s'ouvre tout de suite.** Elle peignait d'un coup toutes les vignettes du milieu (près de 190 pour la prairie) avant de s'afficher ; maintenant, seules celles qui arrivent à l'écran se peignent, quelques-unes par image, au fil du défilement.
+- **Des sous-catégories** dans chaque milieu : Tout, Plantes, Insectes (et petites bêtes : araignées, escargots, vers…) et Animaux, avec leur nombre. La vue Tout est rangée en sections, chacune avec ses découvertes.
+
 ## 0.7.18 — 1er novembre 2026 · Play
 - **Le jardinier et la jardinière marchent pour de vrai.** Le pas fait la longueur d'une vraie enjambée ; le talon attaque le sol, la pointe pousse à la fin de l'appui, le genou plie au passage de la jambe ; le bassin descend quand les deux pieds touchent terre et remonte au milieu du pas ; les bras balancent à l'opposé des jambes. Avant, ils piétinaient à petits pas raides.
 - **L'allure change l'amplitude** : en promenade ou chargés, les pas et le balancement des bras raccourcissent ; pressés de rentrer le soir, ils s'allongent et le buste se penche. Le changement se fait en douceur, et la cadence suit toujours la longueur du pas (les pieds ne glissent plus).

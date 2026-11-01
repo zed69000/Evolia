@@ -9,6 +9,13 @@ const CRITTER_SCALE = { hoverfly: 1.8, beefly: 1.6, ants: 2.6, firebug: 2, snail
 const CRITTER_SHIFT = { heron: 4, marmot: -2, owl: 1 };
 const cache = new Map();
 
+// Les petites bêtes (insectes, araignées, escargots, vers…) ; le reste des animaux a une colonne vertébrale.
+const BUGS = new Set(['bee', 'butterfly', 'moth', 'dragonfly', 'hoverfly', 'beefly', 'ant', 'ants', 'firebug', 'ladybug', 'beetle', 'grasshopper', 'spider', 'snail', 'worm', 'firefly', 'crab']);
+/** Sous-catégorie d'une espèce dans la page : plantes (et milieux), insectes et petites bêtes, ou animaux. */
+const groupOf = s => (s.kind !== 'animal' ? 'plantes' : BUGS.has(s.critter.kind) ? 'insectes' : 'animaux');
+const GROUPS = [['plantes', 'Plantes'], ['insectes', 'Insectes et petites bêtes'], ['animaux', 'Animaux']];
+const GROUP_SHORT = { tout: 'Tout', plantes: 'Plantes', insectes: 'Insectes', animaux: 'Animaux' };
+
 /** Vignette peinte d'une espèce ; en silhouette tant qu'elle n'est pas découverte. */
 export function thumb(sp, size, locked) {
 	const key = `${sp.id}:${size}:${locked}`;
@@ -82,11 +89,14 @@ export class Encyclopedia {
 		this.state = state;
 		this.onChange = onChange;
 		this.filter = 'prairie';
+		this.group = 'tout';
 		panel.addEventListener('click', e => {
 			const card = e.target.closest('[data-sp]');
 			if (card) return this.showDetail(card.dataset.sp);
 			const f = e.target.closest('[data-filter]');
 			if (f) { this.filter = f.dataset.filter; return this.showGrid(); }
+			const gr = e.target.closest('[data-group]');
+			if (gr) { this.group = gr.dataset.group; return this.showGrid(); }
 			if (e.target.closest('[data-back]')) return this.showGrid();
 			if (e.target.closest('[data-close-species]')) this.close();
 		});
@@ -110,28 +120,62 @@ export class Encyclopedia {
 		const list = SPECIES.filter(s => s.place === this.filter);
 		const found = list.filter(s => st.species[s.id]).length;
 		const open = placeOpen(st, place);
-		this.panel.innerHTML = `
-			<div class="panel-head"><h2>Espèces</h2><button class="close" data-close-species aria-label="Fermer">×</button></div>
-			<div class="sp-progress"><div class="bar"><i style="width:${(foundAll / all) * 100}%"></i></div><span><b>${foundAll}</b> / ${all} espèces</span></div>
-			<div class="seg sp-filters scroll">${PLACES.map(p => `<button data-filter="${p.id}" class="${p.id === this.filter ? 'on' : ''}">${p.short}</button>`).join('')}</div>
-			<p class="sp-intro"><b>${place.name}</b> · ${found} / ${list.length} espèces. ${esc(place.intro)}${open ? '' : ` <i>Lieu à découvrir : ${place.km} km et ${place.found} espèces.</i>`}</p>
-			<div class="sp-grid">${list.map(s => {
-				const known = !!st.species[s.id];
-				const fresh = known && !st.speciesSeen?.[s.id];
-				return `<button class="sp-card${known ? '' : ' locked'}" data-sp="${s.id}">
+		const card = s => {
+			const known = !!st.species[s.id];
+			const fresh = known && !st.speciesSeen?.[s.id];
+			return `<button class="sp-card${known ? '' : ' locked'}" data-sp="${s.id}">
 					${fresh ? '<span class="sp-new">Nouveau</span>' : ''}
 					<span class="sp-thumb" data-thumb="${s.id}"></span>
 					<span class="sp-name">${known ? esc(s.name) : '???'}</span>
 				</button>`;
-			}).join('')}</div>`;
-		for (const el of this.panel.querySelectorAll('[data-thumb]')) {
-			const s = list.find(x => x.id === el.dataset.thumb);
-			el.appendChild(thumbCopy(s, 76, !st.species[s.id]));
-		}
+		};
+		// En vue « Tout », une section par sous-catégorie ; sinon, seulement la sous-catégorie choisie.
+		const sections = GROUPS.filter(([g]) => this.group === 'tout' || this.group === g).map(([g, title]) => {
+			const items = list.filter(s => groupOf(s) === g);
+			if (!items.length) return '';
+			const got = items.filter(s => st.species[s.id]).length;
+			return `${this.group === 'tout' ? `<h3 class="sp-section">${title} <small>${got} / ${items.length}</small></h3>` : ''}<div class="sp-grid">${items.map(card).join('')}</div>`;
+		}).join('');
+		const count = g => (g === 'tout' ? list.length : list.filter(s => groupOf(s) === g).length);
+		this.panel.innerHTML = `
+			<div class="panel-head"><h2>Espèces</h2><button class="close" data-close-species aria-label="Fermer">×</button></div>
+			<div class="sp-progress"><div class="bar"><i style="width:${(foundAll / all) * 100}%"></i></div><span><b>${foundAll}</b> / ${all} espèces</span></div>
+			<div class="seg sp-filters scroll">${PLACES.map(p => `<button data-filter="${p.id}" class="${p.id === this.filter ? 'on' : ''}">${p.short}</button>`).join('')}</div>
+			<div class="sp-groups">${['tout', ...GROUPS.map(([g]) => g)].filter(g => count(g)).map(g => `<button data-group="${g}" class="${g === this.group ? 'on' : ''}">${GROUP_SHORT[g]} <small>${count(g)}</small></button>`).join('')}</div>
+			<p class="sp-intro"><b>${place.name}</b> · ${found} / ${list.length} espèces. ${esc(place.intro)}${open ? '' : ` <i>Lieu à découvrir : ${place.km} km et ${place.found} espèces.</i>`}</p>
+			${sections}`;
+		this.paintThumbs(list);
 		this.panel.scrollTop = 0;
 	}
 
+	/**
+	 * Les vignettes se peignent au fil du défilement : seulement celles qui approchent de l'écran, quelques-unes
+	 * par image, pour que la page s'ouvre tout de suite au lieu de tout peindre d'un coup.
+	 */
+	paintThumbs(list) {
+		this.thumbObs?.disconnect();
+		const st = this.state, queue = [];
+		let busy = false;
+		const pump = () => {
+			const t0 = performance.now();
+			while (queue.length && performance.now() - t0 < 8) {
+				const el = queue.shift();
+				if (!el.isConnected || el.firstChild) continue;
+				const s = list.find(x => x.id === el.dataset.thumb);
+				if (s) el.appendChild(thumbCopy(s, 76, !st.species[s.id]));
+			}
+			busy = queue.length > 0;
+			if (busy) requestAnimationFrame(pump);
+		};
+		const obs = (this.thumbObs = new IntersectionObserver(entries => {
+			for (const e of entries) if (e.isIntersecting) { queue.push(e.target); obs.unobserve(e.target); }
+			if (!busy && queue.length) { busy = true; requestAnimationFrame(pump); }
+		}, { root: this.panel, rootMargin: '300px 0px' }));
+		for (const el of this.panel.querySelectorAll('[data-thumb]')) obs.observe(el);
+	}
+
 	showDetail(id) {
+		this.thumbObs?.disconnect();
 		const s = SPECIES.find(x => x.id === id);
 		this.filter = s.place;
 		const known = !!this.state.species[id];
