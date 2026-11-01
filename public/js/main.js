@@ -176,8 +176,9 @@ function chooseFarmer(then) {
 }
 
 // Le jardinier ramasse les œufs du poulailler : chacun vaut un peu de nectar.
+const EGG_NECTAR = 15;
 garden.onEggs = (coop, n) => {
-	const gain = n * 8;
+	const gain = n * EGG_NECTAR;
 	state.nectar = (state.nectar ?? 0) + gain;
 	toast(`${farmerName(true)} a ramassé ${n} œuf${n > 1 ? 's' : ''} · +${gain} nectar`, '#5F933E');
 	renderHud();
@@ -322,7 +323,14 @@ garden.onTap = hit => {
 	clearTimeout(cardTimer);
 	if (placing) return movePlacing(hit);
 	if (!hit) { card.hidden = true; return; }
-	if (hit.poi) { card.hidden = true; garden.flyTo(hit.poi.x, hit.poi.y, hit.poi.z); return; }
+	if (hit.poi) {
+		card.hidden = true;
+		garden.flyTo(hit.poi.x, hit.poi.y, hit.poi.z);
+		// Les œufs ne se ramassent pas à la main : le jardinier passe les chercher.
+		const eggs = hit.poi.items?.find(p => p.eggs);
+		if (eggs) toast(`${eggs.eggs} œuf${eggs.eggs > 1 ? 's' : ''} : ${owned('cabane') ? `${farmerName(true).toLowerCase()} viendra les chercher` : 'pose une cabane, ton jardinier viendra les chercher'} (+${eggs.eggs * EGG_NECTAR} nectar)`, '#5F933E');
+		return;
+	}
 	if (hit.dew) {
 		const d = hit.dew, v = collect(garden.takeDew(d), true);
 		if (v >= 1) jackpot(v, d.x, d.y);
@@ -1263,7 +1271,7 @@ const coopSeats = it => ITEMS.poulailler.levels.seats[it.level ?? 1];
 function coopTip(it, lv, nx) {
 	const L = ITEMS.poulailler.levels, fl = it.flock ?? { hens: 3, roosters: 1 }, eggs = garden.eggsOf(it);
 	const who = `${fl.hens} poule${fl.hens > 1 ? 's' : ''}${fl.roosters ? ` et ${fl.roosters} coq${fl.roosters > 1 ? 's' : ''}` : ''}`;
-	return `<small class="item-tip">${L.name[lv][0].toUpperCase() + L.name[lv].slice(1)} · ${fl.hens + fl.roosters}/${coopSeats(it)} places · ${eggs ? `${eggs} œuf${eggs > 1 ? 's' : ''} à ramasser` : 'les poules pondent quand tu marches'}${fl.hens + fl.roosters < coopSeats(it) ? ` · une bête de plus : ${BIRD_COST} nectar` : ''}${nx && !nx.ok ? ` · ${L.seats[nx.level]} places dès ${nx.km} km` : ''}</small>`;
+	return `<small class="item-tip">${L.name[lv][0].toUpperCase() + L.name[lv].slice(1)} · ${fl.hens + fl.roosters}/${coopSeats(it)} places · ${eggs ? `${eggs} œuf${eggs > 1 ? 's' : ''} (+${eggs * EGG_NECTAR} nectar) : ${farmerName(true).toLowerCase()} viendra les chercher` : 'les poules pondent quand tu marches'}${fl.hens + fl.roosters < coopSeats(it) ? ` · une bête de plus : ${BIRD_COST} nectar` : ''}${nx && !nx.ok ? ` · ${L.seats[nx.level]} places dès ${nx.km} km` : ''}</small>`;
 }
 /** Poules et coqs sur une ligne : − nombre + (ajouter coûte un peu de nectar, tant qu'il reste de la place). */
 function coopButtons(it) {

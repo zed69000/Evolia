@@ -3,6 +3,10 @@
 Chaque version, la plus récente en haut. Le site (evolia.sebastienalzamora.workers.dev) est toujours à jour ;
 le Play Store (tests internes) reçoit les versions indiquées « Play ».
 
+## 0.7.33 — 1er novembre 2026
+- **Un œuf vaut 15 nectar** (au lieu de 8) : le poulailler rapporte enfin de quoi valoir son prix.
+- **On sait qui ramasse les œufs.** Toucher la pastille 🥚 (vue dézoomée) l'explique : « 9 œufs : le fermier viendra les chercher (+135 nectar) ». La bulle du poulailler le dit aussi.
+
 ## 0.7.32 — 1er novembre 2026
 - **Des bulles plus compactes** quand on touche un aménagement. Elles ne gardent que la première phrase de la description (le texte complet reste dans Aménager) ; le poulailler, la cabane et le collecteur montrent seulement leur état. L'astuce de l'appui long n'apparaît plus que les trois premières fois. Sur un iPhone, la bulle du poulailler passe de 308 à 165 px de haut, celle de la cabane de 224 à 153.
 - **Le poulailler** se règle sur une seule ligne : « Poules − 3 + · Coqs − 1 + », et la bulle reste ouverte pour ajouter plusieurs bêtes d'affilée.

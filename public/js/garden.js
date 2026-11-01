@@ -1599,7 +1599,7 @@ export class Garden {
 				if (js.v >= 1) out.push({ x: it.x, y: it.y - 60, icon: '🍯', label: `+${Math.floor(js.v)}`, hot: js.v >= js.cap - 0.5, rank: js.v >= js.cap - 0.5 ? 3 : 2 });
 			} else if (it.kind === 'poulailler') {
 				const n = this.eggsOf(it);
-				if (n >= 1) out.push({ x: it.x, y: it.y - 50, icon: '🥚', label: `${n}`, rank: 1 });
+				if (n >= 1) out.push({ x: it.x, y: it.y - 50, icon: '🥚', label: `${n}`, rank: 1, eggs: n });
 			} else if (it.kind === 'potager' && this.bedStage(it) >= 1) out.push({ x: it.x, y: it.y - 20, icon: '🥕', label: 'mûr', rank: 1 });
 		}
 		const drops = new Map();
@@ -1886,7 +1886,7 @@ export class Garden {
 		if (this.cam.z < POI_Z) for (const h of this.poiHits ?? []) {
 			if (Math.hypot(h.x - sx, h.y - sy) > h.r) continue;
 			const x = h.items.reduce((a, p) => a + p.x, 0) / h.items.length, y = h.items.reduce((a, p) => a + p.y, 0) / h.items.length;
-			return { poi: { x, y, z: h.items.length > 1 ? Math.min(POI_ZOOM, Math.max(this.cam.z * 2.2, GLYPH_Z + 0.05)) : POI_ZOOM }, x: sx, y: sy };
+			return { poi: { x, y, items: h.items, z: h.items.length > 1 ? Math.min(POI_ZOOM, Math.max(this.cam.z * 2.2, GLYPH_Z + 0.05)) : POI_ZOOM }, x: sx, y: sy };
 		}
 		const [wx, wy] = this.toWorld(sx, sy);
 		const ci = this.cellAt(wx, wy);
