@@ -12,7 +12,7 @@ $out = Join-Path $env:USERPROFILE 'Downloads\evolia-play'
 New-Item -ItemType Directory -Force $out | Out-Null
 
 $release = Invoke-RestMethod 'https://api.github.com/repos/zed69000/Evolia/releases/tags/android-latest'
-$asset = $release.assets | Where-Object { $_.name -like '*.aab' } | Sort-Object updated_at -Descending | Select-Object -First 1
+$asset = $release.assets | Where-Object { $_.name -like '*.aab' } | Sort-Object { $v = [regex]::Match($_.name, '(\d+)\.(\d+)\.(\d+)').Groups; [int]$v[1].Value * 1000000 + [int]$v[2].Value * 1000 + [int]$v[3].Value } -Descending | Select-Object -First 1
 if (-not $asset) { throw "Aucun App Bundle dans la version android-latest" }
 $unsigned = Join-Path $out $asset.name
 Invoke-WebRequest $asset.browser_download_url -OutFile $unsigned
