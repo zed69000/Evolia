@@ -3,6 +3,10 @@
 Chaque version, la plus récente en haut. Le site (evolia.sebastienalzamora.workers.dev) est toujours à jour ;
 le Play Store (tests internes) reçoit les versions indiquées « Play ».
 
+## 0.7.26 — 1er novembre 2026
+- La trace indique l'état du suivi au départ **et à l'arrêt** (par exemple « Accéléromètre : éteint → actif à l'arrêt ») : il change souvent entre les deux.
+- Vérifié sur iPhone avec une trace : le compteur de pas du téléphone est actif et compte la marche ; un petit écart de GPS à l'arrêt n'est plus pris pour de la marche.
+
 ## 0.7.25 — 1er novembre 2026
 Corrections trouvées grâce à une trace prise sur iPhone (site web).
 - **Le compteur de pas du téléphone s'active enfin sur iPhone.** Safari n'accepte la demande d'accès au capteur de mouvement qu'au moment où le doigt se relève ; le jeu la faisait quand il touchait l'écran, et elle était refusée sans rien dire : aucun pas n'était compté par le capteur. Elle se fait maintenant au bon moment, et Options propose « Activer le compteur de pas du téléphone » s'il est encore éteint.

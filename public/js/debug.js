@@ -24,10 +24,11 @@ export function startTrace(info) {
 	flush();
 	debugLog('Trace démarrée');
 }
-export function stopTrace() {
+export function stopTrace(info) {
 	if (!tr) return;
 	tr.on = false;
 	tr.end = Date.now();
+	tr.infoEnd = info;
 	flush();
 	debugLog(`Trace arrêtée : ${tr.lines.length} lignes`);
 }
@@ -43,7 +44,9 @@ export const traceFlush = () => { if (tr && dirty) flush(); };
 export function traceText() {
 	if (!tr) return 'Aucune trace enregistrée.';
 	const t0 = tr.start, fmtv = v => (typeof v === 'number' ? (Number.isInteger(v) ? v : v.toFixed(2)) : v);
-	const head = [`Evolia · trace du ${new Date(t0).toLocaleString('fr-FR')} au ${tr.end ? new Date(tr.end).toLocaleString('fr-FR') : '(en cours)'}`, ...Object.entries(tr.info ?? {}).map(([k, v]) => `${k} : ${v}`), `${tr.lines.length} lignes · temps en secondes depuis le début`];
+	// L'état du suivi au départ, et à l'arrêt (il change souvent entre les deux : GPS lancé, capteur autorisé…).
+	const end = tr.infoEnd ?? {};
+	const head = [`Evolia · trace du ${new Date(t0).toLocaleString('fr-FR')} au ${tr.end ? new Date(tr.end).toLocaleString('fr-FR') : '(en cours)'}`, ...Object.entries(tr.info ?? {}).map(([k, v]) => `${k} : ${v}${end[k] != null && end[k] !== v ? ` → ${end[k]} à l'arrêt` : ''}`), `${tr.lines.length} lignes · temps en secondes depuis le début`];
 	return [...head, ...tr.lines.map(([t, kind, d]) => `${((t - t0) / 1000).toFixed(1)}\t${kind}\t${Object.entries(d ?? {}).map(([k, v]) => `${k}=${fmtv(v)}`).join(' ')}`)].join('\n');
 }
 
@@ -76,7 +79,7 @@ export class DebugPanel {
 		document.getElementById('app').appendChild(this.el);
 		this.el.addEventListener('click', e => {
 			if (e.target.closest('[data-dbg-copy]')) this.copy();
-			if (e.target.closest('[data-dbg-trace]')) { if (tracing()) stopTrace(); else startTrace(this.info?.() ?? {}); this.render(); }
+			if (e.target.closest('[data-dbg-trace]')) { if (tracing()) stopTrace(this.info?.() ?? {}); else startTrace(this.info?.() ?? {}); this.render(); }
 			if (e.target.closest('[data-dbg-trace-copy]')) this.copy(traceText());
 			if (e.target.closest('[data-dbg-fold]')) { this.folded = !this.folded; this.render(); }
 			if (e.target.closest('[data-dbg-clear]')) { log = []; debugLog('Journal effacé'); this.render(); }
