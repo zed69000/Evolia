@@ -15,7 +15,7 @@ import { Soundscape } from './audio.js';
 import { ITEMS, ITEM_ORDER, itemHelp, itemCost, fitsPlace, CATS, MAX_LEVEL, LEVEL_NAME, LEVEL_KM, canLevel, levelCost, CABIN_STYLES } from './deco.js';
 import { VERSION } from './version.js';
 import { exportCode, importCode, backupAge } from './backup.js';
-import { DebugPanel, debugOn, setDebug, debugLog, ago, dur } from './debug.js';
+import { DebugPanel, debugOn, setDebug, debugLog, ago, dur, trace, traceFlush } from './debug.js';
 import { canNotify, askNotify, scheduleReminders, clearReminders } from './notify.js';
 import { rollDay, markActive, giftReady, giftFor, claimGift, claim, toClaim, noteTap, noteQuest, challengesHtml, weekHtml, nextGoal, albumHtml, collection, herbarium, newlyComplete, HERBARIUM_REWARD } from './daily.js';
 
@@ -671,6 +671,7 @@ async function enableTracking(gesture = false) {
 	}
 	if (!tracking.gps && GpsTracker.available()) {
 		tracking.gps = new GpsTracker(onSample, onGpsStatus);
+		tracking.gps.onFix = f => trace('gps-point', f);
 		tracking.gps.start();
 		debugLog('Suivi lancé : GPS démarré');
 	}
@@ -691,6 +692,7 @@ async function resumeTracking() {
 }
 
 function onGpsStatus(st) {
+	if (st.kind !== 'ok') trace('gps-état', { état: st.kind, ...(st.accuracy ? { précision: st.accuracy } : {}), ...(st.seconds ? { trou_s: st.seconds } : {}), ...(st.message ? { message: st.message } : {}) });
 	if (st.kind === 'gap') { debugLog(`GPS : aucun point pendant ${dur(st.seconds)} (écran éteint ou appli en arrière-plan ?)`); return; }
 	if (st.kind !== tracking.gpsState) debugLog(`GPS : ${{ searching: 'recherche', ok: 'bon signal', weak: `signal faible (±${Math.round(st.accuracy)} m)`, error: `erreur ${st.code} (${st.message})` }[st.kind] ?? st.kind}`);
 	tracking.gpsState = st.kind;
@@ -707,6 +709,7 @@ const sessionSeconds = w => (w.sim ? w.simTime : (Date.now() - w.start) / 1000);
 
 function startSession(sim) {
 	debugLog(sim ? 'Balade simulée commencée' : 'Balade commencée');
+	trace('balade', { état: 'début' });
 	session = { start: Date.now(), simTime: 0, distance: 0, steps: 0, effort: 0, events: [], speed: 0, act: null, sim, touched: new Set(), lastMove: Date.now() };
 	garden.setFollow(true);
 	toast('Tu bouges : ton jardin pousse', '#F08A3C');
@@ -733,6 +736,9 @@ function onSample(s) {
 		tracking.hiking = onFoot && hikeFor(log, now, tracking.hiking);
 		if (tracking.hiking) act = act.mult <= ACTIVITY_BY_ID['marche-tres-rapide'].mult ? ACTIVITY_BY_ID.randonnee : ACTIVITY_BY_ID.trail;
 	}
+	trace(s.motion ? 'pas' : s.sim ? 'simulé' : 'gps-mesure', s.motion
+		? { pas: s.steps, cadence: tracking.motion?.spm ?? 0, km_h: s.speedKmh, retenu: act ? act.name : (now - tracking.lastGpsMove < 15000 ? 'non (GPS prioritaire)' : 'non') }
+		: { m: s.dist, s: s.dt, km_h: s.speedKmh, montée: s.climb ?? 0, descente: s.drop ?? 0, activité: act?.name ?? 'aucune', balade_m: session ? Math.round(session.distance) : '-' });
 	if (!act || !(s.dist > 0)) {
 		if (session) { session.speed = s.speedKmh ?? 0; session.act = null; if (s.sim) session.simTime += s.dt; }
 		renderStatus();
@@ -771,6 +777,7 @@ function onSample(s) {
 function endSession() {
 	const w = session;
 	debugLog(`Balade finie : ${Math.round(w.distance)} m en ${dur(sessionSeconds(w))}`);
+	trace('balade', { état: 'fin', m: w.distance, s: sessionSeconds(w), pas: w.steps });
 	session = null;
 	garden.setFollow(false);
 	const duration = sessionSeconds(w);
@@ -1068,7 +1075,8 @@ async function offerHarvest() {
 }
 
 document.addEventListener('visibilitychange', async () => {
-	if (document.hidden) { tracking.hiddenAt = Date.now(); debugLog(session ? 'Écran éteint ou autre appli — pendant une balade' : 'Écran éteint ou autre appli'); persist(true); sound.pause(); planReminders(); return; }
+	trace('écran', { état: document.hidden ? 'caché' : 'visible' });
+	if (document.hidden) { traceFlush(); tracking.hiddenAt = Date.now(); debugLog(session ? 'Écran éteint ou autre appli — pendant une balade' : 'Écran éteint ou autre appli'); persist(true); sound.pause(); planReminders(); return; }
 	debugLog(`De retour${tracking.hiddenAt ? ` après ${dur((Date.now() - tracking.hiddenAt) / 1000)}` : ''}`);
 	clearReminders();
 	sound.resume();
@@ -1610,6 +1618,8 @@ function debugRead() {
 	];
 }
 const debugPanel = new DebugPanel(debugRead);
+// Ce qu'on note en tête d'une trace : l'appareil et l'état du suivi au départ.
+debugPanel.info = () => ({ Version: VERSION, Plateforme: `${isApp() ? 'appli' : 'site web'} · ${window.Capacitor?.getPlatform?.() ?? navigator.userAgent.slice(0, 90)}`, 'Suivi activé': state.tracking ? 'oui' : 'non', GPS: tracking.gps ? 'démarré' : 'éteint', Accéléromètre: tracking.motion ? 'actif' : 'éteint' });
 debugPanel.show(debugOn());
 
 /** Ce que la dernière relecture des pas a trouvé, et quoi faire si elle ne trouve rien. */

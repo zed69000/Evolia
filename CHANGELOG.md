@@ -3,6 +3,9 @@
 Chaque version, la plus récente en haut. Le site (evolia.sebastienalzamora.workers.dev) est toujours à jour ;
 le Play Store (tests internes) reçoit les versions indiquées « Play ».
 
+## 0.7.24 — 1er novembre 2026
+- **Trace à la demande** (panneau de débogage) : « ● Trace » démarre un enregistrement détaillé, « ■ Arrêter la trace » le termine, « Copier la trace » met tout en texte à coller dans un message. Chaque ligne a l'heure (en secondes depuis le début) : chaque point GPS (position, précision, altitude, vitesse, âge), chaque paquet de pas de l'accéléromètre (cadence, retenu ou non), chaque mesure et la décision du jeu (activité, mètres comptés), l'écran caché ou visible, le début et la fin des balades. La trace est gardée sur le téléphone même si l'appli se ferme, jusqu'à 4 000 lignes.
+
 ## 0.7.23 — 1er novembre 2026
 - **Panneau de débogage** (Options › Débogage) : en jeu, ce que voit le suivi en direct. Appareil (site ou appli, iPhone ou Android, suivi activé, écran visible, images par seconde) ; GPS (état, âge et précision du dernier point, vitesse, altitude, montée et descente des 10 dernières minutes) ; pas de l'accéléromètre (pas comptés, cadence) ; balade en cours (durée, distance, pas, activité reconnue, fin automatique) ; relecture des pas appli fermée ; totaux du jour.
 - **Un journal des événements**, gardé d'une ouverture à l'autre : écran éteint ou autre appli (et combien de temps), GPS perdu ou faible, trous de GPS, balades commencées et finies, relectures et leurs erreurs.

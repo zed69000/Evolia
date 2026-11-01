@@ -40,6 +40,7 @@ export class GpsTracker {
 		const c = pos.coords;
 		// Pour le panneau de débogage : le dernier point reçu, même trop imprécis pour compter.
 		this.fix = { at: Date.now(), acc: c.accuracy, alt: c.altitude, altAcc: c.altitudeAccuracy, gpsSpeed: c.speed };
+		this.onFix?.({ lat: c.latitude, lon: c.longitude, précision: c.accuracy, alt: c.altitude ?? '-', altPrécision: c.altitudeAccuracy ?? '-', km_h: c.speed != null ? c.speed * 3.6 : '-', âge: (Date.now() - pos.timestamp) / 1000 });
 		if (c.accuracy > 35) { this.onStatus({ kind: 'weak', accuracy: c.accuracy }); return; }
 		this.onStatus({ kind: 'ok', accuracy: c.accuracy });
 		if (!this.last) { this.last = { coords: c, t: pos.timestamp }; return; }

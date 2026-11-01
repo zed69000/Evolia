@@ -8,6 +8,45 @@ const ON_KEY = 'evolia.debug', LOG_KEY = 'evolia.debuglog', MAX_LOG = 60;
 let log = [];
 try { log = JSON.parse(localStorage.getItem(LOG_KEY)) ?? []; } catch (e) { log = []; }
 
+// ─── Trace : un enregistrement détaillé qu'on démarre et qu'on arrête soi-même ───────────────
+// Chaque point GPS, chaque paquet de pas, chaque décision du jeu, avec l'heure. Gardée sur le téléphone
+// (même si l'appli se ferme), jusqu'à 4 000 lignes, puis copiée d'un geste pour être envoyée.
+const TRACE_KEY = 'evolia.trace', MAX_TRACE = 4000;
+let tr = null;
+try { tr = JSON.parse(localStorage.getItem(TRACE_KEY)); } catch (e) { tr = null; }
+let dirty = 0;
+const flush = () => { dirty = 0; try { localStorage.setItem(TRACE_KEY, JSON.stringify(tr)); } catch (e) { /* plein : on garde en mémoire */ } };
+
+export const tracing = () => !!tr?.on;
+export const traceSize = () => tr?.lines.length ?? 0;
+export function startTrace(info) {
+	tr = { on: true, start: Date.now(), end: null, info, lines: [] };
+	flush();
+	debugLog('Trace démarrée');
+}
+export function stopTrace() {
+	if (!tr) return;
+	tr.on = false;
+	tr.end = Date.now();
+	flush();
+	debugLog(`Trace arrêtée : ${tr.lines.length} lignes`);
+}
+/** Ajoute une ligne à la trace en cours : `kind` (gps, pas, décision…) et ses valeurs. */
+export function trace(kind, data) {
+	if (!tr?.on) return;
+	tr.lines.push([Date.now(), kind, data]);
+	if (tr.lines.length > MAX_TRACE) tr.lines.splice(0, tr.lines.length - MAX_TRACE);
+	if (++dirty >= 10) flush();
+}
+export const traceFlush = () => { if (tr && dirty) flush(); };
+/** La trace en texte, une ligne par événement : secondes depuis le début, type, valeurs. */
+export function traceText() {
+	if (!tr) return 'Aucune trace enregistrée.';
+	const t0 = tr.start, fmtv = v => (typeof v === 'number' ? (Number.isInteger(v) ? v : v.toFixed(2)) : v);
+	const head = [`Evolia · trace du ${new Date(t0).toLocaleString('fr-FR')} au ${tr.end ? new Date(tr.end).toLocaleString('fr-FR') : '(en cours)'}`, ...Object.entries(tr.info ?? {}).map(([k, v]) => `${k} : ${v}`), `${tr.lines.length} lignes · temps en secondes depuis le début`];
+	return [...head, ...tr.lines.map(([t, kind, d]) => `${((t - t0) / 1000).toFixed(1)}\t${kind}\t${Object.entries(d ?? {}).map(([k, v]) => `${k}=${fmtv(v)}`).join(' ')}`)].join('\n');
+}
+
 export const debugOn = () => { try { return localStorage.getItem(ON_KEY) === '1'; } catch (e) { return false; } };
 export function setDebug(on) {
 	try { localStorage.setItem(ON_KEY, on ? '1' : '0'); } catch (e) { /* stockage indisponible */ }
@@ -37,6 +76,8 @@ export class DebugPanel {
 		document.getElementById('app').appendChild(this.el);
 		this.el.addEventListener('click', e => {
 			if (e.target.closest('[data-dbg-copy]')) this.copy();
+			if (e.target.closest('[data-dbg-trace]')) { if (tracing()) stopTrace(); else startTrace(this.info?.() ?? {}); this.render(); }
+			if (e.target.closest('[data-dbg-trace-copy]')) this.copy(traceText());
 			if (e.target.closest('[data-dbg-fold]')) { this.folded = !this.folded; this.render(); }
 			if (e.target.closest('[data-dbg-clear]')) { log = []; debugLog('Journal effacé'); this.render(); }
 		});
@@ -61,9 +102,7 @@ export class DebugPanel {
 	}
 
 	/** Copie tout le panneau et le journal ; si le téléphone refuse, le texte s'ouvre tout sélectionné, à copier à la main. */
-	async copy() {
-		const text = `Evolia · débogage · ${new Date().toLocaleString('fr-FR')}
-${this.text()}`;
+	async copy(text = `Evolia · débogage · ${new Date().toLocaleString('fr-FR')}\n${this.text()}`) {
 		try { await navigator.clipboard.writeText(text); this.flash = 'Copié !'; }
 		catch (e) {
 			const box = document.createElement('div');
@@ -83,7 +122,8 @@ ${this.text()}`;
 	render() {
 		if (this.el.hidden) return;
 		const esc = s => String(s).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
-		const head = `<div class="dbg-head"><b>Débogage</b><button data-dbg-copy>${this.flash ?? 'Copier'}</button><button data-dbg-fold>${this.folded ? 'Ouvrir' : 'Réduire'}</button></div>`;
+		const rec = tracing() ? `<button data-dbg-trace class="rec">■ Arrêter la trace (${traceSize()})</button>` : `<button data-dbg-trace>● Trace</button>${traceSize() ? '<button data-dbg-trace-copy>Copier la trace</button>' : ''}`;
+		const head = `<div class="dbg-head"><b>Débogage</b><button data-dbg-copy>${this.flash ?? 'Copier'}</button><button data-dbg-fold>${this.folded ? 'Ouvrir' : 'Réduire'}</button></div><div class="dbg-head">${rec}</div>`;
 		if (this.folded) { this.el.innerHTML = head; return; }
 		const body = this.read().map(([title, rows]) => `<div class="dbg-sec"><i>${esc(title)}</i>${rows.map(([k, v]) => `<div><span>${esc(k)}</span><b>${esc(v)}</b></div>`).join('')}</div>`).join('');
 		const journal = log.slice(-14).reverse().map(e => `<div><span>${hhmm(e.t)}</span>${esc(e.msg)}</div>`).join('');

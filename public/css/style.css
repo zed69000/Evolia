@@ -865,3 +865,4 @@ body:has(#modal:not([hidden])) .tip, body:has(.panel.open) .tip, body:has(#coach
 #app ~ .dbg-copy, .dbg-copy { position: fixed; inset: 10% 12px auto; z-index: 100; padding: 12px; border-radius: 14px; background: #FBF6E9; box-shadow: 0 8px 30px rgba(0,0,0,.3); font: 13px Nunito, sans-serif; color: #2F5A33; }
 .dbg-copy textarea { width: 100%; height: 45vh; font: 11px ui-monospace, Menlo, monospace; }
 .dbg-copy button { margin-top: 8px; }
+#debug button.rec { border-color: #E8503A; color: #FFB4A8; }
