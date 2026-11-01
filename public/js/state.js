@@ -9,6 +9,11 @@ export const ACTIVITIES = [
 	{ id: 'marche-rapide', name: 'Marche rapide', min: 5, mult: 1.3, base: 5.5, plant: 'buisson' },
 	{ id: 'marche-tres-rapide', name: 'Marche très rapide', min: 6.5, mult: 1.6, base: 7, plant: 'buisson' },
 	{ id: 'jogging', name: 'Jogging', min: 7.5, mult: 2, base: 8, plant: 'buisson' },
+	// La randonnée : une marche qui grimpe. Elle n'a pas de vitesse à elle, c'est le dénivelé qui la révèle
+	// (voir hikeFor) ; plus d'effort que la marche, et des arbres plutôt que des fleurs.
+	{ id: 'randonnee', name: 'Randonnée', min: Infinity, mult: 1.4, base: 4, plant: 'arbre', hike: true },
+	// Le trail : la même chose en courant, dans les montées et les descentes.
+	{ id: 'trail', name: 'Trail', min: Infinity, mult: 3, base: 9, plant: 'arbre', hike: true },
 	{ id: 'course', name: 'Course', min: 9, mult: 2.5, base: 10.5, plant: 'arbre' },
 	{ id: 'course-rapide', name: 'Course rapide', min: 12, mult: 3, base: 13.5, plant: 'arbre' },
 	{ id: 'sprint', name: 'Sprint', min: 15, mult: 4, base: 16, plant: 'arbre' },
@@ -32,6 +37,21 @@ export function activityFor(speedKmh, noSteps = false) {
 	let best = null;
 	for (const a of ACTIVITIES) if (speedKmh >= a.min) best = a;
 	return best;
+}
+
+/**
+ * Randonnée (ou trail) ou simple marche (ou course) ? `log` : les derniers échantillons GPS { t, dist, climb } (en ms, m, m gravis).
+ * On parle de randonnée quand, à allure de marche, on a monté au moins 25 m en 10 minutes (ou sur une pente
+ * moyenne de 6 % ou plus) ; une fois partie, elle continue dans les montées, les descentes et les courts replats tant
+ * qu'on a encore monté ou descendu au moins 10 m sur les 10 dernières minutes.
+ */
+export const HIKE_WINDOW = 10 * 60000;
+export function hikeFor(log, now, wasHiking) {
+	let climb = 0, drop = 0, dist = 0;
+	for (const e of log) if (now - e.t <= HIKE_WINDOW) { climb += e.climb; drop += e.drop ?? 0; dist += e.dist; }
+	// Partie, elle continue tant que ça monte ou que ça descend encore (le trail, c'est aussi les descentes).
+	if (wasHiking) return climb + drop >= 10;
+	return climb >= 25 || (dist >= 150 && climb / dist >= 0.06);
 }
 
 export function effortFor(distanceM, speedKmh, act) {

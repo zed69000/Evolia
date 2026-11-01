@@ -3,6 +3,11 @@
 Chaque version, la plus récente en haut. Le site (evolia.sebastienalzamora.workers.dev) est toujours à jour ;
 le Play Store (tests internes) reçoit les versions indiquées « Play ».
 
+## 0.7.21 — 1er novembre 2026
+- **Randonnée et trail**, reconnus grâce au dénivelé pendant une sortie suivie au GPS. À allure de marche, dès qu'on a monté 25 m en dix minutes (ou sur une pente moyenne de 6 %), c'est une **randonnée** ; à allure de course, un **trail**. Ils continuent dans les descentes et les courts replats, tant que ça monte ou que ça descend encore. La randonnée compte plus d'effort que la marche, le trail plus que la course, et tous deux font pousser des arbres.
+- Le bilan s'appelle « Belle randonnée ! » ou « Quel trail ! » quand la sortie s'est faite surtout en montée et en descente, avec les mètres de montée.
+- Avant, une montée faisait passer une marche pour du jogging : la pente était comptée comme de la vitesse.
+
 ## 0.7.20 — 1er novembre 2026 · Play
 - **Un seul jardinier, qui fait sa tournée.** Avec plusieurs cabanes, ton fermier ou ta fermière va de l'une à l'autre : après chaque pause, il part parfois vers une autre cabane et s'occupe d'abord des potagers et du poulailler qui l'entourent ; le soir, il dort dans la plus proche. Le chien ou le chat le suit, et la fumée sort de la cabane où il se trouve.
 - **Les personnages de face et de dos.** Quand le jardinier, la jardinière, le chien, le chat, les poules ou le coq marchent vers le bas ou le haut de l'écran, on les voit de face (visage, tablier ou salopette, museau) ou de dos (natte, bretelles croisées, queue qui remue) au lieu de profil.

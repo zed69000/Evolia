@@ -51,19 +51,20 @@ export class GpsTracker {
 		const measured = c.speed != null && c.speed >= 0 ? c.speed * 3.6 : (dist / dt) * 3.6;
 		this.speed = this.speed ? this.speed * 0.6 + measured * 0.4 : measured;
 		this.last = { coords: c, t: pos.timestamp };
+		this.drop = 0;
 		const climb = this.climb(c);
 		this.climbRate = this.climbRate * 0.8 + (climb / dt) * 0.2;
-		this.onSample({ dist, dt, speedKmh: this.speed, climb, climbRate: this.climbRate });
+		this.onSample({ dist, dt, speedKmh: this.speed, climb, drop: this.drop, climbRate: this.climbRate });
 	}
 
-	/** Mètres montés depuis l'échantillon précédent (les descentes ne comptent pas). */
+	/** Mètres montés depuis l'échantillon précédent ; les mètres descendus vont dans `this.drop` (sans effort en plus). */
 	climb(c) {
 		if (c.altitude == null || (c.altitudeAccuracy != null && c.altitudeAccuracy > 20)) return 0;
 		this.alt = this.alt == null ? c.altitude : this.alt * 0.7 + c.altitude * 0.3;
 		if (this.altRef == null) { this.altRef = this.alt; return 0; }
 		const up = this.alt - this.altRef;
 		if (up > 4) { this.altRef = this.alt; return up; }
-		if (up < -4) this.altRef = this.alt;
+		if (up < -4) { this.drop = -up; this.altRef = this.alt; }
 		return 0;
 	}
 

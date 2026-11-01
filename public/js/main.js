@@ -1,6 +1,6 @@
 // Interface : bandeau, suivi automatique du mouvement, récolte des pas, récap, carnet, biodiversité, tutoriel.
 
-import { load, save, reset, allPlants, biomeKm, heartOf, ACTIVITIES, ACTIVITY_BY_ID, MAX_SPEED_KMH, activityFor, effortFor, dayKey, todayMeters, addDistance, STEP_LENGTH_M, effortMix } from './state.js';
+import { load, save, reset, allPlants, biomeKm, heartOf, ACTIVITIES, ACTIVITY_BY_ID, MAX_SPEED_KMH, activityFor, effortFor, hikeFor, HIKE_WINDOW, dayKey, todayMeters, addDistance, STEP_LENGTH_M, effortMix } from './state.js';
 import { Garden, CELLS, CELL_KM, cellsOpen, cellName } from './garden.js';
 import { PlacesMap } from './map.js';
 import { PLANT_TYPES, DECOR, plantName } from './plants.js';
@@ -718,9 +718,14 @@ function onSample(s) {
 	} else {
 		if (s.dist > 0 && !s.sim) tracking.lastGpsMove = now;
 		// Le téléphone sent des pas depuis peu : on court ; s'il n'en sent aucun à cette allure, on pédale.
-		// En montée, l'allure compte double : 100 m de dénivelé valent à peu près un kilomètre à plat.
-		const uphill = Math.min(6, Math.max(0, (s.climbRate ?? 0) * 36));
-		act = activityFor(s.speedKmh + uphill, !!tracking.motion && now - (tracking.lastStep ?? 0) > 20000);
+		act = activityFor(s.speedKmh, !!tracking.motion && now - (tracking.lastStep ?? 0) > 20000);
+		// Le dénivelé des dix dernières minutes dit si c'est une randonnée (en marchant) ou un trail (en courant).
+		const log = (tracking.hikeLog ??= []);
+		log.push({ t: now, dist: s.dist ?? 0, climb: s.climb ?? 0, drop: s.drop ?? 0 });
+		while (log.length && now - log[0].t > HIKE_WINDOW) log.shift();
+		const onFoot = act && !act.bike && !act.indoor;
+		tracking.hiking = onFoot && hikeFor(log, now, tracking.hiking);
+		if (tracking.hiking) act = act.mult <= ACTIVITY_BY_ID['marche-tres-rapide'].mult ? ACTIVITY_BY_ID.randonnee : ACTIVITY_BY_ID.trail;
 	}
 	if (!act || !(s.dist > 0)) {
 		if (session) { session.speed = s.speedKmh ?? 0; session.act = null; if (s.sim) session.simTime += s.dt; }
@@ -734,6 +739,8 @@ function onSample(s) {
 	session.act = act;
 	session.distance += s.dist;
 	if (act.bike) session.bike = (session.bike ?? 0) + s.dist;
+	// Les mètres faits en randonnée ou en trail, pour le titre du bilan.
+	if (act.hike) session.hike = { ...(session.hike ?? {}), [act.id]: (session.hike?.[act.id] ?? 0) + s.dist };
 	addMeters(s.dist * (act.counts ?? 1));
 	// Chaque mètre gravi vaut une dizaine de mètres à plat.
 	if (s.climb > 0 && !act.bike) session.climb = (session.climb ?? 0) + s.climb;
@@ -765,7 +772,7 @@ function endSession() {
 	if (w.distance > 50) addBoost(state, (duration / 60) * BOOST_PER_MIN);
 	if (w.distance > 10) {
 		// `end` sert à ne pas recompter ces pas lors de la prochaine récolte.
-		state.walks.unshift({ start: w.start, end: w.sim ? undefined : w.lastMove, duration, distance: w.distance, effort: w.effort, matured, place: state.place, ...(w.climb >= 10 ? { climb: Math.round(w.climb) } : {}) });
+		state.walks.unshift({ start: w.start, end: w.sim ? undefined : w.lastMove, duration, distance: w.distance, effort: w.effort, matured, place: state.place, ...(w.climb >= 10 ? { climb: Math.round(w.climb) } : {}), ...(w.hike ? { hike: Object.entries(w.hike).sort((a, b) => b[1] - a[1])[0][0] } : {}) });
 		state.walks.length = Math.min(state.walks.length, 100);
 		state.totals.walks += 1;
 		state.totals.steps += w.steps;
@@ -911,7 +918,10 @@ function showRecap(w, duration, matured) {
 	for (const ev of w.events) if (ev.kind === 'decor') chips.push(`<span class="chip gold">${DECOR[ev.key].name}</span>`);
 	for (const ev of w.events) if (ev.kind === 'cell') chips.push(`<span class="chip gold">${cellsOpen(here()) > ev.n ? cellName(here(), ev.n) : 'Nouvelle parcelle'}</span>`);
 	for (const ev of w.events) if (ev.kind === 'sown') chips.push(`<span class="chip">Semé par ${ev.by} : ${plantName(ev.plant).toLowerCase()}</span>`);
-	const title = w.distance > 3000 ? 'Quelle balade !' : 'Belle balade !';
+	// Une sortie surtout en montée devient une randonnée ou un trail.
+	const hike = Object.entries(w.hike ?? {}).sort((a, b) => b[1] - a[1])[0];
+	const hiked = hike && hike[1] >= w.distance * 0.4 ? ACTIVITY_BY_ID[hike[0]] : null;
+	const title = hiked ? (hiked.id === 'trail' ? 'Quel trail !' : 'Belle randonnée !') : w.distance > 3000 ? 'Quelle balade !' : 'Belle balade !';
 	let ecoLine = '';
 	if (w.distance > 50) {
 		const r = rates(state, state.place);
