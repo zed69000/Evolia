@@ -727,12 +727,14 @@ function onSample(s) {
 		if (session) session.steps += s.steps;
 		if (s.steps > 0) tracking.lastStep = now;
 		// Dehors, le GPS a la priorité ; l'accéléromètre prend le relais quand il ne voit plus de déplacement.
-		if (now - tracking.lastGpsMove < 15000) { renderStatus(); return; }
+		if (now - tracking.lastGpsMove < 15000) { trace('pas', { pas: s.steps, cadence: tracking.motion?.spm ?? 0, retenu: 'non (GPS prioritaire)' }); renderStatus(); return; }
 		act = s.act ? ACTIVITY_BY_ID[s.act] : null;
 	} else {
 		if (s.dist > 0 && !s.sim) tracking.lastGpsMove = now;
 		// Le téléphone sent des pas depuis peu : on court ; s'il n'en sent aucun à cette allure, on pédale.
 		act = activityFor(s.speedKmh, !!tracking.motion && now - (tracking.lastStep ?? 0) > 20000);
+		// Le téléphone sent des pas à l'instant : on est à pied, même si le GPS annonce une allure de vélo.
+		if (act?.bike && tracking.motion && now - (tracking.lastStep ?? 0) < 10000) act = activityFor(Math.min(s.speedKmh, 14.9));
 		// Le dénivelé des dix dernières minutes dit si c'est une randonnée (en marchant) ou un trail (en courant).
 		const log = (tracking.hikeLog ??= []);
 		log.push({ t: now, dist: s.dist ?? 0, climb: s.climb ?? 0, drop: s.drop ?? 0 });

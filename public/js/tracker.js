@@ -51,6 +51,9 @@ export class GpsTracker {
 		if (dt > 90) { this.onStatus({ kind: 'gap', seconds: dt }); this.last = { coords: c, t: pos.timestamp }; this.speed = 0; this.altRef = null; return; }
 		// En dessous de quelques mètres, c'est le bruit du GPS, pas un déplacement.
 		if (dist < Math.max(3, c.accuracy * 0.5) || dt <= 0) return;
+		// Quand la précision change d'un coup (37 m puis 10 m), la position « saute » : un écart plus petit que
+		// l'incertitude des deux points, parcouru à une allure invraisemblable, n'est pas un déplacement.
+		if (c.speed == null && dist < (this.last.coords.accuracy + c.accuracy) * 0.6 && (dist / dt) * 3.6 > 12) return;
 		const measured = c.speed != null && c.speed >= 0 ? c.speed * 3.6 : (dist / dt) * 3.6;
 		// Après un silence de plus de 20 s (écran éteint, GPS en pause), l'ancienne vitesse ne vaut plus rien : on
 		// repart de la mesure, sinon un petit écart de position au retour passait pour de la marche.
