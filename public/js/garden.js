@@ -1955,7 +1955,7 @@ export class Garden {
 			// Sous la pluie ou la neige, les insectes volants se mettent à l'abri.
 			if (wet && FLYERS.has(c.kind)) want = 0;
 			// Les oiseaux et les mammifères restent peu nombreux : une nuée de merles ou de lièvres ferait désordre.
-			const most = { bird: 4, tit: 4, hare: 4, rabbit: 4, roe: 3, chamois: 3, fox: 2, squirrel: 3, heron: 2, owl: 1, eagle: 1, gull: 4, duck: 4, bat: 3 }[c.kind];
+			const most = { bird: 4, tit: 4, hare: 4, rabbit: 4, roe: 3, chamois: 3, fox: 2, squirrel: 3, heron: 2, owl: 1, eagle: 1, gull: 4, duck: 4, bat: 3, boar: 3, badger: 1 }[c.kind];
 			if (most) want = Math.min(want, most);
 			const active = this.insects.filter(i => i.sp === sp.id && !i.leaving);
 			for (let k = active.length; k < want; k++) {
@@ -2914,7 +2914,7 @@ export class Garden {
 			for (const b of [...this.insects, ...[this.farmer, this.pet].filter(x => x && !x.hidden)]) {
 				const h = FLIGHT[b.kind] ?? (b.mode === 'perch' ? null : 24);
 				if (h == null || b.p.swim || b.behavior === 'trail') continue;
-				const big = { hedgehog: 2.6, frog: 1.8, marmot: 2.6, squirrel: 2, heron: 2.4, eagle: 5, gull: 3, crab: 1.8, rabbit: 3, hare: 3.4, roe: 6, chamois: 5.6, fox: 5, farmer: 3.4, dog: 3.6, cat: 2.8 }[b.kind] ?? 1;
+				const big = { hedgehog: 2.6, frog: 1.8, marmot: 2.6, squirrel: 2, heron: 2.4, eagle: 5, gull: 3, crab: 1.8, rabbit: 3, hare: 3.4, roe: 6, chamois: 5.6, fox: 5, boar: 6, badger: 4.4, farmer: 3.4, dog: 3.6, cat: 2.8 }[b.kind] ?? 1;
 				ctx.beginPath();
 				ctx.ellipse(b.x + h * 0.25, b.y + h, 4 * big, 1.8 * big, 0, 0, Math.PI * 2);
 				ctx.fill();

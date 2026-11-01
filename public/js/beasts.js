@@ -373,6 +373,54 @@ const FOX = {
 	},
 };
 
+// Le sanglier : trapu, la tête en coin, une crinière de soies sur le dos, le groin au ras du sol.
+const BOAR = {
+	legH: 10.5, bodyL: 27, bodyH: 13, neck: 4, neckW: 9, head: 6, stride: 8, lift: 2.6, bob: 0.5, legW: 2.4, trot: true, neckFwd: 1.2,
+	fur: '#4A3C32', belly: '#5A4A3E', leg: '#3A2E26', legFar: '#2A201A', hoof: '#1A1210', rump: null,
+	tail(ctx, x, y, s) {
+		ctx.strokeStyle = '#3A2E26'; ctx.lineWidth = 0.9; ctx.lineCap = 'round';
+		ctx.beginPath(); ctx.moveTo(x + 1, y); ctx.quadraticCurveTo(x - 2, y + 1 + Math.sin(s.t * 5) * 0.8, x - 2.4, y + 5); ctx.stroke();
+	},
+	headDraw(ctx, x, y, graze) {
+		ctx.save();
+		ctx.translate(x, y);
+		ctx.rotate(0.35 + graze * 0.6);
+		// Crinière : des soies plus sombres dressées sur la nuque.
+		ctx.fillStyle = '#2E241E';
+		ctx.beginPath(); ctx.moveTo(-6, -3); ctx.lineTo(-4.5, -6.5); ctx.lineTo(-3, -4); ctx.lineTo(-1.5, -6.6); ctx.lineTo(0, -3.6); ctx.fill();
+		ctx.fillStyle = '#4A3C32';
+		ctx.beginPath(); ctx.moveTo(-2, -4.2); ctx.quadraticCurveTo(4, -3.6, 9.6, 0.4); ctx.lineTo(9.6, 2.6); ctx.quadraticCurveTo(3, 4.6, -2, 3.8); ctx.fill();
+		ell(ctx, 9.8, 1.5, 1.2, 1.5, 0, '#6A5448');
+		ell(ctx, 10.3, 1.5, 0.4, 0.5, 0, '#1A1210');
+		ell(ctx, 2.8, -1.4, 0.7, 0.6, 0, '#1A1210');
+		ell(ctx, -0.6, -4.2, 1.4, 2.2, -0.4, '#3A2E26');
+		// Les défenses.
+		ctx.strokeStyle = '#F0E6D2'; ctx.lineWidth = 0.8; ctx.lineCap = 'round';
+		ctx.beginPath(); ctx.moveTo(7, 2.4); ctx.quadraticCurveTo(8.2, 1, 7.6, 0.2); ctx.stroke();
+		ctx.restore();
+	},
+};
+
+// Le blaireau : bas sur pattes, gris argenté, pattes noires, tête blanche barrée de deux bandes noires.
+const BADGER = {
+	legH: 6.5, bodyL: 22, bodyH: 9.5, neck: 3, neckW: 6, head: 4, stride: 6, lift: 1.8, bob: 0.4, legW: 2.3, trot: true, neckFwd: 1.4,
+	fur: '#8C8780', belly: '#3A3632', leg: '#2A2624', legFar: '#1A1816', hoof: null, rump: null,
+	tail(ctx, x, y) { ell(ctx, x - 1.5, y + 0.5, 2.6, 1.6, 0.3, '#A8A39A'); },
+	headDraw(ctx, x, y, graze) {
+		ctx.save();
+		ctx.translate(x, y);
+		ctx.rotate(0.3 + graze * 0.5);
+		ctx.fillStyle = '#F2EEE6';
+		ctx.beginPath(); ctx.moveTo(-2.5, -3); ctx.quadraticCurveTo(4, -2.6, 8.6, 0.8); ctx.quadraticCurveTo(3, 3.6, -2.5, 3); ctx.fill();
+		// Deux bandes noires de l'oreille au museau.
+		ctx.fillStyle = '#1E1C1A';
+		ctx.beginPath(); ctx.moveTo(-2, -1.6); ctx.quadraticCurveTo(3, -1.2, 7.4, 0.6); ctx.quadraticCurveTo(3, 0.4, -2, 1.2); ctx.fill();
+		ell(ctx, 8.6, 0.9, 0.8, 0.7, 0, '#1A1210');
+		ell(ctx, -1.2, -2.6, 1, 0.8, 0, '#F2EEE6');
+		ctx.restore();
+	},
+};
+
 // ─── Le chien ou le chat de la cabane ───────────────────────────
 
 /** Une queue qui remue (chien) ou ondule lentement, dressée (chat). */
@@ -707,6 +755,8 @@ export const BEASTS = {
 	roe: (ctx, t, mode, p, s) => quadruped(ctx, s, ROE),
 	chamois: (ctx, t, mode, p, s) => quadruped(ctx, s, p.ibex ? IBEX : CHAMOIS),
 	fox: (ctx, t, mode, p, s) => quadruped(ctx, s, FOX),
+	boar: (ctx, t, mode, p, s) => quadruped(ctx, s, BOAR),
+	badger: (ctx, t, mode, p, s) => quadruped(ctx, s, BADGER),
 	farmer: (ctx, t, mode, p, s) => farmer(ctx, s),
 	dog: (ctx, t, mode, p, s) => pet(ctx, s, DOG),
 	cat: (ctx, t, mode, p, s) => pet(ctx, s, CAT),
@@ -720,6 +770,8 @@ export const GAIT = {
 	roe: { stride: 18, speed: 16 },
 	chamois: { stride: 16, speed: 14 },
 	fox: { stride: 20, speed: 30 },
+	boar: { stride: 16, speed: 22 },
+	badger: { stride: 11, speed: 12 },
 	farmer: { stride: 27, speed: 18 },
 	dog: { stride: 24, speed: 26 },
 	cat: { stride: 16, speed: 16 },
