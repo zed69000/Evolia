@@ -77,6 +77,9 @@ const SHEET_READY = b => !!SHEETS[sheetIdOf(b)];
 const FLYERS = new Set(['bee', 'butterfly', 'dragonfly', 'hoverfly', 'beefly', 'bat', 'moth']);
 // Niveaux de détail selon le zoom : formes simples, aquarelle, aquarelle détaillée.
 const GLYPH_Z = 0.5, DETAIL_Z = 1.6, DETAIL_DENSITY = 2.2;
+// En dessous de ce zoom, des pastilles signalent ce qui attend (collecteur, œufs, potager mûr, gouttes) ;
+// les toucher ramène la vue dessus.
+const POI_Z = 0.85, POI_ZOOM = 1.4;
 const Z_MAX = 3.2;
 
 const DEFAULT_SUN = { rise: 7.5, set: 19 };
@@ -1584,6 +1587,69 @@ export class Garden {
 		}
 	}
 
+	/**
+	 * Ce qui mérite qu'on y aille, vu de loin : collecteurs qui ont du nectar, poulaillers avec des œufs, potagers
+	 * mûrs, gouttes de nectar à cueillir (regroupées par parcelle). Coordonnées du monde.
+	 */
+	poiList() {
+		const out = [];
+		for (const it of this.items) {
+			if (it.kind === 'collecteur') {
+				const js = this.jarStock?.(it) ?? { v: 0, cap: 1 };
+				if (js.v >= 1) out.push({ x: it.x, y: it.y - 60, icon: '🍯', label: `+${Math.floor(js.v)}`, hot: js.v >= js.cap - 0.5, rank: js.v >= js.cap - 0.5 ? 3 : 2 });
+			} else if (it.kind === 'poulailler') {
+				const n = this.eggsOf(it);
+				if (n >= 1) out.push({ x: it.x, y: it.y - 50, icon: '🥚', label: `${n}`, rank: 1 });
+			} else if (it.kind === 'potager' && this.bedStage(it) >= 1) out.push({ x: it.x, y: it.y - 20, icon: '🥕', label: 'mûr', rank: 1 });
+		}
+		const drops = new Map();
+		for (const d of this.dew ?? []) {
+			const ci = this.cellAt(d.x, d.y), g = drops.get(ci) ?? { x: 0, y: 0, n: 0 };
+			g.x += d.x; g.y += d.y; g.n++;
+			drops.set(ci, g);
+		}
+		for (const g of drops.values()) out.push({ x: g.x / g.n, y: g.y / g.n - 30, icon: '💧', label: `${g.n}`, rank: 2 });
+		return out;
+	}
+
+	/** Les pastilles à l'écran, regroupées quand elles se chevauchent ; gardées pour le toucher. */
+	drawPOI(ctx, S, tx, ty) {
+		const dpr = this.dpr, R = 18 * dpr, groups = [];
+		for (const p of this.poiList().sort((a, b) => b.rank - a.rank)) {
+			const sx = p.x * S + tx, sy = p.y * S + ty;
+			const g = groups.find(q => Math.hypot(q.sx - sx, q.sy - sy) < R * 2.2);
+			if (g) { g.items.push(p); continue; }
+			groups.push({ sx, sy, items: [p] });
+		}
+		this.poiHits = [];
+		ctx.setTransform(1, 0, 0, 1, 0, 0);
+		ctx.textAlign = 'center';
+		ctx.textBaseline = 'middle';
+		const bob = Math.sin(this.t * 2.4) * 2 * dpr;
+		for (const g of groups) {
+			const p = g.items[0], many = g.items.length > 1, sx = g.sx, sy = g.sy - R - 6 * dpr + bob;
+			// Une pastille ronde, sa pointe vers l'objet, l'icône et ce qui attend.
+			ctx.fillStyle = 'rgba(40,30,10,0.18)';
+			ctx.beginPath(); ctx.ellipse(g.sx, g.sy + 2 * dpr, R * 0.5, R * 0.18, 0, 0, Math.PI * 2); ctx.fill();
+			ctx.fillStyle = p.hot ? '#E87028' : '#FDF7E7';
+			ctx.beginPath(); ctx.arc(sx, sy, R, 0, Math.PI * 2); ctx.fill();
+			ctx.beginPath(); ctx.moveTo(sx - 6 * dpr, sy + R - 3 * dpr); ctx.lineTo(sx, sy + R + 7 * dpr); ctx.lineTo(sx + 6 * dpr, sy + R - 3 * dpr); ctx.fill();
+			ctx.strokeStyle = p.hot ? '#B0521A' : 'rgba(176,122,26,0.75)'; ctx.lineWidth = 2 * dpr;
+			ctx.beginPath(); ctx.arc(sx, sy, R, 0, Math.PI * 2); ctx.stroke();
+			ctx.font = `${Math.round(17 * dpr)}px sans-serif`;
+			ctx.fillText(p.icon, sx, sy + 1 * dpr);
+			const label = many ? `${g.items.length} à voir` : p.label;
+			ctx.font = `800 ${Math.round(12 * dpr)}px Nunito, sans-serif`;
+			const w = ctx.measureText(label).width + 12 * dpr, h = 17 * dpr, ly = sy - R - 4 * dpr;
+			ctx.fillStyle = p.hot ? '#E87028' : '#5F933E';
+			ctx.beginPath(); ctx.roundRect(sx - w / 2, ly - h / 2, w, h, h / 2); ctx.fill();
+			ctx.fillStyle = '#FFFFFF';
+			ctx.fillText(label, sx, ly + 0.5 * dpr);
+			// Pour le toucher : centre de la pastille (pixels CSS) et ce qu'elle regroupe.
+			this.poiHits.push({ x: sx / dpr, y: sy / dpr, r: (R + 8 * dpr) / dpr, items: g.items });
+		}
+	}
+
 	/** Vider un collecteur : le nectar en sort en gouttes qui filent au compteur. */
 	/** Vider un collecteur (ou une goutte) : `n` gouttes s'en échappent l'une après l'autre pendant `span` secondes. */
 	pourFrom(it, n = 8, span = 0.56, y = it.y - 40) {
@@ -1816,6 +1882,12 @@ export class Garden {
 
 	/** Ce qui se trouve sous le doigt : un animal, une plante, ou une parcelle (fermée, ou en vue d'ensemble). */
 	pick(sx, sy) {
+		// Vu de loin, une pastille touchée emmène la vue sur ce qu'elle montre.
+		if (this.cam.z < POI_Z) for (const h of this.poiHits ?? []) {
+			if (Math.hypot(h.x - sx, h.y - sy) > h.r) continue;
+			const x = h.items.reduce((a, p) => a + p.x, 0) / h.items.length, y = h.items.reduce((a, p) => a + p.y, 0) / h.items.length;
+			return { poi: { x, y, z: h.items.length > 1 ? Math.min(POI_ZOOM, Math.max(this.cam.z * 2.2, GLYPH_Z + 0.05)) : POI_ZOOM }, x: sx, y: sy };
+		}
 		const [wx, wy] = this.toWorld(sx, sy);
 		const ci = this.cellAt(wx, wy);
 		const open = ci >= 0 && ci < cellsOpen(this.place);
@@ -3376,6 +3448,8 @@ export class Garden {
 		if (!glyph && this.dew?.length) { world(); this.drawDew(ctx); }
 		if (!glyph && this.items.some(it => it.kind === 'collecteur')) { world(); this.drawJarTags(ctx); }
 		if (!glyph && this.farmer?.hidden) { world(); this.drawSmoke(ctx); }
+		if (this.cam.z < POI_Z && !this.ghost) this.drawPOI(ctx, S, tx, ty);
+		else this.poiHits = null;
 		if (this.floats?.length) { world(); this.drawFloats(ctx); }
 
 		if (this.ghost) {

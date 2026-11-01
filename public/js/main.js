@@ -317,6 +317,7 @@ garden.onTap = hit => {
 	clearTimeout(cardTimer);
 	if (placing) return movePlacing(hit);
 	if (!hit) { card.hidden = true; return; }
+	if (hit.poi) { card.hidden = true; garden.flyTo(hit.poi.x, hit.poi.y, hit.poi.z); return; }
 	if (hit.dew) {
 		const d = hit.dew, v = collect(garden.takeDew(d), true);
 		if (v >= 1) jackpot(v, d.x, d.y);
