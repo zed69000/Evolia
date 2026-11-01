@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Evolia · Spritesheets</title>
+<style>
+	:root { --papier: #FBF6E9; --foret: #2F5A33; --doux: #6A6450; }
+	body { margin: 0; padding: 16px; background: var(--papier); color: var(--foret); font: 15px/1.5 Nunito, system-ui, sans-serif; }
+	h1 { font-size: 22px; margin: 0 0 6px; }
+	p { color: var(--doux); max-width: 760px; }
+	code { background: #EFE6CE; padding: 1px 5px; border-radius: 4px; }
+	.sheet { margin: 22px 0; }
+	.sheet h2 { font-size: 17px; margin: 0 0 6px; }
+	.sheet a { margin-left: 10px; font-size: 14px; color: #A8582A; }
+	.wrap { overflow-x: auto; }
+	canvas { background-image: linear-gradient(45deg, #E8E2D0 25%, transparent 25%, transparent 75%, #E8E2D0 75%), linear-gradient(45deg, #E8E2D0 25%, transparent 25%, transparent 75%, #E8E2D0 75%); background-size: 16px 16px; background-position: 0 0, 8px 8px; border: 1px solid #D8CCB0; max-width: none; }
+	.legend { font-size: 13px; color: var(--doux); }
+</style>
+</head>
+<body>
+<h1>Spritesheets des personnages</h1>
+<p>Chaque feuille a <b>4 lignes</b> (de haut en bas : vers le bas de l'écran, vers la gauche, vers la droite, vers le haut) et
+	<b>9 colonnes</b> (repos, puis les 8 images d'un cycle de marche). Les cases sont carrées ; les pieds du personnage sont
+	au même point dans chaque case (repère rouge). Télécharge une feuille, repeins-la en gardant la grille, puis pose-la
+	dans <code>public/img/sprites/&lt;nom&gt;.png</code> et ajoute son nom dans <code>public/img/sprites/index.json</code>
+	(par exemple <code>["fermiere", "chat"]</code>). Le jeu l'utilise alors pour la marche et le repos ; les gestes
+	(ratisser, arroser, s'asseoir…) restent dessinés par le jeu.</p>
+<label class="legend"><input type="checkbox" id="grid" checked> Montrer la grille et le repère des pieds (non exportés)</label>
+<div id="sheets"></div>
+<script type="module">
+import { SHEET_SPECS, SHEET_DIRS, SHEET_COLS, bakeSheet } from './js/beasts.js';
+
+const NAMES = { fermier: 'Le fermier', fermiere: 'La fermière', chien: 'Le chien', chat: 'Le chat', coq: 'Le coq', 'coq-blanc': 'Le coq blanc', 'poule-rousse': 'La poule rousse', 'poule-blanche': 'La poule blanche', 'poule-noire': 'La poule noire', 'poule-fauve': 'La poule fauve' };
+const DIRS = { down: 'bas', left: 'gauche', right: 'droite', up: 'haut' };
+const root = document.getElementById('sheets');
+
+function render() {
+	root.innerHTML = '';
+	const grid = document.getElementById('grid').checked;
+	for (const id of Object.keys(SHEET_SPECS)) {
+		const sp = SHEET_SPECS[id], sheet = bakeSheet(id);
+		const view = document.createElement('canvas');
+		view.width = sheet.width; view.height = sheet.height;
+		const g = view.getContext('2d');
+		g.drawImage(sheet, 0, 0);
+		if (grid) {
+			g.strokeStyle = 'rgba(160,120,60,0.5)'; g.lineWidth = 1;
+			for (let c = 0; c <= SHEET_COLS; c++) { g.beginPath(); g.moveTo(c * sp.cell + 0.5, 0); g.lineTo(c * sp.cell + 0.5, view.height); g.stroke(); }
+			for (let r = 0; r <= SHEET_DIRS.length; r++) { g.beginPath(); g.moveTo(0, r * sp.cell + 0.5); g.lineTo(view.width, r * sp.cell + 0.5); g.stroke(); }
+			g.fillStyle = '#D8302A';
+			for (let r = 0; r < SHEET_DIRS.length; r++) for (let c = 0; c < SHEET_COLS; c++) g.fillRect(c * sp.cell + sp.ax - 2, r * sp.cell + sp.ay - 1, 4, 2);
+			g.font = '11px sans-serif'; g.fillStyle = 'rgba(90,70,40,0.8)';
+			SHEET_DIRS.forEach((d, r) => g.fillText(DIRS[d], 4, r * sp.cell + 13));
+		}
+		const box = document.createElement('div');
+		box.className = 'sheet';
+		box.innerHTML = `<h2>${NAMES[id] ?? id} <small>(${id}.png · cases de ${sp.cell} px, pieds en ${sp.ax}, ${sp.ay})</small><a download="${id}.png" href="${sheet.toDataURL('image/png')}">Télécharger</a></h2><div class="wrap"></div>`;
+		box.querySelector('.wrap').appendChild(view);
+		root.appendChild(box);
+	}
+}
+document.getElementById('grid').addEventListener('change', render);
+render();
+</script>
+</body>
+</html>

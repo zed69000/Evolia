@@ -1226,6 +1226,8 @@ function coopButtons(it) {
 /** Le prochain niveau d'un habitat posé : son prix, ou ce qui manque (kilomètres), ou null s'il est au plus haut. */
 function nextLevel(it) {
 	const lv = it.level ?? 1, own = ITEMS[it.kind].levels, km = state.totals.distance / 1000;
+	// Le collecteur a ses trois niveaux de réserve.
+	if (it.kind === 'collecteur') return lv >= 3 ? null : { level: lv + 1, cost: COLLECTOR_UPGRADE[lv + 1], km: 0, ok: true };
 	// La cabane a ses propres niveaux (petite cabane, cabane à auvent, chalet).
 	if (own) return lv >= own.max ? null : { level: lv + 1, cost: own.cost[lv + 1], km: own.km[lv + 1], ok: km >= own.km[lv + 1] };
 	if (!canLevel(it.kind) || lv >= MAX_LEVEL) return null;
@@ -1241,6 +1243,15 @@ function levelUp(it) {
 	it.spent = (it.spent ?? 0) + nx.cost;
 	garden.popItem(it, true);
 	garden.nextPopulate = 0;
+	if (it.kind === 'collecteur') {
+		toast(`Collecteur niveau ${it.level} : il garde ${COLLECTOR_CAP[it.level]} nectar`, '#E3A33A');
+		fillFromDew(it);
+		sound.chime(2);
+		renderHud();
+		renderStatus();
+		persist(true);
+		return true;
+	}
 	const own = ITEMS[it.kind].levels;
 	toast(it.kind === 'poulailler' ? `Ton poulailler s’agrandit : ${own.name[it.level]}, ${own.seats[it.level]} places !` : own ? `Ta cabane devient un${own.name[it.level] === 'chalet' ? '' : 'e'} ${own.name[it.level]} !` : `${ITEMS[it.kind].name} : niveau ${it.level}, ${LEVEL_NAME[it.level]}`, '#5F933E');
 	sound.chime(3);
@@ -1269,7 +1280,7 @@ function renderDeco() {
 			const action = km < it.km ? `<span class="deco-lock">dès ${it.km} km parcourus</span>`
 				: need ? `<span class="deco-lock">après avoir posé ${ITEMS[need].name.toLowerCase()}</span>`
 				: `<button class="btn ${n && canLevel(k) ? 'ghost' : 'primary'} small" data-buy="${k}" ${poor ? 'disabled' : ''}>${poor ? `il manque ${fmtInt(cost - nectar)}` : n ? 'Un de plus' : 'Installer'}</button>`;
-			const levels = n && canLevel(k) ? `<small>${mine.map(x => `niv. ${x.level ?? 1}`).join(' · ')}</small>` : n ? `<small>${n} ici</small>` : '';
+			const levels = n && (canLevel(k) || k === 'collecteur') ? `<small>${mine.map(x => `niv. ${x.level ?? 1}`).join(' · ')}</small>` : n ? `<small>${n} ici</small>` : '';
 			return `<div class="deco-card${locked ? ' locked' : ''}"><div class="deco-art" data-art="${k}"></div>
 				<div class="deco-body"><h3>${it.name}</h3><p>${it.text}</p>${itemHelp(k) ? `<span class="deco-help">${itemHelp(k)}</span>` : ''}
 				<div class="deco-row"><span class="nectar">${fmtInt(cost)}</span>${levels}${action}</div>${up ? `<div class="deco-row deco-up">${up}</div>` : ''}</div></div>`;
@@ -1367,6 +1378,9 @@ $('#btn-place').addEventListener('click', () => {
 		toast(`${ITEMS[kind].name} : installé${/^Une /.test(ITEMS[kind].name) ? 'e' : /^Des /.test(ITEMS[kind].name) ? 's' : ''}${help ? ` · ${help}` : ''}`, '#9A7448');
 		if (kind === 'cabane' && garden.items.filter(x => x.kind === 'cabane').length === 1) {
 			setTimeout(() => chooseFarmer(() => choosePet(() => toast(`${farmerName(true)} s’installe : construis-lui un potager`, '#5F933E', () => openDeco('recolte')))), 1400);
+		} else if (kind === 'cabane') {
+			// Toujours un seul jardinier : il ajoute cette cabane à sa tournée.
+			setTimeout(() => toast(`${farmerName(true)} fera aussi la tournée de cette cabane et de ses potagers`, '#5F933E'), 1400);
 		}
 	}
 	sound.chime(2);

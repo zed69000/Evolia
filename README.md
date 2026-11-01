@@ -39,6 +39,22 @@ Les anciennes parties (un jardin par lieu) sont converties : les lieux deviennen
 Lever et coucher du soleil calculés sur l'appareil ; météo du moment via Open-Meteo, avec une position
 arrondie à 0,1° (environ 10 km), seulement si la personne a autorisé sa position.
 
+## Spritesheets des personnages
+
+Le jardinier, la jardinière, le chien, le chat, les poules et les coqs sont dessinés en code, de profil, de face et de
+dos (vue de face ou de dos quand ils marchent vers le bas ou le haut de l'écran). On peut remplacer leur marche et
+leur repos par des feuilles peintes à la main :
+
+- La page `sprites.html` (en local : http://localhost:8642/sprites.html) génère chaque feuille au bon format et
+  permet de la télécharger, pour la repeindre.
+- Une feuille = **4 lignes** (vers le bas, vers la gauche, vers la droite, vers le haut) × **9 colonnes** (repos, puis
+  8 images d'un cycle de marche), en cases carrées. Les pieds sont au même point dans chaque case (taille des cases
+  et point des pieds dans `SHEET_SPECS`, `js/beasts.js`).
+- Pose la feuille repeinte dans `public/img/sprites/<nom>.png` (noms : `fermier`, `fermiere`, `chien`, `chat`, `coq`,
+  `coq-blanc`, `poule-rousse`, `poule-blanche`, `poule-noire`, `poule-fauve`) et ajoute son nom dans
+  `public/img/sprites/index.json` (par exemple `["fermiere", "chat"]`). Les gestes (ratisser, arroser, s'asseoir,
+  dormir…) restent dessinés par le jeu.
+
 ## Fichiers
 
 - `js/watercolor.js` : primitives de peinture (lavis, rubans, feuilles, grain de papier).

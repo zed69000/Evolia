@@ -3,6 +3,12 @@
 Chaque version, la plus récente en haut. Le site (evolia.sebastienalzamora.workers.dev) est toujours à jour ;
 le Play Store (tests internes) reçoit les versions indiquées « Play ».
 
+## 0.7.20 — 1er novembre 2026
+- **Un seul jardinier, qui fait sa tournée.** Avec plusieurs cabanes, ton fermier ou ta fermière va de l'une à l'autre : après chaque pause, il part parfois vers une autre cabane et s'occupe d'abord des potagers et du poulailler qui l'entourent ; le soir, il dort dans la plus proche. Le chien ou le chat le suit, et la fumée sort de la cabane où il se trouve.
+- **Les personnages de face et de dos.** Quand le jardinier, la jardinière, le chien, le chat, les poules ou le coq marchent vers le bas ou le haut de l'écran, on les voit de face (visage, tablier ou salopette, museau) ou de dos (natte, bretelles croisées, queue qui remue) au lieu de profil.
+- **Spritesheets** : une page `sprites.html` génère pour chaque personnage une feuille de 4 directions × 9 images (repos et 8 images de marche), à télécharger et repeindre. Posée dans `img/sprites/` et déclarée dans `index.json`, une feuille repeinte remplace le dessin du jeu pour la marche et le repos.
+- Le collecteur s'améliore aussi depuis Aménager, comme les autres aménagements.
+
 ## 0.7.19 — 1er novembre 2026
 - **La page Espèces s'ouvre tout de suite.** Elle peignait d'un coup toutes les vignettes du milieu (près de 190 pour la prairie) avant de s'afficher ; maintenant, seules celles qui arrivent à l'écran se peignent, quelques-unes par image, au fil du défilement.
 - **Des sous-catégories** dans chaque milieu : Tout, Plantes, Insectes (et petites bêtes : araignées, escargots, vers…) et Animaux, avec leur nombre. La vue Tout est rangée en sections, chacune avec ses découvertes.

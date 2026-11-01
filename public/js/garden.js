@@ -7,7 +7,7 @@
 import { rng, wash, rgba, mix, paperTexture, lerp, blurred } from './watercolor.js';
 import { PLANT_TYPES, DECOR, DECOR_PAINTERS, paintPlant, paintTurf, newVariant, lookOf } from './plants.js';
 import { drawCritter, CRITTER_SIZE, FLIGHT } from './critters.js';
-import { GAIT, strideOf } from './beasts.js';
+import { GAIT, strideOf, HEN_LOOKS, drawFromSheet, loadSheets, SHEETS, sheetIdOf } from './beasts.js';
 import { SPECIES, PLACE_BY_ID, speciesOf } from './species.js';
 import { PARCEL_W, PARCEL_H, CELLS, CELL_KM, GROUND, zoneOf, zoneName, tileSteps, tileSig, keepOut, cellIndexAt, riversIn } from './zones.js';
 import { biomeOf, heartOf, rankOf, biomesIn } from './state.js';
@@ -73,6 +73,7 @@ const guildOf = c => {
 const GUILD_ROOM = { hirondelles: 2, grands: 1, rongeurs: 2, 'chauves-souris': 2, 'rapaces-nuit': 1, planeurs: 1, oiseaux: 3, eau: 3, amphibiens: 3, reptiles: 1, libellules: 3, papillons: 3, butineurs: 6, criquets: 3, 'petits-mammiferes': 1, escargots: 2, 'petites-betes': 3 };
 const FIXED_ROOM = new Set(['grands', 'planeurs', 'hirondelles', 'rapaces-nuit']);
 const SLEEPS = new Set(['chauves-souris', 'amphibiens', 'reptiles', 'libellules', 'papillons', 'butineurs', 'criquets', 'escargots', 'petites-betes']);
+const SHEET_READY = b => !!SHEETS[sheetIdOf(b)];
 const FLYERS = new Set(['bee', 'butterfly', 'dragonfly', 'hoverfly', 'beefly', 'bat', 'moth']);
 // Niveaux de détail selon le zoom : formes simples, aquarelle, aquarelle détaillée.
 const GLYPH_Z = 0.5, DETAIL_Z = 1.6, DETAIL_DENSITY = 2.2;
@@ -160,6 +161,8 @@ export class Garden {
 		this.fireflies = Array.from({ length: 30 }, () => ({ x: Math.random(), y: Math.random(), ph: Math.random() * 6.28, a: Math.random() * 6.28 }));
 		this.paper = paperTexture(256);
 		this.hourOverride = null;
+		// Les feuilles de sprites peintes à la main, s'il y en a (sinon les personnages sont dessinés en code).
+		loadSheets();
 		this.sun = DEFAULT_SUN;
 		this.season = null;
 		this.seasonKey = '';
@@ -1534,7 +1537,7 @@ export class Garden {
 
 	/** Quand le fermier est chez lui, un filet de fumée sort de la cheminée et part avec le vent. */
 	drawSmoke(ctx) {
-		const cab = this.items.find(it => it.kind === 'cabane');
+		const cab = this.homeCabin();
 		const sp = cab && this.itemSprite('cabane', cab.rot, cab);
 		if (!sp?.smoke) return;
 		const [sx, sy] = sp.smoke;
@@ -2239,7 +2242,7 @@ export class Garden {
 	 */
 	updatePet(dt) {
 		const kind = { chien: 'dog', chat: 'cat' }[this.state.pet];
-		const cab = this.glyph || !kind ? null : this.items.find(it => it.kind === 'cabane');
+		const cab = this.glyph || !kind ? null : this.homeCabin();
 		if (!cab) { this.pet = null; return; }
 		const door = this.cabinDoor(cab), f = this.farmer;
 		let a = this.pet;
@@ -2320,8 +2323,8 @@ export class Garden {
 		const coops = this.glyph ? [] : this.items.filter(it => it.kind === 'poulailler');
 		this.hens = (this.hens ?? []).filter(h => coops.includes(h.coop));
 		// Autant de poules et de coqs que le poulailler en accueille ; chacun garde son plumage.
-		const COQS = [{ rooster: true, body: '#C8602A', wing: '#7A2E1A', neck: '#E8A040' }, { rooster: true, body: '#F2EEE6', wing: '#D8D2C8', neck: '#E8C060' }];
-		const POULES = [{ body: '#A8582A', wing: '#7A3A1A' }, { body: '#F2EEE6', wing: '#D8D2C8' }, { body: '#3A3430', wing: '#24201E', neck: '#4A4038' }, { body: '#C8904A', wing: '#9A6A30' }];
+		const COQS = [HEN_LOOKS.coq, HEN_LOOKS['coq-blanc']];
+		const POULES = [HEN_LOOKS['poule-rousse'], HEN_LOOKS['poule-blanche'], HEN_LOOKS['poule-noire'], HEN_LOOKS['poule-fauve']];
 		for (const c of coops) {
 			const fl = c.flock ?? { hens: 3, roosters: 1 };
 			for (const [rooster, want, looks] of [[true, fl.roosters, COQS], [false, fl.hens, POULES]]) {
@@ -2379,15 +2382,31 @@ export class Garden {
 		return best;
 	}
 
+	/** La cabane où le jardinier se trouve en ce moment (il n'y en a qu'un, qui fait la tournée de toutes). */
+	homeCabin() {
+		const cabs = this.glyph ? [] : this.items.filter(it => it.kind === 'cabane');
+		return cabs.find(c => c.id === this.farmer?.cab) ?? cabs[0] ?? null;
+	}
+
+	/**
+	 * Un seul jardinier pour tout le jardin. Avec plusieurs cabanes, il fait sa tournée : après chaque pause, il
+	 * part parfois vers une autre cabane et s'occupe des potagers et du poulailler qui l'entourent ; le soir, il
+	 * dort dans la plus proche.
+	 */
 	updateFarmer(dt) {
-		const cab = this.glyph ? null : this.items.find(it => it.kind === 'cabane');
-		if (!cab) { this.farmer = null; return; }
-		const door = this.cabinDoor(cab);
+		const cabs = this.glyph ? [] : this.items.filter(it => it.kind === 'cabane');
+		if (!cabs.length) { this.farmer = null; return; }
 		let f = this.farmer;
-		if (!f || f.cab !== cab.id) f = this.farmer = { kind: 'farmer', p: {}, x: door.x, y: door.y, mode: 'stand', t: 0, ph: 0, dir: 1, timer: 1.5, cab: cab.id, hidden: true };
+		if (!f) { const d0 = this.cabinDoor(cabs[0]); f = this.farmer = { kind: 'farmer', p: {}, x: d0.x, y: d0.y, mode: 'stand', t: 0, ph: 0, dir: 1, timer: 1.5, cab: cabs[0].id, hidden: true }; }
+		const near = () => cabs.reduce((a, c) => (Math.hypot(c.x - f.x, c.y - f.y) < Math.hypot(a.x - f.x, a.y - f.y) ? c : a));
+		let cab = cabs.find(c => c.id === f.cab) ?? near();
 		f.fem = this.state.gardener === 'fermiere';
 		f.t += dt;
 		const home = this.night() > 0.45 || this.precip() > 0.5;
+		// Le soir ou sous la pluie, il rentre à la cabane la plus proche de l'endroit où il travaille.
+		if (home && !f.hidden && f.goal?.task !== 'in') cab = near();
+		f.cab = cab.id;
+		let door = this.cabinDoor(cab);
 		if (home && !f.goal && f.hidden) return;
 		// Il se repose un moment à la cabane entre deux séries de travaux.
 		if (f.hidden && !f.goal && f.t < (f.restUntil ?? 0)) return;
@@ -2484,9 +2503,18 @@ export class Garden {
 				return;
 			}
 		}
+		// En sortant de la cabane, il part parfois faire sa tournée vers une autre.
+		if (f.hidden && cabs.length > 1 && Math.random() < 0.5) {
+			const others = cabs.filter(c => c !== cab);
+			cab = others[Math.floor(Math.random() * others.length)];
+			f.cab = cab.id;
+			door = this.cabinDoor(cab);
+		}
 		f.hidden = false;
-		const beds = this.items.filter(it => it.kind === 'potager');
-		const coop = this.items.find(it => it.kind === 'poulailler' && this.eggsOf(it) >= Math.max(2, it.flock?.hens ?? 3));
+		// Les potagers et le poulailler les plus proches de la cabane où il est passent en premier.
+		const byNear = list => list.sort((a, b) => Math.hypot(a.x - door.x, a.y - door.y) - Math.hypot(b.x - door.x, b.y - door.y));
+		const beds = byNear(this.items.filter(it => it.kind === 'potager'));
+		const coop = byNear(this.items.filter(it => it.kind === 'poulailler' && this.eggsOf(it) >= Math.max(2, it.flock?.hens ?? 3)))[0];
 		if (coop && !f.carry && !f.basket) {
 			f.goal = { x: coop.x + 22, y: coop.y + 20, task: 'eggs' };
 			f.coop = coop;
@@ -3549,6 +3577,19 @@ export class Garden {
 		ctx.save();
 		ctx.translate(b.x, b.y - (b.lift ?? 0));
 		const k = CRITTER_SIZE[b.kind] ?? 1;
+		if (b.kind === 'farmer' || b.kind === 'dog' || b.kind === 'cat' || b.kind === 'hen') {
+			const vx = b.x - (b.vx0 ?? b.x), vy = b.y - (b.vy0 ?? b.y);
+			b.vx0 = b.x; b.vy0 = b.y;
+			if (Math.hypot(vx, vy) > 0.02) b.view = Math.abs(vy) > Math.abs(vx) * 1.2 ? (vy > 0 ? 'down' : 'up') : 'side';
+			// Une tâche (ratisser, arroser, cueillir…) se fait toujours de profil.
+			if (!['run', 'stand', 'stroll'].includes(b.mode)) b.view = 'side';
+			if (b.view !== 'side' || SHEET_READY(b)) {
+				ctx.scale(k, k);
+				if (!drawFromSheet(ctx, b)) drawCritter(ctx, b.kind, b.t, b.mode, b.p, b);
+				ctx.restore();
+				return;
+			}
+		}
 		if (b.kind === 'swallow' || b.behavior === 'soar') {
 			const vx = b.x - (b.px ?? b.x), vy = b.y - (b.py ?? b.y);
 			if (Math.hypot(vx, vy) > 0.01) b.head = Math.atan2(vy, vx);

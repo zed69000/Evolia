@@ -556,6 +556,7 @@ function curled(ctx, s, k) {
 
 function pet(ctx, s, k) {
 	if (s.mode === 'sleep') return curled(ctx, s, k);
+	if ((s.view === 'down' || s.view === 'up') && (s.mode === 'run' || s.mode === 'stand')) return petFacing(ctx, s, k, s.view === 'up');
 	quadruped(ctx, s, k);
 }
 
@@ -640,6 +641,7 @@ function leg(ctx, hx, hy, fx, fy, color, tip = 0) {
  * ratisse, arrose, se repose debout, s'assoit sur un banc, cueille des fruits dans un arbre, contemple le jardin.
  */
 function farmer(ctx, s) {
+	if ((s.view === 'down' || s.view === 'up') && FACING_MODES.has(s.mode)) return farmerFacing(ctx, s, s.view === 'up');
 	const t = s.t, mode = s.mode, fem = !!s.fem;
 	const C = fem
 		? { shirt: '#D0607A', sh: '#B04C64', legs: '#4E6A86', legsFar: '#3E566E', hair: '#7A4A2A' }
@@ -860,6 +862,7 @@ function barrow(ctx, hx, hy, s) {
  * (ce qu'on prend pour un genou est la cheville) ; la tête pique vers le sol pour picorer.
  */
 function chicken(ctx, s, p) {
+	if ((s.view === 'down' || s.view === 'up') && (s.mode === 'run' || s.mode === 'stand')) return chickenFacing(ctx, s, p, s.view === 'up');
 	const t = s.t, walk = s.mode === 'run', peck = s.mode === 'peck' ? Math.max(0, Math.sin(t * 7)) : 0;
 	const crow = s.mode === 'crow';
 	const k = p.rooster ? 1.15 : 1, ph = s.ph ?? 0;
@@ -907,6 +910,16 @@ function chicken(ctx, s, p) {
 	ctx.restore();
 }
 
+// Les plumages du poulailler (et le nom de leur feuille de sprites).
+export const HEN_LOOKS = {
+	coq: { rooster: true, body: '#C8602A', wing: '#7A2E1A', neck: '#E8A040', sheet: 'coq' },
+	'coq-blanc': { rooster: true, body: '#F2EEE6', wing: '#D8D2C8', neck: '#E8C060', sheet: 'coq-blanc' },
+	'poule-rousse': { body: '#A8582A', wing: '#7A3A1A', sheet: 'poule-rousse' },
+	'poule-blanche': { body: '#F2EEE6', wing: '#D8D2C8', sheet: 'poule-blanche' },
+	'poule-noire': { body: '#3A3430', wing: '#24201E', neck: '#4A4038', sheet: 'poule-noire' },
+	'poule-fauve': { body: '#C8904A', wing: '#9A6A30', sheet: 'poule-fauve' },
+};
+
 const LAPIN = { fur: '#9C8466', dark: '#7A644A', belly: '#E8DCC8' };
 const LIEVRE = { fur: '#A88A5E', dark: '#806640', belly: '#E8DCC0', hare: true };
 
@@ -925,6 +938,284 @@ export const BEASTS = {
 	hen: (ctx, t, mode, p, s) => chicken(ctx, s, p),
 	cat: (ctx, t, mode, p, s) => pet(ctx, s, CAT),
 };
+
+// ─── Vues de face et de dos (quand on marche vers le bas ou vers le haut de l'écran) ─────────────
+
+const FACING_MODES = new Set(['run', 'stroll', 'stand']);
+const farmerColors = fem => (fem
+	? { shirt: '#D0607A', sh: '#B04C64', legs: '#4E6A86', legsFar: '#3E566E', hair: '#7A4A2A' }
+	: { shirt: '#C8643E', sh: '#A84E30', legs: '#5E8AA8', legsFar: '#48708C', hair: '#6A4428' });
+
+/**
+ * Le jardinier de face (back = false) ou de dos, pieds en y = 0. En marchant, chaque pied se lève à son tour
+ * (le pas va vers nous ou s'éloigne), le bassin ondule et les bras balancent à l'opposé.
+ */
+function farmerFacing(ctx, s, back) {
+	const t = s.t, fem = !!s.fem, C = farmerColors(fem), walk = s.mode !== 'stand', ph = s.ph ?? 0, pace = s.pace ?? 1;
+	const breath = Math.sin(t * 1.7) * 0.18;
+	const hipY = walk ? -13.75 + Math.cos(ph * TAU * 2) * 0.45 * strideOf(pace) : -14.15 + breath * 0.3;
+	const sway = walk ? Math.sin(ph * TAU) * 0.35 : 0;
+	ctx.save();
+	ctx.translate(sway * 0.4, 0);
+	// Les jambes : celle qui avance se lève et se raccourcit un peu (elle vient vers nous ou s'éloigne).
+	for (const i of [0, 1]) {
+		const side = i ? 1 : -1, u = walk ? Math.max(0, Math.sin((ph + i * 0.5) * TAU)) : 0;
+		const fx = side * 1.75, fy = -u * 2.2;
+		const kx = side * (1.85 + u * 0.3), ky = (hipY + fy) / 2 + (back ? 0.3 : -0.3) * u;
+		ctx.strokeStyle = C.legs; ctx.lineCap = 'round';
+		ctx.lineWidth = 3.1; ctx.beginPath(); ctx.moveTo(side * 1.5, hipY); ctx.lineTo(kx, ky); ctx.stroke();
+		ctx.lineWidth = 2.6; ctx.beginPath(); ctx.moveTo(kx, ky); ctx.lineTo(fx, fy - 1.4); ctx.stroke();
+		// La botte, vue par le bout (de face) ou par le talon (de dos).
+		ell(ctx, fx, fy - 0.9, 1.6, back ? 1.1 : 1.25 + u * 0.25, 0, '#5A3A22');
+		ell(ctx, fx, fy - 0.15, 1.75, 0.35, 0, '#2E1E14');
+	}
+	// Le buste.
+	const top = hipY - 8.6;
+	ctx.fillStyle = C.shirt;
+	ctx.beginPath();
+	ctx.moveTo(-3.1, hipY + 0.6);
+	ctx.quadraticCurveTo(-3.9, hipY - 4, -3.7, top + 0.6);
+	ctx.quadraticCurveTo(0, top - 0.8, 3.7, top + 0.6);
+	ctx.quadraticCurveTo(3.9, hipY - 4, 3.1, hipY + 0.6);
+	ctx.closePath(); ctx.fill();
+	if (fem) {
+		if (!back) {
+			// Le tablier clair noué à la taille.
+			ctx.fillStyle = '#EFE6CE';
+			ctx.beginPath(); ctx.moveTo(-2.4, top + 3.4); ctx.lineTo(2.4, top + 3.4); ctx.lineTo(2.9, hipY + 4.4); ctx.lineTo(-2.9, hipY + 4.4); ctx.closePath(); ctx.fill();
+			ctx.strokeStyle = '#D8CCB0'; ctx.lineWidth = 0.5;
+			ctx.beginPath(); ctx.moveTo(-3.3, hipY - 2); ctx.lineTo(3.3, hipY - 2); ctx.stroke();
+		} else {
+			// De dos : les cordons du tablier noués en nœud.
+			ctx.strokeStyle = '#EFE6CE'; ctx.lineWidth = 0.7;
+			ctx.beginPath(); ctx.moveTo(-3.3, hipY - 2); ctx.lineTo(3.3, hipY - 2); ctx.stroke();
+			ell(ctx, -0.9, hipY - 2, 0.9, 0.55, 0.4, '#EFE6CE'); ell(ctx, 0.9, hipY - 2, 0.9, 0.55, -0.4, '#EFE6CE');
+			ctx.beginPath(); ctx.moveTo(0, hipY - 2); ctx.lineTo(-0.6, hipY + 0.6); ctx.moveTo(0, hipY - 2); ctx.lineTo(0.7, hipY + 0.6); ctx.stroke();
+		}
+	} else {
+		// La salopette : le plastron devant, les bretelles croisées dans le dos.
+		ctx.fillStyle = C.legs;
+		ctx.fillRect(-3.1, hipY - 2.2, 6.2, 2.8);
+		if (!back) {
+			ctx.beginPath(); ctx.moveTo(-2.1, hipY - 2); ctx.lineTo(-2, top + 2.6); ctx.lineTo(2, top + 2.6); ctx.lineTo(2.1, hipY - 2); ctx.closePath(); ctx.fill();
+			ctx.fillStyle = C.legsFar; ctx.fillRect(-1, top + 4, 2, 1.4);
+			ctx.strokeStyle = C.legs; ctx.lineWidth = 0.9;
+			ctx.beginPath(); ctx.moveTo(-1.8, top + 2.8); ctx.lineTo(-2.4, top + 0.3); ctx.moveTo(1.8, top + 2.8); ctx.lineTo(2.4, top + 0.3); ctx.stroke();
+			for (const x of [-1.8, 1.8]) ell(ctx, x, top + 2.9, 0.35, 0.35, 0, '#E8C060');
+		} else {
+			ctx.strokeStyle = C.legs; ctx.lineWidth = 0.9;
+			ctx.beginPath(); ctx.moveTo(-2.4, top + 0.3); ctx.lineTo(2, hipY - 2); ctx.moveTo(2.4, top + 0.3); ctx.lineTo(-2, hipY - 2); ctx.stroke();
+		}
+	}
+	// Les bras : celui qui part en avant monte un peu (on le voit en raccourci).
+	for (const i of [0, 1]) {
+		const side = i ? 1 : -1, a = walk ? Math.sin((ph + i * 0.5 + 0.5) * TAU) * (0.55 + 0.45 * pace) : breath * 0.3;
+		const sx = side * 3.5, sy = top + 1, ex = side * 4.1, ey = sy + 4.3 - Math.max(0, a) * 0.6, hx = side * (4.2 + Math.abs(a) * 0.2), hy = ey + 3.6 - a * 1.3;
+		ctx.lineCap = 'round';
+		ctx.strokeStyle = SKIN_SH; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.moveTo(ex, ey); ctx.lineTo(hx, hy); ctx.stroke();
+		ctx.strokeStyle = i ? C.shirt : C.sh; ctx.lineWidth = 2.4; ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(ex, ey + 0.4); ctx.stroke();
+		ell(ctx, hx, hy + 0.4, 1, 1.1, 0, SKIN);
+	}
+	// Le cou, la tête, les cheveux, le chapeau.
+	const hy = top - 3.9;
+	ctx.fillStyle = SKIN_SH; ctx.fillRect(-0.8, top - 1.6, 1.6, 2);
+	if (fem && back) {
+		// La natte qui pend dans le dos.
+		ctx.strokeStyle = C.hair; ctx.lineWidth = 1.5; ctx.lineCap = 'round';
+		ctx.beginPath(); ctx.moveTo(0, hy); ctx.quadraticCurveTo(sway, hy + 4, sway * 1.6, hy + 7.6); ctx.stroke();
+		ell(ctx, sway * 1.6, hy + 7.9, 0.6, 0.5, 0, '#E8B860');
+	}
+	ell(ctx, -2.35, hy + 0.2, 0.55, 0.8, 0, SKIN_SH);
+	ell(ctx, 2.35, hy + 0.2, 0.55, 0.8, 0, SKIN_SH);
+	ell(ctx, 0, hy, 2.3, 2.55, 0, SKIN);
+	if (back) {
+		ell(ctx, 0, hy - 0.2, 2.35, 2.4, 0, C.hair);
+		if (!fem) ell(ctx, 0, hy + 1.6, 2.1, 0.9, 0, SKIN);
+	} else {
+		ell(ctx, 0, hy - 1.9, 2.25, 1.1, 0, C.hair);
+		if (fem) { ell(ctx, -2.05, hy - 0.4, 0.75, 1.9, 0.15, C.hair); ell(ctx, 2.05, hy - 0.4, 0.75, 1.9, -0.15, C.hair); }
+		const blink = (t % 3.7) < 0.12;
+		for (const x of [-0.85, 0.85]) {
+			if (blink) { ctx.strokeStyle = '#2A1C14'; ctx.lineWidth = 0.3; ctx.beginPath(); ctx.moveTo(x - 0.35, hy - 0.4); ctx.lineTo(x + 0.35, hy - 0.4); ctx.stroke(); }
+			else ell(ctx, x, hy - 0.4, 0.3, 0.36, 0, '#2A1C14');
+		}
+		ell(ctx, 0, hy + 0.35, 0.42, 0.5, 0, SKIN_SH);
+		for (const x of [-1.35, 1.35]) ell(ctx, x, hy + 0.5, 0.5, 0.3, 0, 'rgba(220,120,110,0.35)');
+		if (!fem) {
+			// La barbe et la moustache.
+			ctx.fillStyle = C.hair;
+			ctx.beginPath(); ctx.moveTo(-1.9, hy + 0.4); ctx.quadraticCurveTo(-1.6, hy + 2.8, 0, hy + 2.9); ctx.quadraticCurveTo(1.6, hy + 2.8, 1.9, hy + 0.4); ctx.quadraticCurveTo(0, hy + 1.6, -1.9, hy + 0.4); ctx.fill();
+			ell(ctx, 0, hy + 1.05, 1, 0.3, 0, C.hair);
+		} else {
+			ctx.strokeStyle = '#B05A5A'; ctx.lineWidth = 0.35;
+			ctx.beginPath(); ctx.moveTo(-0.5, hy + 1.3); ctx.quadraticCurveTo(0, hy + 1.6, 0.5, hy + 1.3); ctx.stroke();
+		}
+	}
+	ell(ctx, 0, hy - 2.2, 4.8, 1.2, 0, '#D8A850');
+	ell(ctx, 0, hy - 3.1, 2.45, 1.55, 0, '#E8C060');
+	ctx.fillStyle = fem ? '#D0607A' : '#8A5A34'; ctx.fillRect(-2.4, hy - 2.75, 4.8, 0.6);
+	if (fem && !back) { ell(ctx, 1.6, hy - 2.6, 0.85, 0.85, 0, '#F2F0E8'); ell(ctx, 1.6, hy - 2.6, 0.36, 0.36, 0, '#F2C230'); }
+	ctx.restore();
+}
+
+/** Le chien ou le chat de face ou de dos : les pattes se lèvent à tour de rôle, la queue remue. */
+function petFacing(ctx, s, k, back) {
+	const walk = s.mode === 'run', ph = s.ph ?? 0, t = s.t, cat = k === CAT;
+	// De face, on voit le poitrail : plus large et plus haut que de profil, et des pattes plus courtes.
+	const W = k.bodyH * 1.4, bodyY = -k.legH * 0.8 - k.bodyH * 0.3, bob = walk ? Math.abs(Math.sin(ph * TAU * 2)) * k.bob : 0;
+	ctx.save();
+	ctx.translate(0, -bob);
+	const legAt = (x, phase, far) => {
+		const u = walk ? Math.max(0, Math.sin((ph + phase) * TAU)) : 0, fy = -u * k.lift + bob;
+		ctx.strokeStyle = far ? k.legFar : k.leg; ctx.lineCap = 'round'; ctx.lineWidth = k.legW * (far ? 1.7 : 2);
+		ctx.beginPath(); ctx.moveTo(x, bodyY + k.bodyH * 0.25); ctx.lineTo(x, fy - 0.4); ctx.stroke();
+		ell(ctx, x, fy - 0.4, k.legW * 1.25, k.legW * 0.75, 0, far ? k.legFar : k.leg);
+	};
+	// Pattes du fond (arrière si on le voit de face), puis le corps, puis les pattes de devant.
+	legAt(-W * 0.42, 0.5, true); legAt(W * 0.42, 0, true);
+	if (back) {
+		// De dos : la queue dressée qui remue, au-dessus de l'arrière-train.
+		const wag = Math.sin(t * (cat ? 1.6 : 6)) * (cat ? 0.25 : 0.5);
+		ctx.strokeStyle = k.leg; ctx.lineWidth = cat ? 2 : 2.2; ctx.lineCap = 'round';
+		ctx.beginPath(); ctx.moveTo(0, bodyY - k.bodyH * 0.3); ctx.quadraticCurveTo(wag * 6, bodyY - k.bodyH * 1.4, wag * 9 + (cat ? 3 : 0), bodyY - k.bodyH * (cat ? 2.2 : 1.8)); ctx.stroke();
+		if (cat) ell(ctx, wag * 9 + 3, bodyY - k.bodyH * 2.2, 1, 1, 0, '#B86A2E');
+	}
+	ell(ctx, 0, bodyY, W * 0.62, k.bodyH * 0.72, 0, k.fur);
+	ell(ctx, 0, bodyY - k.bodyH * 0.25, W * 0.4, k.bodyH * 0.2, 0, 'rgba(255,245,225,0.2)');
+	if (!back) ell(ctx, 0, bodyY + k.bodyH * 0.1, W * 0.32, k.bodyH * 0.42, 0, k.belly);
+	if (k.stripes && back) {
+		ctx.strokeStyle = k.stripes; ctx.lineWidth = 0.8;
+		for (const y of [-0.3, 0, 0.3]) { ctx.beginPath(); ctx.moveTo(-W * 0.45, bodyY + y * k.bodyH); ctx.quadraticCurveTo(0, bodyY + y * k.bodyH - 1, W * 0.45, bodyY + y * k.bodyH); ctx.stroke(); }
+	}
+	legAt(-W * 0.3, 0, false); legAt(W * 0.3, 0.5, false);
+	// La tête : de face avec son museau, de dos seulement la nuque et les oreilles.
+	const hr = k.head * 1.2, hy = bodyY - k.bodyH * (back ? 0.62 : 0.85);
+	const ears = () => {
+		for (const sd of [-1, 1]) {
+			if (cat) { ctx.fillStyle = sd < 0 ? '#B86A2E' : k.fur; ctx.beginPath(); ctx.moveTo(sd * hr * 0.9, hy - hr * 0.3); ctx.lineTo(sd * hr * 0.55, hy - hr * 1.45); ctx.lineTo(sd * hr * 0.15, hy - hr * 0.6); ctx.fill(); }
+			else ell(ctx, sd * hr * 0.95, hy + hr * 0.15, hr * 0.38, hr * 0.85, sd * -0.25, '#8A5A2E');
+		}
+	};
+	if (back) { ell(ctx, 0, hy, hr * 0.9, hr * 0.85, 0, k.fur); ears(); ctx.restore(); return; }
+	if (k.collar) { ctx.strokeStyle = k.collar; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.ellipse(0, hy + hr * 0.75, hr * 0.7, hr * 0.25, 0, 0, Math.PI); ctx.stroke(); ell(ctx, 0, hy + hr * 1.05, 0.7, 0.7, 0, '#E8C040'); }
+	if (cat) ears();
+	ell(ctx, 0, hy, hr * 0.95, hr * 0.88, 0, k.fur);
+	if (!cat) ears();
+	ell(ctx, 0, hy + hr * 0.42, hr * 0.5, hr * 0.38, 0, k.belly);
+	ell(ctx, 0, hy + hr * 0.25, hr * 0.2, hr * 0.15, 0, cat ? '#C86A6A' : '#2A1E18');
+	const blink = (t % 4.3) < 0.12;
+	for (const sd of [-1, 1]) {
+		if (blink) { ctx.strokeStyle = '#1A1210'; ctx.lineWidth = 0.35; ctx.beginPath(); ctx.moveTo(sd * hr * 0.45 - 0.4, hy - hr * 0.15); ctx.lineTo(sd * hr * 0.45 + 0.4, hy - hr * 0.15); ctx.stroke(); }
+		else {
+			if (cat) ell(ctx, sd * hr * 0.42, hy - hr * 0.15, 0.7, 0.6, 0, '#4A6A2A');
+			ell(ctx, sd * hr * 0.42, hy - hr * 0.15, cat ? 0.22 : 0.55, cat ? 0.5 : 0.55, 0, '#1A1210');
+		}
+	}
+	if (cat) {
+		ctx.strokeStyle = 'rgba(250,245,235,0.8)'; ctx.lineWidth = 0.2;
+		for (const sd of [-1, 1]) for (const dy of [-0.3, 0.3]) { ctx.beginPath(); ctx.moveTo(sd * hr * 0.35, hy + hr * 0.4); ctx.lineTo(sd * hr * 1.3, hy + hr * 0.4 + dy); ctx.stroke(); }
+	}
+	ctx.restore();
+}
+
+/** Poule ou coq de face ou de dos. */
+function chickenFacing(ctx, s, p, back) {
+	const walk = s.mode === 'run', ph = s.ph ?? 0, k = p.rooster ? 1.15 : 1;
+	const body = p.body ?? '#A8582A', wing = p.wing ?? '#8A4420', legC = '#E8B040';
+	ctx.save(); ctx.scale(k, k);
+	for (const sd of [-1, 1]) {
+		const u = walk ? Math.max(0, Math.sin((ph + (sd > 0 ? 0.5 : 0)) * TAU)) : 0, fy = -u * 1.4;
+		ctx.strokeStyle = legC; ctx.lineWidth = 0.8; ctx.lineCap = 'round';
+		ctx.beginPath(); ctx.moveTo(sd * 1.3, -4.4); ctx.lineTo(sd * 1.4, fy - 0.2); ctx.stroke();
+		ctx.lineWidth = 0.45;
+		ctx.beginPath(); ctx.moveTo(sd * 1.4, fy - 0.2); ctx.lineTo(sd * 1.4 - 0.9, fy + 0.3); ctx.moveTo(sd * 1.4, fy - 0.2); ctx.lineTo(sd * 1.4 + 0.9, fy + 0.3); ctx.moveTo(sd * 1.4, fy - 0.2); ctx.lineTo(sd * 1.4, fy + (back ? -0.6 : 0.6)); ctx.stroke();
+	}
+	const bob = walk ? Math.abs(Math.sin(ph * TAU)) * 0.4 : 0;
+	ctx.translate(0, -bob);
+	if (back) {
+		if (p.rooster) {
+			ctx.lineCap = 'round';
+			for (const [x, c] of [[-1.6, '#16281E'], [0, '#1E3A2A'], [1.6, '#2A4A30']]) { ctx.strokeStyle = c; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(x * 0.5, -8); ctx.quadraticCurveTo(x * 1.6, -15, x * 2.6, -10); ctx.stroke(); }
+		} else { ell(ctx, 0, -10.6, 2.2, 2.6, 0, wing); }
+	}
+	ell(ctx, 0, -7, 4.2, 4.1, 0, body);
+	for (const sd of [-1, 1]) ell(ctx, sd * 3.3, -7.2, 1.3, 2.8, sd * 0.15, wing);
+	if (!back) ell(ctx, 0, -6.2, 2.4, 2.6, 0, 'rgba(255,240,215,0.18)');
+	const hy = -11.4;
+	ctx.strokeStyle = p.neck ?? body; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(0, -9.2); ctx.lineTo(0, hy + 0.6); ctx.stroke();
+	ell(ctx, 0, hy, 1.85, 1.8, 0, p.neck ?? body);
+	ctx.fillStyle = '#D8302A';
+	const cr = p.rooster ? 1.4 : 0.85;
+	for (const y of [-1.6, -2.3]) { ctx.beginPath(); ctx.arc(0, hy + y, cr * 0.7, 0, TAU); ctx.fill(); }
+	if (!back) {
+		for (const sd of [-1, 1]) ell(ctx, sd * 0.9, hy - 0.3, 0.35, 0.35, 0, '#1A1210');
+		ctx.fillStyle = legC; ctx.beginPath(); ctx.moveTo(-0.6, hy + 0.2); ctx.lineTo(0.6, hy + 0.2); ctx.lineTo(0, hy + 1.5); ctx.fill();
+		ell(ctx, 0, hy + 2, 0.55, cr * 0.8, 0, '#D8302A');
+	}
+	ctx.restore();
+}
+
+// ─── Spritesheets ───────────────────────────────────────────────
+// Une feuille par personnage : 4 lignes (bas, gauche, droite, haut) × 9 colonnes (repos, puis 8 images de
+// marche). Cellules carrées ; le personnage y a les pieds au point (ax, ay), à `scale` pixels par unité.
+// Une PNG posée dans img/sprites/<id>.png et listée dans img/sprites/index.json remplace le dessin en code
+// pour la marche et le repos ; sinon, le jeu dessine lui-même les mêmes vues.
+export const SHEET_DIRS = ['down', 'left', 'right', 'up'];
+export const SHEET_COLS = 9;
+export const SHEET_SPECS = {
+	fermier: { cell: 112, scale: 3.2, ax: 56, ay: 106, kind: 'farmer', s: { fem: false } },
+	fermiere: { cell: 112, scale: 3.2, ax: 56, ay: 106, kind: 'farmer', s: { fem: true } },
+	chien: { cell: 160, scale: 3.2, ax: 80, ay: 150, kind: 'dog' },
+	chat: { cell: 128, scale: 3.2, ax: 64, ay: 120, kind: 'cat' },
+	...Object.fromEntries(Object.entries(HEN_LOOKS).map(([id, p]) => [id, { cell: 112, scale: 3.6, ax: 60, ay: 102, kind: 'hen', p }])),
+};
+export const SHEETS = {};
+
+/** Charge les feuilles peintes à la main déclarées dans img/sprites/index.json (s'il y en a). */
+export async function loadSheets(base = 'img/sprites/') {
+	try {
+		const list = await (await fetch(`${base}index.json`, { cache: 'no-cache' })).json();
+		await Promise.all(list.filter(id => SHEET_SPECS[id]).map(id => new Promise(ok => {
+			const img = new Image();
+			img.onload = () => { SHEETS[id] = img; ok(); };
+			img.onerror = ok;
+			img.src = `${base}${id}.png`;
+		})));
+	} catch { /* pas de feuilles : le dessin en code suffit */ }
+}
+
+/** L'identifiant de feuille d'un personnage du jardin. */
+export const sheetIdOf = b => (b.kind === 'farmer' ? (b.fem ? 'fermiere' : 'fermier') : b.kind === 'dog' ? 'chien' : b.kind === 'cat' ? 'chat' : b.kind === 'hen' ? b.p.sheet : null);
+
+/** Dessine la bonne case d'une feuille peinte (repos ou marche), ou renvoie false si on doit dessiner en code. */
+export function drawFromSheet(ctx, b) {
+	const id = sheetIdOf(b), img = id && SHEETS[id];
+	if (!img || !(b.mode === 'run' || b.mode === 'stand' || b.mode === 'stroll')) return false;
+	const sp = SHEET_SPECS[id], view = b.view === 'down' || b.view === 'up' ? b.view : (b.dir ?? 1) < 0 ? 'left' : 'right';
+	const col = b.mode === 'stand' ? 0 : 1 + (Math.floor(((b.ph ?? 0) % 1) * 8) + 8) % 8;
+	const row = SHEET_DIRS.indexOf(view), k = 1 / sp.scale;
+	ctx.drawImage(img, col * sp.cell, row * sp.cell, sp.cell, sp.cell, -sp.ax * k, -sp.ay * k, sp.cell * k, sp.cell * k);
+	return true;
+}
+
+/** Peint une feuille complète en code (pour l'exporter et la repeindre). */
+export function bakeSheet(id) {
+	const sp = SHEET_SPECS[id], c = document.createElement('canvas');
+	c.width = sp.cell * SHEET_COLS;
+	c.height = sp.cell * SHEET_DIRS.length;
+	const g = c.getContext('2d');
+	SHEET_DIRS.forEach((view, r) => {
+		for (let col = 0; col < SHEET_COLS; col++) {
+			const s = { t: 1, mode: col ? 'run' : 'stand', ph: col ? (col - 1) / 8 : 0, pace: 1, view, ...(sp.s ?? {}) };
+			g.save();
+			g.translate(col * sp.cell + sp.ax, r * sp.cell + sp.ay);
+			g.scale(view === 'left' ? -sp.scale : sp.scale, sp.scale);
+			BEASTS[sp.kind](g, s.t, s.mode, sp.p ?? {}, s);
+			g.restore();
+		}
+	});
+	return c;
+}
 
 /** Allure de chaque bête : durée d'un bond ou longueur d'une foulée, vitesse au sol. */
 export const GAIT = {
