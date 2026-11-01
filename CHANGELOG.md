@@ -3,6 +3,10 @@
 Chaque version, la plus récente en haut. Le site (evolia.sebastienalzamora.workers.dev) est toujours à jour ;
 le Play Store (tests internes) reçoit les versions indiquées « Play ».
 
+## 0.7.16 — 1er novembre 2026
+- **Les oiseaux qui planent ne suivent plus le zoom.** Leur cercle était calé sur l'écran : en zoomant, ils se déplaçaient avec la vue, et tous tournaient autour du même point, à la même vitesse, comme liés. Chacun a maintenant son propre cercle, fixé dans le jardin et qui dérive lentement avec le vent, son rayon, sa vitesse et son sens.
+- Zoomer ou dézoomer ne fait plus apparaître ou partir les grands animaux, les rapaces et les hirondelles.
+
 ## 0.7.15 — 1er novembre 2026
 - **Le jardinier et la jardinière marchent enfin bien :** le genou plie vers l'avant (il pliait à l'envers).
 - **Le râteau :** la traverse et ses dents sont fixées au bout du manche, posées au sol, et les deux mains serrent vraiment le manche en ratissant.

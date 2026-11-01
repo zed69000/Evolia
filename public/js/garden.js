@@ -71,6 +71,7 @@ const guildOf = c => {
 	return 'petites-betes';
 };
 const GUILD_ROOM = { hirondelles: 2, grands: 1, rongeurs: 2, 'chauves-souris': 2, 'rapaces-nuit': 1, planeurs: 1, oiseaux: 3, eau: 3, amphibiens: 3, reptiles: 1, libellules: 3, papillons: 3, butineurs: 6, criquets: 3, 'petits-mammiferes': 1, escargots: 2, 'petites-betes': 3 };
+const FIXED_ROOM = new Set(['grands', 'planeurs', 'hirondelles', 'rapaces-nuit']);
 const SLEEPS = new Set(['chauves-souris', 'amphibiens', 'reptiles', 'libellules', 'papillons', 'butineurs', 'criquets', 'escargots', 'petites-betes']);
 const FLYERS = new Set(['bee', 'butterfly', 'dragonfly', 'hoverfly', 'beefly', 'bat', 'moth']);
 // Niveaux de détail selon le zoom : formes simples, aquarelle, aquarelle détaillée.
@@ -2003,7 +2004,9 @@ export class Garden {
 			// Les espèces de la guilde passent à tour de rôle ; la place restante revient aux suivantes.
 			// La nuit, la vie est plus discrète : moins de petites bêtes à la fois.
 			const calm = night && SLEEPS.has(g) ? 0.6 : 1;
-			let room = Math.max(1, Math.round((GUILD_ROOM[g] ?? 4) * (g === 'grands' ? 1 : scale) * calm));
+			// Les grands animaux et les oiseaux du ciel ne dépendent pas du zoom : on ne les fait pas apparaître ou partir
+			// en zoomant.
+			let room = Math.max(1, Math.round((GUILD_ROOM[g] ?? 4) * (FIXED_ROOM.has(g) ? 1 : scale) * calm));
 			list.sort((a, b) => idHash(a.id, slot) - idHash(b.id, slot));
 			for (const sp of list) { const n = Math.min(want.get(sp), room); want.set(sp, n); room -= n; }
 		}
@@ -2156,7 +2159,10 @@ export class Garden {
 			case 'bat':
 				return { ...base, x: side, y: y - 60, mode: 'fly', timer: 0 };
 			case 'soar':
-				return { ...base, x: P.ox + PARCEL_W / 2, y, mode: 'soar', ang: Math.random() * 6.28, r: 90 + Math.random() * 60 };
+				// Chaque planeur a son propre cercle, fixé dans le jardin (et non sur l'écran), sa vitesse et son sens.
+				return { ...base, x: P.ox + PARCEL_W / 2, y, mode: 'soar', ang: Math.random() * 6.28, r: 70 + Math.random() * 80,
+					cx: P.ox + PARCEL_W * (0.25 + Math.random() * 0.5), cy: P.oy + PARCEL_H * (0.25 + Math.random() * 0.5),
+					spin: (Math.random() < 0.5 ? -1 : 1) * (0.14 + Math.random() * 0.2), seed: Math.random() * 100 };
 			case 'flower':
 			case 'flutter':
 			default:
@@ -2760,12 +2766,12 @@ export class Garden {
 			}
 			case 'soar': {
 				if (b.leaving) return flyAway();
-				b.ang += dt * 0.25;
-				const v = this.view();
-				const cy = Math.max(P.oy + 150, Math.min(P.oy + PARCEL_H - 150, v.y0 + v.h * 0.4));
-				b.x = midX + Math.cos(b.ang) * b.r * 1.3;
+				b.ang += dt * (b.spin ?? 0.25);
+				// Le centre du cercle dérive lentement, porté par le vent, sans quitter la parcelle.
+				const sd = b.seed ?? 0, cx = (b.cx ?? midX) + Math.sin(b.t * 0.03 + sd) * 60, cy = (b.cy ?? P.oy + PARCEL_H / 2) + Math.cos(b.t * 0.023 + sd) * 40;
+				b.x = cx + Math.cos(b.ang) * b.r * 1.3;
 				b.y = cy + Math.sin(b.ang) * b.r * 0.7;
-				b.dir = Math.sin(b.ang) > 0 ? -1 : 1;
+				b.dir = Math.sin(b.ang) * Math.sign(b.spin ?? 1) > 0 ? -1 : 1;
 			}
 		}
 	}
