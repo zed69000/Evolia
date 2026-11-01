@@ -234,7 +234,8 @@ function quadruped(ctx, s, k) {
 		const hind = i % 2 === 0;
 		const [hx, hy] = hips[hind ? 0 : 1];
 		const [fx, fy] = moving ? gaitFoot(ph + phase[i], k.stride, k.lift) : [hind ? -0.5 : 0.8, 0];
-		const l1 = k.legH * (hind ? 0.42 : 0.4), l2 = k.legH * (hind ? 0.5 : 0.48);
+		// Avant : long avant-bras, poignet bas qui pointe vers l'avant ; arrière : jarret bas qui pointe vers l'arrière.
+		const l1 = k.legH * (hind ? 0.62 : 0.66), l2 = k.legH * (hind ? 0.36 : 0.3);
 		ikLeg(ctx, hx + (near ? 0 : -1.2), hy, hx + fx + (near ? 0 : -1.2), fy, l1, l2, hind ? -1 : 1, k.legW * (hind ? 1.5 : 1.15), k.legW, near ? k.leg : k.legFar, k.hoof);
 	};
 	leg(2, false); leg(3, false);
@@ -576,9 +577,32 @@ function arm(ctx, x, y, a1, a2, sleeve) {
 	return [hx + dx2 * 0.6, hy + dy2 * 0.6];
 }
 
+/** Bras dont la main va saisir le point (tx, ty) ; le coude plie vers le bas et l'arrière. Renvoie la main. */
+function armTo(ctx, x, y, tx, ty, sleeve) {
+	const l1 = 4.6, l2 = 4.6;
+	let dx = tx - x, dy = ty - y, d = Math.hypot(dx, dy);
+	const max = (l1 + l2) * 0.995;
+	if (d > max) { dx *= max / d; dy *= max / d; d = max; }
+	const a = Math.acos(Math.max(-1, Math.min(1, (l1 * l1 + d * d - l2 * l2) / (2 * l1 * d))));
+	const ka = Math.atan2(dy, dx) + a;
+	const ex = x + Math.cos(ka) * l1, ey = y + Math.sin(ka) * l1, hx = x + dx, hy = y + dy;
+	ctx.lineCap = 'round';
+	ctx.strokeStyle = SKIN_SH; ctx.lineWidth = 1.7;
+	ctx.beginPath(); ctx.moveTo(ex, ey); ctx.lineTo(hx, hy); ctx.stroke();
+	ctx.strokeStyle = sleeve; ctx.lineWidth = 2.5;
+	ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + (ex - x) * 1.05, y + (ey - y) * 1.05); ctx.stroke();
+	return [hx, hy];
+}
+
+/** Un point du personnage ramené dans le repère du buste (tourné de `lean` autour de la hanche). */
+function toTorso(hipX, hipY, lean, x, y) {
+	const c = Math.cos(lean), sn = Math.sin(lean), dx = x - hipX, dy = y - hipY;
+	return [dx * c + dy * sn, -dx * sn + dy * c];
+}
+
 /** Jambe : pantalon, puis une botte qui pointe vers l'avant (talon relevé si `tip`). */
 function leg(ctx, hx, hy, fx, fy, color, tip = 0) {
-	ikLeg(ctx, hx, hy, fx, fy - 0.9, LEG1, LEG2, -1, 3.1, 2.5, color);
+	ikLeg(ctx, hx, hy, fx, fy - 0.9, LEG1, LEG2, 1, 3.1, 2.5, color);
 	ctx.save();
 	ctx.translate(fx, fy);
 	ctx.rotate(-tip);
@@ -626,6 +650,16 @@ function farmer(ctx, s) {
 		feet = [[-1.6, 0, 0], [1.8, 0, 0]];
 	}
 	const swing = walk ? Math.sin(ph * TAU) : 0;
+	// Ratisser : le manche passe dans les deux mains, la tête du râteau gratte le sol devant et revient.
+	let rake = null;
+	if (mode === 'rake') {
+		const rk = Math.sin(t * 2.4), th = 1.0 + rk * 0.1;
+		const [shx, shy] = toWorld(hipX, hipY, lean, 0.6, -7.8);
+		const h1 = [shx + 4.4 + rk * 1.6, shy + 6.6 - rk * 0.4];
+		const c = Math.cos(th), sn = Math.sin(th), k = (-0.9 - h1[1]) / sn;
+		const head = [h1[0] + c * k, -0.9];
+		rake = { h1, h2: [h1[0] - c * 4.2, h1[1] - sn * 4.2], top: [h1[0] - c * 8, h1[1] - sn * 8], head };
+	}
 	// La jambe et le bras du fond, plus sombres.
 	leg(ctx, hipX - 0.4, hipY, feet[0][0], feet[0][1], C.legsFar, feet[0][2]);
 	ctx.save();
@@ -634,7 +668,7 @@ function farmer(ctx, s) {
 	const shX = -0.4, shY = -8.4;
 	const back = mode === 'gaze' ? [-0.5, -1.6] : mode === 'pick' ? [0.25, 1.2] : mode === 'sit' ? [0.4, 1.3]
 		: mode === 'barrow' ? [0.9, 1.1] : mode === 'rake' ? [0.7, 1.4] : mode === 'water' ? [0.2, 0.5] : walk ? [swing * 0.5, swing * 0.5 + 0.35] : [0.08, 0.2];
-	const bh = arm(ctx, shX + 0.6, shY + 0.6, back[0], back[1], C.sh);
+	const bh = rake ? armTo(ctx, shX + 0.6, shY + 0.6, ...toTorso(hipX, hipY, lean, ...rake.h2), C.sh) : arm(ctx, shX + 0.6, shY + 0.6, back[0], back[1], C.sh);
 	// Un panier au bras : pendant la cueillette, et en rapportant les fruits.
 	if (mode === 'pick' || s.basket) basket(ctx, bh[0], bh[1], s.basket);
 	ctx.restore();
@@ -697,18 +731,25 @@ function farmer(ctx, s) {
 	ctx.restore();
 	// Le bras proche, et ce qu'il tient.
 	const rk = Math.sin(t * 2.4);
-	if (mode === 'rake') {
-		const a = 0.85 + rk * 0.35;
-		const [hx, hy] = arm(ctx, 0.6, shY + 0.6, a, a + 0.55, C.shirt);
+	if (rake) {
 		ctx.restore();
-		const w = toWorld(hipX, hipY, lean, hx, hy);
-		const tx = w[0] + 15 * Math.cos(0.55 + rk * 0.18), ty = w[1] + 15 * Math.sin(0.55 + rk * 0.18);
-		ctx.strokeStyle = '#8A5A2E'; ctx.lineWidth = 0.9;
-		ctx.beginPath(); ctx.moveTo(w[0] - 5 * Math.cos(0.55), w[1] - 5 * Math.sin(0.55)); ctx.lineTo(tx, Math.min(ty, -0.5)); ctx.stroke();
-		ctx.strokeStyle = '#4A3A2E'; ctx.lineWidth = 0.7;
-		ctx.beginPath(); ctx.moveTo(tx - 1, -1.2); ctx.lineTo(tx + 4.2, -1.2);
-		for (let i = 0; i < 5; i++) { ctx.moveTo(tx - 0.6 + i * 1.15, -1.2); ctx.lineTo(tx - 0.6 + i * 1.15, 0.4); }
+		// Le manche, du haut jusqu'au milieu de la traverse ; la traverse et ses dents posées au sol.
+		const [x0, y0] = rake.top, [x1, y1] = rake.head;
+		ctx.strokeStyle = '#8A5A2E'; ctx.lineWidth = 0.9; ctx.lineCap = 'round';
+		ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1 - 0.4); ctx.stroke();
+		ctx.strokeStyle = '#4A3A2E'; ctx.lineWidth = 0.8;
+		ctx.beginPath(); ctx.moveTo(x1 - 2.4, y1 - 0.4); ctx.lineTo(x1 + 2.4, y1 - 0.4);
+		ctx.lineWidth = 0.5;
+		for (let i = 0; i < 5; i++) { ctx.moveTo(x1 - 2.1 + i * 1.05, y1 - 0.4); ctx.lineTo(x1 - 2.3 + i * 1.05, 0.5); }
 		ctx.stroke();
+		// La main du fond, par-dessus le manche, puis le bras proche dont la main serre le manche plus bas.
+		ell(ctx, rake.h2[0], rake.h2[1], 1.05, 1.1, 0, SKIN_SH);
+		ctx.save();
+		ctx.translate(hipX, hipY);
+		ctx.rotate(lean);
+		const [hx, hy] = armTo(ctx, 0.6, shY + 0.6, ...toTorso(hipX, hipY, lean, ...rake.h1), C.shirt);
+		ell(ctx, hx, hy, 1.1, 1.15, 0, SKIN);
+		ctx.restore();
 		return;
 	}
 	if (mode === 'water') {

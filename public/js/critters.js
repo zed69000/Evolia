@@ -595,27 +595,71 @@ const DRAW = {
 		ctx.restore();
 	},
 
+	/**
+	 * Rapace en vol plané, vu de dessous, la tête vers le haut : ailes larges aux « doigts » écartés (aigle, buse,
+	 * milan, busard) ou pointues (faucon), queue en éventail, fourchue (milan) ou longue (busard, crécerelle).
+	 */
 	eagle(ctx, t, mode, p = {}) {
-		const flex = Math.sin(t * 1.2) * 0.08, k = p.small ? 0.6 : p.body ? 0.8 : 1;
+		const k = p.small ? 0.62 : p.body ? 0.82 : 1, flex = Math.sin(t * 1.1) * 0.6;
+		const body = p.body ?? '#4A3424', light = p.light ?? '#8A6A48', dark = 'rgba(30,20,14,0.75)';
 		ctx.save(); ctx.scale(k, k);
-		ctx.fillStyle = p.body ?? '#4A3424';
+		// La queue, sous les ailes.
+		ctx.fillStyle = body;
+		ctx.beginPath();
+		if (p.tail === 'fork') { ctx.moveTo(-2, 5); ctx.lineTo(-4.4, 15); ctx.lineTo(0, 12); ctx.lineTo(4.4, 15); ctx.lineTo(2, 5); }
+		else if (p.tail === 'long' || p.falcon) { ctx.moveTo(-1.8, 5); ctx.lineTo(-2.4, 15); ctx.quadraticCurveTo(0, 16, 2.4, 15); ctx.lineTo(1.8, 5); }
+		else { ctx.moveTo(-2, 5); ctx.lineTo(-5, 12.5); ctx.quadraticCurveTo(0, 14.5, 5, 12.5); ctx.lineTo(2, 5); }
+		ctx.closePath(); ctx.fill();
+		if (p.tail === 'fork') { ctx.fillStyle = 'rgba(255,240,220,0.25)'; ell(ctx, 0, 9, 1.2, 3); }
 		for (const s of [-1, 1]) {
+			const tipY = -1 + flex * s * 0.3;
+			ctx.fillStyle = body;
 			ctx.beginPath();
-			ctx.moveTo(0, 0);
-			ctx.quadraticCurveTo(s * 14, -6 - flex * 20, s * 28, -2 + flex * 10);
-			ctx.lineTo(s * 26, 2);
-			ctx.quadraticCurveTo(s * 12, 4, 0, 4);
-			ctx.fill();
+			ctx.moveTo(s * 2, -2.5);
+			if (p.falcon) {
+				// Ailes de faucon : étroites et pointues, coude marqué.
+				ctx.quadraticCurveTo(s * 9, -6.5, s * 13, -5);
+				ctx.quadraticCurveTo(s * 18, -3.5, s * 23, tipY + 3);
+				ctx.quadraticCurveTo(s * 13, 5, s * 2, 3.8);
+			} else {
+				ctx.quadraticCurveTo(s * 8, -5.5, s * 15, -5);
+				ctx.lineTo(s * 22, -4 + tipY * 0.5);
+				ctx.lineTo(s * 22, 3 + tipY * 0.5);
+				ctx.quadraticCurveTo(s * 12, 8, s * 2, 4.8);
+			}
+			ctx.closePath(); ctx.fill();
+			if (!p.falcon) {
+				// Les grandes rémiges écartées comme des doigts, plus sombres au bout.
+				for (let i = 0; i < 5; i++) {
+					const y = -3.6 + i * 1.6 + tipY * 0.5, len = 5.2 - Math.abs(i - 1.6) * 0.7;
+					ctx.fillStyle = body;
+					ell(ctx, s * (22 + len * 0.5), y + i * 0.25, len * 0.55, 0.75, s * (0.12 * (i - 2)));
+					ctx.fillStyle = dark;
+					ell(ctx, s * (22 + len * 0.85), y + i * 0.3, len * 0.25, 0.6, s * (0.12 * (i - 2)));
+				}
+				// Une plage plus claire sous l'aile, vers le poignet (fenêtre du milan, de la buse).
+				ctx.fillStyle = light;
+				ctx.globalAlpha = 0.3;
+				ell(ctx, s * 16, -0.4 + tipY * 0.4, 4.6, 1.8, s * 0.08);
+				ctx.globalAlpha = 1;
+			} else {
+				ctx.fillStyle = dark;
+				ell(ctx, s * 19.5, tipY + 1.6, 3.2, 1.1, s * 0.25);
+			}
+			// Bord de fuite plus sombre.
+			ctx.strokeStyle = 'rgba(30,20,14,0.35)'; ctx.lineWidth = 0.8;
+			ctx.beginPath(); ctx.moveTo(s * 3, 4.4); ctx.quadraticCurveTo(s * 12, 6.2, s * (p.falcon ? 22 : 21), p.falcon ? tipY + 2 : 3); ctx.stroke();
 		}
-		if (p.light) { ctx.fillStyle = p.light; for (const s of [-1, 1]) ell(ctx, s * 13, 0, 6, 1.4, s * -0.1); }
-		ctx.fillStyle = p.body ?? '#4A3424';
-		ell(ctx, 0, 1, 3.2, 7);
-		ctx.fillStyle = p.head ?? '#4A3424';
-		ell(ctx, 0, -6.5, 2.4, 2.4);
-		ctx.fillStyle = p.light ?? '#C8A060';
-		ell(ctx, 0, -7.5, 1.6, 1.4);
-		ctx.fillStyle = p.body ?? '#3A2A1C';
-		ell(ctx, 0, 9, 3.6, 2.6);
+		ctx.fillStyle = body;
+		ell(ctx, 0, 1, 3.1, 6.4);
+		ctx.fillStyle = light;
+		ctx.globalAlpha = 0.6;
+		ell(ctx, 0, 1.5, 1.8, 4.2);
+		ctx.globalAlpha = 1;
+		ctx.fillStyle = p.head ?? body;
+		ell(ctx, 0, -5.8, 2.3, 2.6);
+		ctx.fillStyle = '#E8B830';
+		ctx.beginPath(); ctx.moveTo(-0.8, -8); ctx.lineTo(0, -9.8); ctx.lineTo(0.8, -8); ctx.fill();
 		ctx.restore();
 	},
 
@@ -656,6 +700,34 @@ const DRAW = {
 		ctx.fillStyle = '#1A1210';
 		ell(ctx, 5, -1.2, 0.5, 0.5);
 		ell(ctx, 5, 1.2, 0.5, 0.5);
+	},
+
+	/**
+	 * Hirondelle ou martinet vu de dessus, tourné vers +x : longues ailes en faux balayées vers l'arrière,
+	 * queue fourchue (hirondelle), gorge rousse. Les ailes battent vite puis planent un instant.
+	 */
+	swallow(ctx, t, mode, p = {}) {
+		const cyc = (t * 1.3) % 1, beat = cyc < 0.55 ? Math.sin(cyc / 0.55 * Math.PI * 4) : 0;
+		const sweep = 0.75 + beat * 0.25, back = p.wing ?? '#1E2A48';
+		ctx.fillStyle = back;
+		for (const s of [-1, 1]) {
+			ctx.beginPath();
+			ctx.moveTo(1.4, s * 0.9);
+			ctx.quadraticCurveTo(0.6, s * 6 * sweep, -4.8, s * 10 * sweep);
+			ctx.quadraticCurveTo(-1.2, s * 5.4 * sweep, -1.6, s * 0.9);
+			ctx.closePath();
+			ctx.fill();
+		}
+		if (!p.swift) {
+			ctx.beginPath(); ctx.moveTo(-3, -0.8); ctx.lineTo(-9, -2.2); ctx.lineTo(-4.4, 0); ctx.lineTo(-9, 2.2); ctx.lineTo(-3, 0.8); ctx.fill();
+		} else {
+			ctx.beginPath(); ctx.moveTo(-3, -0.9); ctx.lineTo(-6.2, -1.6); ctx.lineTo(-5, 0); ctx.lineTo(-6.2, 1.6); ctx.lineTo(-3, 0.9); ctx.fill();
+		}
+		ctx.fillStyle = p.body ?? back;
+		ell(ctx, -0.6, 0, 3.2, 1.3);
+		ctx.fillStyle = back;
+		ell(ctx, 2.4, 0, 1.4, 1.2);
+		if (p.cap) { ctx.fillStyle = p.cap; ell(ctx, 3.2, 0, 0.7, 0.9); }
 	},
 
 	/** Campagnol, mulot ou musaraigne : une petite boule de poils qui trottine, la queue plus ou moins longue. */
@@ -755,5 +827,5 @@ export function drawCritter(ctx, kind, t = 0, mode, params = {}, s = { t, mode, 
 }
 
 /** Taille d'affichage dans le jardin, et hauteur de vol (pour placer l'ombre au sol). */
-export const CRITTER_SIZE = { hoverfly: 1.2, beefly: 1.2, ant: 1.9, firebug: 1.3, snail: 1.4, grasshopper: 1.2, spider: 1.2, duck: 1.5, hedgehog: 1.6, frog: 1.4, tit: 1.4, bird: 1.4, ladybug: 1.2, squirrel: 1.3, rabbit: 1.4, hare: 1.5, roe: 2, chamois: 1.9, fox: 1.6, farmer: 2, dog: 1.7, cat: 1.6, marmot: 1.6, lizard: 1.2, heron: 1.8, owl: 1.5, eagle: 1.6, bat: 1.4, moth: 1.7, boar: 1.9, badger: 1.6, mouse: 1.3, weasel: 1.4, snake: 1.4, deer: 2.2, gull: 1.3, crab: 1.3, beetle: 1.2 };
-export const FLIGHT = { rabbit: 1, hare: 1, roe: 1, chamois: 1, fox: 1, farmer: 1, dog: 1, cat: 1, hoverfly: 24, beefly: 24, firebug: 2, snail: 2, grasshopper: 3, bee: 24, butterfly: 24, dragonfly: 24, frog: 6, hedgehog: 9, squirrel: 1, marmot: 7, lizard: 3, heron: 18, crab: 4, eagle: 160, gull: 110, bat: 46, moth: 24, boar: 1, badger: 1, mouse: 1, weasel: 1, snake: 1, deer: 1 };
+export const CRITTER_SIZE = { hoverfly: 1.2, beefly: 1.2, ant: 1.9, firebug: 1.3, snail: 1.4, grasshopper: 1.2, spider: 1.2, duck: 1.5, hedgehog: 1.6, frog: 1.4, tit: 1.4, bird: 1.4, ladybug: 1.2, squirrel: 1.3, rabbit: 1.4, hare: 1.5, roe: 2, chamois: 1.9, fox: 1.6, farmer: 2, dog: 1.7, cat: 1.6, marmot: 1.6, lizard: 1.2, heron: 1.8, owl: 1.5, eagle: 1.6, bat: 1.4, moth: 1.7, boar: 1.9, badger: 1.6, mouse: 1.3, weasel: 1.4, swallow: 1.25, snake: 1.4, deer: 2.2, gull: 1.3, crab: 1.3, beetle: 1.2 };
+export const FLIGHT = { rabbit: 1, hare: 1, roe: 1, chamois: 1, fox: 1, farmer: 1, dog: 1, cat: 1, hoverfly: 24, beefly: 24, firebug: 2, snail: 2, grasshopper: 3, bee: 24, butterfly: 24, dragonfly: 24, frog: 6, hedgehog: 9, squirrel: 1, marmot: 7, lizard: 3, heron: 18, crab: 4, eagle: 160, gull: 110, bat: 46, moth: 24, boar: 1, badger: 1, mouse: 1, weasel: 1, swallow: 34, snake: 1, deer: 1 };

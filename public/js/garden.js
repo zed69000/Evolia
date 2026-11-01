@@ -55,6 +55,7 @@ const guildOf = c => {
 	if (['roe', 'fox', 'boar', 'badger', 'deer', 'chamois'].includes(k)) return 'grands';
 	if (['hare', 'rabbit', 'squirrel', 'marmot'].includes(k)) return 'rongeurs';
 	if (k === 'bat') return 'chauves-souris';
+	if (k === 'swallow') return 'hirondelles';
 	if (k === 'owl') return 'rapaces-nuit';
 	if (k === 'eagle' || (k === 'gull' && b === 'soar')) return 'planeurs';
 	if (k === 'bird' || k === 'tit') return 'oiseaux';
@@ -69,7 +70,7 @@ const guildOf = c => {
 	if (k === 'snail' || k === 'worm') return 'escargots';
 	return 'petites-betes';
 };
-const GUILD_ROOM = { grands: 1, rongeurs: 2, 'chauves-souris': 2, 'rapaces-nuit': 1, planeurs: 1, oiseaux: 3, eau: 3, amphibiens: 3, reptiles: 1, libellules: 3, papillons: 3, butineurs: 6, criquets: 3, 'petits-mammiferes': 1, escargots: 2, 'petites-betes': 3 };
+const GUILD_ROOM = { hirondelles: 2, grands: 1, rongeurs: 2, 'chauves-souris': 2, 'rapaces-nuit': 1, planeurs: 1, oiseaux: 3, eau: 3, amphibiens: 3, reptiles: 1, libellules: 3, papillons: 3, butineurs: 6, criquets: 3, 'petits-mammiferes': 1, escargots: 2, 'petites-betes': 3 };
 const SLEEPS = new Set(['chauves-souris', 'amphibiens', 'reptiles', 'libellules', 'papillons', 'butineurs', 'criquets', 'escargots', 'petites-betes']);
 const FLYERS = new Set(['bee', 'butterfly', 'dragonfly', 'hoverfly', 'beefly', 'bat', 'moth']);
 // Niveaux de détail selon le zoom : formes simples, aquarelle, aquarelle détaillée.
@@ -3403,7 +3404,14 @@ export class Garden {
 		ctx.save();
 		ctx.translate(b.x, b.y);
 		const k = CRITTER_SIZE[b.kind] ?? 1;
-		ctx.scale((b.dir || 1) * k, k);
+		if (b.kind === 'swallow' || b.behavior === 'soar') {
+			const vx = b.x - (b.px ?? b.x), vy = b.y - (b.py ?? b.y);
+			if (Math.hypot(vx, vy) > 0.01) b.head = Math.atan2(vy, vx);
+			b.px = b.x; b.py = b.y;
+			// Le dessin des planeurs regarde vers le haut, celui des hirondelles vers la droite.
+			ctx.rotate((b.head ?? 0) + (b.kind === 'swallow' ? 0 : Math.PI / 2));
+			ctx.scale(k, k);
+		} else ctx.scale((b.dir || 1) * k, k);
 		if (b.kind === 'hare') b.winter = (this.season?.winter ?? 0) > 0.5;
 		drawCritter(ctx, b.kind, b.t, b.mode, b.p, b);
 		ctx.restore();

@@ -3,6 +3,13 @@
 Chaque version, la plus récente en haut. Le site (evolia.sebastienalzamora.workers.dev) est toujours à jour ;
 le Play Store (tests internes) reçoit les versions indiquées « Play ».
 
+## 0.7.15 — 1er novembre 2026
+- **Le jardinier et la jardinière marchent enfin bien :** le genou plie vers l'avant (il pliait à l'envers).
+- **Le râteau :** la traverse et ses dents sont fixées au bout du manche, posées au sol, et les deux mains serrent vraiment le manche en ratissant.
+- **Les pattes des quadrupèdes** (chien, chat, renard, chevreuil, cerf, sanglier, blaireau…) : le poignet de devant et le jarret de derrière sont bas, comme chez les vrais animaux, au lieu d'un « genou » à mi-hauteur.
+- **Hirondelles et martinets :** un vrai dessin (ailes en faux, queue fourchue, gorge rousse), plus petits, tournés dans le sens du vol, et un vol vif et brisé à la poursuite des moucherons au lieu de tourner en rond.
+- **Les rapaces** (aigle, buse, milan, busard, crécerelle) : une vraie silhouette vue de dessous, avec les plumes écartées comme des doigts au bout des ailes, la queue fourchue du milan, longue du busard, et les ailes pointues du faucon ; ils se tournent dans le sens où ils planent.
+
 ## 0.7.14 — 1er novembre 2026
 **179 nouvelles espèces d'animaux**, choisies dans un guide naturaliste des prairies d'Europe (Europe de l'Ouest et du centre), chacune vérifiée absente du jeu avant d'être ajoutée. 331 espèces en tout.
 - **Prairie :** 21 papillons de jour (machaon, vulcain, belle-dame, demi-deuil, myrtil, tabac d'Espagne…), 13 papillons de nuit et zygènes (moro-sphinx, sphinx tête-de-mort, écaille martre…), grillons, criquets et sauterelles, 13 abeilles sauvages, bourdons et guêpes (xylocope, osmies, frelon…), coléoptères (cétoine dorée, carabe doré, hanneton…), punaises, araignées (épeire fasciée, thomise…), escargots et limace, campagnol, mulot, musaraigne, belette, fouine, cinq chauves-souris, 25 oiseaux (alouette, chardonneret, rougegorge, huppe, hirondelle, crécerelle, buse, effraie, chevêche…), orvet, coronelle, vipère aspic et lézard des souches.
