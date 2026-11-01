@@ -562,7 +562,29 @@ function pet(ctx, s, k) {
 // ─── Le jardinier ou la jardinière ─────────────────────────────────
 
 const SKIN = '#E8B898', SKIN_SH = '#C9967A';
-const LEG1 = 6.9, LEG2 = 6.7, STRIDE = 8;
+const LEG1 = 6.9, LEG2 = 6.7, STRIDE = 11, DUTY = 0.6;
+
+/** Longueur du pas selon l'allure (1 = marche normale, 0,7 = promenade, plus = pressé). */
+export const strideOf = pace => 0.55 + 0.45 * pace;
+
+/**
+ * Pied d'une jambe qui marche, relatif à la hanche : appui (le talon attaque devant, le pied recule au sol, la
+ * pointe pousse), puis oscillation (le genou plie, le pied passe sous le corps et revient devant). Renvoie
+ * [x, y, inclinaison du pied] : positive quand la pointe se relève (attaque du talon), négative quand elle
+ * s'abaisse (poussée).
+ */
+function walkFoot(u, S) {
+	u = ((u % 1) + 1) % 1;
+	if (u < DUTY) {
+		const v = u / DUTY;
+		const tip = v < 0.12 ? -0.25 * (1 - v / 0.12) : v > 0.82 ? ((v - 0.82) / 0.18) * 0.45 : 0;
+		return [S * (0.5 - v), v > 0.82 ? -((v - 0.82) / 0.18) * 0.9 : 0, -tip];
+	}
+	const v = (u - DUTY) / (1 - DUTY);
+	// Le pied monte vite au début (le genou plie), puis s'allonge vers l'avant pour l'attaque du talon.
+	const lift = Math.sin(Math.PI * Math.pow(v, 0.75)) * 2.4;
+	return [S * (-0.5 + smooth(v)), -lift - (1 - v) * 0.6, -0.45 * (1 - v) + 0.3 * v];
+}
 
 /** Bras en deux segments : manche jusqu'au coude (retroussée), avant-bras et main nus. Renvoie la main. */
 function arm(ctx, x, y, a1, a2, sleeve) {
@@ -627,11 +649,14 @@ function farmer(ctx, s) {
 	const breath = Math.sin(t * 1.7) * 0.18;
 	let hipX = 0, hipY = -14.15 + breath * 0.3, lean = 0.03, head = 0;
 	let feet = [[-1.1, 0, 0], [1.3, 0, 0]];
+	const pace = s.pace ?? 1, S = STRIDE * strideOf(pace);
 	if (walk) {
-		const f0 = gaitFoot(ph, STRIDE, 2), f1 = gaitFoot(ph + 0.5, STRIDE, 2);
-		feet = [[f0[0], f0[1], f0[1] < -0.2 ? 0.25 : 0], [f1[0], f1[1], f1[1] < -0.2 ? 0.25 : 0]];
-		hipY = -14 + Math.cos(ph * TAU * 2) * 0.4;
-		lean = mode === 'barrow' ? 0.16 : 0.06;
+		feet = [walkFoot(ph, S), walkFoot(ph + 0.5, S)];
+		// Le bassin descend quand les deux pieds touchent le sol, remonte au milieu de l'appui ; plus on va vite,
+		// plus il ondule, et plus le buste se penche en avant.
+		hipY = -13.75 + Math.cos(ph * TAU * 2) * 0.45 * strideOf(pace);
+		hipX = Math.sin(ph * TAU * 2) * 0.15;
+		lean = mode === 'barrow' ? 0.16 : 0.04 + 0.05 * pace;
 	} else if (mode === 'rake') lean = 0.18 + Math.sin(t * 2.4) * 0.05;
 	else if (mode === 'water') lean = 0.12;
 	else if (mode === 'sit') {
@@ -649,7 +674,8 @@ function farmer(ctx, s) {
 		hipX = Math.sin(t * 0.6) * 0.3; lean = -0.04; head = -0.12 + Math.sin(t * 0.4) * 0.06;
 		feet = [[-1.6, 0, 0], [1.8, 0, 0]];
 	}
-	const swing = walk ? Math.sin(ph * TAU) : 0;
+	// Les bras balancent à l'opposé des jambes, d'autant plus qu'on va vite.
+	const swing = walk ? Math.sin((ph + 0.25) * TAU) * (0.55 + 0.45 * pace) : 0;
 	// Ratisser : le manche passe dans les deux mains, la tête du râteau gratte le sol devant et revient.
 	let rake = null;
 	if (mode === 'rake') {
@@ -667,7 +693,7 @@ function farmer(ctx, s) {
 	ctx.rotate(lean);
 	const shX = -0.4, shY = -8.4;
 	const back = mode === 'gaze' ? [-0.5, -1.6] : mode === 'pick' ? [0.25, 1.2] : mode === 'sit' ? [0.4, 1.3]
-		: mode === 'barrow' ? [0.9, 1.1] : mode === 'rake' ? [0.7, 1.4] : mode === 'water' ? [0.2, 0.5] : walk ? [swing * 0.5, swing * 0.5 + 0.35] : [0.08, 0.2];
+		: mode === 'barrow' ? [0.9, 1.1] : mode === 'rake' ? [0.7, 1.4] : mode === 'water' ? [0.2, 0.5] : walk ? [swing * 0.55, swing * 0.55 + 0.25 + Math.max(0, swing) * 0.5] : [0.08, 0.2];
 	const bh = rake ? armTo(ctx, shX + 0.6, shY + 0.6, ...toTorso(hipX, hipY, lean, ...rake.h2), C.sh) : arm(ctx, shX + 0.6, shY + 0.6, back[0], back[1], C.sh);
 	// Un panier au bras : pendant la cueillette, et en rapportant les fruits.
 	if (mode === 'pick' || s.basket) basket(ctx, bh[0], bh[1], s.basket);
@@ -776,7 +802,7 @@ function farmer(ctx, s) {
 	}
 	const front = mode === 'gaze' ? [-0.45, -1.7] : mode === 'sit' ? [0.55, 1.45]
 		: mode === 'pick' ? [Math.PI - 0.45 + Math.sin(t * 1.6) * 0.18, Math.PI - 0.25 + Math.sin(t * 1.6) * 0.25]
-		: walk ? [-swing * 0.5, -swing * 0.5 + 0.35] : [0.05, 0.18 + breath * 0.2];
+		: walk ? [-swing * 0.55, -swing * 0.55 + 0.25 + Math.max(0, -swing) * 0.5] : [0.05, 0.18 + breath * 0.2];
 	const [hx, hy] = arm(ctx, 0.6, shY + 0.6, front[0], front[1], C.shirt);
 	// Un fruit dans la main levée, de temps en temps.
 	if (mode === 'pick' && Math.sin(t * 1.6) > 0.6) ell(ctx, hx, hy - 0.8, 0.9, 1, 0, s.fruit ?? '#D8402E');
@@ -911,7 +937,8 @@ export const GAIT = {
 	boar: { stride: 16, speed: 22 },
 	deer: { stride: 20, speed: 18 },
 	badger: { stride: 11, speed: 12 },
-	farmer: { stride: 27, speed: 18 },
+	// Un cycle (deux pas) fait avancer de 11 / 0,6 unités de dessin, soit 37 au jardin (le jardinier est dessiné ×2).
+	farmer: { stride: 36.7, speed: 26 },
 	dog: { stride: 24, speed: 26 },
 	cat: { stride: 16, speed: 16 },
 	hen: { stride: 6, speed: 12 },

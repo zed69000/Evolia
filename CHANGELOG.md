@@ -3,6 +3,11 @@
 Chaque version, la plus récente en haut. Le site (evolia.sebastienalzamora.workers.dev) est toujours à jour ;
 le Play Store (tests internes) reçoit les versions indiquées « Play ».
 
+## 0.7.18 — 1er novembre 2026
+- **Le jardinier et la jardinière marchent pour de vrai.** Le pas fait la longueur d'une vraie enjambée ; le talon attaque le sol, la pointe pousse à la fin de l'appui, le genou plie au passage de la jambe ; le bassin descend quand les deux pieds touchent terre et remonte au milieu du pas ; les bras balancent à l'opposé des jambes. Avant, ils piétinaient à petits pas raides.
+- **L'allure change l'amplitude** : en promenade ou chargés, les pas et le balancement des bras raccourcissent ; pressés de rentrer le soir, ils s'allongent et le buste se penche. Le changement se fait en douceur, et la cadence suit toujours la longueur du pas (les pieds ne glissent plus).
+- Ils marchent aussi un peu plus vite.
+
 ## 0.7.17 — 1er novembre 2026
 - **Un poulailler** (Aménager › Récolte, dès 7 km, une fois la cabane posée) : un coq et trois poules picorent autour, grattent la terre, courent gober un criquet ou un carabe, et rentrent dormir à la nuit tombée ou sous la pluie. Le coq chante le matin.
 - **Agrandis-le** : petit poulailler (4 places), poulailler (6, dès 12 km), grand poulailler (8, dès 25 km, avec un pondoir accolé). Il s'élargit à chaque niveau.

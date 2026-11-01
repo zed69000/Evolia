@@ -7,7 +7,7 @@
 import { rng, wash, rgba, mix, paperTexture, lerp, blurred } from './watercolor.js';
 import { PLANT_TYPES, DECOR, DECOR_PAINTERS, paintPlant, paintTurf, newVariant, lookOf } from './plants.js';
 import { drawCritter, CRITTER_SIZE, FLIGHT } from './critters.js';
-import { GAIT } from './beasts.js';
+import { GAIT, strideOf } from './beasts.js';
 import { SPECIES, PLACE_BY_ID, speciesOf } from './species.js';
 import { PARCEL_W, PARCEL_H, CELLS, CELL_KM, GROUND, zoneOf, zoneName, tileSteps, tileSig, keepOut, cellIndexAt, riversIn } from './zones.js';
 import { biomeOf, heartOf, rankOf, biomesIn } from './state.js';
@@ -2420,10 +2420,14 @@ export class Garden {
 				return;
 			}
 			const stroll = f.goal.task === 'stroll';
-			const step = Math.min(d, GAIT.farmer.speed * (f.carry ? 0.8 : stroll ? 0.7 : 1) * dt);
+			// L'allure change le pas : plus court en promenade ou chargé, plus long quand il se presse (rentrer le soir).
+			const pace = f.carry ? 0.8 : stroll ? 0.7 : f.goal.task === 'in' && home ? 1.2 : 1;
+			f.pace = (f.pace ?? pace) + (pace - (f.pace ?? pace)) * Math.min(1, dt * 2);
+			const step = Math.min(d, GAIT.farmer.speed * f.pace * dt);
 			f.x += (dx / d) * step;
 			f.y += (dy / d) * step;
-			f.ph += step / GAIT.farmer.stride;
+			// Les pieds ne glissent pas : la cadence suit la longueur du pas.
+			f.ph += step / (GAIT.farmer.stride * strideOf(f.pace));
 			f.dist = (f.dist ?? 0) + step;
 			if (Math.abs(dx) > 0.5) f.dir = Math.sign(dx);
 			f.mode = f.carry ? 'barrow' : stroll ? 'stroll' : 'run';
