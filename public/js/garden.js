@@ -44,6 +44,8 @@ const OLD_TREES = {
 // L'eau des mares (décors), pour ses reflets : taille relative à la mare de la prairie.
 const POND_SIZE = { pond: 1, bigpond: 1.65, mare2: 1, mare3: 1.15 };
 const POND_PADS = [[40, -10], [58, 10], [-60, 14], [-20, 24], [10, -26]];
+/** Un nombre stable tiré d'un nom et d'un créneau : pour tirer au sort sans que ça clignote. */
+const idHash = (id, slot) => [...id].reduce((h, c) => Math.imul(h ^ c.charCodeAt(0), 16777619), 2166136261 ^ slot) >>> 0;
 const FLYERS = new Set(['bee', 'butterfly', 'dragonfly', 'hoverfly', 'beefly', 'bat', 'moth']);
 // Niveaux de détail selon le zoom : formes simples, aquarelle, aquarelle détaillée.
 const GLYPH_Z = 0.5, DETAIL_Z = 1.6, DETAIL_DENSITY = 2.2;
@@ -1948,10 +1950,16 @@ export class Garden {
 		if (!visible.length) return;
 		// Un effectif par espèce pour tout le jardin ; chaque animal s'installe dans une parcelle visible de son milieu.
 		const scale = Math.min(2, 1 + (visible.length - 1) * 0.35), present = biomesIn(place);
+		// La nuit, les grands mammifères ne défilent pas tous ensemble : deux espèces au plus, qui changent au fil
+		// de la nuit (environ toutes les quatre minutes).
+		const BIG = ['roe', 'fox', 'boar', 'badger'], slot = Math.floor(this.t / 240);
+		const bigOk = new Set(dusk ? SPECIES.filter(sp => sp.kind === 'animal' && BIG.includes(sp.critter.kind) && present.has(sp.place) && this.state.species[sp.id])
+			.map(sp => sp.id).sort((a, b) => idHash(a, slot) - idHash(b, slot)).slice(0, 2) : []);
 		for (const sp of SPECIES) {
 			if (sp.kind !== 'animal' || !present.has(sp.place) || !sp.critter.behavior) continue;
 			const c = sp.critter;
 			let want = this.state.species[sp.id] && ok(c.when) ? Math.round((c.count(this.state) + (this.idleBonus?.(sp) ?? 0)) * scale) + attracted(place, sp.id) : 0;
+			if (dusk && BIG.includes(c.kind) && !bigOk.has(sp.id)) want = 0;
 			// Sous la pluie ou la neige, les insectes volants se mettent à l'abri.
 			if (wet && FLYERS.has(c.kind)) want = 0;
 			// Les oiseaux et les mammifères restent peu nombreux : une nuée de merles ou de lièvres ferait désordre.
@@ -1991,6 +1999,13 @@ export class Garden {
 				const x = P.ox + PARCEL_W * (0.3 + Math.random() * 0.4), y = P.oy + PARCEL_H * (0.3 + Math.random() * 0.4);
 				if (this.inOpen(x, y)) spots.push({ x, y });
 			}
+			const warm = (this.season?.winter ?? 0) < 0.3 && (this.season?.autumn ?? 0) < 0.6;
+			if (night && warm && this.state.species['ver-luisant'] && this.biomeOf(ci) === 'prairie') {
+				for (const p of [...P.herbs].sort(() => Math.random() - 0.5).slice(0, 3)) {
+					this.ambient.push({ x: P.ox + p.x + (Math.random() - 0.5) * 10, y: P.oy + p.y - 2, kind: 'glow', n: 0, ph: Math.random() * 100 });
+					if (Math.random() < 0.5) this.ambient.push({ x: P.ox + p.x, y: P.oy + p.y - 20, kind: 'glow', male: true, n: 0, ph: Math.random() * 100 });
+				}
+			}
 			if (night) {
 				for (const it of this.items) {
 					if (this.cellAt(it.x, it.y) !== ci) continue;
@@ -2010,6 +2025,7 @@ export class Garden {
 	drawAmbient(ctx, v) {
 		const t = this.t;
 		for (const s of this.ambient ?? []) {
+			if (s.kind === 'glow') continue;
 			if (s.x < v.x0 - 60 || s.x > v.x0 + v.w + 60 || s.y < v.y0 - 20 || s.y > v.y0 + v.h + 80) continue;
 			for (let i = 0; i < s.n; i++) {
 				const a = s.ph + i * 2.4;
@@ -3113,13 +3129,26 @@ export class Garden {
 			ctx.globalCompositeOperation = 'source-over';
 		}
 
-		// Lucioles (le ver luisant) la nuit, une fois l'espèce découverte et hors de la pluie.
-		if (!glyph && night > 0 && this.state.species['ver-luisant'] && !this.precip()) {
+		// Vers luisants : la femelle brille posée au pied d'une herbe, d'une lueur verte qui respire lentement ;
+		// le mâle, plus discret, vole doucement autour.
+		if (!glyph && night > 0 && !this.precip()) {
+			ctx.setTransform(1, 0, 0, 1, 0, 0);
 			ctx.globalCompositeOperation = 'lighter';
 			const n = this.glow.width;
-			for (const f of this.fireflies) {
-				ctx.globalAlpha = night * Math.pow(0.5 + 0.5 * Math.sin(this.t * 2 + f.ph), 2);
-				ctx.drawImage(this.glow, f.x * cw - n / 2, f.y * ch - n / 2, n * this.cam.z, n * this.cam.z);
+			for (const s of this.ambient ?? []) {
+				if (s.kind !== 'glow') continue;
+				const t = this.t + s.ph;
+				const wx = s.male ? s.x + Math.sin(t * 0.37) * 26 + Math.sin(t * 1.3) * 5 : s.x;
+				const wy = s.male ? s.y + Math.sin(t * 0.29) * 10 + Math.cos(t * 1.1) * 4 : s.y;
+				const x = wx * S + tx, y = wy * S + ty;
+				if (x < -40 || x > cw + 40 || y < -40 || y > ch + 40) continue;
+				const size = n * this.cam.z * (s.male ? 0.35 : 0.7);
+				const a = night * (s.male ? 0.35 + 0.25 * Math.sin(t * 3) : 0.7 + 0.3 * Math.sin(t * 0.8));
+				ctx.globalAlpha = a;
+				ctx.drawImage(this.glow, x - size / 2, y - size / 2, size, size);
+				// Le petit point de lumière vert-jaune, bien net au cœur de la lueur.
+				ctx.fillStyle = 'rgb(200,255,120)';
+				ctx.beginPath(); ctx.arc(x, y, (s.male ? 0.9 : 1.6) * S, 0, Math.PI * 2); ctx.fill();
 			}
 			ctx.globalAlpha = 1;
 			ctx.globalCompositeOperation = 'source-over';

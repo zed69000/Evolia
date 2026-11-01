@@ -3,6 +3,12 @@
 Chaque version, la plus récente en haut. Le site (evolia.sebastienalzamora.workers.dev) est toujours à jour ;
 le Play Store (tests internes) reçoit les versions indiquées « Play ».
 
+## 0.7.13 — 1er novembre 2026
+Le bestiaire a été relu avec un guide naturaliste des prairies d'Europe.
+- **De vrais vers luisants.** La femelle, sans ailes, brille posée au pied des herbes de la prairie : une lueur vert-jaune qui respire lentement ; un mâle plus discret vole parfois autour. Ils ne brillent qu'à la belle saison (plus en automne ni en hiver), et ne flottent plus partout sur l'écran.
+- **La nuit, on croise les grands mammifères un par un :** deux espèces au plus à la fois (chevreuil, renard, sanglier, blaireau), qui se relaient au fil de la nuit.
+- **Des horaires plus justes :** les chauves-souris, le sphinx et le sanglier sortent dès le crépuscule ; le renard est un animal du soir et de la nuit ; le lapin se montre aussi la nuit ; la grande sauterelle, qui chante le soir, reste visible la nuit.
+
 ## 0.7.12 — 1er novembre 2026
 - **Les mammifères de la nuit.** Le lièvre, le chevreuil et le renard ne se cachent plus le soir : on les voit de jour comme de nuit.
 - **Deux nouveaux venus nocturnes :** le blaireau, qui fouille la prairie (avec le vieux tronc et dix herbes folles), et le sanglier, qui retourne la terre de la forêt. Ils ne sortent que la nuit. 152 espèces en tout.
