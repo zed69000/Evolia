@@ -3,6 +3,11 @@
 Chaque version, la plus récente en haut. Le site (evolia.sebastienalzamora.workers.dev) est toujours à jour ;
 le Play Store (tests internes) reçoit les versions indiquées « Play ».
 
+## 0.7.23 — 1er novembre 2026
+- **Panneau de débogage** (Options › Débogage) : en jeu, ce que voit le suivi en direct. Appareil (site ou appli, iPhone ou Android, suivi activé, écran visible, images par seconde) ; GPS (état, âge et précision du dernier point, vitesse, altitude, montée et descente des 10 dernières minutes) ; pas de l'accéléromètre (pas comptés, cadence) ; balade en cours (durée, distance, pas, activité reconnue, fin automatique) ; relecture des pas appli fermée ; totaux du jour.
+- **Un journal des événements**, gardé d'une ouverture à l'autre : écran éteint ou autre appli (et combien de temps), GPS perdu ou faible, trous de GPS, balades commencées et finies, relectures et leurs erreurs.
+- **« Copier »** met tout le panneau et le journal en texte dans le presse-papiers, à coller dans un message ; si le téléphone refuse, le texte s'ouvre tout sélectionné.
+
 ## 0.7.22 — 1er novembre 2026
 - **Plusieurs sauvegardes** (Options › Mes sauvegardes) : plusieurs jardins sur le même téléphone, pour comparer ou essayer. Chaque partie montre ses kilomètres et ses espèces ; on passe de l'une à l'autre d'un geste (« Jouer »), on duplique la partie en cours, on commence une nouvelle partie, on renomme ou on efface les autres. Ta partie actuelle devient « Ma partie », sans rien perdre. Les pas vont dans la partie en cours.
 

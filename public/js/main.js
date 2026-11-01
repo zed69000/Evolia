@@ -15,6 +15,7 @@ import { Soundscape } from './audio.js';
 import { ITEMS, ITEM_ORDER, itemHelp, itemCost, fitsPlace, CATS, MAX_LEVEL, LEVEL_NAME, LEVEL_KM, canLevel, levelCost, CABIN_STYLES } from './deco.js';
 import { VERSION } from './version.js';
 import { exportCode, importCode, backupAge } from './backup.js';
+import { DebugPanel, debugOn, setDebug, debugLog, ago, dur } from './debug.js';
 import { canNotify, askNotify, scheduleReminders, clearReminders } from './notify.js';
 import { rollDay, markActive, giftReady, giftFor, claimGift, claim, toClaim, noteTap, noteQuest, challengesHtml, weekHtml, nextGoal, albumHtml, collection, herbarium, newlyComplete, HERBARIUM_REWARD } from './daily.js';
 
@@ -671,7 +672,9 @@ async function enableTracking(gesture = false) {
 	if (!tracking.gps && GpsTracker.available()) {
 		tracking.gps = new GpsTracker(onSample, onGpsStatus);
 		tracking.gps.start();
+		debugLog('Suivi lancé : GPS démarré');
 	}
+	if (tracking.motion && !tracking.motionLogged) { tracking.motionLogged = true; debugLog('Accéléromètre actif (compte les pas appli ouverte)'); }
 	state.tracking = true;
 	persist(true);
 	renderStatus();
@@ -688,6 +691,8 @@ async function resumeTracking() {
 }
 
 function onGpsStatus(st) {
+	if (st.kind === 'gap') { debugLog(`GPS : aucun point pendant ${dur(st.seconds)} (écran éteint ou appli en arrière-plan ?)`); return; }
+	if (st.kind !== tracking.gpsState) debugLog(`GPS : ${{ searching: 'recherche', ok: 'bon signal', weak: `signal faible (±${Math.round(st.accuracy)} m)`, error: `erreur ${st.code} (${st.message})` }[st.kind] ?? st.kind}`);
 	tracking.gpsState = st.kind;
 	if (st.kind === 'ok' && !tracking.located && tracking.gps?.last) {
 		tracking.located = true;
@@ -701,6 +706,7 @@ function onGpsStatus(st) {
 const sessionSeconds = w => (w.sim ? w.simTime : (Date.now() - w.start) / 1000);
 
 function startSession(sim) {
+	debugLog(sim ? 'Balade simulée commencée' : 'Balade commencée');
 	session = { start: Date.now(), simTime: 0, distance: 0, steps: 0, effort: 0, events: [], speed: 0, act: null, sim, touched: new Set(), lastMove: Date.now() };
 	garden.setFollow(true);
 	toast('Tu bouges : ton jardin pousse', '#F08A3C');
@@ -764,6 +770,7 @@ function onSample(s) {
 /** Une minute sans bouger : la balade se termine toute seule, avec un petit bilan. */
 function endSession() {
 	const w = session;
+	debugLog(`Balade finie : ${Math.round(w.distance)} m en ${dur(sessionSeconds(w))}`);
 	session = null;
 	garden.setFollow(false);
 	const duration = sessionSeconds(w);
@@ -953,6 +960,7 @@ async function maybeHarvest(source = SOURCES[state.harvestSource], since = state
 		const res = await harvest(source, since, skip);
 		if (source.id !== 'mock') state.lastHarvest = Date.now();
 		state.harvestInfo = { at: Date.now(), from: res?.from ?? since, steps: Math.round(res?.steps ?? 0), source: source.label };
+		debugLog(`Relecture ${source.label} : ${state.harvestInfo.steps} pas depuis ${new Date(state.harvestInfo.from).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`);
 		persist(true);
 		if (res && res.steps >= 30) await playHarvest(res, source);
 		else if (res && res.to - res.from > 30 * 60000) {
@@ -961,6 +969,7 @@ async function maybeHarvest(source = SOURCES[state.harvestSource], since = state
 		}
 	} catch (e) {
 		console.warn('Récolte impossible', e);
+		debugLog(`Relecture ${source.label} impossible : ${String(e?.message ?? e).slice(0, 80)}`);
 		state.harvestInfo = { at: Date.now(), from: since, steps: 0, source: source.label, error: String(e?.message ?? e).slice(0, 120) };
 		persist(true);
 		toast(`Impossible de lire tes pas dans ${source.label} · voir Options`, '#C0442F', () => openOptions());
@@ -1059,7 +1068,8 @@ async function offerHarvest() {
 }
 
 document.addEventListener('visibilitychange', async () => {
-	if (document.hidden) { persist(true); sound.pause(); planReminders(); return; }
+	if (document.hidden) { tracking.hiddenAt = Date.now(); debugLog(session ? 'Écran éteint ou autre appli — pendant une balade' : 'Écran éteint ou autre appli'); persist(true); sound.pause(); planReminders(); return; }
+	debugLog(`De retour${tracking.hiddenAt ? ` après ${dur((Date.now() - tracking.hiddenAt) / 1000)}` : ''}`);
 	clearReminders();
 	sound.resume();
 	runIdle(true);
@@ -1550,6 +1560,58 @@ $('#btn-deco').addEventListener('click', () => openDeco(currentMission()?.id ===
 
 const isApp = () => !!window.Capacitor?.isNativePlatform?.();
 
+// ─── Panneau de débogage ──────────────────────────────────────
+
+/** Ce que le panneau affiche, section par section. */
+function debugRead() {
+	const g = tracking.gps, fix = g?.fix, m = tracking.motion, w = session, h = state.harvestInfo, now = Date.now();
+	const ua = navigator.userAgent, os = window.Capacitor?.getPlatform?.() ?? (/iPhone|iPad/.test(ua) ? 'ios' : /Android/.test(ua) ? 'android' : 'autre');
+	let climb = 0, drop = 0, dist = 0;
+	for (const e of tracking.hikeLog ?? []) if (now - e.t <= HIKE_WINDOW) { climb += e.climb; drop += e.drop ?? 0; dist += e.dist; }
+	const src = state.harvestSource ? SOURCES[state.harvestSource]?.label ?? state.harvestSource : 'aucune';
+	return [
+		['Appareil', [
+			['Version', `${VERSION} · ${isApp() ? 'appli' : 'site web'} · ${os}`],
+			['Suivi des pas', state.tracking ? 'activé' : 'pas activé'],
+			['Écran', document.hidden ? 'caché' : 'visible'],
+			['Images/s', `${Math.round(garden.fps ?? 0)}`],
+		]],
+		['GPS', [
+			['État', !g ? (GpsTracker.available() ? 'éteint' : 'indisponible') : { searching: 'recherche', ok: 'bon signal', weak: 'signal faible', error: 'erreur (position refusée ?)' }[tracking.gpsState] ?? 'en attente'],
+			['Dernier point', fix ? `il y a ${ago(fix.at)} · ±${Math.round(fix.acc)} m` : '—'],
+			['Vitesse', g ? `${(g.speed ?? 0).toFixed(1)} km/h${fix?.gpsSpeed != null ? ` (GPS ${(fix.gpsSpeed * 3.6).toFixed(1)})` : ''}` : '—'],
+			['Altitude', fix?.alt != null ? `${Math.round(fix.alt)} m ±${Math.round(fix.altAcc ?? 0)}` : 'non fournie'],
+			['10 dernières min', `${Math.round(dist)} m · +${Math.round(climb)} m / −${Math.round(drop)} m${tracking.hiking ? ' · rando/trail' : ''}`],
+			['Dernier mouvement', ago(tracking.lastGpsMove)],
+		]],
+		['Pas (accéléromètre)', [
+			['État', m ? 'actif' : 'éteint'],
+			['Pas comptés', m ? `${m.steps}` : '—'],
+			['Cadence', m ? `${Math.round(m.spm ?? 0)} pas/min` : '—'],
+			['Dernier pas', ago(tracking.lastStep)],
+		]],
+		['Balade', w ? [
+			['En cours depuis', dur(sessionSeconds(w))],
+			['Distance', `${Math.round(w.distance)} m`],
+			['Pas', `${w.steps}`],
+			['Activité', w.act?.name ?? 'à l’arrêt'],
+			['Vitesse', `${(w.speed ?? 0).toFixed(1)} km/h`],
+			['Montée', `${Math.round(w.climb ?? 0)} m`],
+			['Fin auto dans', `${Math.max(0, Math.round((STOP_AFTER - (now - w.lastMove)) / 1000))} s`],
+		] : [['État', 'aucune balade en cours']]],
+		['Relecture des pas (appli fermée)', [
+			['Source', isApp() ? src : 'impossible sur le site'],
+			['Dernière', h ? `${new Date(h.at).toLocaleString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })} · ${h.steps} pas${h.error ? ` · erreur : ${h.error}` : ''}` : new Date(state.lastHarvest).toLocaleString('fr-FR')],
+		]],
+		['Totaux', [
+			['Aujourd’hui', `${fmt(todayMeters(state) / 1000, 2)} km`],
+			['Depuis le début', `${fmt(state.totals.distance / 1000, 1)} km · ${fmtInt(state.totals.steps ?? 0)} pas`],
+		]],
+	];
+}
+const debugPanel = new DebugPanel(debugRead);
+debugPanel.show(debugOn());
+
 /** Ce que la dernière relecture des pas a trouvé, et quoi faire si elle ne trouve rien. */
 function harvestHtml(src) {
 	const h = state.harvestInfo, when = t => new Date(t).toLocaleString('fr-FR', { weekday: 'short', hour: '2-digit', minute: '2-digit' });
@@ -1712,6 +1774,8 @@ function renderOptions() {
 		<h3>Recommencer</h3>
 		<p class="empty">Efface ton jardin, tes espèces et tes balades sur ce téléphone, pour repartir d'une prairie neuve.</p>
 		<button class="btn ghost wide danger" id="opt-reset">Recommencer à zéro</button>
+		<h3>Débogage</h3>
+		<label class="switch"><input type="checkbox" id="opt-debug" ${debugOn() ? 'checked' : ''}><i></i><span>Afficher en jeu ce que voit le suivi (GPS, pas, balade, relecture) et le journal des événements</span></label>
 		<h3>Mode test</h3>
 		<label class="switch"><input type="checkbox" id="opt-dev" ${DEV ? 'checked' : ''}><i></i><span>Outils de test et raccourcis (pour essayer le jeu sans marcher)</span></label>
 		${DEV ? `<div class="dev">Heure du jardin <b id="dev-h">${garden.hourOverride ?? 'réelle'}</b>
@@ -1828,6 +1892,7 @@ $('#options').addEventListener('change', e => {
 	if (e.target.id === 'opt-sound') { sound.setOn(e.target.checked); persist(true); renderOptions(); return; }
 	if (e.target.id === 'opt-music') { sound.setMusicOn(e.target.checked); persist(true); renderOptions(); return; }
 	if (e.target.id === 'opt-volume' || e.target.id === 'opt-music-vol') { persist(true); return; }
+	if (e.target.id === 'opt-debug') { setDebug(e.target.checked); debugPanel.show(e.target.checked); return; }
 	if (e.target.id !== 'opt-dev') return;
 	DEV = e.target.checked;
 	try { localStorage.setItem(DEV_KEY, DEV ? '1' : '0'); } catch (err) { /* stockage indisponible */ }

@@ -38,6 +38,8 @@ export class GpsTracker {
 
 	handle(pos) {
 		const c = pos.coords;
+		// Pour le panneau de débogage : le dernier point reçu, même trop imprécis pour compter.
+		this.fix = { at: Date.now(), acc: c.accuracy, alt: c.altitude, altAcc: c.altitudeAccuracy, gpsSpeed: c.speed };
 		if (c.accuracy > 35) { this.onStatus({ kind: 'weak', accuracy: c.accuracy }); return; }
 		this.onStatus({ kind: 'ok', accuracy: c.accuracy });
 		if (!this.last) { this.last = { coords: c, t: pos.timestamp }; return; }
@@ -45,7 +47,7 @@ export class GpsTracker {
 		const dt = (pos.timestamp - this.last.t) / 1000;
 		// Après une longue pause (appli en arrière-plan, téléphone en poche), le saut de position ne dit rien de
 		// l'allure : on repart de là, et ce sont les pas comptés par le téléphone qui rattrapent la sortie.
-		if (dt > 90) { this.last = { coords: c, t: pos.timestamp }; this.speed = 0; this.altRef = null; return; }
+		if (dt > 90) { this.onStatus({ kind: 'gap', seconds: dt }); this.last = { coords: c, t: pos.timestamp }; this.speed = 0; this.altRef = null; return; }
 		// En dessous de quelques mètres, c'est le bruit du GPS, pas un déplacement.
 		if (dist < Math.max(3, c.accuracy * 0.25) || dt <= 0) return;
 		const measured = c.speed != null && c.speed >= 0 ? c.speed * 3.6 : (dist / dt) * 3.6;
@@ -131,6 +133,7 @@ export class MotionTracker {
 		const n = this.pending;
 		this.pending = 0;
 		const spm = (n / dt) * 60;
+		this.spm = spm;
 		const band = this.classify(spm);
 		this.onSample({ dist: n * band.stride, dt, speedKmh: spm * band.stride * 0.06, steps: n, act: n >= 4 ? band.act : null, motion: true });
 	}

@@ -849,3 +849,19 @@ body:has(#modal:not([hidden])) .tip, body:has(.panel.open) .tip, body:has(#coach
 .slots li small { display: block; color: var(--doux); font-size: 12px; }
 .slots .slot-actions { display: flex; gap: 6px; flex-wrap: wrap; }
 .slots .slot-actions .btn { width: auto; }
+
+/* Panneau de débogage (Options › Débogage) : en haut à gauche, sous le bandeau, au-dessus du jardin. */
+#debug { position: absolute; left: 8px; top: calc(env(safe-area-inset-top, 0px) + 150px); z-index: 40; width: min(300px, calc(100% - 16px)); max-height: 55vh; overflow: auto; padding: 8px 10px; border-radius: 12px; background: rgba(20, 24, 18, 0.78); color: #EAF0DC; font: 11px/1.35 ui-monospace, Menlo, Consolas, monospace; -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px); }
+#debug .dbg-head { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
+#debug .dbg-head b { flex: 1; font-size: 12px; }
+#debug button { border: 1px solid rgba(234, 240, 220, 0.4); background: transparent; color: inherit; border-radius: 6px; padding: 2px 7px; font: inherit; cursor: pointer; }
+#debug .dbg-sec { margin-top: 6px; }
+#debug .dbg-sec > i { display: block; color: #F4C23E; font-style: normal; font-weight: 700; margin-bottom: 1px; }
+#debug .dbg-sec > div { display: flex; gap: 8px; justify-content: space-between; }
+#debug .dbg-sec span { color: #B8C4A8; white-space: nowrap; }
+#debug .dbg-sec b { font-weight: 600; text-align: right; }
+#debug .dbg-log > div { justify-content: flex-start; }
+#debug .dbg-log span { min-width: 58px; }
+#app ~ .dbg-copy, .dbg-copy { position: fixed; inset: 10% 12px auto; z-index: 100; padding: 12px; border-radius: 14px; background: #FBF6E9; box-shadow: 0 8px 30px rgba(0,0,0,.3); font: 13px Nunito, sans-serif; color: #2F5A33; }
+.dbg-copy textarea { width: 100%; height: 45vh; font: 11px ui-monospace, Menlo, monospace; }
+.dbg-copy button { margin-top: 8px; }
