@@ -519,6 +519,16 @@ html, body {
 .daily-chip svg { color: var(--elan); }
 .daily-chip .dot-new { top: -3px; right: -3px; }
 .peek .daily-chip { opacity: 0; transform: translateY(-16px); pointer-events: none; }
+.map-filters { display: flex; gap: 6px; margin: 0 0 10px; overflow-x: auto; scrollbar-width: none; }
+.map-filters[hidden] { display: none; }
+.map-filters::-webkit-scrollbar { display: none; }
+.map-chip {
+	flex: none; display: inline-flex; align-items: center; gap: 5px; min-height: 34px; padding: 0 11px;
+	border: 1px solid rgba(31, 107, 71, .25); border-radius: 17px; background: var(--papier-2); color: var(--doux);
+	font: 700 13px Nunito, sans-serif; cursor: pointer;
+}
+.map-chip b { font-weight: 800; opacity: .75; }
+.map-chip.on { background: var(--foret); border-color: var(--foret); color: #fff; }
 .next-goal {
 	display: flex;
 	align-items: center;
