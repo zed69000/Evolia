@@ -11,6 +11,7 @@ const out = join(root, "www");
 rmSync(out, { recursive: true, force: true });
 cpSync(join(root, "public"), out, { recursive: true });
 rmSync(join(out, "_headers"), { force: true }); // réglages du serveur Cloudflare, inutiles dans l'appli
+rmSync(join(out, "js", "gdd-preview.js"), { force: true }); // scenes of the GDD preview, never used by the app
 
 const indexPath = join(out, "index.html");
 const html = readFileSync(indexPath, "utf8");

@@ -114,6 +114,30 @@
 	<section id="eco" class="panel" aria-hidden="true"></section>
 </div>
 <script src="js/tuning.js"></script>
+<script>
+// GDD preview only (?tuning=preview): the real save and the device sensors stay out of reach.
+if (new URLSearchParams(location.search).get('tuning') === 'preview') (function () {
+	var mem = new Map();
+	var store = {
+		getItem: function (k) { k = String(k); return mem.has(k) ? mem.get(k) : null; },
+		setItem: function (k, v) { mem.set(String(k), String(v)); },
+		removeItem: function (k) { mem.delete(String(k)); },
+		clear: function () { mem.clear(); },
+		key: function (i) { var k = Array.from(mem.keys())[i]; return k === undefined ? null : k; },
+		get length() { return mem.size; }
+	};
+	['getItem', 'setItem', 'removeItem', 'clear', 'key'].forEach(function (m) { Storage.prototype[m] = store[m]; });
+	Object.defineProperty(window, 'localStorage', { value: store, configurable: true });
+	Object.defineProperty(window, 'sessionStorage', { value: store, configurable: true });
+	Object.defineProperty(navigator, 'geolocation', { configurable: true, value: {
+		getCurrentPosition: function (ok, err) { if (err) err({ code: 1, message: 'preview' }); },
+		watchPosition: function (ok, err) { if (err) err({ code: 1, message: 'preview' }); return 0; },
+		clearWatch: function () {}
+	} });
+	Object.defineProperty(navigator, 'permissions', { configurable: true, value: { query: function () { return Promise.resolve({ state: 'denied' }); } } });
+	delete window.DeviceMotionEvent;
+})();
+</script>
 <script type="module" src="js/main.js"></script>
 </body>
 </html>

@@ -2082,12 +2082,25 @@ garden.onActive = () => { $('#hud-day').textContent = cellName(here(), garden.ac
 announceSpecies(firstRun);
 updateSpeciesDot();
 persist(true);
-if (!sky.override) sky.start();
-resumeTracking();
-if (firstRun) {
-	setTimeout(() => coach(0), 1600);
+if (Tuning.preview) {
+	// GDD preview: no tutorial, sensor, permission or harvest. The scene module drives a temporary garden.
+	state.seenIntro = state.onboarded = state.harvestDeclined = state.notifyAsked = state.tracking = true;
+	state.tips = Object.fromEntries(TIPS.map(t => [t.id, Date.now()]));
+	import('./gdd-preview.js').then(m => m.startPreview({
+		garden, state, sky, sound, eco, species, places, debugPanel,
+		session: () => session, onSample, endSession, runIdle, showIdleRecap, announceSpecies,
+		renderHud, renderStatus, renderDaily, showDaily, closeModal,
+		openDeco, closeDeco, openJournal, closeJournal, openOptions, closeOptions, startPlacing, endPlacing, endQuest,
+		setQuest: id => { quest = id; state.lastQuest = id; $('#quest-name').textContent = SPECIES_BY_ID[id].name; $('#quest').hidden = false; },
+	})).catch(e => console.warn('GDD preview', e));
 } else {
-	runIdle(true);
-	maybeHarvest().then(() => (newDay() ? setTimeout(() => whenFree(() => showDaily(true)), 300) : whenFree(showIdleRecap)));
-	if (!state.harvestSource) setTimeout(() => whenFree(() => $('#modal').hidden && offerHarvest()), 2500);
+	if (!sky.override) sky.start();
+	resumeTracking();
+	if (firstRun) {
+		setTimeout(() => coach(0), 1600);
+	} else {
+		runIdle(true);
+		maybeHarvest().then(() => (newDay() ? setTimeout(() => whenFree(() => showDaily(true)), 300) : whenFree(showIdleRecap)));
+		if (!state.harvestSource) setTimeout(() => whenFree(() => $('#modal').hidden && offerHarvest()), 2500);
+	}
 }
