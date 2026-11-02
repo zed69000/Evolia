@@ -80,6 +80,8 @@ const GLYPH_Z = 0.5, DETAIL_Z = 1.6, DETAIL_DENSITY = 2.2;
 // En dessous de ce zoom, des pastilles signalent ce qui attend (collecteur, œufs, potager mûr, gouttes) ;
 // les toucher ramène la vue dessus.
 const POI_Z = 0.85, POI_ZOOM = 1.4;
+// La caméra ne repart toute seule qu'après ce temps sans aucun geste (toucher, glisser, zoomer, bouton).
+const CAM_IDLE_MS = 20000;
 const Z_MAX = 3.2;
 
 const DEFAULT_SUN = { rise: 7.5, set: 19 };
@@ -459,10 +461,23 @@ export class Garden {
 		this.flyTo(wx, wy, Math.max(1, this.cam.z));
 	}
 
-	setFollow(on) {
+	/**
+	 * `show` : on montre exprès le jardin qui pousse (pas relus à l'ouverture) ; la caméra suit tout de suite chaque
+	 * plante, jusqu'au prochain geste. Sinon elle ne suit que ce qui se voit vraiment et attend qu'on ne fasse plus rien.
+	 */
+	setFollow(on, show = false) {
 		this.following = on;
+		this.followShow = show;
+		this.followed = null;
+		if (show) this.lastTouch = -Infinity;
 		if (!on) this.camTarget = null;
 	}
+
+	/** Plus aucun geste depuis un moment ? */
+	idle() { return performance.now() - (this.lastTouch ?? 0) >= CAM_IDLE_MS; }
+
+	/** La caméra peut-elle partir d'elle-même ? Jamais pendant qu'on agit, ni quand on regarde la carte de loin. */
+	autoCam() { return this.idle() && !this.camLock?.() && !this.camBusy?.() && this.cam.z >= POI_Z; }
 
 	makeVignette() {
 		const c = document.createElement('canvas');
@@ -993,6 +1008,7 @@ export class Garden {
 			const share = amount / 3, c2 = PLANT_TYPES[sown.type].cost;
 			sown.growth = Math.min(1, sown.growth + share / c2);
 			amount -= share;
+			if (follow) this.followed = sown;
 			if (sown.growth >= 1) { events.push({ kind: 'mature', plant: sown, pid }); this.succeed(pid, sown, events); }
 		}
 		let p = place.plants.find(q => q.type === type && q.growth < 1);
@@ -1006,6 +1022,8 @@ export class Garden {
 			p.growth = Math.min(1, p.growth + used / cost);
 			amount -= used;
 			if (follow) this.current = p;
+			// L'herbe et les fleurs poussent sans cesse : la caméra ne se déplace que pour un arbuste ou un arbre.
+			if (follow && (p.type === 'buisson' || p.type === 'arbre')) this.followed = p;
 			if (p.growth >= 1) { events.push({ kind: 'mature', plant: p, pid }); this.succeed(pid, p, events); p = null; }
 		}
 		return events;
@@ -1428,7 +1446,13 @@ export class Garden {
 		if (!pos) return;
 		this.popAt[key] = this.t;
 		this.burst(pos.x, pos.y - 20, 24, '#F4C23E');
-		this.focusOn(pos.x, pos.y);
+		if (this.autoCam()) this.focusOn(pos.x, pos.y);
+	}
+
+	/** Va voir un décor, à la demande. */
+	showDecor(key) {
+		const pos = this.decorPos(key);
+		if (pos) this.focusOn(pos.x, pos.y);
 	}
 
 	/**
@@ -1786,11 +1810,17 @@ export class Garden {
 		const c = this.canvas;
 		let drag = null, pinch = null, lastTap = 0;
 		const local = e => { const r = c.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
+		// Chaque geste, sur le jardin comme sur un bouton, remet à zéro le temps d'inactivité et arrête le suivi en cours.
+		const touched = () => { this.lastTouch = performance.now(); };
+		window.addEventListener('pointerdown', () => { touched(); if (this.following) this.camTarget = null; }, true);
+		window.addEventListener('pointerup', touched, true);
+		window.addEventListener('pointermove', e => { if (e.buttons) touched(); }, true);
+		window.addEventListener('wheel', touched, { capture: true, passive: true });
+		window.addEventListener('keydown', touched, true);
 		c.addEventListener('pointerdown', e => {
 			c.setPointerCapture(e.pointerId);
 			this.pointers.set(e.pointerId, local(e));
 			this.camTarget = null;
-			this.followPausedUntil = performance.now() + 6000;
 			this.vel = { x: 0, y: 0 };
 			if (this.pointers.size === 2) {
 				const [a, b] = [...this.pointers.values()];
@@ -1888,7 +1918,6 @@ export class Garden {
 			e.preventDefault();
 			const [x, y] = local(e);
 			this.zoomAt(Math.exp(-e.deltaY * 0.0015), x, y);
-			this.followPausedUntil = performance.now() + 6000;
 		}, { passive: false });
 	}
 
@@ -2007,9 +2036,13 @@ export class Garden {
 			}
 		}
 		if (this.camLock?.() && this.camTarget) this.camTarget = null;
-		if (this.following && !this.camLock?.() && this.current && now > (this.followPausedUntil ?? 0) && !this.dragging && this.pointers.size === 0) {
-			const [hx, hy] = this.headOf(this.current);
-			this.camTarget = { cx: hx, cy: hy + 40, z: Math.max(1, this.cam.z) };
+		if (this.following) {
+			const plant = this.followShow ? this.current : this.followed;
+			const go = this.followShow ? this.idle() && !this.camLock?.() : this.autoCam();
+			if (plant && go && !this.dragging && this.pointers.size === 0) {
+				const [hx, hy] = this.headOf(plant);
+				this.camTarget = { cx: hx, cy: hy + 40, z: Math.max(1, this.cam.z), follow: true };
+			} else if (!go && this.camTarget?.follow) this.camTarget = null;
 		}
 		if (!this.dragging && this.pointers.size === 0) {
 			if (this.camTarget) {

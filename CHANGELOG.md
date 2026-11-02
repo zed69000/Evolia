@@ -3,6 +3,12 @@
 Chaque version, la plus récente en haut. Le site (evolia.sebastienalzamora.workers.dev) est toujours à jour ;
 le Play Store (tests internes) reçoit les versions indiquées « Play ».
 
+## 0.7.38 — 2 novembre 2026
+- **La caméra ne part plus pendant que tu joues.** Chaque geste (toucher, glisser, zoomer, bouton) remet à zéro un minuteur : elle ne peut repartir d'elle-même qu'après 20 secondes sans rien faire, et jamais tant qu'une fiche, une fenêtre ou une page est ouverte, ni quand tu regardes la carte de loin.
+- **Elle ne suit plus l'herbe ni les fleurs**, seulement les arbustes, les arbres et les jeunes pousses semées par les bêtes.
+- **Un nouveau décor** n'emmène plus la vue si tu es occupé : touche son message pour aller le voir. Les astuces ne déplacent plus la caméra non plus pendant que tu agis.
+- Quand tes pas sont relus à l'ouverture, la caméra montre toujours le jardin qui pousse, jusqu'à ton premier geste.
+
 ## 0.7.37 — 2 novembre 2026
 - **De vrais cris d'animaux.** Les sons fabriqués sonnaient faux : merle, rouge-gorge, fauvette, rossignol, hirondelles, chouettes hulotte et effraie, corneille, grenouilles, crapauds, grillons, sauterelles, poules, coq, chien, chat, canard et bourdon sont maintenant de vrais enregistrements (42 cris, 750 Ko, de Joseph Sardin sur BigSoundBank, domaine public). Les cousins proches empruntent la voix d'un autre, plus aiguë ou plus grave (la chevêche et le grand-duc celle de la hulotte, la pie et le geai celle de la corneille, la rainette celle de la grenouille…), et les petits passereaux un vrai chant de cousin à leur hauteur. Chaque cri est joué un peu différemment à chaque fois (variante, hauteur, volume) pour ne pas se répéter, et six bêtes au plus chantent ensemble.
 - Les oiseaux lointains du jour et les grillons de la nuit sont eux aussi de vrais enregistrements, très bas.

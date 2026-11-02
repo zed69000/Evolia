@@ -487,7 +487,8 @@ function nextTip() {
 	const target = $(tip.target);
 	if (!target || target.offsetParent === null) return;
 	tipShown = tip;
-	tip.show?.();
+	// L'astuce montre l'endroit seulement si on ne fait rien d'autre.
+	if (garden.autoCam()) tip.show?.();
 	target.classList.add('tip-glow');
 	const el = $('#tip');
 	el.innerHTML = `<b>${tip.title}</b><p>${tip.text}</p><button class="btn primary small" data-tip-ok>Compris</button>`;
@@ -637,7 +638,7 @@ function checkUnlocks(events) {
 		if (heartOf(pl, d.place) < 0 || d.always || pl.unlocked[key] || biomeKm(pl, d.place) < d.km) continue;
 		pl.unlocked[key] = Date.now();
 		garden.reveal(key);
-		toast(DECOR_MSG[key], '#5BB5B0');
+		toast(DECOR_MSG[key], '#5BB5B0', () => garden.showDecor(key));
 		events?.push({ kind: 'decor', key });
 	}
 }
@@ -1031,7 +1032,7 @@ async function playHarvest(res, source) {
 	renderHud();
 	closeModal();
 	toast(`${fmtInt(res.steps)} pas pendant ton absence · +${fmtInt(nectar)} nectar à récolter`, '#A3BD57');
-	garden.setFollow(true);
+	garden.setFollow(true, true);
 	const rows = [], events = [];
 	for (const g of res.groups.sort((a, b) => b.effort - a.effort)) {
 		const matured = {}, touched = new Set();
@@ -1259,6 +1260,8 @@ setInterval(() => {
 let placing = null; // { kind, item? } pendant qu'on choisit la place d'un objet
 // Aménager fige la vue : ni la croissance suivie, ni le guide, ni une découverte ne déplacent la caméra.
 garden.camLock = () => !!placing || $('#deco').classList.contains('open');
+// Elle ne part pas non plus d'elle-même pendant qu'on lit une fiche, une fenêtre ou une page.
+garden.camBusy = () => !$('#plant-card').hidden || !$('#modal').hidden || !$('#coach').hidden || !!document.querySelector('.panel.open');
 
 /** L'objet qu'il faut d'abord poser ici pour pouvoir construire celui-ci (le potager vient avec la cabane), ou null. */
 function needsFirst(kind) {
