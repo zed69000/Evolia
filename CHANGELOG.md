@@ -3,6 +3,10 @@
 Chaque version, la plus récente en haut. Le site (evolia.sebastienalzamora.workers.dev) est toujours à jour ;
 le Play Store (tests internes) reçoit les versions indiquées « Play ».
 
+## 0.7.36 — 2 novembre 2026
+- **Les animaux autour de toi se font entendre.** Jusqu'ici, seules 15 espèces avaient un cri ; maintenant chaque oiseau visible a son petit chant à lui (hauteur, notes et rythme propres à son espèce), les rapaces crient (la crécerelle fait « kli-kli-kli »), les hirondelles gazouillent, grenouilles et crapauds coassent, criquets et grillons stridulent, le sanglier grogne, les poules gloussent, le coq chante quand il chante, le chien aboie et le chat miaule (rarement). Les chauves-souris restent muettes : leurs cris sont trop aigus pour nos oreilles. Plus on zoome, plus on les entend souvent et fort.
+- **La pastille 🥚 revient** en vue dézoomée, comme celle du potager ; la toucher amène sur le poulailler et rappelle que le jardinier viendra chercher les œufs. Ils ne sont plus détaillés dans la bulle du poulailler.
+
 ## 0.7.35 — 1er novembre 2026
 - **Replanter un arbre ou un arbuste adulte.** Sa fiche (touche-le) propose « Déplacer » : on le fait glisser comme un aménagement, la place s'affiche en vert si elle est libre (dans une clairière, hors de l'eau et des chemins, loin des objets et des autres arbres), et on le pose. Il peut changer de parcelle.
 - En le reposant, il s'écrase un peu puis se redresse en rebondissant, et perd quelques feuilles qui tombent en virevoltant.

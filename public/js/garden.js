@@ -1633,9 +1633,8 @@ export class Garden {
 	}
 
 	/**
-	 * Ce qui mérite qu'on y aille, vu de loin : collecteurs qui ont du nectar, potagers mûrs, gouttes de nectar à
-	 * cueillir (regroupées par parcelle). Les œufs n'y sont pas : le jardinier les ramasse seul (voir la bulle du
-	 * poulailler). Coordonnées du monde.
+	 * Ce qui mérite qu'on y aille, vu de loin : collecteurs qui ont du nectar, poulaillers avec des œufs (le
+	 * jardinier les ramassera), potagers mûrs, gouttes de nectar à cueillir (par parcelle). Coordonnées du monde.
 	 */
 	poiList() {
 		const out = [];
@@ -1643,6 +1642,9 @@ export class Garden {
 			if (it.kind === 'collecteur') {
 				const js = this.jarStock?.(it) ?? { v: 0, cap: 1 };
 				if (js.v >= 1) out.push({ x: it.x, y: it.y - 60, icon: '🍯', label: `+${Math.floor(js.v)}`, hot: js.v >= js.cap - 0.5, rank: js.v >= js.cap - 0.5 ? 3 : 2 });
+			} else if (it.kind === 'poulailler') {
+				const n = this.eggsOf(it);
+				if (n >= 1) out.push({ x: it.x, y: it.y - 50, icon: '🥚', label: `${n}`, rank: 1, eggs: n });
 			} else if (it.kind === 'potager' && this.bedStage(it) >= 1) out.push({ x: it.x, y: it.y - 20, icon: '🥕', label: 'mûr', rank: 1 });
 		}
 		const drops = new Map();

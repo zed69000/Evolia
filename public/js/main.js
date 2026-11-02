@@ -1274,9 +1274,9 @@ const priceOf = kind => itemCost(kind, ownedCount(kind));
 const BIRD_COST = 40;
 const coopSeats = it => ITEMS.poulailler.levels.seats[it.level ?? 1];
 function coopTip(it, lv, nx) {
-	const L = ITEMS.poulailler.levels, fl = it.flock ?? { hens: 3, roosters: 1 }, eggs = garden.eggsOf(it);
+	const L = ITEMS.poulailler.levels, fl = it.flock ?? { hens: 3, roosters: 1 };
 	const who = `${fl.hens} poule${fl.hens > 1 ? 's' : ''}${fl.roosters ? ` et ${fl.roosters} coq${fl.roosters > 1 ? 's' : ''}` : ''}`;
-	return `<small class="item-tip">${L.name[lv][0].toUpperCase() + L.name[lv].slice(1)} · ${fl.hens + fl.roosters}/${coopSeats(it)} places · ${eggs ? `${eggs} œuf${eggs > 1 ? 's' : ''} (+${eggs * EGG_NECTAR} nectar) : ${farmerName(true).toLowerCase()} viendra les chercher` : 'les poules pondent quand tu marches'}${fl.hens + fl.roosters < coopSeats(it) ? ` · une bête de plus : ${BIRD_COST} nectar` : ''}${nx && !nx.ok ? ` · ${L.seats[nx.level]} places dès ${nx.km} km` : ''}</small>`;
+	return `<small class="item-tip">${L.name[lv][0].toUpperCase() + L.name[lv].slice(1)} · ${fl.hens + fl.roosters}/${coopSeats(it)} places · les poules pondent quand tu marches${fl.hens + fl.roosters < coopSeats(it) ? ` · une bête de plus : ${BIRD_COST} nectar` : ''}${nx && !nx.ok ? ` · ${L.seats[nx.level]} places dès ${nx.km} km` : ''}</small>`;
 }
 /** Poules et coqs sur une ligne : − nombre + (ajouter coûte un peu de nectar, tant qu'il reste de la place). */
 function coopButtons(it) {

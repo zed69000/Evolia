@@ -183,7 +183,8 @@ export class Soundscape {
 
 		if (g.glyph) return; // en vue d'ensemble, on n'entend plus les animaux un par un
 		const v = g.view();
-		const seen = g.insects.filter(b => !b.leaving && b.x > v.x0 && b.x < v.x0 + v.w && b.y > v.y0 && b.y < v.y0 + v.h);
+		// Les bêtes à l'écran, plus la basse-cour et le compagnon de la cabane.
+		const seen = [...g.insects, ...(g.hens ?? []), ...(g.pet ? [g.pet] : [])].filter(b => b && !b.leaving && !b.hidden && b.x > v.x0 && b.x < v.x0 + v.w && b.y > v.y0 && b.y < v.y0 + v.h);
 		const near = Math.min(1, g.cam.z / 1.2);
 		// Une abeille qui passe tout près : un bref bourdonnement, de temps en temps, seulement quand on regarde de près.
 		if (g.cam.z >= 1.2 && now > (this.nextBuzz ?? 0)) {
@@ -198,10 +199,11 @@ export class Soundscape {
 		// Un animal visible, au hasard, chante s'il en a envie.
 		const b = seen[Math.floor(Math.random() * seen.length)];
 		if (!b) return;
-		const call = CALLS[b.sp] ?? CALLS[b.kind];
-		if (!call || (this.next[b.sp] ?? 0) > now) return;
-		if (Math.random() > call.chance) return;
-		this.next[b.sp] = now + call.every * (0.7 + Math.random() * 0.6);
+		const call = CALLS[b.sp] ?? kindCall(b), key = b.sp ?? `${b.kind}${b.p?.rooster ? '-coq' : ''}`;
+		if (!call || (this.next[key] ?? 0) > now) return;
+		// De près, on entend les bêtes plus souvent (et plus fort, voir plus bas).
+		if (Math.random() > call.chance * (0.45 + 0.55 * near)) return;
+		this.next[key] = now + call.every * (0.7 + Math.random() * 0.6);
 		const pan = Math.max(-0.8, Math.min(0.8, ((b.x - v.x0) / v.w) * 2 - 1));
 		this[call.voice](pan, call, 0.4 + 0.6 * near);
 	}
@@ -321,6 +323,49 @@ export class Soundscape {
 	croak(pan, c, lvl) {
 		const out = this.voice(pan, lvl), t = this.ctx.currentTime + 0.05;
 		this.note(out, t, 220, 160, 0.4, 0.014, 'sawtooth');
+	}
+
+	/** Un chant d'oiseau générique, propre à chaque espèce : hauteur, nombre de notes et rythme tirés de son nom. */
+	warble(pan, c, lvl) {
+		const out = this.voice(pan, lvl), t = this.ctx.currentTime + 0.05;
+		let f = c.f, at = t;
+		for (let i = 0; i < c.n; i++) {
+			const nf = f * (c.up ? 1.08 : 0.94) * (0.92 + Math.random() * 0.16);
+			this.note(out, at, f, nf, c.dur, 0.03);
+			f = i % 3 === 2 ? c.f : nf;
+			at += c.gap;
+		}
+	}
+
+	/** Poule : quelques « cot » secs. */
+	cluck(pan, c, lvl) {
+		const out = this.voice(pan, lvl), t = this.ctx.currentTime + 0.05;
+		for (let i = 0; i < 2 + Math.floor(Math.random() * 3); i++) this.note(out, t + i * 0.2, 520, 380, 0.09, 0.02, 'sawtooth');
+	}
+
+	/** Coq : « co-co-ri-coooo ». */
+	crow(pan, c, lvl) {
+		const out = this.voice(pan, lvl), t = this.ctx.currentTime + 0.05;
+		[[620, 600, 0.12], [680, 660, 0.12], [760, 740, 0.14], [880, 640, 0.7]].reduce((at, [a, b, d]) => { this.note(out, at, a, b, d, 0.03, 'sawtooth'); return at + d + 0.04; }, t);
+	}
+
+	/** Chien : un ou deux aboiements. */
+	bark(pan, c, lvl) {
+		const out = this.voice(pan, lvl), t = this.ctx.currentTime + 0.05;
+		for (let i = 0; i < 1 + Math.floor(Math.random() * 2); i++) { this.note(out, t + i * 0.3, 420, 250, 0.13, 0.04, 'sawtooth'); this.note(out, t + i * 0.3, 840, 500, 0.1, 0.01); }
+	}
+
+	/** Chat : un miaulement qui monte puis retombe. */
+	meow(pan, c, lvl) {
+		const out = this.voice(pan, lvl), t = this.ctx.currentTime + 0.05;
+		this.note(out, t, 600, 900, 0.25, 0.025, 'triangle');
+		this.note(out, t + 0.25, 900, 550, 0.35, 0.025, 'triangle');
+	}
+
+	/** Sanglier : un grognement grave. */
+	grunt(pan, c, lvl) {
+		const out = this.voice(pan, lvl), t = this.ctx.currentTime + 0.05;
+		for (let i = 0; i < 2; i++) this.note(out, t + i * 0.28, 120, 90, 0.2, 0.03, 'sawtooth');
 	}
 
 	/** Un oiseau lointain, à peine audible, noyé dans l'écho. */
@@ -507,6 +552,38 @@ const CALLS = {
 	sauterelle: { voice: 'chirr', every: 6, chance: 0.5 },
 	heron: { voice: 'croak', every: 30, chance: 0.3 },
 };
+
+/** Un petit nombre stable tiré d'un nom (pour que chaque espèce garde sa voix). */
+const hashOf = s => [...String(s)].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7);
+const callCache = {};
+
+/**
+ * La voix d'une bête qui n'a pas de cri à elle (CALLS), d'après sa famille : chaque espèce d'oiseau a son petit
+ * chant (hauteur, notes, rythme), les rapaces crient, grenouilles et crapauds coassent, criquets et grillons
+ * stridulent, la basse-cour glousse. Les chauves-souris restent muettes : leurs cris sont trop aigus pour nous.
+ */
+function kindCall(b) {
+	const id = b.sp ?? b.kind;
+	if (b.kind === 'hen') return b.p?.rooster ? (b.mode === 'crow' ? { voice: 'crow', every: 25, chance: 0.9 } : null) : { voice: 'cluck', every: 9, chance: 0.35 };
+	if (callCache[id] !== undefined) return callCache[id];
+	const h = hashOf(id), pick = (a, b) => a + ((h % 1000) / 1000) * (b - a);
+	const c = {
+		bird: { voice: 'warble', every: 10 + (h % 7), chance: 0.45, f: pick(2200, 4800), n: 3 + (h % 5), gap: pick(0.1, 0.24), dur: pick(0.07, 0.16), up: h % 2 === 0 },
+		tit: { voice: 'tit', every: 9, chance: 0.45 },
+		swallow: { voice: 'peep', every: 6, chance: 0.5, n: 5, gap: 0.09, f0: 4200, f1: 3600, dur: 0.06 },
+		owl: { voice: 'owl', every: 20, chance: 0.4 },
+		eagle: b.p?.falcon ? { voice: 'peep', every: 14, chance: 0.4, n: 4, gap: 0.14, f0: 3400, f1: 3000, dur: 0.1 } : { voice: 'cry', every: 20, chance: 0.4, n: 1, gap: 0, f0: pick(1800, 2600), f1: pick(1200, 1700), dur: 0.6 },
+		gull: { voice: 'cry', every: 12, chance: 0.4, n: 3, gap: 0.45, f0: 1500, f1: 1050, dur: 0.38 },
+		heron: { voice: 'croak', every: 28, chance: 0.3 },
+		duck: { voice: 'duck', every: 14, chance: 0.4 },
+		frog: { voice: 'frog', every: 8, chance: 0.45 },
+		grasshopper: b.p?.cricket ? { voice: 'chirr', every: 5, chance: 0.5 } : { voice: 'chirr', every: 7, chance: 0.4 },
+		dog: { voice: 'bark', every: 30, chance: 0.25 },
+		cat: { voice: 'meow', every: 40, chance: 0.2 },
+		boar: { voice: 'grunt', every: 15, chance: 0.4 },
+	}[b.kind] ?? null;
+	return (callCache[id] = c);
+}
 
 // Gamme pentatonique de ré (ré mi fa# la si) sur trois octaves : aucune note ne peut sonner faux avec une autre.
 const SCALE = [146.83, 164.81, 185.0, 220.0, 246.94, 293.66, 329.63, 369.99, 440.0, 493.88, 587.33, 659.25, 739.99, 880.0, 987.77];
