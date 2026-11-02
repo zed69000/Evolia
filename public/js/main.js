@@ -7,7 +7,7 @@ import { PLANT_TYPES, DECOR, plantName } from './plants.js';
 import { GpsTracker, MotionTracker, SimTracker } from './tracker.js';
 import { SOURCES, bestSource, harvest, classifyCadence } from './harvest.js';
 import { PLACES, PLACE_BY_ID, PLACE_DE, PLACE_IN, SPECIES, SPECIES_BY_ID, checkSpecies, placeOpen, speciesOf } from './species.js';
-import { Encyclopedia, thumbCopy } from './encyclopedia.js';
+import { Encyclopedia, READ_REWARD, thumbCopy } from './encyclopedia.js';
 import { Sky, WEATHER_LABEL } from './weather.js';
 import { EcoPanel, tick, summaryHtml, addBoost, boostLeft, visualExtra, rates, GUILDS, boostMult, boostPerMin, maxBoostH, nectarCapacity, hasCollector, COLLECTOR_CAP, COLLECTOR_UPGRADE, addWaiting, groundOf, jarOf, jarCap, stockOf, jarCapOf, emptyJar, drainGround } from './idle.js';
 import { paperTexture } from './watercolor.js';
@@ -287,6 +287,76 @@ function showBiome(id) {
 	if (ci >= 0) garden.flyToCell(ci);
 }
 
+// ─── Vue de loin : la carte et ses filtres ────────────────────
+
+const MAP_FILTERS = [['new', '✨', 'Nouveautés'], ['harvest', '🍯', 'Récoltes'], ['grow', '🌳', 'Croissance'], ['next', '📍', 'À venir']];
+const mapFilter = () => (state.mapFilter ??= { new: true, harvest: true, grow: false, next: false });
+
+/** Les pastilles de chaque filtre (les récoltes viennent du jardin). */
+function mapPills() {
+	const pl = here(), fresh = SPECIES.filter(s => state.species[s.id] && !state.speciesSeen?.[s.id]);
+	const specimen = {};
+	if (fresh.length) for (const p of pl.plants) {
+		if (p.growth < 1) continue;
+		specimen[speciesOf(p)] ??= p;
+	}
+	const at = p => { const [ox, oy] = garden.cellOriginOf(p); return { x: ox + p.x, y: oy + p.y - 30 }; };
+	const pills = { new: [], grow: [], next: [] };
+	// Les espèces dont la fiche n'est pas encore lue : sur place si on la voit, sinon sur le cœur de son milieu.
+	for (const s of fresh) {
+		const p = specimen[s.id], b = p ? null : garden.insects.find(i => i.sp === s.id && !i.leaving && !i.hidden);
+		let pos = p ? at(p) : b ? { x: b.x, y: b.y - 20 } : null;
+		if (!pos) {
+			const ci = heartOf(pl, s.place);
+			if (ci < 0) continue;
+			const [cx, cy] = garden.cellCenter(ci), h = [...s.id].reduce((a, c) => (a * 31 + c.charCodeAt(0)) >>> 0, 7);
+			// Au-dessus du nom de la parcelle, pour ne pas le cacher.
+			pos = { x: cx + (h % 240) - 120, y: cy - 90 - ((h >> 8) % 80) };
+		}
+		pills.new.push({ ...pos, icon: '✨', label: s.name.length > 16 ? `${s.name.slice(0, 15)}…` : s.name, rank: 4, msg: `${s.name} : lis sa fiche, +${READ_REWARD} nectar`, open: () => species.open(s.id) });
+	}
+	for (const p of pl.plants) {
+		if (p.growth >= 1 || (p.type !== 'arbre' && p.type !== 'buisson')) continue;
+		const pct = Math.floor(p.growth * 100);
+		pills.grow.push({ ...at(p), icon: p.type === 'arbre' ? '🌳' : '🌿', label: `${pct} %`, rank: 1, msg: `${plantName(p)} : ${pct} %` });
+	}
+	// Le prochain décor de chaque milieu (la prochaine parcelle a déjà son étiquette).
+	const nextDecor = {};
+	for (const [key, d] of Object.entries(DECOR)) {
+		if (d.always || pl.unlocked[key] || heartOf(pl, d.place) < 0) continue;
+		if (!nextDecor[d.place] || d.km < DECOR[nextDecor[d.place]].km) nextDecor[d.place] = key;
+	}
+	for (const key of Object.values(nextDecor)) {
+		const d = DECOR[key], left = fmt(Math.max(0.1, d.km - biomeKm(pl, d.place)), 1);
+		pills.next.push({ ...garden.decorPos(key), icon: '📍', label: `${left} km`, rank: 0, stay: true, msg: `${d.name} : encore ${left} km dans ce milieu` });
+	}
+	return pills;
+}
+
+garden.mapExtras = () => {
+	const f = mapFilter(), pills = mapPills();
+	return Object.keys(pills).flatMap(k => (f[k] ? pills[k] : []));
+};
+
+function renderMapFilters() {
+	const f = mapFilter(), pills = mapPills();
+	const count = k => (k === 'harvest' ? garden.poiHarvest().length : pills[k].length);
+	$('#map-filters').innerHTML = MAP_FILTERS.map(([k, icon, name]) => `<button class="map-chip${f[k] ? ' on' : ''}" data-filter="${k}" aria-pressed="${!!f[k]}">${icon} ${name}<b>${count(k)}</b></button>`).join('');
+}
+garden.onMapView = on => {
+	$('#map-filters').hidden = !on;
+	if (on) renderMapFilters();
+};
+$('#map-filters').addEventListener('click', e => {
+	const b = e.target.closest('[data-filter]');
+	if (!b) return;
+	const f = mapFilter();
+	f[b.dataset.filter] = !f[b.dataset.filter];
+	renderMapFilters();
+	persist();
+});
+setInterval(() => { if (!document.hidden && garden.mapView) renderMapFilters(); }, 2000);
+
 // ─── Toucher : plante, animal, parcelle ───────────────────────
 
 let cardTimer = 0;
@@ -325,7 +395,9 @@ garden.onTap = hit => {
 	if (!hit) { card.hidden = true; return; }
 	if (hit.poi) {
 		card.hidden = true;
-		garden.flyTo(hit.poi.x, hit.poi.y, hit.poi.z);
+		const one = hit.poi.items?.length === 1 ? hit.poi.items[0] : null;
+		if (!one?.stay) garden.flyTo(hit.poi.x, hit.poi.y, hit.poi.z);
+		if (one?.msg) toast(one.msg, '#5F933E', one.open ?? null);
 		// Les œufs ne se ramassent pas à la main : le jardinier passe les chercher.
 		const eggs = hit.poi.items?.find(p => p.eggs);
 		if (eggs) toast(`${eggs.eggs} œuf${eggs.eggs > 1 ? 's' : ''} : ${owned('cabane') ? `${farmerName(true).toLowerCase()} viendra les chercher` : 'pose une cabane, ton jardinier viendra les chercher'} (+${eggs.eggs * EGG_NECTAR} nectar)`, '#5F933E');

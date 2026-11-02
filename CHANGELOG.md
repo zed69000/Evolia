@@ -3,6 +3,14 @@
 Chaque version, la plus récente en haut. Le site (evolia.sebastienalzamora.workers.dev) est toujours à jour ;
 le Play Store (tests internes) reçoit les versions indiquées « Play ».
 
+## 0.7.39 — 2 novembre 2026
+- **La carte a ses filtres.** Quand tu dézoomes, une barre apparaît pour choisir ce que tu veux voir ; le jeu garde ton choix :
+  - **✨ Nouveautés** : les espèces dont tu n'as pas encore lu la fiche. Touche la pastille pour zoomer, puis le message pour ouvrir la fiche (+10 nectar).
+  - **🍯 Récoltes** : collecteurs, gouttes, œufs et potager, comme avant.
+  - **🌳 Croissance** : les arbres et arbustes qui poussent, avec leur pourcentage.
+  - **📍 À venir** : ce qu'il reste à parcourir pour le prochain décor de chaque milieu.
+- Les pastilles passent au-dessus des noms de parcelles, et celles qui se touchent se regroupent pour rester lisibles.
+
 ## 0.7.38 — 2 novembre 2026
 - **La caméra ne part plus pendant que tu joues.** Chaque geste (toucher, glisser, zoomer, bouton) remet à zéro un minuteur : elle ne peut repartir d'elle-même qu'après 20 secondes sans rien faire, et jamais tant qu'une fiche, une fenêtre ou une page est ouverte, ni quand tu regardes la carte de loin.
 - **Elle ne suit plus l'herbe ni les fleurs**, seulement les arbustes, les arbres et les jeunes pousses semées par les bêtes.

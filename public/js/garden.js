@@ -1186,6 +1186,12 @@ export class Garden {
 	 * Peut-on poser cet objet ici : dans une clairière ouverte, dans un milieu où il a sa place, pas dans l'eau
 	 * ni sur un sentier, pas sur un autre objet.
 	 */
+	/** Le centre d'une parcelle, ouverte ou non. */
+	cellCenter(i) {
+		const [ox, oy] = cellOrigin(i);
+		return [ox + PARCEL_W / 2, oy + PARCEL_H / 2];
+	}
+
 	/** Coin haut-gauche de la parcelle d'une plante. */
 	cellOriginOf(p) { return cellOrigin(cellOf(p)); }
 
@@ -1661,6 +1667,11 @@ export class Garden {
 	 * jardinier les ramassera), potagers mûrs, gouttes de nectar à cueillir (par parcelle). Coordonnées du monde.
 	 */
 	poiList() {
+		return [...(this.state.mapFilter?.harvest === false ? [] : this.poiHarvest()), ...(this.mapExtras?.() ?? [])];
+	}
+
+	/** Le filtre « Récoltes » : ce qui attend d'être ramassé. */
+	poiHarvest() {
 		const out = [];
 		for (const it of this.items) {
 			if (it.kind === 'collecteur') {
@@ -1686,7 +1697,8 @@ export class Garden {
 		const dpr = this.dpr, R = 18 * dpr, groups = [];
 		for (const p of this.poiList().sort((a, b) => b.rank - a.rank)) {
 			const sx = p.x * S + tx, sy = p.y * S + ty;
-			const g = groups.find(q => Math.hypot(q.sx - sx, q.sy - sy) < R * 2.2);
+			// Les étiquettes sont larges : on regroupe plus loin à l'horizontale, pour qu'elles ne se chevauchent pas.
+			const g = groups.find(q => Math.hypot((q.sx - sx) / 2.4, q.sy - sy) < R * 2.2);
 			if (g) { g.items.push(p); continue; }
 			groups.push({ sx, sy, items: [p] });
 		}
@@ -2036,6 +2048,8 @@ export class Garden {
 			}
 		}
 		if (this.camLock?.() && this.camTarget) this.camTarget = null;
+		const mapView = this.cam.z < POI_Z;
+		if (mapView !== this.mapView) { this.mapView = mapView; this.onMapView?.(mapView); }
 		if (this.following) {
 			const plant = this.followShow ? this.current : this.followed;
 			const go = this.followShow ? this.idle() && !this.camLock?.() : this.autoCam();
@@ -3532,8 +3546,6 @@ export class Garden {
 		if (!glyph && this.dew?.length) { world(); this.drawDew(ctx); }
 		if (!glyph && this.items.some(it => it.kind === 'collecteur')) { world(); this.drawJarTags(ctx); }
 		if (!glyph && this.farmer?.hidden) { world(); this.drawSmoke(ctx); }
-		if (this.cam.z < POI_Z && !this.ghost) this.drawPOI(ctx, S, tx, ty);
-		else this.poiHits = null;
 		if (this.floats?.length) { world(); this.drawFloats(ctx); }
 
 		if (this.ghost) {
@@ -3570,6 +3582,9 @@ export class Garden {
 		ctx.drawImage(this.vignette, 0, 0);
 
 		if (glyph || this.lockedCells().length) this.drawLabels(ctx, glyph, S, tx, ty);
+		// Les pastilles passent par-dessus tout, étiquettes des parcelles comprises.
+		if (this.cam.z < POI_Z && !this.ghost) this.drawPOI(ctx, S, tx, ty);
+		else this.poiHits = null;
 		this.drawNectarDrops(ctx, S, tx, ty);
 	}
 
