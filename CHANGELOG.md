@@ -3,6 +3,12 @@
 Chaque version, la plus récente en haut. Le site (evolia.sebastienalzamora.workers.dev) est toujours à jour ;
 le Play Store (tests internes) reçoit les versions indiquées « Play ».
 
+## 0.7.37 — 2 novembre 2026
+- **De vrais cris d'animaux.** Les sons fabriqués sonnaient faux : merle, rouge-gorge, fauvette, rossignol, hirondelles, chouettes hulotte et effraie, corneille, grenouilles, crapauds, grillons, sauterelles, poules, coq, chien, chat, canard et bourdon sont maintenant de vrais enregistrements (42 cris, 750 Ko, de Joseph Sardin sur BigSoundBank, domaine public). Les cousins proches empruntent la voix d'un autre, plus aiguë ou plus grave (la chevêche et le grand-duc celle de la hulotte, la pie et le geai celle de la corneille, la rainette celle de la grenouille…), et les petits passereaux un vrai chant de cousin à leur hauteur. Chaque cri est joué un peu différemment à chaque fois (variante, hauteur, volume) pour ne pas se répéter, et six bêtes au plus chantent ensemble.
+- Les oiseaux lointains du jour et les grillons de la nuit sont eux aussi de vrais enregistrements, très bas.
+- Le pic, la mésange, les rapaces, le goéland, le héron et le sanglier gardent leur voix fabriquée en attendant un bon enregistrement libre.
+- Crédit dans Options › Sons de la nature.
+
 ## 0.7.36 — 2 novembre 2026
 - **Les animaux autour de toi se font entendre.** Jusqu'ici, seules 15 espèces avaient un cri ; maintenant chaque oiseau visible a son petit chant à lui (hauteur, notes et rythme propres à son espèce), les rapaces crient (la crécerelle fait « kli-kli-kli »), les hirondelles gazouillent, grenouilles et crapauds coassent, criquets et grillons stridulent, le sanglier grogne, les poules gloussent, le coq chante quand il chante, le chien aboie et le chat miaule (rarement). Les chauves-souris restent muettes : leurs cris sont trop aigus pour nos oreilles. Plus on zoome, plus on les entend souvent et fort.
 - **La pastille 🥚 revient** en vue dézoomée, comme celle du potager ; la toucher amène sur le poulailler et rappelle que le jardinier viendra chercher les œufs. Ils ne sont plus détaillés dans la bulle du poulailler.

@@ -1,8 +1,9 @@
-// Les sons de la nature, fabriqués sur place avec Web Audio (aucun fichier, marche hors ligne) :
+// Les sons de la nature, avec Web Audio (tout marche hors ligne) :
 //   - un fond très discret qui suit le vrai ciel et le lieu : pluie et orage quand il pleut vraiment,
 //     ressac du littoral, grillons la nuit ; aucun souffle ni bruit de fond continu ;
-//   - les cris des animaux visibles à l'écran (merle, mésange, pic, chouette, grenouille, abeilles…),
-//     placés à gauche ou à droite selon où ils sont ;
+//   - les cris des animaux visibles à l'écran, placés à gauche ou à droite selon où ils sont : de vrais
+//     enregistrements (public/sfx, BigSoundBank, domaine public) quand on en a, joués chaque fois un peu
+//     différemment (variante, hauteur, volume) ; sinon une voix fabriquée sur place (pic, mésange, rapaces…) ;
 //   - une petite cloche douce, en gamme pentatonique, quand quelque chose de beau arrive ;
 //   - une musique générative très calme : notes et accords tirés au hasard dans une gamme pentatonique,
 //     avec de longs silences ; elle ne boucle jamais, donc ne se répète jamais.
@@ -17,6 +18,9 @@ export class Soundscape {
 		this.ctx = null;
 		this.next = {}; // prochain cri possible, par espèce
 		this.lastFlash = 0;
+		this.buf = {}; // les vrais cris, une fois chargés : nom → variantes
+		this.lastVar = {};
+		this.voices = 0;
 	}
 
 	get settings() { return (this.state.sound ??= { on: true, vol: 0.7 }); }
@@ -111,6 +115,52 @@ export class Soundscape {
 		this.rainBody = this.bed({ type: 'lowpass', freq: 500, q: 0.4 }, 0);
 		this.sea = this.bed({ type: 'lowpass', freq: 520, q: 0.5 }, 0, null, 0.11);
 		this.loop = setInterval(() => this.tick(), 250);
+		this.loadSamples();
+	}
+
+	/** Charge les vrais cris une seule fois, au premier geste ; en attendant (ou sans réseau), les voix fabriquées. */
+	loadSamples() {
+		for (const [name, n] of Object.entries(SAMPLES)) {
+			for (let i = 1; i <= n; i++) {
+				fetch(`sfx/${name}-${i}.mp3`)
+					.then(r => (r.ok ? r.arrayBuffer() : Promise.reject(r.status)))
+					// La forme à rappels marche aussi sur les vieux Safari.
+					.then(ab => new Promise((ok, ko) => this.ctx.decodeAudioData(ab, ok, ko)))
+					.then(b => (this.buf[name] ??= []).push(b))
+					.catch(() => {});
+			}
+		}
+	}
+
+	/**
+	 * Joue un vrai cri : une variante tirée au hasard (jamais deux fois la même de suite), un peu plus haute ou plus
+	 * basse et plus ou moins forte à chaque fois, pour que la répétition ne s'entende pas. Faux s'il n'est pas chargé
+	 * ou si trop de bêtes chantent déjà (le téléphone et l'oreille saturent).
+	 */
+	sample(name, pan, level, rate = 1, opt = {}) {
+		const list = this.buf[name];
+		if (!list?.length || this.voices >= MAX_VOICES) return false;
+		let i = Math.floor(Math.random() * list.length);
+		if (list.length > 1 && i === this.lastVar[name]) i = (i + 1) % list.length;
+		this.lastVar[name] = i;
+		const ctx = this.ctx, src = ctx.createBufferSource(), t = ctx.currentTime + 0.03;
+		src.buffer = list[i];
+		src.playbackRate.value = rate * (0.95 + Math.random() * 0.1);
+		const out = this.voice(pan, level), vol = SAMPLE_LEVEL * (SAMPLE_GAIN[name] ?? 1) * (opt.vol ?? 1) * level * 10 ** ((Math.random() - 0.5) * 0.25);
+		const dur = list[i].duration / src.playbackRate.value;
+		if (opt.swell) {
+			// Un insecte qui passe : le son monte, puis s'éloigne d'un côté à l'autre.
+			out.g.gain.setValueAtTime(0, t);
+			out.g.gain.linearRampToValueAtTime(vol, t + dur * 0.45);
+			out.g.gain.linearRampToValueAtTime(0, t + dur);
+			out.p.pan.setValueAtTime(pan - 0.3, t);
+			out.p.pan.linearRampToValueAtTime(pan + 0.3, t + dur);
+		} else out.g.gain.value = vol;
+		src.connect(out.g);
+		this.voices++;
+		src.onended = () => { this.voices = Math.max(0, this.voices - 1); out.p.disconnect(); };
+		src.start(t);
+		return true;
 	}
 
 	/** Un bruit filtré qui tourne en boucle ; `swell` : houle lente du volume (vagues, clapotis), en Hz. */
@@ -205,6 +255,9 @@ export class Soundscape {
 		if (Math.random() > call.chance * (0.45 + 0.55 * near)) return;
 		this.next[key] = now + call.every * (0.7 + Math.random() * 0.6);
 		const pan = Math.max(-0.8, Math.min(0.8, ((b.x - v.x0) / v.w) * 2 - 1));
+		const s = sampleFor(b);
+		// Un vrai cri dès qu'il est chargé (s'il y a déjà trop de voix, la bête se tait cette fois).
+		if (s && this.buf[s.name]) { this.sample(s.name, pan, 0.4 + 0.6 * near, s.rate); return; }
 		this[call.voice](pan, call, 0.4 + 0.6 * near);
 	}
 
@@ -217,7 +270,7 @@ export class Soundscape {
 		g.connect(p);
 		p.connect(this.master);
 		p.connect(this.verb);
-		return { g, level };
+		return { g, p, level };
 	}
 
 	note(out, t, f0, f1, dur, vol, type = 'sine') {
@@ -370,6 +423,9 @@ export class Soundscape {
 
 	/** Un oiseau lointain, à peine audible, noyé dans l'écho. */
 	distant() {
+		// De préférence un vrai chanteur, très bas et noyé dans l'écho.
+		const sing = SONGBIRDS[Math.floor(Math.random() * SONGBIRDS.length)];
+		if (this.sample(sing, Math.random() * 1.4 - 0.7, 0.35, 0.9 + Math.random() * 0.3, { vol: 0.35 })) return;
 		const out = this.voice(Math.random() * 1.4 - 0.7, 0.35), t = this.ctx.currentTime + 0.05;
 		const f = 2400 + Math.random() * 2000, kind = Math.random();
 		if (kind < 0.4) {
@@ -386,6 +442,13 @@ export class Soundscape {
 	}
 
 	cricket() {
+		// Un vrai grillon, de temps en temps (un enregistrement dure quelques secondes) ; sinon trois petits « cri ».
+		if (this.buf.grillon) {
+			const now = this.ctx.currentTime;
+			if (now < (this.nextCricket ?? 0)) return;
+			this.nextCricket = now + 3 + Math.random() * 5;
+			if (this.sample('grillon', Math.random() * 1.6 - 0.8, 0.5, 0.9 + Math.random() * 0.2, { vol: 0.3 })) return;
+		}
 		const out = this.voice(Math.random() * 1.6 - 0.8, 0.5), t = this.ctx.currentTime + 0.05;
 		const f = 4200 + Math.random() * 800;
 		for (let i = 0; i < 3; i++) this.note(out, t + i * 0.045, f, f, 0.03, 0.018);
@@ -393,6 +456,8 @@ export class Soundscape {
 
 	/** Un insecte qui passe : un bourdonnement doux qui monte, change de hauteur en passant, et s'éloigne. */
 	flyby(pan, kind) {
+		// Le vrai bourdon ; plus aigu pour les petites mouches.
+		if (this.sample('bourdon', pan, 1, kind === 1 ? 1 : 1.7, { swell: true, vol: kind === 1 ? 0.6 : 0.35 })) return;
 		const ctx = this.ctx, t = ctx.currentTime + 0.05, dur = 1.1 + Math.random() * 0.8;
 		const base = kind === 1 ? 165 + Math.random() * 40 : 260 + Math.random() * 60;
 		const o = ctx.createOscillator(), f = ctx.createBiquadFilter(), g = ctx.createGain(), p = ctx.createStereoPanner();
@@ -552,6 +617,42 @@ const CALLS = {
 	sauterelle: { voice: 'chirr', every: 6, chance: 0.5 },
 	heron: { voice: 'croak', every: 30, chance: 0.3 },
 };
+
+// Les vrais cris (public/sfx, enregistrements de Joseph Sardin, BigSoundBank, domaine public) : nombre de variantes.
+const SAMPLES = { merle: 3, rougegorge: 3, fauvette: 1, rossignol: 1, hirondelle: 3, hulotte: 3, effraie: 2, corneille: 2, grenouille: 3, crapaud: 1, grillon: 2, sauterelle: 2, poule: 4, coq: 2, chien: 3, chat: 3, canard: 3, bourdon: 1 };
+// Fichiers ramenés à -16 LUFS ; quelques cris très brefs restent plus bas, on les remonte un peu.
+const SAMPLE_GAIN = { canard: 1.6, poule: 1.35 };
+const SAMPLE_LEVEL = 0.12; // un cri proche, à côté des notes fabriquées et de la musique
+const MAX_VOICES = 6;
+const SONGBIRDS = ['rougegorge', 'fauvette', 'rossignol', 'merle'];
+
+// Quel enregistrement pour quelle espèce, et à quelle hauteur (les cousins proches empruntent la voix d'un autre,
+// plus haute ou plus grave selon leur taille).
+const SAMPLE_OF = {
+	merle: ['merle'], 'rouge-gorge': ['rougegorge'], fauvette: ['fauvette'], rossignol: ['rossignol'],
+	hirondelle: ['hirondelle'], martinet: ['hirondelle', 1.25],
+	hulotte: ['hulotte'], effraie: ['effraie'], cheveche: ['hulotte', 1.35], 'moyen-duc': ['hulotte', 0.85], 'hibou-marais': ['hulotte', 0.9], 'grand-duc': ['hulotte', 0.7],
+	corneille: ['corneille'], pie: ['corneille', 1.3], geai: ['corneille', 1.2], cassenoix: ['corneille', 1.1], chocard: ['corneille', 1.45],
+	colvert: ['canard'],
+	grenouille: ['grenouille'], 'grenouille-agile': ['grenouille', 1.15], rainette: ['grenouille', 1.35],
+	crapaud: ['crapaud', 0.8], calamite: ['crapaud', 0.9], alyte: ['crapaud'], sonneur: ['crapaud', 0.75],
+	courtiliere: ['grillon', 0.6],
+};
+// Petits passereaux sans enregistrement à eux : un vrai chant de cousin, à une hauteur propre à chaque espèce.
+const SONG_POOL = new Set(['alouette', 'bergeronnette', 'tarier', 'bruant-jaune', 'linotte', 'chardonneret', 'verdier', 'pinson', 'grive', 'troglodyte', 'phragmite', 'etourneau', 'pie-grieche']);
+
+/** L'enregistrement d'une bête, s'il y en a un : { name, rate }. */
+function sampleFor(b) {
+	const m = SAMPLE_OF[b.sp];
+	if (m) return { name: m[0], rate: m[1] ?? 1 };
+	if (b.kind === 'hen') return { name: b.p?.rooster ? 'coq' : 'poule', rate: 1 };
+	if (b.kind === 'dog') return { name: 'chien', rate: 1 };
+	if (b.kind === 'cat') return { name: 'chat', rate: 1 };
+	const h = hashOf(b.sp ?? b.kind);
+	if (SONG_POOL.has(b.sp)) return { name: SONGBIRDS[h % SONGBIRDS.length], rate: 0.95 + ((h >> 4) % 100) / 100 * 0.4 };
+	if (b.kind === 'grasshopper') return { name: b.p?.cricket ? 'grillon' : 'sauterelle', rate: 0.85 + ((h >> 4) % 100) / 100 * 0.45 };
+	return null;
+}
 
 /** Un petit nombre stable tiré d'un nom (pour que chaque espèce garde sa voix). */
 const hashOf = s => [...String(s)].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7);

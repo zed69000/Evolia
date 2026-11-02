@@ -12,3 +12,6 @@ keystore.properties
 *.jks
 *.keystore
 *.aab
+
+# Enregistrements sonores d’origine (lourds) : voir CREDITS-AUDIO.md pour les retrouver
+art/audio-sources/

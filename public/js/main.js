@@ -1823,6 +1823,7 @@ function renderOptions() {
 		<h3>Sons de la nature</h3>
 		<label class="switch"><input type="checkbox" id="opt-sound" ${sound.settings.on ? 'checked' : ''}><i></i><span>Pluie, oiseaux et petites bêtes de ton jardin</span></label>
 		${sound.settings.on ? `<input type="range" id="opt-volume" class="volume" min="0" max="1" step="0.05" value="${sound.settings.vol}" aria-label="Volume des sons">` : ''}
+		<p class="empty">Cris d'animaux : vrais enregistrements de Joseph Sardin, <a href="https://bigsoundbank.com" target="_blank" rel="noopener">BigSoundBank.com</a> (domaine public).</p>
 		<h3>Musique</h3>
 		<label class="switch"><input type="checkbox" id="opt-music" ${sound.musicSettings.on ? 'checked' : ''}><i></i><span>Musique zen, jamais la même</span></label>
 		${sound.musicSettings.on ? `<input type="range" id="opt-music-vol" class="volume" min="0" max="1" step="0.05" value="${sound.musicSettings.vol}" aria-label="Volume de la musique">` : ''}
