@@ -76,7 +76,6 @@ export function metFor(act, speedKmh) {
 	return interp(RUNS.has(act.id) ? MET_RUN : MET_WALK, speedKmh);
 }
 // Un kilomètre de marche à 5 km/h vaut 125 points d'effort, comme avant ; tout le reste en découle.
-const EFFORT_PER_MET_HOUR = 125 / ((3.8 - 1) * 0.2);
 
 /**
  * L'effort d'un bout de chemin : l'énergie dépensée au-delà du repos (METs − 1, multipliés par la durée), plus un
@@ -87,7 +86,7 @@ const EFFORT_PER_MET_HOUR = 125 / ((3.8 - 1) * 0.2);
 export function effortFor(distanceM, speedKmh, act) {
 	const v = Math.max(1, speedKmh), met = metFor(act, v);
 	const hours = distanceM / 1000 / v;
-	return (met - 1) * hours * EFFORT_PER_MET_HOUR * (1 + 0.05 * Math.max(0, met - 4));
+	return (met - 1) * hours * (Tuning.num('effort.km_marche', 125) / ((3.8 - 1) * 0.2)) * (1 + Tuning.num('effort.bonus_intensite', 0.05) * Math.max(0, met - 4));
 }
 
 export const STEP_LENGTH_M = 0.75;
@@ -311,7 +310,7 @@ export function todayMeters(state) {
 
 // Le nectar d'une sortie à pied suit l'effort : 125 points d'effort (1 km de marche à 5 km/h) font 200 nectar,
 // comme avant ; l'effort d'un jour, rapporté en « mètres de marche » (×8), règle aussi le plafond de l'écosystème.
-export const NECTAR_PER_EFFORT = 200 / 125;
+export const nectarPerEffort = () => Tuning.num('nectar.par_effort', 200 / 125);
 export const WALK_M_PER_EFFORT = 1000 / 125;
 
 /** Ajoute l'effort fait aujourd'hui (ou un autre jour, `key`). */

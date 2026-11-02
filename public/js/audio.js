@@ -146,7 +146,7 @@ export class Soundscape {
 		const ctx = this.ctx, src = ctx.createBufferSource(), t = ctx.currentTime + 0.03;
 		src.buffer = list[i];
 		src.playbackRate.value = rate * (0.95 + Math.random() * 0.1);
-		const out = this.voice(pan, level), vol = SAMPLE_LEVEL * (SAMPLE_GAIN[name] ?? 1) * (opt.vol ?? 1) * level * 10 ** ((Math.random() - 0.5) * 0.25);
+		const out = this.voice(pan, level), vol = Tuning.num('son.niveau_cris', SAMPLE_LEVEL) * (SAMPLE_GAIN[name] ?? 1) * (opt.vol ?? 1) * level * 10 ** ((Math.random() - 0.5) * 0.25);
 		const dur = list[i].duration / src.playbackRate.value;
 		if (opt.swell) {
 			// Un insecte qui passe : le son monte, puis s'éloigne d'un côté à l'autre.

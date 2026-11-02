@@ -987,7 +987,7 @@ export const ITEM_PAINTERS = {
  * Le premier de chaque reste bon marché ; garnir tout un monde devient un vrai projet.
  */
 export function itemCost(kind, owned = 0) {
-	return Math.round((ITEMS[kind].cost * Math.pow(1.4, owned)) / 5) * 5;
+	return Math.round((ITEMS[kind].cost * Math.pow(Tuning.num('amenagement.hausse_prix', 1.4), owned)) / 5) * 5;
 }
 
 /** Combien d'individus de plus d'une espèce les objets posés dans ce lieu attirent. */

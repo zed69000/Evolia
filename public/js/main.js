@@ -1,6 +1,6 @@
 // Interface : bandeau, suivi automatique du mouvement, récolte des pas, récap, carnet, biodiversité, tutoriel.
 
-import { NECTAR_PER_EFFORT, addDayEffort, slots, slotSummary, createSlot, useSlot, renameSlot, deleteSlot, load, save, reset, allPlants, biomeKm, heartOf, ACTIVITIES, ACTIVITY_BY_ID, MAX_SPEED_KMH, activityFor, effortFor, hikeFor, HIKE_WINDOW, dayKey, todayMeters, addDistance, STEP_LENGTH_M, effortMix } from './state.js';
+import { nectarPerEffort, addDayEffort, slots, slotSummary, createSlot, useSlot, renameSlot, deleteSlot, load, save, reset, allPlants, biomeKm, heartOf, ACTIVITIES, ACTIVITY_BY_ID, MAX_SPEED_KMH, activityFor, effortFor, hikeFor, HIKE_WINDOW, dayKey, todayMeters, addDistance, STEP_LENGTH_M, effortMix } from './state.js';
 import { Garden, CELLS, CELL_KM, cellsOpen, cellName } from './garden.js';
 import { PlacesMap } from './map.js';
 import { PLANT_TYPES, DECOR, plantName } from './plants.js';
@@ -9,7 +9,7 @@ import { SOURCES, bestSource, harvest, classifyCadence } from './harvest.js';
 import { PLACES, PLACE_BY_ID, PLACE_DE, PLACE_IN, SPECIES, SPECIES_BY_ID, checkSpecies, placeOpen, speciesOf } from './species.js';
 import { Encyclopedia, thumbCopy } from './encyclopedia.js';
 import { Sky, WEATHER_LABEL } from './weather.js';
-import { EcoPanel, tick, summaryHtml, addBoost, boostLeft, visualExtra, rates, GUILDS, BOOST_MULT, BOOST_PER_MIN, nectarCapacity, hasCollector, COLLECTOR_CAP, COLLECTOR_UPGRADE, addWaiting, groundOf, jarOf, jarCap, stockOf, jarCapOf, emptyJar, drainGround } from './idle.js';
+import { EcoPanel, tick, summaryHtml, addBoost, boostLeft, visualExtra, rates, GUILDS, boostMult, boostPerMin, maxBoostH, nectarCapacity, hasCollector, COLLECTOR_CAP, COLLECTOR_UPGRADE, addWaiting, groundOf, jarOf, jarCap, stockOf, jarCapOf, emptyJar, drainGround } from './idle.js';
 import { paperTexture } from './watercolor.js';
 import { Soundscape } from './audio.js';
 import { ITEMS, ITEM_ORDER, itemHelp, itemCost, fitsPlace, CATS, MAX_LEVEL, LEVEL_NAME, LEVEL_KM, canLevel, levelCost, CABIN_STYLES } from './deco.js';
@@ -365,7 +365,7 @@ garden.onTap = hit => {
 // ─── Toucher un animal, et le jeu « Trouve… » pour les enfants ─
 
 let quest = null;
-const QUEST_REWARD = 15;
+const questReward = () => Tuning.num('trouve.recompense', 15);
 
 function tapCritter(hit, card) {
 	const sp = SPECIES_BY_ID[hit.critter.sp];
@@ -562,11 +562,11 @@ function winQuest(sp) {
 	endQuest();
 	noteQuest(state);
 	renderDaily();
-	state.nectar = (state.nectar ?? 0) + QUEST_REWARD;
+	state.nectar = (state.nectar ?? 0) + questReward();
 	persist();
 	renderHud();
 	showModal(`<h2>Bravo !</h2><p>Tu as trouvé : <b>${sp.name}</b></p><div class="bravo-thumb" id="bravo-thumb"></div>
-		<p>${sp.role}</p><div class="chips"><span class="chip gold">+${QUEST_REWARD} nectar</span></div>
+		<p>${sp.role}</p><div class="chips"><span class="chip gold">+${questReward()} nectar</span></div>
 		<button class="btn primary" data-close>Continuer</button><button class="btn ghost wide" data-close data-open-sp="${sp.id}">Voir sa fiche</button>`);
 	$('#bravo-thumb').appendChild(thumbCopy(sp, 110, false));
 }
@@ -784,7 +784,7 @@ function onSample(s) {
 	if (s.climb > 0 && !act.bike) session.climb = (session.climb ?? 0) + s.climb;
 	const effort = effortFor(s.dist, s.speedKmh, act) + (s.climb > 0 && !act.bike ? s.climb * act.mult : 0);
 	// À pied, le nectar suit l'effort (montée comprise) ; à vélo, il garde sa part réduite, comme la progression.
-	const nectar = act.bike ? (s.dist * (act.counts ?? 1)) / 5 : effort * NECTAR_PER_EFFORT;
+	const nectar = act.bike ? (s.dist * (act.counts ?? 1)) / 5 : effort * nectarPerEffort();
 	session.nectar = (session.nectar ?? 0) + nectar;
 	addMeters(s.dist * (act.counts ?? 1), nectar);
 	addDayEffort(state, effort);
@@ -814,7 +814,7 @@ function endSession() {
 	const duration = sessionSeconds(w);
 	const matured = {};
 	for (const ev of w.events) if (ev.kind === 'mature') matured[ev.plant.type] = (matured[ev.plant.type] ?? 0) + 1;
-	if (w.distance > 50) addBoost(state, (duration / 60) * BOOST_PER_MIN);
+	if (w.distance > 50) addBoost(state, (duration / 60) * boostPerMin());
 	if (w.distance > 10) {
 		// `end` sert à ne pas recompter ces pas lors de la prochaine récolte.
 		state.walks.unshift({ start: w.start, end: w.sim ? undefined : w.lastMove, duration, distance: w.distance, effort: w.effort, matured, place: state.place, ...(w.climb >= 10 ? { climb: Math.round(w.climb) } : {}), ...(w.hike ? { hike: Object.entries(w.hike).sort((a, b) => b[1] - a[1])[0][0] } : {}) });
@@ -845,7 +845,7 @@ function renderStatus() {
 	if (session) {
 		dot.className = 'status-dot moving';
 		title.textContent = session.act?.name ?? 'En pause';
-		sub.textContent = `Ton jardin pousse · élan ×${BOOST_MULT} à la fin`;
+		sub.textContent = `Ton jardin pousse · élan ×${boostMult()} à la fin`;
 		$('#live-km').textContent = fmt(session.distance / 1000);
 		$('#live-time').textContent = fmtTime(sessionSeconds(session));
 		$('#live-speed').textContent = fmt(session.speed ?? 0, 1);
@@ -860,7 +860,7 @@ function renderStatus() {
 		return;
 	}
 	const r = rates(state, state.place);
-	const x = boostLeft(state) ? BOOST_MULT : 1;
+	const x = boostLeft(state) ? boostMult() : 1;
 	dot.className = `status-dot${state.tracking ? ' idle' : ''}`;
 	title.textContent = state.tracking ? 'Au repos' : 'Suivi en pause';
 	// La récolte qui attend : dans les fleurs (à cueillir) ou dans les collecteurs (à vider d'un geste).
@@ -893,7 +893,7 @@ function showDaily(gift = false) {
 	const streak = d.streak > 0 ? `<b>${d.streak} jour${d.streak > 1 ? 's' : ''} actif${d.streak > 1 ? 's' : ''}</b> de suite${d.best > d.streak ? ` · record ${d.best}` : ''}` : 'Bouge 500 m pour lancer ta série';
 	const top = ready
 		? `<div class="gift"><span class="gift-box" aria-hidden="true">🎁</span><div><p>${streak}. Ton jardin t'a gardé un cadeau :</p>
-			<span class="chip gold">+${g.nectar} nectar</span>${g.boost ? `<span class="chip">élan ×3 · ${g.boost} min</span>` : ''}</div></div>`
+			<span class="chip gold">+${g.nectar} nectar</span>${g.boost ? `<span class="chip">élan ×${boostMult()} · ${g.boost} min</span>` : ''}</div></div>`
 		: `<p class="streak">${streak}</p>`;
 	// Le bilan de l'absence reste replié : la fenêtre tient sur l'écran.
 	const note = gift && idleNote ? `<details class="away"><summary>Pendant ton absence</summary>${idleNote}</details>` : '';
@@ -910,7 +910,7 @@ function showDaily(gift = false) {
 		state.nectar = (state.nectar ?? 0) + got.nectar;
 		if (got.boost) addBoost(state, got.boost);
 		garden.burst(garden.cam.cx, garden.cam.cy, 30, '#F4C23E');
-		toast(`Cadeau : +${got.nectar} nectar${got.boost ? ` et élan ×3 pendant ${got.boost} min` : ''}`, '#F4C23E');
+		toast(`Cadeau : +${got.nectar} nectar${got.boost ? ` et élan ×${boostMult()} pendant ${got.boost} min` : ''}`, '#F4C23E');
 		persist(true);
 		renderHud();
 		renderDaily();
@@ -926,7 +926,7 @@ $('#modal').addEventListener('click', e => {
 	state.nectar = (state.nectar ?? 0) + c.reward;
 	if (c.boost) addBoost(state, c.boost);
 	sound.chime(2);
-	toast(`Défi réussi : +${c.reward} nectar${c.boost ? ` et élan ×3 pendant ${c.boost} min` : ''}`, '#F08A3C');
+	toast(`Défi réussi : +${c.reward} nectar${c.boost ? ` et élan ×${boostMult()} pendant ${c.boost} min` : ''}`, '#F08A3C');
 	persist(true);
 	renderHud();
 	renderDaily();
@@ -970,9 +970,9 @@ function showRecap(w, duration, matured) {
 	let ecoLine = '';
 	if (w.distance > 50) {
 		const r = rates(state, state.place);
-		const mins = Math.min(360, (duration / 60) * BOOST_PER_MIN);
-		const flowers = ((r.grow.fleur ?? 0) * (BOOST_MULT - 1) * mins) / 60 / PLANT_TYPES.fleur.cost;
-		ecoLine = `<p class="eco-gain">Ton écosystème profite de ta sortie : <b>+${fmtInt(w.nectar ?? w.distance / 5)} nectar à récolter</b> et production <b>×${BOOST_MULT}</b> pendant ${fmtMin(mins)}${flowers >= 0.5 ? `, soit environ ${fmtInt(flowers)} fleur${flowers >= 1.5 ? 's' : ''} en plus grâce à tes pollinisateurs` : ''}.</p>`;
+		const mins = Math.min(maxBoostH() * 60, (duration / 60) * boostPerMin());
+		const flowers = ((r.grow.fleur ?? 0) * (boostMult() - 1) * mins) / 60 / PLANT_TYPES.fleur.cost;
+		ecoLine = `<p class="eco-gain">Ton écosystème profite de ta sortie : <b>+${fmtInt(w.nectar ?? w.distance / 5)} nectar à récolter</b> et production <b>×${boostMult()}</b> pendant ${fmtMin(mins)}${flowers >= 0.5 ? `, soit environ ${fmtInt(flowers)} fleur${flowers >= 1.5 ? 's' : ''} en plus grâce à tes pollinisateurs` : ''}.</p>`;
 	}
 	showModal(`
 		<h2>${title}</h2><p>Voici ce qui a poussé grâce à toi.</p>
@@ -1022,12 +1022,12 @@ async function playHarvest(res, source) {
 	here().km += res.distance / 1000;
 	state.totals.steps += res.steps;
 	// Le nectar des pas relus suit leur effort, réparti sur les jours où ils ont été faits.
-	const effortAll = res.groups.reduce((a, g) => a + g.effort, 0), nectar = effortAll * NECTAR_PER_EFFORT;
+	const effortAll = res.groups.reduce((a, g) => a + g.effort, 0), nectar = effortAll * nectarPerEffort();
 	for (const [k, m] of Object.entries(res.days)) if (res.distance > 0) addDayEffort(state, (effortAll * m) / res.distance, k);
 	addWaiting(state, nectar, false, state.place);
 	// L'élan des pas relus vaut celui d'une marche suivie en direct : 3 min par minute de vraie marche,
 	// 2 min par minute de petits pas (ménage, marche lente).
-	addBoost(state, res.groups.reduce((n, g) => n + g.minutes * (g.act.id === 'menage' || g.act.id === 'marche-lente' ? 2 : 3), 0));
+	addBoost(state, res.groups.reduce((n, g) => n + g.minutes * (g.act.id === 'menage' || g.act.id === 'marche-lente' ? 2 : boostPerMin()), 0));
 	renderHud();
 	closeModal();
 	toast(`${fmtInt(res.steps)} pas pendant ton absence · +${fmtInt(nectar)} nectar à récolter`, '#A3BD57');
@@ -1213,7 +1213,7 @@ garden.onNectar = n => {
 
 /** Production par heure, dans tous les lieux (l'écosystème travaille partout à la fois). */
 function nectarPerHour() {
-	const x = boostLeft(state) ? BOOST_MULT : 1;
+	const x = boostLeft(state) ? boostMult() : 1;
 	return Object.keys(state.places).reduce((a, id) => a + rates(state, id).nectar, 0) * x;
 }
 
@@ -1226,7 +1226,7 @@ function renderZoomInfo() {
 	const show = close && !!state.showZoomInfo;
 	card.hidden = !show;
 	if (!show) return;
-	const x = boostLeft(state) ? BOOST_MULT : 1;
+	const x = boostLeft(state) ? boostMult() : 1;
 	const r = rates(state, state.place);
 	// Le total avance en direct entre deux passages de l'écosystème (toutes les 5 s).
 	// La récolte qui attend avance en direct, jusqu'à la limite de la réserve.
@@ -1789,7 +1789,7 @@ function offerNotify() {
 /** En quittant l'appli : quand le collecteur sera plein, le cadeau de demain matin, la série à garder ce soir. */
 function planReminders() {
 	if (!state.notify) return;
-	const perH = Object.keys(state.places).reduce((a, id) => a + rates(state, id).nectar, 0) * (boostLeft(state) ? BOOST_MULT : 1);
+	const perH = Object.keys(state.places).reduce((a, id) => a + rates(state, id).nectar, 0) * (boostLeft(state) ? boostMult() : 1);
 	const space = jarCap(state) - jarOf(state), hours = perH > 0 ? space / perH : Infinity;
 	const gift = new Date(); gift.setDate(gift.getDate() + 1); gift.setHours(9, 0, 0, 0);
 	const evening = new Date(); evening.setHours(18, 30, 0, 0);

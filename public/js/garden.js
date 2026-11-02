@@ -1267,12 +1267,12 @@ export class Garden {
 	/** Œufs prêts à ramasser au poulailler : chaque poule en pond un et demi par kilomètre, trois au plus en attente. */
 	eggsOf(it) {
 		const hens = it.flock?.hens ?? 3;
-		return Math.max(0, Math.min(hens * 3, Math.floor((this.state.totals.distance / 1000 - (it.km0 ?? 0)) * hens * 1.5)));
+		return Math.max(0, Math.min(hens * 3, Math.floor((this.state.totals.distance / 1000 - (it.km0 ?? 0)) * hens * Tuning.num('poulailler.oeufs_par_km', 1.5))));
 	}
 
 	/** Pousse des légumes d'une parcelle (0 → 1) : ils mûrissent en 2,5 km parcourus. */
 	bedStage(it) {
-		return Math.max(0, Math.min(1, (this.state.totals.distance / 1000 - (it.km0 ?? 0)) / 2.5));
+		return Math.max(0, Math.min(1, (this.state.totals.distance / 1000 - (it.km0 ?? 0)) / Tuning.num('potager.km_maturite', 2.5)));
 	}
 
 	placeItem(kind, x, y, rot = 0) {

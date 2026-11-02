@@ -7,10 +7,10 @@ import { rng, wash, ribbon, curve, pointAt, leaf, ease, clamp01, mix, rgba } fro
 import { SPECIES_BY_ID, speciesIn, speciesOf } from './species.js';
 
 export const PLANT_TYPES = {
-	herbe: { name: 'Herbe folle', plural: 'herbes folles', cost: 15, spacing: 16, box: { w: 72, h: 76, ax: 36, ay: 62 } },
-	fleur: { name: 'Fleur', plural: 'fleurs', cost: 60, spacing: 24, box: { w: 90, h: 140, ax: 45, ay: 126 } },
-	buisson: { name: 'Arbuste', plural: 'arbustes', cost: 150, spacing: 48, box: { w: 200, h: 145, ax: 100, ay: 125 } },
-	arbre: { name: 'Arbre', plural: 'arbres', cost: 400, spacing: 82, box: { w: 340, h: 315, ax: 170, ay: 297 } },
+	herbe: { name: 'Herbe folle', plural: 'herbes folles', get cost() { return Tuning.num('plante.cout_herbe', 15); }, spacing: 16, box: { w: 72, h: 76, ax: 36, ay: 62 } },
+	fleur: { name: 'Fleur', plural: 'fleurs', get cost() { return Tuning.num('plante.cout_fleur', 60); }, spacing: 24, box: { w: 90, h: 140, ax: 45, ay: 126 } },
+	buisson: { name: 'Arbuste', plural: 'arbustes', get cost() { return Tuning.num('plante.cout_arbuste', 150); }, spacing: 48, box: { w: 200, h: 145, ax: 100, ay: 125 } },
+	arbre: { name: 'Arbre', plural: 'arbres', get cost() { return Tuning.num('plante.cout_arbre', 400); }, spacing: 82, box: { w: 340, h: 315, ax: 170, ay: 297 } },
 };
 
 const GREENS = ['#326832', '#488641', '#5F933E', '#7FAA48'];

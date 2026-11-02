@@ -34,11 +34,11 @@ export const GUILDS = {
 };
 export const GUILD_OF = Object.fromEntries(Object.entries(GUILDS).flatMap(([g, d]) => d.members.map(id => [id, g])));
 
-const MAX_OFFLINE_H = 12;
+const maxOfflineH = () => Tuning.num('ecosysteme.absence_max_h', 12);
 // Le sport est le vrai moteur : l'élan triple la production, pendant 3 fois la durée de la sortie.
-export const BOOST_MULT = 3;
-export const BOOST_PER_MIN = 3;
-const MAX_BOOST_MS = 6 * 3600000;
+export const boostMult = () => Tuning.num('elan.multiplicateur', 3);
+export const boostPerMin = () => Tuning.num('elan.minutes_par_minute', 3);
+export const maxBoostH = () => Tuning.num('elan.duree_max_h', 6);
 const TYPE_PLURAL = { herbe: 'herbes', fleur: 'fleurs', buisson: 'arbustes', arbre: 'arbres' };
 
 /**
@@ -61,7 +61,7 @@ export function vitality(place) {
 	const xp = place?.xp ?? 0;
 	const level = 1 + Math.floor(Math.log(1 + xp / 150) / Math.log(1.45));
 	const lo = xpFor(level), hi = xpFor(level + 1);
-	return { level, progress: (xp - lo) / (hi - lo), bonus: 0.05 * (level - 1) };
+	return { level, progress: (xp - lo) / (hi - lo), bonus: Tuning.num('vitalite.bonus_par_niveau', 0.05) * (level - 1) };
 }
 
 export const boostLeft = state => Math.max(0, (state.boostUntil ?? 0) - Date.now());
@@ -69,7 +69,7 @@ export const boostLeft = state => Math.max(0, (state.boostUntil ?? 0) - Date.now
 /** L'élan sportif triple la production ; il s'ajoute à l'élan en cours, sans dépasser 6 h. */
 export function addBoost(state, minutes) {
 	const now = Date.now();
-	state.boostUntil = Math.min(now + MAX_BOOST_MS, Math.max(now, state.boostUntil ?? 0) + minutes * 60000);
+	state.boostUntil = Math.min(now + maxBoostH() * 3600000, Math.max(now, state.boostUntil ?? 0) + minutes * 60000);
 }
 
 /**
@@ -89,7 +89,7 @@ export function activityBudget(state, now = Date.now()) {
 	}
 	const meters = sum / age;
 	const k = 1 + habitatBonus(state);
-	return { grow: (Math.max(150, (meters / 10) * 0.5) / 24) * k, nectar: (Math.max(300, meters / 5) / 24) * k };
+	return { grow: (Math.max(150, (meters / 10) * 0.5) / 24) * k, nectar: (Math.max(Tuning.num('ecosysteme.plancher_nectar', 300), meters / 5) / 24) * k };
 }
 
 /**
@@ -272,11 +272,11 @@ export function emptyJar(state, it) {
 export function tick(state, garden, now = Date.now()) {
 	const last = state.lastIdle ?? now;
 	state.lastIdle = now;
-	const hours = Math.min(MAX_OFFLINE_H, (now - last) / 3600000);
+	const hours = Math.min(maxOfflineH(), (now - last) / 3600000);
 	if (hours <= 0) return null;
 	// Part de la période couverte par l'élan (qui a pu s'épuiser pendant l'absence).
 	const boosted = Math.min(hours, Math.max(0, (state.boostUntil ?? 0) - last) / 3600000);
-	const eff = hours + boosted * (BOOST_MULT - 1);
+	const eff = hours + boosted * (boostMult() - 1);
 	const summary = { hours, nectar: 0, places: {} };
 	for (const placeId of Object.keys(state.places)) {
 		const r = rates(state, placeId, now);
@@ -374,7 +374,7 @@ export class EcoPanel {
 
 	/** Production par heure, tous lieux confondus (l'écosystème travaille partout à la fois). */
 	totalPerHour() {
-		return Object.keys(this.state.places).reduce((a, id) => a + rates(this.state, id).nectar, 0) * (boostLeft(this.state) ? BOOST_MULT : 1);
+		return Object.keys(this.state.places).reduce((a, id) => a + rates(this.state, id).nectar, 0) * (boostLeft(this.state) ? boostMult() : 1);
 	}
 
 	/** Le compteur avance en direct entre deux passages de l'écosystème (toutes les 5 s). */
@@ -395,7 +395,7 @@ export class EcoPanel {
 		const r = rates(st, placeId);
 		const vit = vitality(place);
 		const boost = boostLeft(st);
-		const x = boost ? BOOST_MULT : 1;
+		const x = boost ? boostMult() : 1;
 		const working = Object.values(r.members).some(n => n > 0);
 
 		// 1. Le nectar, en direct, et ce qu'il rapporte.
@@ -408,8 +408,8 @@ export class EcoPanel {
 
 		// 2. L'élan : le lien entre le sport et l'idle, dit simplement.
 		const elan = boost
-			? `<div class="eco-elan on"><b>Élan ×${BOOST_MULT}</b><span>Grâce à ta dernière sortie, tout pousse 3 fois plus vite encore <b id="eco-boost-left">${fmtDur(boost)}</b>.</span></div>`
-			: `<div class="eco-elan"><b>Élan</b><span>Après une marche, tout pousse <b>3 fois plus vite</b> pendant 3 fois sa durée : 20 min de marche, 1 h d'élan.</span></div>`;
+			? `<div class="eco-elan on"><b>Élan ×${boostMult()}</b><span>Grâce à ta dernière sortie, tout pousse ${boostMult()} fois plus vite encore <b id="eco-boost-left">${fmtDur(boost)}</b>.</span></div>`
+			: `<div class="eco-elan"><b>Élan</b><span>Après une marche, tout pousse <b>${boostMult()} fois plus vite</b> pendant ${boostPerMin()} fois sa durée : 20 min de marche, ${boostPerMin() % 3 ? `${20 * boostPerMin()} min` : `${(20 * boostPerMin()) / 60} h`} d'élan.</span></div>`;
 
 		// 2 bis. Les habitats : ce qu'ils ajoutent au maximum, et si l'on y est déjà.
 		const hb = habitatBonus(st);
@@ -469,7 +469,7 @@ export class EcoPanel {
 			<ul class="eco-teams">${teams}</ul>
 			<h3 class="eco-h">Vitalité du jardin</h3>
 			<div class="eco-vit"><div class="bar"><i style="width:${Math.round(vit.progress * 100)}%"></i></div><span>Niveau ${vit.level}${vit.bonus ? ` : tout pousse ${Math.round(vit.bonus * 100)} % plus vite ici` : ''}. Elle monte avec chaque plante qui pousse.</span></div>
-			<p class="eco-note">Ton écosystème travaille jusqu'à 12 h d'affilée sans toi : ouvre l'appli matin et soir pour ne rien perdre.</p>`;
+			<p class="eco-note">Ton écosystème travaille jusqu'à ${maxOfflineH()} h d'affilée sans toi : ouvre l'appli matin et soir pour ne rien perdre.</p>`;
 		for (const el of this.panel.querySelectorAll('[data-eco-thumb]')) {
 			const sp = SPECIES.find(s => s.id === el.dataset.ecoThumb);
 			el.appendChild(thumbCopy(sp, 44, el.dataset.locked === '1'));
