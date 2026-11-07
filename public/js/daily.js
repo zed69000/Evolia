@@ -4,7 +4,7 @@
 // elle est seulement divisée par deux : on encourage, on ne punit pas.
 
 import { dayKey, todayMeters, allPlants, autoGoal, biomeKm } from './state.js';
-import { PLACES, PLACE_BY_ID, PLACE_DE, SPECIES, SPECIES_BY_ID, placeOpen } from './species.js';
+import { PLACES, PLACE_BY_ID, PLACE_DE, SPECIES, SPECIES_BY_ID, placeOpen, unreadSpecies, speciesWaiting, UNREAD_MAX } from './species.js';
 import { DECOR } from './plants.js';
 import { boostMult } from './idle.js';
 import { CELLS, CELL_KM, cellsOpen, cellName } from './garden.js';
@@ -142,6 +142,12 @@ export function weekHtml(state) {
 
 /** Le plus proche objectif, en kilomètres : nouvelle parcelle, décor, nouveau milieu, ou objectif du jour. */
 export function nextGoal(state) {
+	// D'abord les fiches à lire, quand elles retiennent de nouvelles espèces.
+	const unread = unreadSpecies(state).length;
+	if (unread >= UNREAD_MAX && speciesWaiting(state)) {
+		const n = unread - UNREAD_MAX + 1;
+		return `Lis ${n} fiche${n > 1 ? 's' : ''} d'espèce${n > 1 ? 's' : ''} : de nouvelles espèces attendent (+10 nectar chacune)`;
+	}
 	const place = state.places[state.place], present = place.biomes ?? ['prairie'];
 	const total = state.totals.distance / 1000;
 	const goals = [];

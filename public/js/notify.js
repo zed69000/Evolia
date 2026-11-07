@@ -2,7 +2,7 @@
 // Ils sont programmés quand on quitte l'appli, d'après l'état du jardin, et annulés dès qu'on y revient.
 // Notifications locales : rien ne part sur Internet.
 
-const IDS = [1, 2, 3];
+const IDS = [1, 2, 3, 4];
 
 function plugin() {
 	const C = window.Capacitor;
@@ -39,6 +39,7 @@ export async function scheduleReminders(plan) {
 	add(1, plan.jarFullAt, 'Ton collecteur est plein', 'Viens récolter ton nectar : plein, il ne garde plus rien.');
 	add(2, plan.giftAt, 'Ton cadeau du jour t’attend', 'Et trois nouveaux défis. Une petite marche pour lancer la journée ?');
 	if (plan.streak >= 2) add(3, plan.streakAt, `Ta série de ${plan.streak} jours`, 'Encore 500 m aujourd’hui pour la faire grandir.');
+	add(4, plan.noSourceAt, 'Tes pas ne sont pas comptés', 'Evolia fermée ne lit pas encore tes pas : ouvre-la pour brancher Health Connect.');
 	if (!list.length) return;
 	try { await p.schedule({ notifications: list }); } catch (e) { console.warn(e); }
 }

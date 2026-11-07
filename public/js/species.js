@@ -1672,9 +1672,25 @@ function unlocked(s, sp) {
 }
 
 /** Espèces nouvellement débloquées (et enregistrées dans state.species). */
-export function checkSpecies(state) {
+// Les découvertes arrivent une à une : au plus UNREAD_MAX fiches qui attendent d'être lues (sans compter les espèces du
+// tout premier lancement), sinon on n'a le temps d'en regarder aucune.
+export const UNREAD_MAX = 4;
+
+/** Les espèces découvertes dont on n'a pas encore ouvert la fiche (hors espèces de départ). */
+export function unreadSpecies(state) {
+	return Object.keys(state.species).filter(id => !state.speciesSeen?.[id] && !state.speciesStart?.[id] && SPECIES_BY_ID[id]);
+}
+
+/** Une espèce pourrait arriver, si on lisait ses fiches ? */
+export function speciesWaiting(state) {
+	return SPECIES.some(sp => !state.species[sp.id] && unlocked(state, sp));
+}
+
+/** Découvre les espèces dont les conditions sont réunies ; `max` au plus. */
+export function checkSpecies(state, max = Infinity) {
 	const found = [];
 	for (const sp of SPECIES) {
+		if (found.length >= max) break;
 		if (state.species[sp.id] || !unlocked(state, sp)) continue;
 		state.species[sp.id] = Date.now();
 		found.push(sp);

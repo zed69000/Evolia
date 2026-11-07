@@ -6,7 +6,7 @@ import { PlacesMap } from './map.js';
 import { PLANT_TYPES, DECOR, plantName } from './plants.js';
 import { GpsTracker, MotionTracker, SimTracker } from './tracker.js';
 import { SOURCES, bestSource, harvest, classifyCadence } from './harvest.js';
-import { PLACES, PLACE_BY_ID, PLACE_DE, PLACE_IN, SPECIES, SPECIES_BY_ID, checkSpecies, placeOpen, speciesOf } from './species.js';
+import { PLACES, PLACE_BY_ID, PLACE_DE, PLACE_IN, SPECIES, SPECIES_BY_ID, checkSpecies, placeOpen, speciesOf, unreadSpecies, speciesWaiting, UNREAD_MAX } from './species.js';
 import { Encyclopedia, READ_REWARD, thumbCopy } from './encyclopedia.js';
 import { Sky, WEATHER_LABEL } from './weather.js';
 import { EcoPanel, tick, summaryHtml, addBoost, boostLeft, visualExtra, rates, GUILDS, boostMult, boostPerMin, maxBoostH, nectarCapacity, hasCollector, COLLECTOR_CAP, COLLECTOR_UPGRADE, addWaiting, groundOf, jarOf, jarCap, stockOf, jarCapOf, emptyJar, drainGround } from './idle.js';
@@ -274,8 +274,26 @@ function updateSpeciesDot() {
 }
 
 /** Annonce les espèces et les parcelles qui viennent de s'ouvrir. `quiet` : au tout premier lancement, sans bruit. */
+// Entre deux découvertes, au moins ce délai : le temps de voir arriver la bête et d'ouvrir sa fiche.
+const SPECIES_GAP = 30000;
+
 function announceSpecies(quiet = false) {
-	const found = checkSpecies(state);
+	let found = [];
+	if (quiet) {
+		// Premier lancement : le jardin de départ arrive d'un coup, sans compter dans les fiches à lire.
+		found = checkSpecies(state);
+		for (const sp of found) (state.speciesStart ??= {})[sp.id] = true;
+	} else if (unreadSpecies(state).length < UNREAD_MAX) {
+		if (Date.now() >= (state.nextSpeciesAt ?? 0)) {
+			found = checkSpecies(state, 1);
+			if (found.length) state.nextSpeciesAt = Date.now() + SPECIES_GAP;
+		}
+	} else if (Date.now() - (state.readNudgeAt ?? 0) > 15 * 60000 && speciesWaiting(state)) {
+		// Trop de fiches en attente : on le dit (tous les quarts d'heure au plus), et le message ouvre la première.
+		state.readNudgeAt = Date.now();
+		const first = unreadSpecies(state)[0];
+		toast('De nouvelles espèces attendent : lis d’abord tes fiches marquées Nouveau (+10 nectar)', '#F08A3C', () => species.open(first));
+	}
 	const opened = PLACES.filter(p => !state.placesOpen[p.id] && placeOpen(state, p));
 	for (const p of opened) state.placesOpen[p.id] = Date.now();
 	if (!found.length && !opened.length) return;
@@ -623,6 +641,8 @@ setInterval(nextTip, 2500);
 $('#next-goal').addEventListener('click', () => {
 	const goal = nextGoal(state);
 	if (!goal) return;
+	// Des fiches à lire : on ouvre la première.
+	if (goal.startsWith('Lis ')) { species.open(unreadSpecies(state)[0]); return; }
 	if (!/espèce/.test(goal)) { toast(goal, '#9A7448'); return; }
 	const present = here().biomes ?? ['prairie'];
 	const open = PLACES.filter(p => present.includes(p.id) || placeOpen(state, p)).map(p => p.id);
@@ -1182,16 +1202,45 @@ function showIdleRecap() {
 }
 
 /** Propose, une fois, de lire les pas comptés par le téléphone (seulement dans l'appli installée). */
-async function offerHarvest() {
-	if (state.harvestSource || state.harvestDeclined) return;
+// Après « Plus tard », on ne redemande pas avant ce délai (sauf au prochain lancement de l'appli).
+const HARVEST_ASK_AGAIN = 6 * 3600000;
+
+/**
+ * Rien ne relit les pas faits appli fermée : on le redemande à chaque lancement (« Plus tard » ne vaut que pour quelques
+ * heures, sinon le joueur croit ses pas comptés alors qu'ils sont perdus). `force` : lancement de l'appli ou Options.
+ */
+async function offerHarvest(force = false) {
+	if (state.harvestSource) return;
+	if (!force && Date.now() - (state.harvestLaterAt ?? 0) < HARVEST_ASK_AGAIN) return;
+	state.harvestLaterAt = Date.now();
+	if (!isApp()) {
+		// Sur le site, aucun navigateur ne peut lire les pas en arrière-plan : on le dit une fois par jour.
+		if (state.webStepsNote !== dayKey()) {
+			state.webStepsNote = dayKey();
+			persist(true);
+			toast('Sur le site, seuls les pas faits Evolia ouverte comptent : garde-la ouverte pendant ta marche', '#E3A33A');
+		}
+		return;
+	}
 	const source = await bestSource(false);
-	if (!source) return;
+	if (!source) {
+		// Ni Health Connect ni podomètre : on explique quoi installer, plutôt que de se taire.
+		showModal(`
+		<h2>Tes pas appli fermée ne comptent pas encore</h2>
+		<p>Pour qu'Evolia relise tes pas quand elle est fermée, ton téléphone doit les compter : installe Health Connect, et une appli qui y écrit tes pas (Google Fit, Samsung Health…). Sinon, garde Evolia ouverte pendant ta marche.</p>
+		<button class="btn primary" id="btn-hc">Installer Health Connect</button>
+		<button class="btn ghost wide" data-close>Plus tard</button>`);
+		$('#btn-hc').onclick = () => { closeModal(); window.open('https://play.google.com/store/apps/details?id=com.google.android.apps.healthdata', '_blank'); };
+		persist(true);
+		return;
+	}
+	persist(true);
 	showModal(`
 		<h2>Ton jardin pousse même appli fermée</h2>
 		<p>Ton téléphone compte déjà tes pas avec ${source.label}. Evolia peut les relire à chaque ouverture. Ces données restent sur ton téléphone.</p>
 		<button class="btn primary" id="btn-allow">Autoriser</button>
 		<button class="btn ghost wide" data-close id="btn-later">Plus tard</button>`);
-	$('#btn-later').onclick = () => { state.harvestDeclined = true; persist(true); };
+	$('#btn-later').onclick = () => { state.harvestLaterAt = Date.now(); persist(true); toast('D’accord : je te le redemanderai au prochain lancement', '#9A7448'); };
 	$('#btn-allow').onclick = async () => {
 		closeModal();
 		let ok = false;
@@ -1885,7 +1934,7 @@ function offerNotify() {
 	state.notifyAsked = true;
 	persist(true);
 	showModal(`<h2>Un petit rappel ?</h2>
-		<p>Evolia peut te prévenir quand ton collecteur est plein, quand ton cadeau du jour t’attend, et le soir si ta série risque de s’arrêter. Trois rappels au plus, et tu peux les couper dans Options.</p>
+		<p>Evolia peut te prévenir quand ton collecteur est plein, quand ton cadeau du jour t’attend, le soir si ta série risque de s’arrêter, et si tes pas appli fermée ne sont pas relus. Quelques rappels au plus, et tu peux les couper dans Options.</p>
 		<button class="btn primary" id="btn-notify-yes">Oui, préviens-moi</button>
 		<button class="btn ghost wide" data-close>Non merci</button>`);
 	$('#btn-notify-yes').onclick = async () => {
@@ -1899,6 +1948,13 @@ function offerNotify() {
 /** En quittant l'appli : quand le collecteur sera plein, le cadeau de demain matin, la série à garder ce soir. */
 function planReminders() {
 	if (!state.notify) return;
+	// Rien ne relit les pas appli fermée : un rappel une demi-heure après, une fois par jour au plus.
+	let noSourceAt = null;
+	if (!state.harvestSource && state.noSourceNote !== dayKey()) {
+		state.noSourceNote = dayKey();
+		noSourceAt = Date.now() + 30 * 60000;
+		persist(true);
+	}
 	const perH = Object.keys(state.places).reduce((a, id) => a + rates(state, id).nectar, 0) * (boostLeft(state) ? boostMult() : 1);
 	const space = jarCap(state) - jarOf(state), hours = perH > 0 ? space / perH : Infinity;
 	const gift = new Date(); gift.setDate(gift.getDate() + 1); gift.setHours(9, 0, 0, 0);
@@ -1909,6 +1965,7 @@ function planReminders() {
 		giftAt: gift.getTime(),
 		streak: d.lastActive === d.day ? 0 : d.streak ?? 0,
 		streakAt: evening.getTime(),
+		noSourceAt,
 	});
 }
 
@@ -1953,7 +2010,7 @@ function renderOptions() {
 		<button class="btn ghost wide" id="opt-slot-copy">Dupliquer la partie en cours</button>
 		<button class="btn ghost wide" id="opt-slot-new">Commencer une nouvelle partie</button>
 		${canNotify() ? `<h3>Rappels</h3>
-		<label class="switch"><input type="checkbox" id="opt-notify" ${state.notify ? 'checked' : ''}><i></i><span>Collecteur plein, cadeau du jour, série à garder</span></label>` : ''}
+		<label class="switch"><input type="checkbox" id="opt-notify" ${state.notify ? 'checked' : ''}><i></i><span>Collecteur plein, cadeau du jour, série à garder, pas non relus</span></label>` : ''}
 		<h3>Aide</h3>
 		<button class="btn ghost wide" id="opt-coach">Revoir le tutoriel</button>
 		<a class="btn ghost wide opt-link" href="privacy.html" target="_blank" rel="noopener">Confidentialité</a>
@@ -2013,7 +2070,7 @@ $('#options').addEventListener('click', async e => {
 	if (id === 'btn-sky') { await sky.locate(true); persist(true); renderOptions(); }
 	if (id === 'btn-track-2') { enableTracking(true); sky.locate(true); renderOptions(); }
 	if (id === 'btn-motion') { await enableTracking(true); toast(tracking.motion ? 'Compteur de pas activé' : 'Le téléphone a refusé le compteur de pas : Réglages › Safari › Mouvement et orientation', tracking.motion ? '#5F933E' : '#C0442F'); renderOptions(); }
-	if (id === 'opt-harvest') { state.harvestDeclined = false; closeOptions(); offerHarvest(); }
+	if (id === 'opt-harvest') { closeOptions(); offerHarvest(true); }
 	if (id === 'opt-harvest-now') { closeOptions(); maybeHarvest(); }
 	if (id === 'opt-coach') { closeOptions(); coach(0); }
 	if (id === 'opt-backup') showBackup();
@@ -2227,6 +2284,7 @@ if (Tuning.preview) {
 	} else {
 		runIdle(true);
 		maybeHarvest().then(() => (newDay() ? setTimeout(() => whenFree(() => showDaily(true)), 300) : whenFree(showIdleRecap)));
-		if (!state.harvestSource) setTimeout(() => whenFree(() => $('#modal').hidden && offerHarvest()), 2500);
+		// À chaque lancement, tant que rien ne relit les pas appli fermée.
+		if (!state.harvestSource) setTimeout(() => whenFree(() => $('#modal').hidden && offerHarvest(true)), 2500);
 	}
 }

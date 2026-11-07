@@ -3,6 +3,12 @@
 Chaque version, la plus récente en haut. Le site (evolia.sebastienalzamora.workers.dev) est toujours à jour ;
 le Play Store (tests internes) reçoit les versions indiquées « Play ».
 
+## 0.7.42 — 7 novembre 2026
+Retours de deux testeurs :
+- **Les espèces arrivent une à une.** Une nouvelle espèce au plus toutes les 30 secondes, et plus aucune tant que 4 fiches attendent d'être lues (les espèces du tout début ne comptent pas). L'objectif du bas dit alors « Lis 2 fiches d'espèces : de nouvelles espèces attendent (+10 nectar chacune) », et le toucher ouvre la première ; un message le rappelle au plus tous les quarts d'heure.
+- **Les pas appli fermée : on redemande.** Tant que rien ne relit les pas, l'appli le repropose à chaque lancement (« Plus tard » ne vaut que quelques heures). Sans Health Connect ni podomètre, elle explique quoi installer, avec un bouton vers Health Connect. Sur le site, un message du jour rappelle que seuls les pas faits Evolia ouverte comptent.
+- **Rappel** : en quittant l'appli sans rien de branché, une notification une demi-heure après (une fois par jour au plus, si les rappels sont activés).
+
 ## 0.7.41 — 7 novembre 2026
 Idées du GDD du catalogue, partie Evolia :
 - **Zoom à une main** : touche deux fois, et garde le doigt posé ; glisse vers le bas pour zoomer, vers le haut pour dézoomer.
