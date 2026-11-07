@@ -18,6 +18,7 @@ import { exportCode, importCode, backupAge } from './backup.js';
 import { DebugPanel, debugOn, setDebug, debugLog, ago, dur, trace, traceFlush } from './debug.js';
 import { canNotify, askNotify, scheduleReminders, clearReminders } from './notify.js';
 import { rollDay, markActive, giftReady, giftFor, claimGift, claim, toClaim, noteTap, noteQuest, challengesHtml, weekHtml, nextGoal, albumHtml, collection, herbarium, newlyComplete, HERBARIUM_REWARD } from './daily.js';
+import { fmtFixed as fmt, fmtInt, fmtNum } from './format.js';
 
 const params = new URLSearchParams(location.search);
 const DEV_KEY = 'evolia.dev';
@@ -51,8 +52,6 @@ const DECOR_MSG = {
 };
 const TYPE_COLOR = { herbe: '#A3BD57', fleur: '#EE8FA4', buisson: '#5F933E', arbre: '#1F6B47' };
 
-const fmt = (n, d = 2) => n.toLocaleString('fr-FR', { minimumFractionDigits: d, maximumFractionDigits: d });
-const fmtInt = n => Math.round(n).toLocaleString('fr-FR');
 const fmtTime = s => {
 	s = Math.floor(s);
 	const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), r = s % 60;
@@ -220,16 +219,37 @@ function renderHud() {
 
 // ─── Messages ─────────────────────────────────────────────────
 
+// Messages that arrive together (end of a walk: summary, nectar, discoveries) are merged into one, and a
+// message stays long enough to be read while walking: its time grows with its length.
+const TOAST_MERGE_MS = 1500, TOAST_MERGE_MAX = 3;
+let lastToast = null;
+const toastTime = (text, link) => Math.max(link ? 5000 : 3200, Math.min(9000, 1500 + text.length * 45));
+function hideToastLater(el) {
+	clearTimeout(el._timer);
+	el._timer = setTimeout(() => { el.classList.add('out'); setTimeout(() => el.remove(), 400); }, toastTime(el._text, el._link));
+}
 function toast(text, color = '#F4C23E', onClick = null) {
+	const prev = lastToast;
+	if (!onClick && prev && !prev._link && prev.isConnected && !prev.classList.contains('out')
+		&& Date.now() - prev._at < TOAST_MERGE_MS && prev._parts < TOAST_MERGE_MAX) {
+		prev._text += ` · ${text}`;
+		prev._parts += 1;
+		prev._at = Date.now();
+		prev.querySelector('span').textContent = prev._text;
+		hideToastLater(prev);
+		return;
+	}
 	const el = document.createElement('div');
 	el.className = 'toast';
 	el.innerHTML = `<i style="background:${color}"></i><span></span>`;
 	el.querySelector('span').textContent = text;
+	el._text = text; el._parts = 1; el._at = Date.now(); el._link = !!onClick;
 	if (onClick) { el.classList.add('link'); el.addEventListener('click', onClick); }
 	const box = $('#toasts');
 	box.appendChild(el);
 	while (box.children.length > 2) box.firstChild.remove();
-	setTimeout(() => { el.classList.add('out'); setTimeout(() => el.remove(), 400); }, onClick ? 5000 : 3200);
+	lastToast = el;
+	hideToastLater(el);
 }
 
 /** Lance `fn` dès qu'aucune page (écosystème, espèces, carnet…) n'est ouverte par-dessus le jardin. */
@@ -918,7 +938,7 @@ function renderStatus() {
 	if (session) {
 		dot.className = 'status-dot moving';
 		title.textContent = session.act?.name ?? 'En pause';
-		sub.textContent = `Ton jardin pousse · élan ×${boostMult()} à la fin`;
+		sub.textContent = `Ton jardin pousse · élan ×${fmtNum(boostMult())} à la fin`;
 		$('#live-km').textContent = fmt(session.distance / 1000);
 		$('#live-time').textContent = fmtTime(sessionSeconds(session));
 		$('#live-speed').textContent = fmt(session.speed ?? 0, 1);
@@ -941,7 +961,7 @@ function renderStatus() {
 	const wait = full ? ` · collecteur plein, ${fmtInt(pend)} à récolter` : pend >= 1 ? ` · ${fmtInt(pend)} à récolter` : r.capped && x === 1 ? ' · à plein : bouge pour plus' : '';
 	// Personne au travail : on dit comment lancer l'écosystème plutôt qu'un petit chiffre qui ne vient de nulle part.
 	const working = Object.values(r.members).some(n => n > 0);
-	sub.textContent = working ? `Écosystème : +${fmtInt(r.nectar * x)} nectar/h${x > 1 ? ` · élan ×${x}` : ''}${wait} ›`
+	sub.textContent = working ? `Écosystème : +${fmtInt(r.nectar * x)} nectar/h${x > 1 ? ` · élan ×${fmtNum(x)}` : ''}${wait} ›`
 		: `Écosystème : découvre un animal pour le lancer${wait} ›`;
 	renderDaily();
 }
@@ -966,7 +986,7 @@ function showDaily(gift = false) {
 	const streak = d.streak > 0 ? `<b>${d.streak} jour${d.streak > 1 ? 's' : ''} actif${d.streak > 1 ? 's' : ''}</b> de suite${d.best > d.streak ? ` · record ${d.best}` : ''}` : 'Bouge 500 m pour lancer ta série';
 	const top = ready
 		? `<div class="gift"><span class="gift-box" aria-hidden="true">🎁</span><div><p>${streak}. Ton jardin t'a gardé un cadeau :</p>
-			<span class="chip gold">+${g.nectar} nectar</span>${g.boost ? `<span class="chip">élan ×${boostMult()} · ${g.boost} min</span>` : ''}</div></div>`
+			<span class="chip gold">+${g.nectar} nectar</span>${g.boost ? `<span class="chip">élan ×${fmtNum(boostMult())} · ${g.boost} min</span>` : ''}</div></div>`
 		: `<p class="streak">${streak}</p>`;
 	// Le bilan de l'absence reste replié : la fenêtre tient sur l'écran.
 	const note = gift && idleNote ? `<details class="away"><summary>Pendant ton absence</summary>${idleNote}</details>` : '';
@@ -983,7 +1003,7 @@ function showDaily(gift = false) {
 		state.nectar = (state.nectar ?? 0) + got.nectar;
 		if (got.boost) addBoost(state, got.boost);
 		garden.burst(garden.cam.cx, garden.cam.cy, 30, '#F4C23E');
-		toast(`Cadeau : +${got.nectar} nectar${got.boost ? ` et élan ×${boostMult()} pendant ${got.boost} min` : ''}`, '#F4C23E');
+		toast(`Cadeau : +${got.nectar} nectar${got.boost ? ` et élan ×${fmtNum(boostMult())} pendant ${got.boost} min` : ''}`, '#F4C23E');
 		persist(true);
 		renderHud();
 		renderDaily();
@@ -999,7 +1019,7 @@ $('#modal').addEventListener('click', e => {
 	state.nectar = (state.nectar ?? 0) + c.reward;
 	if (c.boost) addBoost(state, c.boost);
 	sound.chime(2);
-	toast(`Défi réussi : +${c.reward} nectar${c.boost ? ` et élan ×${boostMult()} pendant ${c.boost} min` : ''}`, '#F08A3C');
+	toast(`Défi réussi : +${c.reward} nectar${c.boost ? ` et élan ×${fmtNum(boostMult())} pendant ${c.boost} min` : ''}`, '#F08A3C');
 	persist(true);
 	renderHud();
 	renderDaily();
@@ -1045,7 +1065,7 @@ function showRecap(w, duration, matured) {
 		const r = rates(state, state.place);
 		const mins = Math.min(maxBoostH() * 60, (duration / 60) * boostPerMin());
 		const flowers = ((r.grow.fleur ?? 0) * (boostMult() - 1) * mins) / 60 / PLANT_TYPES.fleur.cost;
-		ecoLine = `<p class="eco-gain">Ton écosystème profite de ta sortie : <b>+${fmtInt(w.nectar ?? w.distance / 5)} nectar à récolter</b> et production <b>×${boostMult()}</b> pendant ${fmtMin(mins)}${flowers >= 0.5 ? `, soit environ ${fmtInt(flowers)} fleur${flowers >= 1.5 ? 's' : ''} en plus grâce à tes pollinisateurs` : ''}.</p>`;
+		ecoLine = `<p class="eco-gain">Ton écosystème profite de ta sortie : <b>+${fmtInt(w.nectar ?? w.distance / 5)} nectar à récolter</b> et production <b>×${fmtNum(boostMult())}</b> pendant ${fmtMin(mins)}${flowers >= 0.5 ? `, soit environ ${fmtInt(flowers)} fleur${flowers >= 1.5 ? 's' : ''} en plus grâce à tes pollinisateurs` : ''}.</p>`;
 	}
 	showModal(`
 		<h2>${title}</h2><p>Voici ce qui a poussé grâce à toi.</p>
@@ -1307,7 +1327,7 @@ function renderZoomInfo() {
 	const rows = Object.entries(GUILDS).filter(([gid]) => r.members[gid] > 0).map(([gid, g]) =>
 		`<li><span>${g.name} <small>×${r.members[gid]}</small></span><b>+${fmt(g.nectar * r.members[gid] * r.mult * x, 1)}/h</b></li>`).join('');
 	const growing = garden.current && garden.current.growth < 1 ? garden.current : null;
-	card.innerHTML = `<div class="zi-head"><b>Récolte du nectar</b>${x > 1 ? `<span class="zi-boost">élan ×${x} · ${fmtMin(boostLeft(state) / 60000)}</span>` : ''}</div>
+	card.innerHTML = `<div class="zi-head"><b>Récolte du nectar</b>${x > 1 ? `<span class="zi-boost">élan ×${fmtNum(x)} · ${fmtMin(boostLeft(state) / 60000)}</span>` : ''}</div>
 		<div class="zi-total"><span class="nectar">${live.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span><small>à récolter · +${fmt(r.nectar * x, 1)}/h ici</small></div>
 		${rows ? `<ul>${rows}</ul>` : '<p>Découvre des pollinisateurs : ils récoltent le nectar pour toi.</p>'}
 		<p class="zi-move">En marchant : +1 nectar à récolter tous les 5 m${x === 1 ? ', et la récolte triple ensuite' : ''}.</p>
@@ -1877,11 +1897,16 @@ function planReminders() {
 	});
 }
 
+// Which Options groups are unfolded; kept across re-renders of the panel.
+const optOpen = { jardin: false, tech: false };
+const optGroup = (key, title, sub) => `<details class="opt-group" data-group="${key}"${optOpen[key] ? ' open' : ''}><summary><b>${title}</b><span>${sub}</span></summary>`;
+
 function renderOptions() {
 	const src = SOURCES[state.harvestSource];
 	$('#options').innerHTML = `
 		<div class="panel-head"><h2>Options</h2><button class="close" data-close-options aria-label="Fermer">×</button></div>
 		<div class="opt-version"><img src="assets/logo.png" alt=""><div><b>Evolia v${VERSION}</b><span>${isApp() ? 'Appli Android' : 'Version web'} · données gardées sur ce téléphone</span></div></div>
+		${optGroup('jardin', 'Jardin', 'Objectif, suivi des pas, sons, rappels, sauvegardes')}
 		<h3>Objectif du jour : ${fmt(state.goalKm, state.goalKm % 1 ? 1 : 0)} km</h3>
 		<p class="empty">Le jeu le fixe chaque matin d'après ta semaine passée, un peu au-dessus de ta moyenne, pour avancer sans forcer. À vélo, un kilomètre compte pour 0,4 km.</p>
 		<h3>Suivi de tes pas</h3>
@@ -1902,10 +1927,6 @@ function renderOptions() {
 		<h3>Musique</h3>
 		<label class="switch"><input type="checkbox" id="opt-music" ${sound.musicSettings.on ? 'checked' : ''}><i></i><span>Musique zen, jamais la même</span></label>
 		${sound.musicSettings.on ? `<input type="range" id="opt-music-vol" class="volume" min="0" max="1" step="0.05" value="${sound.musicSettings.vol}" aria-label="Volume de la musique">` : ''}
-		<h3>Effet miniature</h3>
-		<label class="switch"><input type="checkbox" id="opt-fx" ${fxOn() ? 'checked' : ''}><i></i><span>Haut et bas de l'écran un peu flous, bords adoucis : le jardin comme une maquette</span></label>
-		<h3>Économie d'énergie</h3>
-		<label class="switch"><input type="checkbox" id="opt-eco" ${state.eco30 ? 'checked' : ''}><i></i><span>30 images par seconde : le téléphone chauffe moins, la batterie dure plus</span></label>
 		<h3>Ma partie</h3>
 		<p class="empty">Ton jardin est gardé sur ce téléphone. Garde-en une copie (un code à coller dans tes notes ou à t'envoyer) : elle le ramène après un changement de téléphone. ${backupAge(state)}</p>
 		<button class="btn ghost wide" id="opt-backup">Garder une copie de ma partie</button>
@@ -1923,6 +1944,12 @@ function renderOptions() {
 		<h3>Recommencer</h3>
 		<p class="empty">Efface ton jardin, tes espèces et tes balades sur ce téléphone, pour repartir d'une prairie neuve.</p>
 		<button class="btn ghost wide danger" id="opt-reset">Recommencer à zéro</button>
+		</details>
+		${optGroup('tech', 'Technique', 'Affichage, batterie, débogage, mode test')}
+		<h3>Effet miniature</h3>
+		<label class="switch"><input type="checkbox" id="opt-fx" ${fxOn() ? 'checked' : ''}><i></i><span>Haut et bas de l'écran un peu flous, bords adoucis : le jardin comme une maquette</span></label>
+		<h3>Économie d'énergie</h3>
+		<label class="switch"><input type="checkbox" id="opt-eco" ${state.eco30 ? 'checked' : ''}><i></i><span>30 images par seconde : le téléphone chauffe moins, la batterie dure plus</span></label>
 		<h3>Débogage</h3>
 		<label class="switch"><input type="checkbox" id="opt-debug" ${debugOn() ? 'checked' : ''}><i></i><span>Afficher en jeu ce que voit le suivi (GPS, pas, balade, relecture) et le journal des événements</span></label>
 		<h3>Mode test</h3>
@@ -1941,7 +1968,8 @@ function renderOptions() {
 			<button id="dev-km10">+10 km (ouvrir des milieux)</button>
 			<button id="dev-nectar">+500 nectar</button>
 			<button id="dev-day">Nouveau jour (cadeau et défis)</button>
-			<button id="dev-reset" class="danger">Effacer le jardin</button></div>` : ''}`;
+			<button id="dev-reset" class="danger">Effacer le jardin</button></div>` : ''}
+		</details>`;
 }
 
 function openOptions() {
@@ -1954,6 +1982,11 @@ function closeOptions() {
 	$('#options').setAttribute('aria-hidden', 'true');
 }
 
+// 'toggle' does not bubble: listen in the capture phase to remember each group's state.
+$('#options').addEventListener('toggle', e => {
+	const g = e.target.closest?.('[data-group]');
+	if (g) optOpen[g.dataset.group] = g.open;
+}, true);
 $('#options').addEventListener('click', async e => {
 	if (e.target.closest('[data-close-options]')) return closeOptions();
 	const w = e.target.closest('[data-w]');

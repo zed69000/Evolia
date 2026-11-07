@@ -8,6 +8,7 @@ import { itemCost, ITEMS } from './deco.js';
 import { collection, giftFor } from './daily.js';
 import { PLACES, SPECIES, SPECIES_BY_ID } from './species.js';
 import { DECOR, PLANT_TYPES, plantName } from './plants.js';
+import { fmtNum } from './format.js';
 
 let api, g, s, pl, voiceOut = null;
 const params = new URLSearchParams(location.search);
@@ -337,7 +338,7 @@ const SCENES = {
 		await walk(5, 500);
 		beat("2/5 l'allure choisit la plante", sl, () => `${api.session()?.act?.name ?? ''} · ${g.current ? plantName(g.current) : ''}`);
 		await walk(10.5, 500);
-		beat('3/5 fin : bilan et élan', sl, () => `Élan ×${boostMult()} pendant ${minutes(boostLeft(s) / 60000)}`);
+		beat('3/5 fin : bilan et élan', sl, () => `Élan ×${fmtNum(boostMult())} pendant ${minutes(boostLeft(s) / 60000)}`);
 		await endWalk();
 		await wait(3800);
 		api.closeModal();
@@ -468,7 +469,7 @@ const SCENES = {
 		debug.measures.run1km = { effort: w().effort - e0, nectar: w().nectar - n0 };
 		await wait(1000);
 		const duration = w().simTime / 60;
-		beat("fin de sortie : l'élan", "Curseurs : force de l'élan, durée de l'élan", () => `Sortie de ${minutes(duration)} → élan ×${boostMult()} pendant ${minutes(boostLeft(s) / 60000)}`);
+		beat("fin de sortie : l'élan", "Curseurs : force de l'élan, durée de l'élan", () => `Sortie de ${minutes(duration)} → élan ×${fmtNum(boostMult())} pendant ${minutes(boostLeft(s) / 60000)}`);
 		await endWalk();
 		debug.measures.boostMinutes = boostLeft(s) / 60000;
 		debug.measures.boostMult = boostMult();

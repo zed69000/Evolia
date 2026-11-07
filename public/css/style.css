@@ -580,6 +580,15 @@ html, body {
 .opt-version img { width: 54px; height: 54px; border-radius: 14px; object-fit: cover; }
 .opt-version b { display: block; font: 400 22px Courgette, cursive; color: var(--foret); }
 .opt-version span { font-size: 13px; color: var(--doux); }
+.opt-group { margin-top: 14px; border-radius: 18px; background: var(--papier-2); padding: 0 14px; }
+.opt-group > summary { list-style: none; cursor: pointer; display: flex; flex-direction: column; gap: 2px; padding: 14px 28px 14px 0; position: relative; }
+.opt-group > summary::-webkit-details-marker { display: none; }
+.opt-group > summary::after { content: ""; position: absolute; right: 4px; top: 50%; width: 9px; height: 9px; margin-top: -7px; border-right: 2.5px solid var(--foret); border-bottom: 2.5px solid var(--foret); transform: rotate(45deg); transition: transform 0.2s; }
+.opt-group[open] > summary::after { transform: rotate(-135deg); margin-top: -2px; }
+.opt-group > summary b { font-size: 17px; color: var(--foret); font-weight: 800; }
+.opt-group > summary span { font-size: 13px; color: var(--doux); }
+.opt-group[open] { padding-bottom: 14px; }
+.opt-group[open] > h3:first-of-type { margin-top: 4px; }
 .opt-link { display: block; box-sizing: border-box; text-align: center; text-decoration: none; margin-top: 8px; }
 .switch { display: flex; align-items: center; gap: 12px; cursor: pointer; font-size: 14px; color: var(--doux); }
 .switch input { position: absolute; opacity: 0; pointer-events: none; }

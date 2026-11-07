@@ -8,10 +8,11 @@ import { PLACES, PLACE_BY_ID, PLACE_DE, SPECIES, SPECIES_BY_ID, placeOpen } from
 import { DECOR } from './plants.js';
 import { boostMult } from './idle.js';
 import { CELLS, CELL_KM, cellsOpen, cellName } from './garden.js';
+import { fmtFixed, fmtNum } from './format.js';
 
 export const ACTIVE_M = 500;
 
-const fmt = (n, d = 1) => n.toLocaleString('fr-FR', { minimumFractionDigits: d, maximumFractionDigits: d });
+const fmt = (n, d = 1) => fmtFixed(n, d);
 const yesterday = () => { const d = new Date(); d.setDate(d.getDate() - 1); return dayKey(d); };
 const matureCount = state => allPlants(state).filter(p => p.growth >= 1).length;
 
@@ -116,7 +117,7 @@ export function challengesHtml(state) {
 	return `<ul class="challenges">${state.daily.challenges.map(c => {
 		const p = progress(state, c), done = p >= c.n, got = state.daily.claimed[c.id];
 		const shown = c.kind === 'move' ? `${fmt(Math.min(p, c.n))} / ${fmt(c.n, c.n % 1 ? 1 : 0)} km` : `${Math.min(p, c.n)} / ${c.n}`;
-		const prize = `+${c.reward} nectar${c.boost ? ` · élan ×${boostMult()} pendant ${c.boost} min` : ''}`;
+		const prize = `+${c.reward} nectar${c.boost ? ` · élan ×${fmtNum(boostMult())} pendant ${c.boost} min` : ''}`;
 		return `<li class="ch${done ? ' done' : ''}${got ? ' got' : ''}">
 			<span class="ch-ico" aria-hidden="true">${ICON[c.kind]}</span>
 			<div class="ch-body"><b>${LABEL[c.id](c)}</b>

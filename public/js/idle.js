@@ -8,6 +8,7 @@ import { PLANT_TYPES } from './plants.js';
 import { ITEMS, itemPower, fitsPlace } from './deco.js';
 import { dayKey, WALK_M_PER_EFFORT } from './state.js';
 import { CELLS, PARCEL_W, PARCEL_H } from './zones.js';
+import { fmtInt as fmt, fmtNum } from './format.js';
 
 // Production par membre et par heure (effort par type de plante, nectar), et bonus sur toute la production.
 export const GUILDS = {
@@ -329,7 +330,6 @@ export function visualExtra(state, placeId, sp) {
 	return m.list[0]?.sp.id === sp.id ? Math.min(6, m.extra) : 0;
 }
 
-const fmt = n => Math.round(n).toLocaleString('fr-FR');
 const fmtDur = ms => { const m = Math.round(ms / 60000); return m >= 60 ? `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, '0')}` : `${m} min`; };
 
 const TYPE_ICON = { fleur: '🌼', herbe: '🌿', buisson: '🌳', arbre: '🌲' };
@@ -408,8 +408,8 @@ export class EcoPanel {
 
 		// 2. L'élan : le lien entre le sport et l'idle, dit simplement.
 		const elan = boost
-			? `<div class="eco-elan on"><b>Élan ×${boostMult()}</b><span>Grâce à ta dernière sortie, tout pousse ${boostMult()} fois plus vite encore <b id="eco-boost-left">${fmtDur(boost)}</b>.</span></div>`
-			: `<div class="eco-elan"><b>Élan</b><span>Après une marche, tout pousse <b>${boostMult()} fois plus vite</b> pendant ${boostPerMin()} fois sa durée : 20 min de marche, ${boostPerMin() % 3 ? `${20 * boostPerMin()} min` : `${(20 * boostPerMin()) / 60} h`} d'élan.</span></div>`;
+			? `<div class="eco-elan on"><b>Élan ×${fmtNum(boostMult())}</b><span>Grâce à ta dernière sortie, tout pousse ${fmtNum(boostMult())} fois plus vite encore <b id="eco-boost-left">${fmtDur(boost)}</b>.</span></div>`
+			: `<div class="eco-elan"><b>Élan</b><span>Après une marche, tout pousse <b>${fmtNum(boostMult())} fois plus vite</b> pendant ${boostPerMin()} fois sa durée : 20 min de marche, ${boostPerMin() % 3 ? `${20 * boostPerMin()} min` : `${(20 * boostPerMin()) / 60} h`} d'élan.</span></div>`;
 
 		// 2 bis. Les habitats : ce qu'ils ajoutent au maximum, et si l'on y est déjà.
 		const hb = habitatBonus(st);

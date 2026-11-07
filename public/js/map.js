@@ -4,8 +4,8 @@
 
 import { PLACES, PLACE_BY_ID, SPECIES, placeOpen } from './species.js';
 import { rng, wash, ribbon, curve, rgba } from './watercolor.js';
+import { fmtNum as fmt } from './format.js';
 
-const fmt = n => n.toLocaleString('fr-FR', { maximumFractionDigits: 1 });
 
 // La carte se peint sur 1000 × 1500, puis s'adapte à la largeur de l'écran.
 const W = 1000, H = 1500;
