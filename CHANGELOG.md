@@ -3,6 +3,19 @@
 Chaque version, la plus récente en haut. Le site (evolia.sebastienalzamora.workers.dev) est toujours à jour ;
 le Play Store (tests internes) reçoit les versions indiquées « Play ».
 
+## 0.7.41 — 7 novembre 2026
+Idées du GDD du catalogue, partie Evolia :
+- **Zoom à une main** : touche deux fois, et garde le doigt posé ; glisse vers le bas pour zoomer, vers le haut pour dézoomer.
+- **Le banc sert enfin** : dans sa bulle, « S'asseoir » rapproche la vue, efface les boutons, et les bêtes alentour chantent plus souvent pendant 40 s.
+- **Le jardinier parle** : une petite bulle au-dessus de sa tête quand il a ramassé les œufs (« Trois œufs de plus ! ») ou récolté le potager.
+- **Musique et sorties** : la musique se tait pendant une sortie suivie en direct, les sons de la nature restent ; Options › Musique › « Aussi pendant mes sorties » pour la garder.
+- **Textes justes** : le nectar des pas est annoncé « environ 200 par km en marchant, davantage en courant », et l'élan avec son vrai multiplicateur (il suit les réglages du GDD) ; « réserve pleine : un collecteur de plus gardera tout », sans reproche ; le rappel de série dit « pour la faire grandir » ; la fiche de la vipère dit « appelle vite les secours » (le 15 n'existe qu'en France).
+- Dans l'appli, le tutoriel dit qu'on peut ranger son téléphone : les pas seront relus au retour.
+- Fiche Play et README : 331 espèces, effort d'après l'énergie dépensée, rien ne pousse au-delà de 35 km/h, milieux dans un seul jardin.
+
+## 0.7.40 — 7 novembre 2026
+- Les messages d'une même sortie sont regroupés et restent le temps de les lire ; les Options sont rangées en deux groupes, Jardin et Technique ; un seul format pour les nombres.
+
 ## 0.7.39 — 2 novembre 2026
 - **La carte a ses filtres.** Quand tu dézoomes, une barre apparaît pour choisir ce que tu veux voir ; le jeu garde ton choix :
   - **✨ Nouveautés** : les espèces dont tu n'as pas encore lu la fiche. Touche la pastille pour zoomer, puis le message pour ouvrir la fiche (+10 nectar).

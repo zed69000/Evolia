@@ -94,7 +94,9 @@ leur repos par des feuilles peintes à la main :
 | Marche rapide, jogging (dès 5 km/h) | buisson | 150 |
 | Course (dès 9 km/h) | arbre | 400 |
 
-Effort = distance (m) / 10 × multiplicateur de l'allure × (vitesse / vitesse de référence).
+Effort = énergie dépensée, d'après les équivalents métaboliques (MET) du Compendium des activités physiques :
+(MET − 1) × heures × 125 / ((3,8 − 1) × 0,2), plus 5 % par MET au-delà de 4. Un kilomètre de marche à 5 km/h vaut 125
+d'effort, soit 200 nectar ; en courant, un kilomètre en rapporte environ 420. Les valeurs se règlent dans le GDD du catalogue.
 En montée (altitude GPS lissée, paliers de 4 m), chaque mètre gravi vaut 10 m à plat, et l'allure est relevée
 d'environ 1 km/h par 100 m/h de dénivelé (jusqu'à +6 km/h).
 
@@ -102,14 +104,14 @@ Succession naturelle : toutes les 4 herbes mûres, le vent ou une abeille sème 
 un oiseau sème un arbuste ; tous les 4 arbustes, un geai ou un écureuil sème un arbre (au plus deux jeunes pousses
 en attente par étage). Une pousse semée plus grande que ce qu'on fait pousser reçoit un tiers de l'effort.
 L'herbe s'étend en pelouse continue (tapis peint au sol sous les touffes).
-Au-delà de 25 km/h rien ne pousse (vélo, voiture). Décor débloqué à 3, 6 et 10 km cumulés.
+Au-delà de 35 km/h rien ne pousse (voiture, train). Décor débloqué à 3, 6 et 10 km cumulés.
 
 Aménager a trois onglets : Habitats (abris pour la faune, améliorables du niveau 1 au niveau 5 : chaque niveau
 compte comme un abri de plus, coûte 4, 12, 35 puis 100 fois le prix de base et demande 6, 18, 40 puis 80 km au
 total), Récolte (collecteur, cabane, potager) et Décoration. La cabane s'agrandit en cabane à auvent (10 km) puis
 en chalet (30 km), se peint en cinq couleurs, et loge un fermier ou une fermière, au choix, avec un chien ou
 un chat. Quand le fermier est chez lui, la cheminée fume. Le nectar butiné attend dans les fleurs ou le
-collecteur : rien n'entre dans la bourse sans qu'on le récolte. Le nectar des pas (1 pour 5 m) se dépose aussi. Le
+collecteur : rien n'entre dans la bourse sans qu'on le récolte. Le nectar des pas (environ 200 par km de marche, davantage en courant) se dépose aussi. Le
 collecteur se remplit jusqu'à sa capacité ; ce qui n'y tient plus reste au sol, en gouttes (l'écosystème y
 en laisse au plus 30, la marche sans limite). La haie, le muret et les pas japonais se tournent et se
 raccordent bout à bout. Un guide explique chaque nouveauté au bon moment : une bulle près du bouton concerné,

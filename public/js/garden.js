@@ -1743,6 +1743,35 @@ export class Garden {
 		(this.floats ??= []).push({ x, y, text, t0: this.t });
 	}
 
+	/** Le jardinier dit un petit mot (une tâche finie), quelques secondes. */
+	say(text) {
+		if (this.farmer) this.farmer.say = { text, until: this.t + 5 };
+	}
+
+	/** Sa bulle, au-dessus de sa tête, à taille lisible quel que soit le zoom. */
+	drawSay(ctx, f) {
+		const left = f.say.until - this.t, z = Math.max(1, 1.1 / this.cam.z);
+		ctx.save();
+		ctx.translate(f.x, f.y - 78);
+		ctx.scale(z, z);
+		ctx.globalAlpha = Math.min(1, left / 0.4, (5 - left) / 0.25);
+		ctx.font = '700 15px Nunito, sans-serif';
+		ctx.textAlign = 'center';
+		ctx.textBaseline = 'middle';
+		const w = ctx.measureText(f.say.text).width + 20, h = 26;
+		ctx.fillStyle = 'rgba(253,247,231,0.96)';
+		ctx.strokeStyle = 'rgba(95,147,62,0.8)';
+		ctx.lineWidth = 1.5;
+		ctx.beginPath();
+		ctx.roundRect(-w / 2, -h, w, h, 13);
+		ctx.moveTo(-5, 0); ctx.lineTo(0, 7); ctx.lineTo(5, 0);
+		ctx.fill();
+		ctx.stroke();
+		ctx.fillStyle = '#1F6B47';
+		ctx.fillText(f.say.text, 0, -h / 2 + 1);
+		ctx.restore();
+	}
+
 	drawFloats(ctx) {
 		this.floats = (this.floats ?? []).filter(f => this.t - f.t0 < 1.8);
 		const z = Math.max(1, 1.2 / this.cam.z);
@@ -1845,7 +1874,10 @@ export class Garden {
 			} else {
 				const [x, y] = local(e);
 				drag = { x, y, lx: x, ly: y, lt: performance.now(), moved: false };
+				// Second toucher juste après un premier : glisser ensuite zoome, d'une seule main.
+				if (!this.ghost && performance.now() - lastTap < 300) drag.zoom = true;
 				if (this.ghost) this.grabGhost(drag, x, y);
+				else if (drag.zoom) { /* pas d'appui long pendant un zoom à un doigt */ }
 				else {
 					// Appui long sur un objet : on le soulève et il suit le doigt, sans passer par un menu.
 					drag.hold = setTimeout(() => {
@@ -1880,6 +1912,11 @@ export class Garden {
 				this.moveGhostTo(drag, x, y);
 				return;
 			}
+			if (drag.zoom) {
+				if (!drag.moved && Math.abs(y - drag.y) > 6) { drag.moved = true; clearTimeout(drag.hold); }
+				if (drag.moved) { this.zoomAt(Math.exp((y - drag.ly) * 0.008), drag.x, drag.y); drag.ly = y; }
+				return;
+			}
 			if (!drag.moved && Math.hypot(x - drag.x, y - drag.y) > 6) {
 				clearTimeout(drag.hold);
 				drag.moved = true;
@@ -1911,6 +1948,7 @@ export class Garden {
 				drag = null;
 				return;
 			}
+			if (drag.zoom && drag.moved) { lastTap = 0; drag = null; return; }
 			if (!drag.moved) {
 				const now = performance.now();
 				// Double toucher : zoomer d'un cran (ou revenir au zoom normal de très près).
@@ -3547,6 +3585,7 @@ export class Garden {
 		if (!glyph && this.items.some(it => it.kind === 'collecteur')) { world(); this.drawJarTags(ctx); }
 		if (!glyph && this.farmer?.hidden) { world(); this.drawSmoke(ctx); }
 		if (this.floats?.length) { world(); this.drawFloats(ctx); }
+		if (this.farmer?.say && this.t < this.farmer.say.until) { world(); this.drawSay(ctx, this.farmer); }
 
 		if (this.ghost) {
 			const { kind, x, y } = this.ghost, box = this.ghostBox(kind, this.ghost.level, this.ghost.plant), ok = this.canPlace(kind, x, y, this.lifted);

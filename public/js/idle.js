@@ -318,7 +318,8 @@ export function summaryHtml(summary) {
 		if (!chips && out.nectar < 1) return '';
 		return `<li><b>${PLACE_BY_ID[id].name}</b> · ${Math.round(out.nectar).toLocaleString('fr-FR')} nectar à récolter<br>${chips}</li>`;
 	}).filter(Boolean);
-	const lost = summary.lost >= 1 ? `<p class="eco-lost">Réserve pleine : ${Math.round(summary.lost).toLocaleString('fr-FR')} nectar perdus. Récolte plus souvent, ou installe un collecteur de plus.</p>` : '';
+	// Sans reproche : le conseil d'abord, le montant en petit.
+	const lost = summary.lost >= 1 ? `<p class="eco-lost">Réserve pleine : un collecteur de plus gardera tout. <small>(${Math.round(summary.lost).toLocaleString('fr-FR')} nectar non gardés)</small></p>` : '';
 	return rows.length || lost ? `<ul class="harvest-rows">${rows.join('')}</ul>${lost}` : '';
 }
 

@@ -58,13 +58,13 @@ Marche, cours, fais le ménage : chaque pas fait pousser ton jardin aquarelle.
 
 **Description complète**
 
-Evolia transforme tes pas en jardin. Une marche fait éclore des fleurs, une marche rapide des arbustes, une course des arbres. Pas besoin d'être sportif : le ménage et les petits pas de la journée comptent aussi.
+Evolia transforme tes pas en jardin. Une marche fait éclore des fleurs, une marche rapide des arbustes, une course des arbres : plus tu dépenses d'énergie, plus ton jardin grandit. Pas besoin d'être sportif : le ménage et les petits pas de la journée comptent aussi.
 
 UN JARDIN VIVANT
 Ton jardin est peint à l'aquarelle et vit au rythme de ton vrai ciel : l'heure, le soleil, la pluie, la neige et les saisons. Les abeilles butinent, les mésanges se posent, le hérisson sort à la nuit tombée.
 
-126 ESPÈCES À DÉCOUVRIR
-Prairie, marais, forêt, montagne, littoral : chaque lieu a ses plantes et ses animaux. Pour chaque espèce, son rôle dans la nature et un geste simple pour l'aider vraiment.
+331 ESPÈCES À DÉCOUVRIR
+Prairie, marais, forêt, montagne, littoral : chaque nouvelle parcelle de ton jardin prend le milieu de ton choix, avec ses plantes et ses animaux, et leurs vrais chants. Pour chaque espèce, son rôle dans la nature et un geste simple pour l'aider vraiment.
 
 UN MONDE QUI S'AGRANDIT
 À chaque kilomètre, la clôture recule et un nouveau coin s'ouvre : le champ de coquelicots, le verger, le ruisseau, la haie… Installe une cabane, un nichoir, un hôtel à insectes : ils attirent la vie.
@@ -93,13 +93,13 @@ Walk, run, do the chores: every step grows your watercolor garden.
 
 **Full description**
 
-Evolia turns your steps into a garden. A walk opens flowers, a brisk walk grows shrubs, a run grows trees. No need to be sporty: chores and the little steps of your day count too.
+Evolia turns your steps into a garden. A walk opens flowers, a brisk walk grows shrubs, a run grows trees: the more energy you spend, the more your garden grows. No need to be sporty: chores and the little steps of your day count too.
 
 A LIVING GARDEN
 Your garden is painted in watercolor and follows your real sky: the time of day, the sun, rain, snow and seasons. Bees forage, tits land on branches, the hedgehog comes out at dusk.
 
-126 SPECIES TO DISCOVER
-Meadow, marsh, forest, mountain, coast: every place has its own plants and animals. For each one, its role in nature and one simple thing you can do to help it.
+331 SPECIES TO DISCOVER
+Meadow, marsh, forest, mountain, coast: each new plot of your garden takes the habitat you choose, with its own plants and animals, and their real calls. For each one, its role in nature and one simple thing you can do to help it.
 
 A WORLD THAT GROWS
 Every kilometer, the fence moves back and a new corner opens: the poppy field, the orchard, the brook, the hedgerow… Build a cabin, a nest box, an insect hotel: they bring life in.

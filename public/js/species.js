@@ -929,7 +929,7 @@ export const SPECIES = [
 	animal('prairie', 'vipere-aspic', "Vipère aspic", 'Vipera aspis', { kind: 'snake', body: '#B89A70', belly: '#6A5040', pattern: 'zigzag', short: true, behavior: 'walk', when: 'day', home: 'herbe', speed: 8, count: () => 1 },
 		s => nMature(s, 'prairie') >= 30, "Fais grandir trente plantes",
 		"Elle chasse surtout les petits rongeurs comme les campagnols, et sert de proie au circaète. Discrète, elle fuit à l'approche des humains.",
-		"Ne la touche jamais : recule doucement pour qu'elle s'en aille, et en cas de morsure appelle vite le 15.",
+		"Ne la touche jamais : recule doucement pour qu'elle s'en aille, et en cas de morsure appelle vite les secours.",
 		"La femelle ne se reproduit pas tous les ans : elle met au monde des petits déjà formés."),
 	animal('prairie', 'lezard-souches', "Lézard des souches", 'Lacerta agilis', { kind: 'lizard', body: '#7A8A40', belly: '#C8D080', spots: '#3A2A1A', behavior: 'walk', when: 'day', home: 'herbe', speed: 18, count: () => 1 },
 		s => nMature(s, 'prairie', 'herbe') >= 15, "Fais pousser quinze herbes folles",

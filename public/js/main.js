@@ -180,6 +180,7 @@ garden.onEggs = (coop, n) => {
 	const gain = n * EGG_NECTAR;
 	state.nectar = (state.nectar ?? 0) + gain;
 	toast(`${farmerName(true)} a ramassé ${n} œuf${n > 1 ? 's' : ''} · +${gain} nectar`, '#5F933E');
+	garden.say(n === 1 ? 'Un œuf de plus !' : `${['', '', 'Deux', 'Trois', 'Quatre', 'Cinq', 'Six'][n] ?? n} œufs de plus !`);
 	renderHud();
 	persist();
 };
@@ -188,6 +189,7 @@ garden.onEggs = (coop, n) => {
 garden.onHarvest = () => {
 	state.nectar = (state.nectar ?? 0) + 60;
 	toast(`${farmerName(true)} a récolté ses légumes · +60 nectar`, '#5F933E');
+	garden.say(['Belle récolte !', 'Des légumes pour ce soir !', 'Le panier est plein !'][Math.floor(Math.random() * 3)]);
 	renderHud();
 	persist();
 };
@@ -526,7 +528,7 @@ const totalKm = () => state.totals.distance / 1000;
 const TIPS = [
 	// La bourse d'abord, dès l'arrivée : tout le reste du guide en découle.
 	{ id: 'purse', target: '#hud-steps', when: () => true,
-		title: 'Ta bourse de nectar', text: 'Le nectar sert à aménager ton jardin. Tes pas en produisent (1 pour 5 m), tes animaux aussi : il se dépose sur les fleurs, et tu le cueilles. Dessous, ce qui t’attend.' },
+		title: 'Ta bourse de nectar', text: 'Le nectar sert à aménager ton jardin. Tes pas en produisent (environ ${nectarPerKm()} par km en marchant, davantage en courant), tes animaux aussi : il se dépose sur les fleurs, et tu le cueilles. Dessous, ce qui t’attend.' },
 	{ id: 'dew', target: '#hud-steps', when: () => groundOf(state) >= 2, show: () => focusDew(),
 		title: 'Du nectar sur les fleurs', text: 'Tes butineurs déposent leur récolte en gouttes dorées sur les fleurs. Touche-les pour la cueillir : sinon elle attend, sans entrer dans ta bourse.' },
 	{ id: 'deco', target: '#btn-deco', when: () => (state.nectar ?? 0) >= 60 && !hasCollector(state),
@@ -537,7 +539,7 @@ const TIPS = [
 		when: () => hasCollector(state) && jarOf(state) >= jarCap(state) && groundOf(state) >= 100 && garden.items.some(it => it.kind === 'collecteur' && (it.level ?? 1) < 3),
 		title: 'Ton collecteur déborde', text: 'Ta récolte ne tient plus dans ton collecteur : le reste attend en gouttes sur les fleurs. Touche le collecteur au jardin pour l’améliorer (il garde 400, puis 1 000 nectar), ou poses-en un deuxième.' },
 	{ id: 'eco', target: '#btn-eco', when: () => !!state.tips?.purse && SPECIES.some(sp => sp.kind === 'animal' && state.species[sp.id]),
-		title: 'Ton écosystème', text: 'Les animaux découverts travaillent pour toi, même appli fermée : ils font pousser le jardin et récoltent du nectar. Quand tu bouges, ils travaillent trois fois plus.' },
+		title: 'Ton écosystème', text: 'Les animaux découverts travaillent pour toi, même appli fermée : ils font pousser le jardin et récoltent du nectar. Quand tu bouges, ils travaillent ${fmtNum(boostMult())} fois plus.' },
 	{ id: 'species', target: '#btn-species', when: () => !!state.tips?.purse && Object.keys(state.species).length >= 1,
 		title: 'Les espèces', text: 'Chaque plante et chaque animal découvert a sa fiche : son rôle dans la nature, et comment l’aider chez toi.' },
 	{ id: 'habitats', target: '#btn-deco', when: () => ownedAny('habitat') || ((state.nectar ?? 0) >= 40 && hasCollector(state)),
@@ -830,6 +832,7 @@ function startSession(sim) {
 	trace('balade', { état: 'début' });
 	session = { start: Date.now(), simTime: 0, distance: 0, steps: 0, effort: 0, events: [], speed: 0, act: null, sim, touched: new Set(), lastMove: Date.now() };
 	garden.setFollow(true);
+	sound.setWalking(true);
 	toast('Tu bouges : ton jardin pousse', '#F08A3C');
 }
 
@@ -904,6 +907,7 @@ function endSession() {
 	trace('balade', { état: 'fin', m: w.distance, s: sessionSeconds(w), pas: w.steps });
 	session = null;
 	garden.setFollow(false);
+	sound.setWalking(false);
 	const duration = sessionSeconds(w);
 	const matured = {};
 	for (const ev of w.events) if (ev.kind === 'mature') matured[ev.plant.type] = (matured[ev.plant.type] ?? 0) + 1;
@@ -1172,7 +1176,7 @@ setInterval(() => { if (!document.hidden) runIdle(); }, 5000);
 
 function showIdleRecap() {
 	if (!idleNote || !$('#modal').hidden || !$('#coach').hidden) return;
-	showModal(`<div class="modal-body"><h2>Pendant ton absence</h2><p>Tes animaux ont continué de travailler. Bouge pour tripler leur production.</p>
+	showModal(`<div class="modal-body"><h2>Pendant ton absence</h2><p>Tes animaux ont continué de travailler. Bouge, et leur production sera multipliée par ${fmtNum(boostMult())}.</p>
 		${idleNote}</div><div class="modal-foot"><button class="btn primary" data-close>Voir mon jardin</button></div>`);
 	idleNote = '';
 }
@@ -1330,7 +1334,7 @@ function renderZoomInfo() {
 	card.innerHTML = `<div class="zi-head"><b>Récolte du nectar</b>${x > 1 ? `<span class="zi-boost">élan ×${fmtNum(x)} · ${fmtMin(boostLeft(state) / 60000)}</span>` : ''}</div>
 		<div class="zi-total"><span class="nectar">${live.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span><small>à récolter · +${fmt(r.nectar * x, 1)}/h ici</small></div>
 		${rows ? `<ul>${rows}</ul>` : '<p>Découvre des pollinisateurs : ils récoltent le nectar pour toi.</p>'}
-		<p class="zi-move">En marchant : +1 nectar à récolter tous les 5 m${x === 1 ? ', et la récolte triple ensuite' : ''}.</p>
+		<p class="zi-move">En marchant : environ +${nectarPerKm()} nectar par km, davantage en courant${x === 1 ? `, et la récolte est ensuite multipliée par ${fmtNum(boostMult())}` : ''}.</p>
 		${growing ? `<p class="zi-grow">${plantName(growing)} · ${Math.floor(growing.growth * 100)} %</p>` : ''}`;
 }
 setInterval(renderZoomInfo, 250);
@@ -1606,6 +1610,14 @@ function fillFromDew(it) {
 	renderHud();
 }
 
+/** Assis sur le banc : la vue se pose tout près, les boutons s'effacent, et les bêtes alentour chantent plus souvent. */
+function sitOnBench(it) {
+	garden.flyTo(it.x, it.y - 40, 1.6);
+	if (!peekLock) $('#btn-peek').click();
+	sound.listen(40);
+	toast('Assis sur le banc : écoute ton jardin', '#5F933E');
+}
+
 function tapItem(hit, card) {
 	const it = hit.item, def = ITEMS[it.kind];
 	// Un collecteur vide avec des gouttes qui attendent sur les fleurs : elles viennent s'y ranger.
@@ -1629,7 +1641,7 @@ function tapItem(hit, card) {
 	const short = ['poulailler', 'cabane', 'collecteur'].includes(it.kind) ? '' : def.text.split(/(?<=[.!?…])\s/)[0];
 	const tip = (state.longPressTips ?? 0) < 3 ? (state.longPressTips = (state.longPressTips ?? 0) + 1, '<small class="item-tip">Astuce : un appui long dessus le soulève directement.</small>') : '';
 	card.innerHTML = `<b>${def.name}</b>${short}${info}${tip}
-		${it.kind === 'poulailler' ? coopButtons(it) : ''}<div class="item-actions">${up ? `<button class="btn primary" data-upgrade ${(state.nectar ?? 0) < up ? 'disabled' : ''}>${def.levels ? 'Agrandir' : 'Améliorer'} (${fmtInt(up)})</button>` : ''}${it.kind === 'cabane' ? '<button class="btn ghost" data-style>Couleur</button><button class="btn ghost" data-farmer-swap>' + (state.gardener === 'fermiere' ? 'Un fermier' : 'Une fermière') + '</button><button class="btn ghost" data-pet-swap>' + (state.pet === 'chien' ? 'Un chat' : state.pet === 'chat' ? 'Sans animal' : 'Un chien') + '</button>' : ''}${def.turn ? '<button class="btn ghost" data-turn>Tourner</button>' : ''}<button class="btn ghost" data-move>Déplacer</button><button class="btn ghost" data-store>Ranger (+${fmtInt((it.paid ?? def.cost) + (it.spent ?? 0))})</button></div>`;
+		${it.kind === 'poulailler' ? coopButtons(it) : ''}<div class="item-actions">${up ? `<button class="btn primary" data-upgrade ${(state.nectar ?? 0) < up ? 'disabled' : ''}>${def.levels ? 'Agrandir' : 'Améliorer'} (${fmtInt(up)})</button>` : ''}${it.kind === 'cabane' ? '<button class="btn ghost" data-style>Couleur</button><button class="btn ghost" data-farmer-swap>' + (state.gardener === 'fermiere' ? 'Un fermier' : 'Une fermière') + '</button><button class="btn ghost" data-pet-swap>' + (state.pet === 'chien' ? 'Un chat' : state.pet === 'chat' ? 'Sans animal' : 'Un chien') + '</button>' : ''}${it.kind === 'banc' ? '<button class="btn primary" data-sit>S’asseoir</button>' : ''}${def.turn ? '<button class="btn ghost" data-turn>Tourner</button>' : ''}<button class="btn ghost" data-move>Déplacer</button><button class="btn ghost" data-store>Ranger (+${fmtInt((it.paid ?? def.cost) + (it.spent ?? 0))})</button></div>`;
 	card.classList.remove('link');
 	card.classList.add('actions');
 	card.onclick = e => {
@@ -1688,6 +1700,7 @@ function tapItem(hit, card) {
 			persist(true);
 			return;
 		}
+		if (e.target.closest('[data-sit]')) { card.hidden = true; sitOnBench(it); return; }
 		if (e.target.closest('[data-move]')) { card.hidden = true; startPlacing(it.kind, it); }
 		if (e.target.closest('[data-store]')) {
 			card.hidden = true;
@@ -1724,6 +1737,8 @@ $('#btn-deco').addEventListener('click', () => openDeco(currentMission()?.id ===
 // ─── Options : version, réglages, mode test ───────────────────
 
 const isApp = () => !!window.Capacitor?.isNativePlatform?.();
+/** Le nectar d'un kilomètre de marche à 5 km/h (en courant, bien plus), d'après les réglages. */
+const nectarPerKm = () => Math.round(Tuning.num('effort.km_marche', 125) * nectarPerEffort());
 
 // ─── Panneau de débogage ──────────────────────────────────────
 
@@ -1926,7 +1941,8 @@ function renderOptions() {
 		<p class="empty">Cris d'animaux : vrais enregistrements de Joseph Sardin, <a href="https://bigsoundbank.com" target="_blank" rel="noopener">BigSoundBank.com</a> (domaine public).</p>
 		<h3>Musique</h3>
 		<label class="switch"><input type="checkbox" id="opt-music" ${sound.musicSettings.on ? 'checked' : ''}><i></i><span>Musique zen, jamais la même</span></label>
-		${sound.musicSettings.on ? `<input type="range" id="opt-music-vol" class="volume" min="0" max="1" step="0.05" value="${sound.musicSettings.vol}" aria-label="Volume de la musique">` : ''}
+		${sound.musicSettings.on ? `<input type="range" id="opt-music-vol" class="volume" min="0" max="1" step="0.05" value="${sound.musicSettings.vol}" aria-label="Volume de la musique">
+		<label class="switch"><input type="checkbox" id="opt-music-walk" ${sound.musicSettings.walk ? 'checked' : ''}><i></i><span>Aussi pendant mes sorties (sinon seuls les sons de la nature restent)</span></label>` : ''}
 		<h3>Ma partie</h3>
 		<p class="empty">Ton jardin est gardé sur ce téléphone. Garde-en une copie (un code à coller dans tes notes ou à t'envoyer) : elle le ramène après un changement de téléphone. ${backupAge(state)}</p>
 		<button class="btn ghost wide" id="opt-backup">Garder une copie de ma partie</button>
@@ -2074,6 +2090,7 @@ $('#options').addEventListener('change', e => {
 	}
 	if (e.target.id === 'opt-sound') { sound.setOn(e.target.checked); persist(true); renderOptions(); return; }
 	if (e.target.id === 'opt-music') { sound.setMusicOn(e.target.checked); persist(true); renderOptions(); return; }
+	if (e.target.id === 'opt-music-walk') { sound.musicSettings.walk = e.target.checked; sound.applyLevels(); persist(true); return; }
 	if (e.target.id === 'opt-volume' || e.target.id === 'opt-music-vol') { persist(true); return; }
 	if (e.target.id === 'opt-debug') { setDebug(e.target.checked); debugPanel.show(e.target.checked); return; }
 	if (e.target.id !== 'opt-dev') return;
@@ -2119,7 +2136,8 @@ $('#modal').addEventListener('click', e => {
 
 const COACH = [
 	{ title: 'Ton jardin est vivant', text: 'Glisse pour te promener, pince pour zoomer.', actions: [['Suivant', 'next']] },
-	{ title: 'Bouge, il pousse', text: 'Tes pas le font grandir. Même le ménage.', actions: [['Activer le suivi', 'track'], ['Plus tard', 'next']] },
+	// Dans l'appli, rien à garder ouvert : les pas faits téléphone rangé sont relus au retour.
+	{ title: 'Bouge, il pousse', text: isApp() ? 'Tes pas le font grandir, même le ménage. Range ton téléphone : tes pas seront relus à ton retour.' : 'Tes pas le font grandir. Même le ménage.', actions: [['Activer le suivi', 'track'], ['Plus tard', 'next']] },
 	{ title: 'Touche les animaux', text: 'Chaque espèce a un rôle. Découvre-les.', actions: [["C'est parti", 'done']] },
 ];
 

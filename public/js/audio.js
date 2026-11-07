@@ -70,8 +70,21 @@ export class Soundscape {
 		if (!this.ctx) return;
 		const t = this.ctx.currentTime;
 		this.master.gain.setTargetAtTime(this.settings.on ? this.settings.vol * 1.3 : 0, t, 0.3);
-		this.musicBus.gain.setTargetAtTime(this.musicSettings.on ? this.musicSettings.vol * 0.7 : 0, t, 0.8);
+		// Pendant une sortie suivie en direct, la musique se tait (sauf si on la veut aussi), la nature reste.
+		const music = this.musicSettings.on && (!this.walking || this.musicSettings.walk);
+		this.musicBus.gain.setTargetAtTime(music ? this.musicSettings.vol * 0.7 : 0, t, 0.8);
 		if (!this.anyOn) this.ctx.suspend();
+	}
+
+	setWalking(on) {
+		this.walking = on;
+		this.applyLevels();
+	}
+
+	/** Un moment d'écoute (assis sur le banc) : les bêtes visibles chantent bien plus souvent pendant `sec` secondes. */
+	listen(sec) {
+		this.unlock();
+		this.listenUntil = (this.ctx?.currentTime ?? 0) + sec;
 	}
 
 	pause() { this.ctx?.suspend(); }
@@ -252,8 +265,9 @@ export class Soundscape {
 		const call = CALLS[b.sp] ?? kindCall(b), key = b.sp ?? `${b.kind}${b.p?.rooster ? '-coq' : ''}`;
 		if (!call || (this.next[key] ?? 0) > now) return;
 		// De près, on entend les bêtes plus souvent (et plus fort, voir plus bas).
-		if (Math.random() > call.chance * (0.45 + 0.55 * near)) return;
-		this.next[key] = now + call.every * (0.7 + Math.random() * 0.6);
+		const listening = now < (this.listenUntil ?? 0);
+		if (Math.random() > call.chance * (0.45 + 0.55 * near) * (listening ? 2 : 1)) return;
+		this.next[key] = now + call.every * (0.7 + Math.random() * 0.6) * (listening ? 0.5 : 1);
 		const pan = Math.max(-0.8, Math.min(0.8, ((b.x - v.x0) / v.w) * 2 - 1));
 		const s = sampleFor(b);
 		// Un vrai cri dès qu'il est chargé (s'il y a déjà trop de voix, la bête se tait cette fois).
