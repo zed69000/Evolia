@@ -2305,4 +2305,11 @@ if (Tuning.preview) {
 		save: () => persist(true),
 		theme: { bg: '#FDF7E7', fg: '#3A2A20', muted: '#5A6B4E', accent: '#1F6B47', accentFg: '#FDF7E7', font: 'Nunito, system-ui, sans-serif', radius: '16px' },
 	});
+	// Every tester can report a bug or an idea: the 🐞 button, F8; it lands in the catalog's Bugs tab.
+	window.BugReport?.init({
+		id: 'evolia',
+		version: VERSION,
+		lang: 'fr',
+		theme: { bg: '#FDF7E7', fg: '#3A2A20', muted: '#5A6B4E', accent: '#1F6B47', accentFg: '#FDF7E7', font: 'Nunito, system-ui, sans-serif', radius: '16px' },
+	});
 }
