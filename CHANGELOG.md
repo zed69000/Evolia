@@ -3,6 +3,10 @@
 Chaque version, la plus récente en haut. Le site (evolia.sebastienalzamora.workers.dev) est toujours à jour ;
 le Play Store (tests internes) reçoit les versions indiquées « Play ».
 
+## 0.7.43 — 8 novembre 2026
+- **Options** : si son contenu n'arrive pas à s'afficher (signalé sur Android), la page s'ouvre quand même, avec le message d'erreur à nous envoyer et l'interrupteur de débogage.
+- L'astuce « Ta bourse de nectar » et celle de l'écosystème affichaient `${…}` au lieu du chiffre : corrigé.
+
 ## 0.7.42 — 7 novembre 2026 · Play
 Retours de deux testeurs :
 - **Les espèces arrivent une à une.** Une nouvelle espèce au plus toutes les 30 secondes, et plus aucune tant que 4 fiches attendent d'être lues (les espèces du tout début ne comptent pas). L'objectif du bas dit alors « Lis 2 fiches d'espèces : de nouvelles espèces attendent (+10 nectar chacune) », et le toucher ouvre la première ; un message le rappelle au plus tous les quarts d'heure.

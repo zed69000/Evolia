@@ -546,7 +546,7 @@ const totalKm = () => state.totals.distance / 1000;
 const TIPS = [
 	// La bourse d'abord, dès l'arrivée : tout le reste du guide en découle.
 	{ id: 'purse', target: '#hud-steps', when: () => true,
-		title: 'Ta bourse de nectar', text: 'Le nectar sert à aménager ton jardin. Tes pas en produisent (environ ${nectarPerKm()} par km en marchant, davantage en courant), tes animaux aussi : il se dépose sur les fleurs, et tu le cueilles. Dessous, ce qui t’attend.' },
+		title: 'Ta bourse de nectar', get text() { return `Le nectar sert à aménager ton jardin. Tes pas en produisent (environ ${nectarPerKm()} par km en marchant, davantage en courant), tes animaux aussi : il se dépose sur les fleurs, et tu le cueilles. Dessous, ce qui t’attend.`; } },
 	{ id: 'dew', target: '#hud-steps', when: () => groundOf(state) >= 2, show: () => focusDew(),
 		title: 'Du nectar sur les fleurs', text: 'Tes butineurs déposent leur récolte en gouttes dorées sur les fleurs. Touche-les pour la cueillir : sinon elle attend, sans entrer dans ta bourse.' },
 	{ id: 'deco', target: '#btn-deco', when: () => (state.nectar ?? 0) >= 60 && !hasCollector(state),
@@ -557,7 +557,7 @@ const TIPS = [
 		when: () => hasCollector(state) && jarOf(state) >= jarCap(state) && groundOf(state) >= 100 && garden.items.some(it => it.kind === 'collecteur' && (it.level ?? 1) < 3),
 		title: 'Ton collecteur déborde', text: 'Ta récolte ne tient plus dans ton collecteur : le reste attend en gouttes sur les fleurs. Touche le collecteur au jardin pour l’améliorer (il garde 400, puis 1 000 nectar), ou poses-en un deuxième.' },
 	{ id: 'eco', target: '#btn-eco', when: () => !!state.tips?.purse && SPECIES.some(sp => sp.kind === 'animal' && state.species[sp.id]),
-		title: 'Ton écosystème', text: 'Les animaux découverts travaillent pour toi, même appli fermée : ils font pousser le jardin et récoltent du nectar. Quand tu bouges, ils travaillent ${fmtNum(boostMult())} fois plus.' },
+		title: 'Ton écosystème', get text() { return `Les animaux découverts travaillent pour toi, même appli fermée : ils font pousser le jardin et récoltent du nectar. Quand tu bouges, ils travaillent ${fmtNum(boostMult())} fois plus.`; } },
 	{ id: 'species', target: '#btn-species', when: () => !!state.tips?.purse && Object.keys(state.species).length >= 1,
 		title: 'Les espèces', text: 'Chaque plante et chaque animal découvert a sa fiche : son rôle dans la nature, et comment l’aider chez toi.' },
 	{ id: 'habitats', target: '#btn-deco', when: () => ownedAny('habitat') || ((state.nectar ?? 0) >= 40 && hasCollector(state)),
@@ -2046,7 +2046,15 @@ function renderOptions() {
 }
 
 function openOptions() {
-	renderOptions();
+	// Si le contenu plante (vu une fois sur Android), la page s'ouvre quand même et dit pourquoi.
+	try { renderOptions(); } catch (e) {
+		const msg = String(e?.stack ?? e?.message ?? e).slice(0, 300);
+		debugLog(`Options : ${msg}`);
+		$('#options').innerHTML = `<div class="panel-head"><h2>Options</h2><button class="close" data-close-options aria-label="Fermer">×</button></div>
+		<p class="empty">Une partie de cette page n'a pas pu s'afficher. Envoie ce message pour qu'on corrige :</p><pre class="opt-error"></pre>
+		<label class="switch"><input type="checkbox" id="opt-debug" ${debugOn() ? 'checked' : ''}><i></i><span>Débogage</span></label>`;
+		$('#options .opt-error').textContent = `Evolia ${VERSION} · ${msg}`;
+	}
 	$('#options').classList.add('open');
 	$('#options').setAttribute('aria-hidden', 'false');
 }
