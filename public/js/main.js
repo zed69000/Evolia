@@ -2297,21 +2297,10 @@ if (Tuning.preview) {
 		// À chaque lancement, tant que rien ne relit les pas appli fermée.
 		if (!state.harvestSource) setTimeout(() => whenFree(() => $('#modal').hidden && offerHarvest(true)), 2500);
 	}
-	// Testers on an older Google Play build: offered once per version, only while nothing is open or recording.
-	window.GameUpdate?.init({
-		id: 'evolia',
-		version: VERSION,
-		android: 'com.zed69000.evolia',
-		lang: 'fr',
+	// Hooks of the studio kit: the new version message waits until nothing is open or recording, the save is written first.
+	window.GameKit = {
+		lang: () => 'fr',
 		isIdle: () => !session && !placing && !garden.camBusy() && !$('#deco').classList.contains('open'),
 		save: () => persist(true),
-		theme: { bg: '#FDF7E7', fg: '#3A2A20', muted: '#5A6B4E', accent: '#1F6B47', accentFg: '#FDF7E7', font: 'Nunito, system-ui, sans-serif', radius: '16px' },
-	});
-	// Every tester can report a bug or an idea: three-finger tap, F8 or Options; it lands in the catalog's Bugs tab.
-	window.BugReport?.init({
-		id: 'evolia',
-		version: VERSION,
-		lang: 'fr',
-		theme: { bg: '#FDF7E7', fg: '#3A2A20', muted: '#5A6B4E', accent: '#1F6B47', accentFg: '#FDF7E7', font: 'Nunito, system-ui, sans-serif', radius: '16px' },
-	});
+	};
 }

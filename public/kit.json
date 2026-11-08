@@ -1,0 +1,8 @@
+{
+  "id": "evolia",
+  "android": "com.zed69000.evolia",
+  "tools": [
+    "bugreport",
+    "update"
+  ]
+}

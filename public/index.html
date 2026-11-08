@@ -2,8 +2,8 @@
 <html lang="fr">
 <head>
 <meta charset="utf-8">
-<!-- bug and idea reports of the testers (copy of games-catalog/client/bugreport.js): loaded first to keep the console -->
-<script src="js/bugreport.js"></script>
+<!-- studio kit (bug reports, new version message): served by the catalog, set up by kit.json -->
+<script src="https://games-catalog.sebastienalzamora.workers.dev/kit/kit.js" async></script>
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="theme-color" content="#FDF7E7">
 <meta name="mobile-web-app-capable" content="yes">
@@ -141,7 +141,6 @@ if (new URLSearchParams(location.search).get('tuning') === 'preview') (function 
 	delete window.DeviceMotionEvent;
 })();
 </script>
-<script src="js/update.js"></script>
 <script type="module" src="js/main.js"></script>
 </body>
 </html>
