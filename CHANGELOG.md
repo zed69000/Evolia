@@ -3,7 +3,7 @@
 Chaque version, la plus récente en haut. Le site (evolia.sebastienalzamora.workers.dev) est toujours à jour ;
 le Play Store (tests internes) reçoit les versions indiquées « Play ».
 
-## 0.7.44 — 8 novembre 2026
+## 0.7.44 — 8 novembre 2026 · Play
 - **Signaler un bug ou une idée** : touche l'écran avec trois doigts, ou Options › « Signaler un bug ou une idée ». Une capture du jardin (tu peux dessiner dessus pour montrer l'endroit), ce que tu as vu ou ce que tu voudrais, et c'est envoyé à l'équipe.
 
 ## 0.7.43 — 8 novembre 2026 · Play
