@@ -6,7 +6,7 @@ const IDS = [1, 2, 3, 4];
 
 function plugin() {
 	const C = window.Capacitor;
-	if (!C?.isNativePlatform?.() || !C.isPluginAvailable?.('LocalNotifications')) return null;
+	if (!C?.isNativePlatform?.() || !C.isPluginAvailable?.('LocalNotifications') || typeof C.registerPlugin !== 'function') return null;
 	return C.registerPlugin('LocalNotifications');
 }
 

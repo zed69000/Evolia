@@ -878,7 +878,7 @@ body:has(#modal:not([hidden])) .tip, body:has(.panel.open) .tip, body:has(#coach
 .slots .slot-actions .btn { width: auto; }
 
 /* Panneau de débogage (Options › Débogage) : en haut à gauche, sous le bandeau, au-dessus du jardin. */
-#debug { position: absolute; left: 8px; top: calc(env(safe-area-inset-top, 0px) + 150px); z-index: 40; width: min(300px, calc(100% - 16px)); max-height: 55vh; overflow: auto; padding: 8px 10px; border-radius: 12px; background: rgba(20, 24, 18, 0.78); color: #EAF0DC; font: 11px/1.35 ui-monospace, Menlo, Consolas, monospace; -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px); }
+#debug { position: absolute; left: 8px; top: calc(env(safe-area-inset-top, 0px) + 150px); z-index: 35; width: min(300px, calc(100% - 16px)); max-height: 55vh; overflow: auto; padding: 8px 10px; border-radius: 12px; background: rgba(20, 24, 18, 0.78); color: #EAF0DC; font: 11px/1.35 ui-monospace, Menlo, Consolas, monospace; -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px); }
 #debug .dbg-head { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
 #debug .dbg-head b { flex: 1; font-size: 12px; }
 #debug button { border: 1px solid rgba(234, 240, 220, 0.4); background: transparent; color: inherit; border-radius: 6px; padding: 2px 7px; font: inherit; cursor: pointer; }

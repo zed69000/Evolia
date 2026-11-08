@@ -66,7 +66,8 @@ export function digest(samples, from, to, skip = []) {
 // ─── Sources ──────────────────────────────────────────────────
 
 const cap = () => window.Capacitor;
-const plugin = name => (cap()?.isNativePlatform?.() ? cap().registerPlugin(name) : null);
+// registerPlugin vient de capacitor.js (embarqué dans l'appli par copy-web) ; sans lui, pas de source plutôt qu'une panne.
+const plugin = name => (cap()?.isNativePlatform?.() && typeof cap().registerPlugin === 'function' ? cap().registerPlugin(name) : null);
 
 /** Santé (iOS) / Health Connect (Android), via @capgo/capacitor-health. */
 const health = {

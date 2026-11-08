@@ -31,9 +31,15 @@ for (const url of [...new Set(css.match(/https:\/\/fonts\.gstatic\.com\/[^)]+/g)
 if (!i) throw new Error("aucune police téléchargée");
 writeFileSync(join(out, "vendor", "fonts", "fonts.css"), css);
 
+// Le cœur de Capacitor (registerPlugin) : sans bundler, il faut l'embarquer à la main, avant tout autre script.
+// Sans lui, Health Connect, le podomètre et les rappels sont injoignables depuis le jeu.
+cpSync(join(root, "node_modules", "@capacitor", "core", "dist", "capacitor.js"), join(out, "vendor", "capacitor.js"));
+
 const local = html
+	.replace(/<script/, '<script src="vendor/capacitor.js"></script>\n<script')
 	.replace(/<link rel="preconnect" href="https:\/\/fonts\.(googleapis|gstatic)\.com"( crossorigin)?>\r?\n/g, "")
 	.replace(/<link rel="stylesheet" href="https:\/\/fonts\.googleapis\.com\/css2[^"]+">/, '<link rel="stylesheet" href="vendor/fonts/fonts.css">');
+if (!local.includes('vendor/capacitor.js')) throw new Error("index.html : capacitor.js n'a pas pu être branché");
 if (/fonts\.googleapis\.com|fonts\.gstatic\.com/.test(local)) throw new Error("index.html : il reste un lien vers Google Fonts");
 writeFileSync(indexPath, local);
 console.log(`www/ prêt : jardin copié, ${i} polices embarquées`);
