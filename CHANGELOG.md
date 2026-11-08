@@ -3,7 +3,7 @@
 Chaque version, la plus récente en haut. Le site (evolia.sebastienalzamora.workers.dev) est toujours à jour ;
 le Play Store (tests internes) reçoit les versions indiquées « Play ».
 
-## Prochaine version (pas encore publiée)
+## 0.7.47 — 8 novembre 2026 · Play
 Bug remonté par les testeurs (catalogue, n° 11) :
 - Le panneau de débogage recouvrait encore la page Options (il passait seulement sous les fenêtres) : il se masque maintenant tant qu'une page est ouverte, et revient au jardin.
 
