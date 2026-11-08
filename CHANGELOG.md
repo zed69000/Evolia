@@ -3,7 +3,7 @@
 Chaque version, la plus récente en haut. Le site (evolia.sebastienalzamora.workers.dev) est toujours à jour ;
 le Play Store (tests internes) reçoit les versions indiquées « Play ».
 
-## 0.7.46 — 8 novembre 2026
+## 0.7.46 — 8 novembre 2026 · Play
 Bugs remontés par les testeurs (catalogue, n° 9 et 10) :
 - **Options plantait sur Android** (« C.registerPlugin is not a function ») : le cœur de Capacitor n'était pas embarqué dans l'appli. Il l'est maintenant (`vendor/capacitor.js`, ajouté par `copy-web.mjs`).
 - **Les pas appli fermée n'étaient jamais relus sur Android**, pour la même raison : Health Connect et le podomètre étaient injoignables depuis le jeu. La relecture devrait enfin marcher (à vérifier sur un téléphone).
