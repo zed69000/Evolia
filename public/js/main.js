@@ -2013,6 +2013,7 @@ function renderOptions() {
 		<label class="switch"><input type="checkbox" id="opt-notify" ${state.notify ? 'checked' : ''}><i></i><span>Collecteur plein, cadeau du jour, série à garder, pas non relus</span></label>` : ''}
 		<h3>Aide</h3>
 		<button class="btn ghost wide" id="opt-coach">Revoir le tutoriel</button>
+		<button class="btn ghost wide" id="opt-bug">Signaler un bug ou une idée</button>
 		<a class="btn ghost wide opt-link" href="privacy.html" target="_blank" rel="noopener">Confidentialité</a>
 		<h3>Recommencer</h3>
 		<p class="empty">Efface ton jardin, tes espèces et tes balades sur ce téléphone, pour repartir d'une prairie neuve.</p>
@@ -2081,6 +2082,7 @@ $('#options').addEventListener('click', async e => {
 	if (id === 'opt-harvest') { closeOptions(); offerHarvest(true); }
 	if (id === 'opt-harvest-now') { closeOptions(); maybeHarvest(); }
 	if (id === 'opt-coach') { closeOptions(); coach(0); }
+	if (id === 'opt-bug') { closeOptions(); window.BugReport?.open(); }
 	if (id === 'opt-backup') showBackup();
 	// Les sauvegardes : changer, dupliquer, commencer, renommer, effacer.
 	const sl = e.target.closest('[data-slot]');
@@ -2305,7 +2307,7 @@ if (Tuning.preview) {
 		save: () => persist(true),
 		theme: { bg: '#FDF7E7', fg: '#3A2A20', muted: '#5A6B4E', accent: '#1F6B47', accentFg: '#FDF7E7', font: 'Nunito, system-ui, sans-serif', radius: '16px' },
 	});
-	// Every tester can report a bug or an idea: the 🐞 button, F8; it lands in the catalog's Bugs tab.
+	// Every tester can report a bug or an idea: three-finger tap, F8 or Options; it lands in the catalog's Bugs tab.
 	window.BugReport?.init({
 		id: 'evolia',
 		version: VERSION,

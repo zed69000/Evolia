@@ -3,6 +3,9 @@
 Chaque version, la plus récente en haut. Le site (evolia.sebastienalzamora.workers.dev) est toujours à jour ;
 le Play Store (tests internes) reçoit les versions indiquées « Play ».
 
+## 0.7.44 — 8 novembre 2026
+- **Signaler un bug ou une idée** : touche l'écran avec trois doigts, ou Options › « Signaler un bug ou une idée ». Une capture du jardin (tu peux dessiner dessus pour montrer l'endroit), ce que tu as vu ou ce que tu voudrais, et c'est envoyé à l'équipe.
+
 ## 0.7.43 — 8 novembre 2026 · Play
 - **Options** : si son contenu n'arrive pas à s'afficher (signalé sur Android), la page s'ouvre quand même, avec le message d'erreur à nous envoyer et l'interrupteur de débogage.
 - L'astuce « Ta bourse de nectar » et celle de l'écosystème affichaient `${…}` au lieu du chiffre : corrigé.
