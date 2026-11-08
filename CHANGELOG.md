@@ -3,6 +3,10 @@
 Chaque version, la plus récente en haut. Le site (evolia.sebastienalzamora.workers.dev) est toujours à jour ;
 le Play Store (tests internes) reçoit les versions indiquées « Play ».
 
+## Prochaine version (pas encore publiée)
+Bug remonté par les testeurs (catalogue, n° 11) :
+- Le panneau de débogage recouvrait encore la page Options (il passait seulement sous les fenêtres) : il se masque maintenant tant qu'une page est ouverte, et revient au jardin.
+
 ## 0.7.46 — 8 novembre 2026 · Play
 Bugs remontés par les testeurs (catalogue, n° 9 et 10) :
 - **Options plantait sur Android** (« C.registerPlugin is not a function ») : le cœur de Capacitor n'était pas embarqué dans l'appli. Il l'est maintenant (`vendor/capacitor.js`, ajouté par `copy-web.mjs`).
