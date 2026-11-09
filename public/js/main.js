@@ -2013,7 +2013,6 @@ function renderOptions() {
 		<label class="switch"><input type="checkbox" id="opt-notify" ${state.notify ? 'checked' : ''}><i></i><span>Collecteur plein, cadeau du jour, série à garder, pas non relus</span></label>` : ''}
 		<h3>Aide</h3>
 		<button class="btn ghost wide" id="opt-coach">Revoir le tutoriel</button>
-		<button class="btn ghost wide" id="opt-bug">Signaler un bug ou une idée</button>
 		<a class="btn ghost wide opt-link" href="privacy.html" target="_blank" rel="noopener">Confidentialité</a>
 		<h3>Recommencer</h3>
 		<p class="empty">Efface ton jardin, tes espèces et tes balades sur ce téléphone, pour repartir d'une prairie neuve.</p>
@@ -2042,6 +2041,7 @@ function renderOptions() {
 			<button id="dev-km10">+10 km (ouvrir des milieux)</button>
 			<button id="dev-nectar">+500 nectar</button>
 			<button id="dev-day">Nouveau jour (cadeau et défis)</button>
+			<button id="opt-bug">Signaler un bug ou une idée</button>
 			<button id="dev-reset" class="danger">Effacer le jardin</button></div>` : ''}
 		</details>`;
 }
