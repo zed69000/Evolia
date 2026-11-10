@@ -1,8 +1,13 @@
 {
   "id": "evolia",
   "android": "com.zed69000.evolia",
+  "kit": "3",
   "tools": [
     "bugreport",
-    "update"
+    "update",
+    "errors"
+  ],
+  "embed": [
+    "tuning"
   ]
 }
