@@ -721,49 +721,65 @@ export class Garden {
 		m.globalAlpha = 1;
 		m.clearRect(0, 0, cw, ch);
 		const S = this.scale / 2;
-		// Vu de loin, et au tout début de l'introduction (la motte de terre seule au milieu du papier).
-		const paper = this.glyph || (this.state.intro && this.cellScale(0) < 0.3);
-		if (paper) {
-			// Vu de loin : la terre inconnue, un papier crème uni, avec quelques lavis très doux.
-			m.fillStyle = 'rgb(241,236,220)';
-			m.fillRect(0, 0, cw, ch);
-			this.fogLayer(m, cw, ch, S, 0.35, 1, 0, 0);
-		} else {
+		// Vu de loin, et au tout début de l'introduction (la motte de terre seule au milieu du papier) : un papier crème
+		// uni. On passe de la brume au papier (et retour) en fondu, jamais d'un coup.
+		const want = this.glyph || (this.state.intro && this.cellScale(0) < 0.3) ? 1 : 0;
+		const now = performance.now(), dt = Math.min(0.1, (now - (this.paperT ?? now)) / 1000);
+		this.paperT = now;
+		this.paperK = this.paperK == null ? want : this.paperK + (want - this.paperK) * Math.min(1, dt * 2.2);
+		if (Math.abs(this.paperK - want) < 0.01) this.paperK = want;
+		const pk = this.paperK, world2 = g => g.setTransform(S, 0, 0, S, cw / 2 - this.cam.cx * S, ch / 2 - this.cam.cy * S);
+		const mk = this.gardenMask();
+		if (pk < 1) {
 			// Le brouillard de la lisière (voile qui s'épaissit, nuages du bord), accroché au monde ; au-delà, dense.
 			// Puis des bancs de brume qui dérivent lentement par-dessus.
 			const rim = this.fogRim();
 			m.fillStyle = `rgba(247,248,246,${FOG_MAX})`;
 			m.fillRect(0, 0, cw, ch);
-			m.setTransform(S, 0, 0, S, cw / 2 - this.cam.cx * S, ch / 2 - this.cam.cy * S);
+			world2(m);
 			m.globalCompositeOperation = 'destination-out';
 			m.drawImage(rim.haze, rim.x0, rim.y0, rim.x1 - rim.x0, rim.y1 - rim.y0);
 			m.globalCompositeOperation = 'source-over';
 			m.setTransform(1, 0, 0, 1, 0, 0);
 			this.fogLayer(m, cw, ch, S, 0.6, 1, 0);
-		}
-		m.setTransform(S, 0, 0, S, cw / 2 - this.cam.cx * S, ch / 2 - this.cam.cy * S);
-		m.globalCompositeOperation = 'destination-out';
-		// Au littoral de la première rangée, la mer reste nette : la brume s'efface au-dessus du rivage.
-		if (!this.glyph) for (const ci of this.openCells()) {
-			if (!this.seaTop(ci)) continue;
-			const prev = m.fillStyle, fade = m.createLinearGradient(0, 120, 0, 190), [ox] = cellOrigin(ci);
-			fade.addColorStop(0, 'rgba(0,0,0,0.85)');
-			fade.addColorStop(1, 'rgba(0,0,0,0)');
-			m.fillStyle = fade;
-			m.fillRect(ox, -1e5, PARCEL_W, 1e5 + 190);
-			m.fillStyle = prev;
-		}
-		if (paper) {
-			const mk = this.gardenMask();
-			m.drawImage(mk.canvas, mk.x0, mk.y0, mk.canvas.width / mk.k, mk.canvas.height / mk.k);
-		} else {
+			world2(m);
+			m.globalCompositeOperation = 'destination-out';
+			// Au littoral de la première rangée, la mer reste nette : la brume s'efface au-dessus du rivage.
+			for (const ci of this.openCells()) {
+				if (!this.seaTop(ci)) continue;
+				const fade = m.createLinearGradient(0, 120, 0, 190), [ox] = cellOrigin(ci);
+				fade.addColorStop(0, 'rgba(0,0,0,0.85)');
+				fade.addColorStop(1, 'rgba(0,0,0,0)');
+				m.fillStyle = fade;
+				m.fillRect(ox, -1e5, PARCEL_W, 1e5 + 190);
+			}
 			// Tout l'intérieur du jardin, poches entre les clairières comprises, au bord déjà fondu.
-			const mk = this.gardenMask();
 			m.drawImage(mk.canvas, mk.x0, mk.y0, mk.canvas.width / mk.k, mk.canvas.height / mk.k);
 			// Les nuages du bord, posés après : leurs volutes débordent un peu sur les clairières et dessinent la lisière.
-			const rim = this.fogRim();
 			m.globalCompositeOperation = 'source-over';
 			m.drawImage(rim.cloud, rim.x0, rim.y0, rim.x1 - rim.x0, rim.y1 - rim.y0);
+		}
+		if (pk > 0) {
+			// Le papier, peint à part puis posé par-dessus avec son fondu.
+			if (!this.paperCv || this.paperCv.width !== cw || this.paperCv.height !== ch) {
+				this.paperCv = document.createElement('canvas');
+				this.paperCv.width = cw; this.paperCv.height = ch;
+			}
+			const q = this.paperCv.getContext('2d');
+			q.setTransform(1, 0, 0, 1, 0, 0);
+			q.globalCompositeOperation = 'source-over';
+			q.clearRect(0, 0, cw, ch);
+			q.fillStyle = 'rgb(241,236,220)';
+			q.fillRect(0, 0, cw, ch);
+			this.fogLayer(q, cw, ch, S, 0.35, 1, 0, 0);
+			world2(q);
+			q.globalCompositeOperation = 'destination-out';
+			q.drawImage(mk.canvas, mk.x0, mk.y0, mk.canvas.width / mk.k, mk.canvas.height / mk.k);
+			m.setTransform(1, 0, 0, 1, 0, 0);
+			m.globalCompositeOperation = 'source-over';
+			m.globalAlpha = pk;
+			m.drawImage(this.paperCv, 0, 0);
+			m.globalAlpha = 1;
 		}
 		ctx.setTransform(1, 0, 0, 1, 0, 0);
 		ctx.drawImage(this.mist, 0, 0, sw, sh);
@@ -1573,7 +1589,8 @@ export class Garden {
 	 * Elle ne va jamais à la bourse : la récolte attend qu'on la ramasse. Sans collecteur, elle perle sur les fleurs.
 	 */
 	nectarFrom(x, y) {
-		if (this.cam.z < 1 || this.t - (this.lastDrop ?? -9) < 0.7) return;
+		// Nouvelle économie : les butineurs ne déposent plus de nectar ; elles le rapportent à la ruche, en miel.
+		if (this.state.eco2 || this.cam.z < 1 || this.t - (this.lastDrop ?? -9) < 0.7) return;
 		const jars = this.items.filter(it => it.kind === 'collecteur');
 		if (!jars.length) return;
 		const jar = jars.reduce((a, b) => (Math.hypot(b.x - x, b.y - y) < Math.hypot(a.x - x, a.y - y) ? b : a));
@@ -1912,6 +1929,19 @@ export class Garden {
 		}
 	}
 
+	/** Une abeille se pose sur une fleur : une petite onde dorée, et quelques grains de pollen qui flottent, tout doux. */
+	pollen(x, y) {
+		this.particles.push({ x, y, vx: 0, vy: 0, life: 1, decay: 1.1, size: 3, ring: true, color: '#F4C23E' });
+		for (let i = 0; i < 5; i++) {
+			this.particles.push({
+				x: x + (Math.random() - 0.5) * 8, y: y + (Math.random() - 0.5) * 4,
+				vx: (Math.random() - 0.5) * 10, vy: -6 - Math.random() * 10,
+				life: 1, decay: 0.55 + Math.random() * 0.3, size: 0.9 + Math.random() * 1.1, glow: true, ph: Math.random() * 6,
+				color: pick(['#F8D46A', '#FBE7A8', '#F4C23E']),
+			});
+		}
+	}
+
 	/** Position de la tête d'une plante, en coordonnées du monde. */
 	headOf(p) {
 		const [ox, oy] = cellOrigin(cellOf(p));
@@ -2234,6 +2264,9 @@ export class Garden {
 			p.x += p.vx * dt; p.y += p.vy * dt; p.life -= p.decay * dt;
 			// La poussière gonfle et ralentit ; le reste retombe.
 			if (p.puff) { p.size += 16 * dt; p.vx *= 0.94; p.vy *= 0.94; }
+			// L'onde du butinage s'élargit sur place ; le pollen flotte et monte doucement.
+			else if (p.ring) p.size += 22 * dt;
+			else if (p.glow) { p.vx *= 0.97; p.vy *= 0.97; p.x += Math.sin(this.t * 2.4 + p.ph) * 4 * dt; }
 			// Une feuille tombe lentement en se balançant et en tournant.
 			else if (p.leaf) { p.vy = Math.min(16, p.vy + 22 * dt); p.x += Math.sin(this.t * 3 + p.ph) * 14 * dt; p.rot += p.spin * dt; }
 			else { p.vy += 10 * dt; p.vx *= 0.98; }
@@ -2317,6 +2350,9 @@ export class Garden {
 			if (lateAutumn && (g === 'papillons' || g === 'criquets') && idHash(sp.id, 1) % 3) n = 0;
 			const most = { bird: 4, tit: 4, hare: 4, rabbit: 4, roe: 3, chamois: 3, fox: 2, squirrel: 3, heron: 2, owl: 1, eagle: 1, gull: 4, duck: 4, bat: 3, boar: 3, badger: 1, deer: 3 }[c.kind];
 			if (most) n = Math.min(n, most);
+			// Les abeilles : une au départ, une de plus par trois fleurs écloses (la ruche n'en ajoute pas). Pendant
+			// l'introduction, seule celle qu'elle met en scène.
+			if (sp.id === 'abeille' && this.state.eco2) n = this.state.intro ? 0 : Math.min(n, Math.round(c.count(this.state)));
 			if (n > 0) want.set(sp, n);
 		}
 		const slot = Math.floor(this.t / 150);
@@ -2358,7 +2394,8 @@ export class Garden {
 	 */
 	populateAmbient(visible, night, dusk, wet) {
 		this.ambient = [];
-		if (wet || this.glyph) return;
+		// Pas de moucherons pendant l'introduction : la scène reste nette.
+		if (wet || this.glyph || this.state.intro) return;
 		for (const ci of visible) {
 			const P = this.pdata[ci], w = this.water(ci), spots = [];
 			if (w) for (let k = 0; k < 2; k++) spots.push({ x: w.x + (Math.random() - 0.5) * w.rx, y: w.y + (Math.random() - 0.5) * w.ry * 0.5, water: true });
@@ -2384,10 +2421,13 @@ export class Garden {
 				}
 				for (const p of [...P.flowers].sort(() => Math.random() - 0.5).slice(0, 2)) this.ambient.push({ x: P.ox + p.x, y: P.oy + p.y + 10, kind: 'moth', n: 1 + Math.floor(Math.random() * 2), r: 22, ph: Math.random() * 100 });
 			}
+			// Quelques moucherons épars, jamais en nuée serrée : un seul petit groupe par parcelle, et pas toujours.
+			let gnats = 0;
 			for (const s of spots) {
 				const mosq = s.water && (dusk || night);
 				if (night && !mosq) continue;
-				this.ambient.push({ x: s.x, y: s.y, kind: mosq ? 'mosq' : 'gnat', n: mosq ? 4 + Math.floor(Math.random() * 4) : 7 + Math.floor(Math.random() * 9), r: mosq ? 24 : 16, ph: Math.random() * 100 });
+				if (!mosq && (gnats++ >= 1 || Math.random() < 0.4)) continue;
+				this.ambient.push({ x: s.x, y: s.y, kind: mosq ? 'mosq' : 'gnat', n: mosq ? 3 + Math.floor(Math.random() * 3) : 2 + Math.floor(Math.random() * 3), r: mosq ? 28 : 30, ph: Math.random() * 100 });
 			}
 		}
 	}
@@ -3027,7 +3067,7 @@ export class Garden {
 				if (!b.target || !has(b.target)) b.target = P.flowers.length ? pick(P.flowers) : null;
 				if (!b.target) { b.leaving = true; return; }
 				const [hx, hy] = head(b.target);
-				if (flyTo(hx, hy - 4, 70, 25) < 4) { b.mode = 'hover'; b.timer = 1.5 + Math.random() * 2; }
+				if (flyTo(hx, hy - 4, 70, 25) < 4) { b.mode = 'hover'; b.timer = 1.5 + Math.random() * 2; if (b.kind === 'bee') this.pollen(hx, hy - 2); }
 				return;
 			}
 			case 'flutter': {
@@ -3671,7 +3711,16 @@ export class Garden {
 		world();
 		if (!glyph) for (const b of this.insects) if (!onGround(b) && !b.p.swim) this.drawInsect(ctx, b);
 		for (const p of this.particles) {
-			ctx.globalAlpha = Math.max(0, p.life) * (p.puff ? 0.45 : 1);
+			if (p.ring) {
+				ctx.globalAlpha = Math.max(0, p.life) * 0.45;
+				ctx.strokeStyle = p.color;
+				ctx.lineWidth = 1.2;
+				ctx.beginPath();
+				ctx.ellipse(p.x, p.y, p.size, p.size * 0.55, 0, 0, Math.PI * 2);
+				ctx.stroke();
+				continue;
+			}
+			ctx.globalAlpha = Math.max(0, p.life) * (p.puff ? 0.45 : p.glow ? 0.75 : 1);
 			ctx.fillStyle = p.color;
 			ctx.beginPath();
 			if (p.leaf) ctx.ellipse(p.x, p.y, p.size, p.size * 0.45, p.rot, 0, Math.PI * 2);

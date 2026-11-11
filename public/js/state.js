@@ -142,6 +142,9 @@ function fresh() {
 		// Une nouvelle partie commence par l'introduction (intro.js), sur une minuscule motte de terre.
 		places: { [GARDEN]: { ...newPlace(), cellSize: { 0: 0.15 } } },
 		intro: 'scene',
+		// La nouvelle économie : pas de nectar déposé en gouttes sur les fleurs ; le nectar vient des pas, des fiches
+		// lues et du troc (miel, œufs…).
+		eco2: true,
 		walks: [],
 		days: {},
 		totals: { distance: 0, effort: 0, walks: 0, steps: 0 },

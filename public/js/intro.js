@@ -30,17 +30,17 @@ export function startIntro(c) {
 	const place = garden.place;
 	app.classList.add('intro');
 	let over = false;
+	// La nuit, les abeilles dorment : le temps de l'introduction, on la joue en plein jour.
+	const dayForced = garden.hourOverride == null && garden.night() > 0.2;
+	if (dayForced) garden.hourOverride = 11;
 
 	// La consigne : une petite carte, une phrase, parfois un bouton.
 	const cap = document.createElement('div');
 	cap.className = 'intro-cap card';
 	cap.hidden = true;
 	app.append(cap);
-	const skip = document.createElement('button');
-	skip.className = 'intro-skip';
-	skip.textContent = 'Passer l’introduction';
-	app.append(skip);
-	skip.onclick = () => finish(true);
+	// Pas de bouton pour passer : l'introduction ne s'efface qu'une fois faite en entier. Si l'appli se ferme en
+	// route, elle reprend à l'étape où l'on s'était arrêté.
 
 	/** Affiche une consigne. Avec des boutons, la promesse attend celui qui termine l'étape. */
 	const say = (html, buttons = []) => new Promise(res => {
@@ -72,8 +72,8 @@ export function startIntro(c) {
 	async function scene() {
 		step('scene');
 		const p = center();
-		garden.cam.cx = p.x; garden.cam.cy = p.y; garden.cam.z = 1.5;
-		garden.flyTo(p.x, p.y, 1.5);
+		garden.cam.cx = p.x; garden.cam.cy = p.y; garden.cam.z = 2.4;
+		garden.flyTo(p.x, p.y, 2.4);
 		if (flowerOf()) return;
 		await wait(1800);
 		await birdPass(p);
@@ -175,7 +175,7 @@ export function startIntro(c) {
 	// ─── 4. La vue s'éloigne, le terrain s'étend un peu, le logo apparaît ───
 	async function logo() {
 		cap.hidden = true;
-		const p = center(), z0 = garden.cam.z, z1 = 0.8;
+		const p = center(), z0 = garden.cam.z, z1 = 1.3;
 		for (let k = 1; k <= 45; k++) {
 			const e = ease(k / 45);
 			garden.flyTo(p.x, p.y, z0 + (z1 - z0) * e);
@@ -272,11 +272,31 @@ export function startIntro(c) {
 			await wait(1400);
 		}
 		deco.classList.remove('tip-glow');
+		await beeHome();
 		c.showModal(`<h2>Ta ruche</h2>
-			<p>Elle accueille jusqu’à <b>6 abeilles</b>. Elles font du <b>miel</b>, que tu pourras troquer contre du nectar : il faut un peu de temps.</p>
+			<p>Elle accueille <b>3 abeilles</b> pour commencer. Elles font du <b>miel</b>, que tu pourras troquer contre du nectar : il faut un peu de temps. Pour en accueillir plus, tu l’amélioreras ou tu poseras une autre ruche.</p>
 			<p>Pour attirer des abeilles, il faut des <b>fleurs</b> : plus il y en a, plus il en vient. Et les fleurs poussent quand tu bouges.</p>
 			<button class="btn primary" data-close>Compris</button>`);
 		await until(() => over || $('#modal').hidden);
+	}
+
+	/** On regarde de près une abeille butiner, puis rentrer dans la ruche : c'est là qu'elle fait le miel. */
+	async function beeHome() {
+		const h = garden.items.find(it => it.kind === 'ruche');
+		const P = garden.pdata?.[0];
+		if (!h || !P) return;
+		garden.flyTo(h.x, h.y - 40, 2.2);
+		const b = garden.newCritter(c.SPECIES_BY_ID.abeille, P);
+		if (!b) return;
+		for (const o of garden.insects) if (o.intro) o.gone = true;
+		b.intro = true;
+		b.visits = 8; // chargée après une fleur : elle rentre tout de suite
+		garden.insects.push(b);
+		say('Ton abeille butine, puis rapporte son nectar à la ruche.<br>C’est là qu’elle fait le <b>miel</b>.');
+		const t0 = Date.now();
+		await until(() => over || b.hidden || Date.now() - t0 > 25000);
+		await wait(1800);
+		b.gone = true;
 	}
 
 	// ─── 8. L'icône d'activité ───
@@ -313,13 +333,14 @@ export function startIntro(c) {
 		}
 		delete state.intro;
 		delete state.introD0;
+		if (dayForced) garden.hourOverride = null;
+		state.eco2 = true;
 		state.seenIntro = true;
 		place.seeded = true;
 		(place.renewed ??= {}).prairie = 1;
 		app.classList.remove('intro', 'i-sheet', 'i-hud');
 		for (const el of document.querySelectorAll('.i-on, .tip-glow, .ui-new')) el.classList.remove('i-on', 'tip-glow', 'ui-new');
 		cap.remove();
-		skip.remove();
 		document.querySelector('.intro-logo')?.remove();
 		c.persist(true);
 		c.renderHud();
@@ -335,7 +356,7 @@ export function startIntro(c) {
 		if (from >= 1) { (place.cellSize ??= {})[0] = Math.max(place.cellSize[0] ?? 0.15, from >= 3 ? 0.4 : 0.15); }
 		if (from <= 1) { await scene(); await walk(); }
 		if (from <= 2) { await bee(); await logo(); }
-		if (from >= 3) { const p = center(); garden.flyTo(p.x, p.y, 0.8); }
+		if (from >= 3) { const p = center(); garden.flyTo(p.x, p.y, 1.3); }
 		if (from >= 4) app.classList.add('i-sheet'), $('#btn-species').classList.add('i-on');
 		if (from >= 5) app.classList.add('i-hud');
 		if (from <= 3) await species();

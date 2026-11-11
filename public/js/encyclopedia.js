@@ -116,7 +116,38 @@ export class Encyclopedia {
 		this.panel.setAttribute('aria-hidden', 'true');
 	}
 
+	/**
+	 * Au début du jeu, une page simple : seulement les espèces déjà venues au jardin, rangées en plantes et insectes
+	 * (et animaux, s'il y en a), chacune avec son icône. Les milieux et le reste viennent plus tard.
+	 */
+	showSimple() {
+		const st = this.state;
+		const known = SPECIES.filter(s => st.species[s.id]);
+		const ICON = { plantes: '🌿', insectes: '🐝', animaux: '🐦' };
+		const sections = GROUPS.map(([g, title]) => {
+			const items = known.filter(s => groupOf(s) === g);
+			if (!items.length) return '';
+			return `<h3 class="sp-section"><span class="sp-ico">${ICON[g]}</span> ${g === 'insectes' ? 'Insectes' : title} <small>${items.length}</small></h3><div class="sp-grid">${items.map(s => this.cardHtml(s)).join('')}</div>`;
+		}).join('');
+		this.panel.innerHTML = `
+			<div class="panel-head"><h2>Espèces</h2><button class="close" data-close-species aria-label="Fermer">×</button></div>
+			<p class="sp-intro">Les espèces venues dans ton jardin. Touche-en une pour lire sa fiche.</p>
+			${sections}`;
+		this.paintThumbs(known);
+		this.panel.scrollTop = 0;
+	}
+
+	cardHtml(s) {
+		const st = this.state, known = !!st.species[s.id], fresh = known && !st.speciesSeen?.[s.id];
+		return `<button class="sp-card${known ? '' : ' locked'}" data-sp="${s.id}">
+				${fresh ? `<span class="sp-new">Nouveau</span>` : ''}
+				<span class="sp-thumb" data-thumb="${s.id}"></span>
+				<span class="sp-name">${known ? esc(s.name) : '???'}</span>
+			</button>`;
+	}
+
 	showGrid() {
+		if (this.simple?.()) return this.showSimple();
 		const st = this.state;
 		const place = PLACE_BY_ID[this.filter];
 		const all = SPECIES.length, foundAll = SPECIES.filter(s => st.species[s.id]).length;

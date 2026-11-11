@@ -14,6 +14,13 @@ La refonte de la progression, d'après le message vocal de Seb (détail : docs/r
 - **La ferme produit** : œufs, légumes, fruits et miel vont dans le panier et se troquent contre du nectar. Le compost booste le potager, et on peut soigner un arbre fruitier pour qu'il donne plus.
 - Les parties déjà commencées gardent leur jardin entier et toute leur interface.
 - Introduction (retours de Seb) : une seule fleur sur sa tige (l'abeille se pose bien dessus), rien ne pousse d'autre pendant l'introduction, logo détouré, phrase « À chacun de tes pas, la nature s’éveille. » centrée.
+- Plus de nectar déposé en gouttes sur les fleurs (nouvelles parties) : le nectar de la marche va droit dans la bourse ; les abeilles rapportent le leur à la ruche, en miel.
+- Les abeilles : une seule au départ, une de plus par trois fleurs écloses. Une ruche en accueille 3 ; on l'améliore (3 de plus par niveau, de plus en plus cher) ou on en pose une autre.
+- Quand une abeille se pose sur une fleur : une petite onde dorée et quelques grains de pollen, tout doux. Dans l'introduction, on la voit de près rentrer dans la ruche.
+- Introduction : plus de bouton pour la passer (elle reprend où l'on s'était arrêté), toujours de jour, sans moucherons, vue plus rapprochée, passage en fondu du papier à la brume.
+- La page Espèces, au début : seulement ce qu'on a découvert, en plantes et insectes, avec une icône.
+- Fonds et boutons à demi transparents ; la consigne du tutoriel passe en vert sombre sur les pages claires.
+- Moins de moucherons, et jamais en nuée serrée.
 
 ## 0.7.48 (suite) — 11 novembre 2026
 Les bêtes regardent enfin là où elles vont (retour de Seb : papillons et oiseaux qui volaient « en crabe ») :

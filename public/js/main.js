@@ -80,6 +80,8 @@ const species = new Encyclopedia($('#species'), state, e => {
 	updateSpeciesDot();
 });
 // Pendant l'introduction, la toute première fiche lue rapporte de quoi s'offrir la première ruche.
+// Au début, la page Espèces ne montre que ce qu'on a découvert, en plantes et insectes.
+species.simple = () => !!state.intro || (state.eco2 && Object.keys(state.species).length < 12);
 species.rewardFor = () => (state.intro && !state.introPaid ? ((state.introPaid = true), INTRO_NECTAR) : null);
 const places = new PlacesMap($('#map'), state, showBiome);
 // Aider une équipe de l'écosystème, c'est poser l'objet qui l'attire (s'il est débloqué et payable), sinon voir la liste.
@@ -257,11 +259,13 @@ garden.onPick = tree => {
 // Les ruches : la colonie produit du miel ; le fermier en prend une part (réglable), le reste nourrit les abeilles.
 // Une ruche accueille 6 abeilles au plus ; il en vient autant que les fleurs en attirent (une, plus une par trois
 // fleurs écloses). Chaque abeille fait du miel ; il faut du temps (et des fleurs) pour en remplir un pot.
-const HIVE_BEES = 6, HONEY_PER_BEE = 0.15; // pots par heure et par abeille si l'on prenait tout
+// Une ruche neuve n'accueille que 3 abeilles : on l'agrandit (3 de plus par niveau, de plus en plus cher) ou l'on en
+// pose une autre (chaque ruche coûte plus que la précédente).
+const HIVE_SEATS = 3, HONEY_PER_BEE = 0.15; // pots par heure et par abeille si l'on prenait tout
+const hiveCap = () => garden.items.filter(it => it.kind === 'ruche').reduce((n, it) => n + HIVE_SEATS * (it.level ?? 1), 0);
 const hiveBees = () => {
-	const hives = garden.items.filter(it => it.kind === 'ruche').length;
 	const flowers = here().plants.filter(p => p.type === 'fleur' && p.growth >= 1).length;
-	return Math.min(HIVE_BEES * hives, hives ? 1 + Math.floor(flowers / 3) : 0);
+	return Math.min(hiveCap(), hiveCap() ? 1 + Math.floor(flowers / 3) : 0);
 };
 setInterval(() => {
 	const bees = hiveBees();
@@ -1744,6 +1748,8 @@ function nextLevel(it) {
 	// La cabane a ses propres niveaux (petite cabane, cabane à auvent, chalet).
 	if (own) return lv >= own.max ? null : { level: lv + 1, cost: own.cost[lv + 1], km: own.km[lv + 1], ok: km >= own.km[lv + 1] };
 	if (!canLevel(it.kind) || lv >= MAX_LEVEL) return null;
+	// La ruche s'agrandit sans attendre de kilomètres : seulement de plus en plus cher.
+	if (it.kind === 'ruche' && state.eco2) return { level: lv + 1, cost: levelCost(it.kind, lv + 1), km: 0, ok: true };
 	return { level: lv + 1, cost: levelCost(it.kind, lv + 1), km: LEVEL_KM[lv + 1], ok: km >= LEVEL_KM[lv + 1] };
 }
 
@@ -1987,6 +1993,7 @@ function tapItem(hit, card) {
 	const info = it.kind === 'collecteur' ? `<small class="item-tip">Niveau ${lv} · garde ${COLLECTOR_CAP[lv]} nectar${up ? ` (niveau ${lv + 1} : ${COLLECTOR_CAP[lv + 1]})` : ''}. Réserve totale : ${fmtInt(nectarCapacity(state))}.</small>`
 		: it.kind === 'poulailler' ? coopTip(it, lv, nx)
 		: def.levels ? `<small class="item-tip">${def.levels.name[lv][0].toUpperCase() + def.levels.name[lv].slice(1)}, ${CABIN_STYLES[(it.style ?? 0) % CABIN_STYLES.length].name}. ${farmerName(true)} y vit.${nx ? nx.ok ? ` Agrandis-la en ${def.levels.name[nx.level]}.` : ` ${def.levels.name[nx.level][0].toUpperCase() + def.levels.name[nx.level].slice(1)} dès ${nx.km} km parcourus.` : ''}</small>`
+		: it.kind === 'ruche' && state.eco2 ? `<small class="item-tip">Niveau ${lv} : ${HIVE_SEATS * lv} abeilles.${nx ? ` Au niveau ${nx.level} : ${HIVE_SEATS * nx.level}.` : ''}</small>`
 		: canLevel(it.kind) ? `<small class="item-tip">Niveau ${lv} sur ${MAX_LEVEL}, ${LEVEL_NAME[lv]} : il fait venir ${lv * def.power} ${def.power * lv > 1 ? 'membres' : 'membre'}.${nx ? nx.ok ? ` Au niveau ${nx.level}, un de plus${def.power > 1 ? ` (${def.power})` : ''}.` : ` Niveau ${nx.level} dès ${nx.km} km parcourus.` : ''}</small>` : '';
 	// Une bulle courte : la première phrase de la description (le reste est dans Aménager), l'astuce de l'appui long
 	// seulement les trois premières fois.
@@ -1996,7 +2003,7 @@ function tapItem(hit, card) {
 	// La ferme : le panier à la cabane, la part de miel prise aux ruches, le compost à épandre.
 	const share = Math.round((state.honeyShare ?? 0.3) * 100), fill = it.kind === 'compost' ? compostFill(it) : 0;
 	const farm = it.kind === 'cabane' && ITEMS.cabane ? `<div class="item-actions"><button class="btn primary" data-market>Le panier${basketCount() ? ` (${fmtInt(basketCount())})` : ''}</button></div>`
-		: it.kind === 'ruche' ? `<small class="item-tip">${hiveBees()} abeille${hiveBees() > 1 ? 's' : ''} sur ${HIVE_BEES} : plante des fleurs pour en attirer d’autres.</small><div class="item-actions"><button class="btn primary" data-market>Le panier${basketCount() ? ` (${fmtInt(basketCount())})` : ''}</button></div><div class="coop-row"><span>Miel récolté <small>le reste nourrit la colonie</small></span><span class="coop-step"><button class="btn ghost small" data-share="-1" ${share <= 0 ? 'disabled' : ''}>−</button><b>${share} %</b><button class="btn ghost small" data-share="1" ${share >= 60 ? 'disabled' : ''}>+</button></span></div>`
+		: it.kind === 'ruche' ? `<small class="item-tip">${hiveBees()} abeille${hiveBees() > 1 ? 's' : ''} au travail · tes ruches en accueillent ${hiveCap()}. Les fleurs attirent les abeilles ; pour en accueillir plus, améliore la ruche ou poses-en une autre. Prochain pot de miel : ${Math.floor(((state.honeyAcc ?? 0) % 1) * 100)} %.</small><div class="item-actions"><button class="btn primary" data-market>Le panier${basketCount() ? ` (${fmtInt(basketCount())})` : ''}</button></div><div class="coop-row"><span>Miel récolté <small>le reste nourrit la colonie</small></span><span class="coop-step"><button class="btn ghost small" data-share="-1" ${share <= 0 ? 'disabled' : ''}>−</button><b>${share} %</b><button class="btn ghost small" data-share="1" ${share >= 60 ? 'disabled' : ''}>+</button></span></div>`
 		: it.kind === 'compost' ? `<small class="item-tip">${fill >= 1 ? 'Plein : épands-le sur le potager, ses prochaines récoltes donneront plus.' : `Rempli à ${Math.round(fill * 100)} % (il se remplit quand tu marches).`}</small>${fill >= 1 ? '<div class="item-actions"><button class="btn primary" data-spread>Épandre sur le potager</button></div>' : ''}`
 		: '';
 	card.innerHTML = `<b>${def.name}</b>${short}${info}${tip}
@@ -2584,6 +2591,10 @@ $('#btn-peek').addEventListener('click', () => {
 	if (peekLock) toast('Touche l’œil pour retrouver tes boutons', '#5F933E');
 });
 
+// Les parties commencées avec la refonte (petit terrain) passent à la nouvelle économie : le nectar resté en
+// gouttes sur les fleurs rejoint la bourse.
+if (!state.eco2 && here().cellSize?.[0] != null && cellsOpen(here()) === 1) state.eco2 = true;
+if (state.eco2 && (state.ground ?? 0) > 0) { state.nectar = (state.nectar ?? 0) + state.ground; state.pending = Math.max(0, (state.pending ?? 0) - state.ground); state.ground = 0; }
 renderHud();
 renderStatus();
 const firstRun = !state.seenIntro;

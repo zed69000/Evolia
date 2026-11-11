@@ -181,6 +181,8 @@ export const jarOf = state => Math.max(0, (state.pending ?? 0) - groundOf(state)
  */
 export function addWaiting(state, v, idle = false, placeId = null) {
 	if (!(v > 0)) return 0;
+	// Nouvelle économie : le nectar de la marche va droit dans la bourse ; l'écosystème n'en dépose plus sur les fleurs.
+	if (state.eco2) { if (!idle) state.nectar = (state.nectar ?? 0) + v; return 0; }
 	const ground = groundOf(state), jar = jarOf(state);
 	const toJar = Math.min(v, Math.max(0, jarCap(state) - jar));
 	const rest = v - toJar;
@@ -282,7 +284,7 @@ export function tick(state, garden, now = Date.now()) {
 	for (const placeId of Object.keys(state.places)) {
 		const r = rates(state, placeId, now);
 		const place = state.places[placeId];
-		const out = { matured: {}, nectar: r.nectar * eff };
+		const out = { matured: {}, nectar: state.eco2 ? 0 : r.nectar * eff };
 		for (const [type, perH] of Object.entries(r.grow)) {
 			const amount = perH * eff;
 			if (amount <= 0) continue;
