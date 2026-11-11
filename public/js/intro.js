@@ -260,7 +260,11 @@ export function startIntro(c) {
 		app.append(el);
 		void el.offsetWidth;
 		el.classList.add('in');
+		// L'ouverture musicale : la musique de l'introduction s'efface un instant pour la laisser sonner.
+		c.sound.setMood?.('hush');
+		c.sound.fanfare?.();
 		await wait(4200);
+		c.sound.setMood?.('joy');
 		el.classList.remove('in');
 		await wait(1500);
 		el.remove();

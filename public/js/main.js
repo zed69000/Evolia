@@ -2604,7 +2604,7 @@ if (state.intro) {
 	logo.className = 'intro-logo';
 	logo.innerHTML = '<img src="assets/logo-detoure.png" alt="Evolia"><p>À chacun de tes pas, la nature s’éveille.</p>';
 	$('#app').append(logo);
-	setTimeout(() => { splash.classList.add('out'); logo.classList.add('in'); }, 300);
+	setTimeout(() => { splash.classList.add('out'); logo.classList.add('in'); sound.fanfare?.(); }, 300);
 	setTimeout(() => splash.remove(), 1600);
 	setTimeout(() => logo.classList.remove('in'), 3400);
 	setTimeout(() => { logo.remove(); $('#app').classList.remove('booting'); }, 4900);

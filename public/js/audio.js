@@ -516,6 +516,7 @@ export class Soundscape {
 	music(now, night) {
 		if (!this.musicSettings.on) return;
 		if (this.mood === 'joy') return this.joy(now);
+		if (this.mood === 'hush') return; // le temps d'une ouverture, rien d'autre ne joue
 		const slow = night > 0.5 ? 1.5 : 1;
 		if (now >= this.nextPad) {
 			this.pad(night > 0.5);
@@ -561,6 +562,44 @@ export class Soundscape {
 			}
 			this.nextBeat += EIGHTH;
 		}
+	}
+
+	/**
+	 * L'ouverture d'Evolia, quand le logo apparaît : un arpège qui monte et s'épanouit en un grand accord lumineux,
+	 * avec quelques notes qui scintillent au-dessus. Seulement si la musique est active.
+	 */
+	fanfare() {
+		const ctx = this.ctx;
+		if (!ctx || ctx.state !== 'running' || !this.musicSettings.on) return;
+		const t0 = ctx.currentTime + 0.05, D4 = 293.66, f = s => D4 * Math.pow(2, s / 12);
+		// L'arpège qui monte (ré, fa dièse, la, ré, fa dièse, la).
+		[0, 4, 7, 12, 16, 19].forEach((s, i) => {
+			this.pluck(f(s), t0 + i * 0.11, 0.9, 0.06, 1.4, 'triangle');
+			this.pluck(f(s), t0 + i * 0.11, 0.6, 0.03, 1.8, 'sine');
+		});
+		// Le grand accord qui s'ouvre, de la basse aux aigus.
+		const t1 = t0 + 0.7, lp = ctx.createBiquadFilter();
+		lp.type = 'lowpass';
+		lp.frequency.setValueAtTime(500, t1);
+		lp.frequency.linearRampToValueAtTime(2600, t1 + 1.6);
+		lp.connect(this.musicBus);
+		lp.connect(this.musicVerb);
+		for (const s of [-12, -5, 0, 4, 7, 12, 16]) {
+			for (const cents of [-5, 5]) {
+				const o = ctx.createOscillator(), e = ctx.createGain();
+				o.type = s < 0 ? 'sine' : 'triangle';
+				o.frequency.value = f(s) * Math.pow(2, cents / 1200);
+				e.gain.setValueAtTime(0, t1);
+				e.gain.linearRampToValueAtTime(s < 0 ? 0.03 : 0.016, t1 + 1.2);
+				e.gain.setValueAtTime(s < 0 ? 0.03 : 0.016, t1 + 2.6);
+				e.gain.linearRampToValueAtTime(0, t1 + 5.5);
+				o.connect(e).connect(lp);
+				o.start(t1);
+				o.stop(t1 + 5.6);
+			}
+		}
+		// Les étincelles : quelques notes aiguës, au hasard, pendant que l'accord s'ouvre.
+		for (let k = 0; k < 7; k++) this.pluck(f([24, 28, 31, 36][Math.floor(Math.random() * 4)]), t1 + 0.3 + Math.random() * 2.2, 0.5 + Math.random() * 0.4, 0.022, 1.6, 'sine');
 	}
 
 	/** Une note pincée, posée à l'instant `t` (temps de l'audio). */
