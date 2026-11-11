@@ -205,7 +205,7 @@ function jarWeight(place, it) {
 	let n = 1;
 	for (const p of place.plants ?? []) {
 		if (p.type !== 'fleur' && p.type !== 'buisson' && p.type !== 'arbre') continue;
-		const [gx, gy] = CELLS[p.c ?? 0];
+		const [gx, gy] = place.layout?.[p.c ?? 0] ?? CELLS[p.c ?? 0];
 		if (Math.hypot(gx * PARCEL_W + p.x - it.x, (gy * PARCEL_H + p.y - it.y) * 1.4) < 520) n += p.type === 'fleur' ? 1 : 0.5;
 	}
 	return n;

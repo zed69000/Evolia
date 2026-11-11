@@ -337,7 +337,7 @@ function announceSpecies(quiet = false) {
 	if (quiet) return;
 	if (found.length || opened.length) sound.chime(opened.length ? 3 : 2);
 	for (const sp of found) toast(`${sp.kind === 'milieu' ? 'Nouveau milieu' : 'Nouvelle espèce'} : ${sp.name}`, '#F08A3C', () => species.open(sp.id));
-	for (const p of opened) toast(`Nouveau milieu : ${p.name.toLowerCase()} ! Choisis-le pour une prochaine parcelle`, p.color, () => places.open(p.id));
+	for (const p of opened) toast(`Nouveau milieu : ${p.name.toLowerCase()} ! Ses parcelles autour de ton jardin peuvent s’acheter`, p.color, () => garden.toggleOverview());
 	celebrateHerbarium();
 }
 
@@ -487,8 +487,7 @@ garden.onTap = hit => {
 	if (hit.critter) return tapCritter(hit, card);
 	if (hit.cell != null) {
 		if (hit.open) garden.flyToCell(hit.cell);
-		else if (here().km >= CELL_KM[hit.cell]) chooseBiome(hit.cell);
-		else toast(`Nouvelle parcelle : encore ${fmt(Math.max(0.1, Math.ceil((CELL_KM[hit.cell] - here().km) * 10) / 10), 1)} km`, '#9A7448');
+		else offerParcel(hit.cell);
 		return;
 	}
 	const p = hit.plant;
@@ -771,17 +770,12 @@ function addEffortXp(effort) {
 
 function checkUnlocks(events) {
 	const pl = here(), n = cellsOpen(pl);
-	// La clôture recule : une nouvelle parcelle tous les quelques kilomètres. On choisit son milieu ; tant qu'il
-	// n'y en a qu'un d'ouvert (la prairie), elle s'ouvre tout de suite.
-	if (n < CELLS.length && pl.km >= CELL_KM[n] && pl.pendingCell !== n) {
-		pl.pendingCell = n;
+	// Assez marché pour agrandir : on le dit une fois ; à chacun de choisir où (et de payer la parcelle en nectar).
+	if (n < CELLS.length && pl.km >= CELL_KM[n] && pl.cellReady !== n) {
+		pl.cellReady = n;
 		events?.push({ kind: 'cell', n });
-		if (PLACES.filter(p => placeOpen(state, p)).length <= 1) openParcel(n, 'prairie');
-		else {
-			sound.chime(3);
-			toast('Une nouvelle parcelle t’attend : choisis son milieu', '#9A7448', () => chooseBiome(n));
-			whenFree(() => chooseBiome(n));
-		}
+		sound.chime(2);
+		toast(`Tu peux agrandir ton jardin : dézoome et touche une parcelle voisine (dès ${fmtInt(parcelPrice(n))} nectar)`, '#9A7448', () => garden.toggleOverview());
 	}
 	for (const [key, d] of Object.entries(DECOR)) {
 		if (heartOf(pl, d.place) < 0 || d.always || pl.unlocked[key] || biomeKm(pl, d.place) < d.km) continue;
@@ -792,11 +786,47 @@ function checkUnlocks(events) {
 	}
 }
 
-/** Ouvre la parcelle `n` dans le milieu choisi ; s'il reste assez de kilomètres, la suivante attend déjà son tour. */
+// ─── Agrandir : acheter une parcelle voisine, dans le milieu que le monde y a mis ───
+
+/** Le prix de la n-ième parcelle (la deuxième coûte 80 nectar, puis de plus en plus). */
+const parcelPrice = n => Math.round((80 * Math.pow(Math.max(1, n), 1.35)) / 10) * 10;
+
+/** Ce qu'on lit sur une parcelle fermée : son milieu, et ce qu'il faut pour l'avoir. */
+garden.lockedInfo = i => {
+	const pl = here(), n = cellsOpen(pl), p = PLACE_BY_ID[garden.worldBiomeAt(i)], price = parcelPrice(n), nectar = state.nectar ?? 0;
+	if (!placeOpen(state, p)) return { title: p.name, sub: `dès ${p.km} km et ${p.found} espèces`, hint: `dès ${p.km} km` };
+	if (pl.km < CELL_KM[n]) {
+		const left = fmt(Math.max(0.1, Math.ceil((CELL_KM[n] - pl.km) * 10) / 10), 1);
+		return { title: p.name, sub: `encore ${left} km pour agrandir`, hint: `${left} km` };
+	}
+	return { title: p.name, sub: nectar >= price ? `${fmtInt(price)} nectar · touche pour l’acheter` : `${fmtInt(price)} nectar (il en manque ${fmtInt(price - nectar)})`, hint: `${fmtInt(price)} nectar` };
+};
+
+/** Toucher une parcelle voisine : ce qu'elle est, et l'acheter si on peut. */
+function offerParcel(i) {
+	const pl = here(), n = cellsOpen(pl), biome = garden.worldBiomeAt(i), p = PLACE_BY_ID[biome], price = parcelPrice(n);
+	if (!placeOpen(state, p)) return toast(`${p.name} : ce milieu s’ouvre dès ${p.km} km et ${p.found} espèces découvertes`, p.color);
+	if (pl.km < CELL_KM[n]) return toast(`Pour agrandir ton jardin : encore ${fmt(Math.max(0.1, Math.ceil((CELL_KM[n] - pl.km) * 10) / 10), 1)} km`, '#9A7448');
+	const nectar = state.nectar ?? 0;
+	showModal(`<h2>Agrandir ton jardin</h2>
+		<p>Cette parcelle est ${PLACE_IN[biome] ?? `en ${p.name.toLowerCase()}`} : la nature s’y installera avec ses propres plantes et ses animaux.</p>
+		<div class="chips"><span class="chip gold">${fmtInt(price)} nectar</span></div>
+		<button class="btn primary" id="btn-parcel" ${nectar < price ? 'disabled' : ''}>${nectar < price ? `Il manque ${fmtInt(price - nectar)} nectar` : 'Acheter cette parcelle'}</button>
+		<button class="btn ghost wide" data-close>Plus tard</button>`);
+	$('#btn-parcel').onclick = () => {
+		if ((state.nectar ?? 0) < price) return;
+		state.nectar -= price;
+		closeModal();
+		openParcel(garden.openAt(i, biome), biome);
+		renderHud();
+	};
+}
+
+/** Ouvre la parcelle `n` (déjà placée sur la grille) ; on le fête et la caméra y va. */
 function openParcel(n, biome) {
 	const pl = here();
-	if (cellsOpen(pl) !== n) return;
-	garden.openCell(n, biome);
+	if (cellsOpen(pl) !== n + 1 && cellsOpen(pl) !== n) return;
+	if (cellsOpen(pl) === n) garden.openCell(n, biome);
 	delete pl.pendingCell;
 	(pl.cellDates ??= {})[n] = Date.now();
 	garden.flyToCell(n);
@@ -804,22 +834,6 @@ function openParcel(n, biome) {
 	toast(`La clôture recule : ${cellName(pl, n).toLowerCase()} !`, PLACE_BY_ID[biome].color);
 	persist(true);
 	checkUnlocks();
-}
-
-/** Le choix du milieu d'une nouvelle parcelle : les milieux ouverts, et ce qu'il faut pour les autres. */
-function chooseBiome(n) {
-	const pl = here();
-	if (cellsOpen(pl) !== n || pl.km < CELL_KM[n]) return;
-	const present = pl.biomes ?? ['prairie'];
-	showModal(`<div class="modal-body"><h2>Une nouvelle parcelle</h2>
-		<p>Choisis son milieu : chacun a ses plantes, ses animaux et ses aménagements.</p>
-		<div class="biome-pick">${PLACES.map(p => {
-			const open = placeOpen(state, p), count = present.filter(b => b === p.id).length;
-			const note = !open ? `dès ${p.km} km et ${p.found} espèces` : count ? `${count} parcelle${count > 1 ? 's' : ''} dans ton jardin` : 'nouveau dans ton jardin !';
-			return `<button class="biome-opt${count || !open ? '' : ' fresh'}" data-biome="${p.id}" ${open ? '' : 'disabled'} style="--pc:${p.color}"><i></i><span><b>${p.name}</b><small>${note}</small></span></button>`;
-		}).join('')}</div></div>
-		<div class="modal-foot"><button class="btn ghost" data-close>Plus tard</button></div>`);
-	for (const b of $('#modal').querySelectorAll('[data-biome]')) b.addEventListener('click', () => { closeModal(); openParcel(n, b.dataset.biome); });
 }
 
 // ─── Suivi automatique : pas de bouton, l'appli voit seule quand on bouge ─
@@ -2340,7 +2354,7 @@ renderStatus();
 const firstRun = !state.seenIntro;
 rollDay(state);
 checkUnlocks();
-if (here().pendingCell === cellsOpen(here()) && here().km >= CELL_KM[cellsOpen(here())]) whenFree(() => chooseBiome(here().pendingCell));
+delete here().pendingCell; // l'ancien choix du milieu par menu : le monde le donne désormais
 garden.maxFps = state.eco30 ? 30 : 0;
 // En paysage, le panneau du bas devient une colonne à droite : le jardin sait quelle part de l'écran il couvre.
 const measureInset = () => {

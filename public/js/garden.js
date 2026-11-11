@@ -11,11 +11,16 @@ import { GAIT, strideOf, HEN_LOOKS, drawFromSheet, loadSheets, SHEETS, sheetIdOf
 import { SPECIES, PLACE_BY_ID, speciesOf } from './species.js';
 import { PARCEL_W, PARCEL_H, CELLS, CELL_KM, GROUND, zoneOf, zoneName, tileSteps, tileSig, keepOut, cellIndexAt, riversIn } from './zones.js';
 import { biomeOf, heartOf, rankOf, biomesIn } from './state.js';
+import { makeWorld, worldBiome } from './world.js';
 import { ITEMS, ITEM_PAINTERS, attracted, paintSoil, PLOT, paintAdorn, canLevel, itemBox, LINK, linkEnds, fitsPlace } from './deco.js';
 
 export { PARCEL_W, PARCEL_H, CELLS, CELL_KM };
 export const cellsOpen = place => Math.min(CELLS.length, place?.cells ?? 1);
-export const cellOrigin = i => [CELLS[i][0] * PARCEL_W, CELLS[i][1] * PARCEL_H];
+// Où se trouve chaque parcelle sur la grille : les ouvertes dans l'ordre de leur ouverture (choisie par le joueur),
+// puis leurs voisines encore fermées, qu'on peut acheter. Fixé par le jardin (syncLayout), une partie à la fois.
+let LAYOUT = CELLS;
+export const cellPos = i => LAYOUT[i] ?? CELLS[i] ?? [0, 0];
+export const cellOrigin = i => { const [x, y] = cellPos(i); return [x * PARCEL_W, y * PARCEL_H]; };
 const cellOf = p => p.c ?? 0;
 /** Le nom d'une parcelle : le milieu pour son cœur (« Le marais »), puis ses coins (« La roselière »…). */
 export function cellName(place, ci) {
@@ -210,24 +215,74 @@ export class Garden {
 	 * (et pour la prochaine parcelle, encore dans la brume), la campagne sauvage du milieu ouvert le plus proche.
 	 */
 	tileAt(gx, gy) {
-		const n = cellsOpen(this.place), sig = (this.place.biomes ?? []).slice(0, n).join(',');
+		const n = cellsOpen(this.place), sig = `${(this.place.biomes ?? []).slice(0, n).join(',')}|${this.layoutSig}`;
 		if (this.tileMemo?.sig !== sig) this.tileMemo = { sig, map: new Map() };
 		const k = `${gx},${gy}`;
 		let t = this.tileMemo.map.get(k);
 		if (t) return t;
-		const ci = cellIndexAt(gx, gy);
+		const ci = LAYOUT.findIndex(([x, y]) => x === gx && y === gy);
 		if (ci >= 0 && ci < n) t = { biome: this.biomeOf(ci), rank: rankOf(this.place, ci) };
-		else {
-			let best = 0, bd = Infinity;
-			for (let j = 0; j < n; j++) { const d = Math.hypot(CELLS[j][0] - gx, (CELLS[j][1] - gy) * 1.2); if (d < bd) { bd = d; best = j; } }
-			t = { biome: this.biomeOf(best), rank: -1 };
-		}
+		// Au-delà de la clôture, le paysage du monde : on voit la mare, la forêt ou la montagne qui attendent.
+		else { const b = worldBiome(this.place.world, gx, gy); t = { biome: b === 'sea' ? 'littoral' : b, rank: -1 }; }
 		this.tileMemo.map.set(k, t);
 		return t;
 	}
 
 	/** Le premier jardin : quelques plantes de départ ; puis le caractère de chaque milieu déjà là. */
+	/**
+	 * Le plan du jardin : les parcelles ouvertes (dans leur ordre d'ouverture), puis toutes leurs voisines libres du
+	 * monde, qu'on peut acheter pour agrandir. Le monde est tiré une fois par partie.
+	 */
+	syncLayout() {
+		const place = this.place, n = cellsOpen(place);
+		place.world ??= makeWorld(Math.floor(Math.random() * 1e9), n > 1);
+		place.layout ??= CELLS.slice(0, n).map(c => [...c]);
+		while (place.layout.length < n) place.layout.push([...CELLS[place.layout.length]]);
+		const open = place.layout, seen = new Set(open.map(p => p.join(','))), front = [];
+		if (n < CELLS.length) {
+			for (const [x, y] of open) {
+				for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+					const gx = x + dx, gy = y + dy, k = `${gx},${gy}`;
+					if (seen.has(k) || Math.abs(gx) > 8 || Math.abs(gy) > 8 || worldBiome(place.world, gx, gy) === 'sea') continue;
+					seen.add(k);
+					front.push([gx, gy]);
+				}
+			}
+		}
+		front.sort((a, b) => a[1] - b[1] || a[0] - b[0]);
+		const lay = [...open, ...front], sig = lay.map(p => p.join(',')).join(';');
+		if (sig === this.layoutSig) return;
+		this.layoutSig = sig;
+		LAYOUT = lay;
+		this.tileMemo = null;
+		this.edgeCache = null;
+	}
+
+	/** Le milieu que le monde réserve à une parcelle (ouverte ou non) ; la mer compte comme du littoral. */
+	worldBiomeAt(i) {
+		const b = worldBiome(this.place.world, ...cellPos(i));
+		return b === 'sea' ? 'littoral' : b;
+	}
+
+	/** Achète la parcelle voisine `i` : elle devient la suivante du jardin, dans le milieu que lui donne le monde. */
+	openAt(i, biome = this.worldBiomeAt(i)) {
+		const place = this.place, n = cellsOpen(place);
+		if (i < n) return i;
+		place.layout = [...place.layout.slice(0, n), [...cellPos(i)]];
+		this.syncLayout();
+		this.openCell(n, biome);
+		this.syncLayout();
+		return n;
+	}
+
+	/** La mer, en haut des parcelles du littoral qui longent la côte. */
+	seaTop(ci) {
+		const y = cellPos(ci)[1], w = this.place.world;
+		return this.biomeOf(ci) === 'littoral' && (w?.seaRow != null ? y === w.seaRow : y === 0);
+	}
+
 	ensurePlace() {
+		this.syncLayout();
 		const place = this.place;
 		if (!place.seeded && !place.plants.length) this.seedStarterGarden(this.biomeOf(0), 0);
 		place.seeded = true;
@@ -271,12 +326,12 @@ export class Garden {
 	/** La prochaine parcelle, dans la brume, avec les kilomètres qu'il reste à faire ici pour l'ouvrir. */
 	lockedCells() {
 		const n = cellsOpen(this.place);
-		return n < CELLS.length ? [n] : [];
+		return Array.from({ length: Math.max(0, LAYOUT.length - n) }, (_, k) => n + k);
 	}
 
 	cellAt(wx, wy) {
 		const gx = Math.floor(wx / PARCEL_W), gy = Math.floor(wy / PARCEL_H);
-		return CELLS.findIndex(([x, y]) => x === gx && y === gy);
+		return LAYOUT.findIndex(([x, y]) => x === gx && y === gy);
 	}
 
 	/**
@@ -287,6 +342,7 @@ export class Garden {
 		const place = this.place;
 		(place.biomes ??= ['prairie'])[i] = biome;
 		place.cells = Math.max(cellsOpen(place), i + 1);
+		this.syncLayout();
 		if (this.heart(biome) === i) {
 			(place.heartKm ??= {})[biome] = place.km ?? 0;
 			this.seedStarterGarden(biome, i);
@@ -307,10 +363,12 @@ export class Garden {
 
 	/** Forme d'une parcelle : ovale tiré au hasard (mais toujours le même pour cette parcelle), bord ondulé. */
 	blob(ci) {
-		const key = `${ci}`;
+		// La forme tient à la place sur la grille (les anciennes parcelles gardent exactement la leur).
+		const [gx, gy] = cellPos(ci), key = `${gx},${gy}`;
 		let b = this.blobs.get(key);
 		if (b) return b;
-		const r = rng(7 + 7 * 97 + ci * 53);
+		const old = CELLS.findIndex(([x, y]) => x === gx && y === gy);
+		const r = rng(7 + 7 * 97 + (old >= 0 ? old : 1000 + (gx + 50) * 131 + (gy + 50)) * 53);
 		const [ox, oy] = cellOrigin(ci);
 		b = {
 			cx: ox + PARCEL_W / 2 + r.range(-20, 20), cy: oy + PARCEL_H / 2 + r.range(-40, 40),
@@ -633,7 +691,7 @@ export class Garden {
 		m.globalCompositeOperation = 'destination-out';
 		// Au littoral de la première rangée, la mer reste nette : la brume s'efface au-dessus du rivage.
 		if (!this.glyph) for (const ci of this.openCells()) {
-			if (this.biomeOf(ci) !== 'littoral' || CELLS[ci][1] !== 0) continue;
+			if (!this.seaTop(ci)) continue;
 			const prev = m.fillStyle, fade = m.createLinearGradient(0, 120, 0, 190), [ox] = cellOrigin(ci);
 			fade.addColorStop(0, 'rgba(0,0,0,0.85)');
 			fade.addColorStop(1, 'rgba(0,0,0,0)');
@@ -939,7 +997,7 @@ export class Garden {
 
 	/** Pas de plante dans la mer, en haut des parcelles du littoral de la première rangée. */
 	minY(pid, type, ci = 0) {
-		return MIN_Y[type] + (this.biomeOf(ci) === 'littoral' && CELLS[ci][1] === 0 ? 240 : 0);
+		return MIN_Y[type] + (this.seaTop(ci) ? 240 : 0);
 	}
 
 	/** Trouve une place libre dans une parcelle ; si elle est pleine, on serre un peu les plantes. */
@@ -1815,7 +1873,7 @@ export class Garden {
 	/** Point d'eau d'une parcelle (mare, grande mare, mer), en coordonnées du monde. */
 	water(ci) {
 		const [ox, oy] = cellOrigin(ci);
-		if (this.biomeOf(ci) === 'littoral' && CELLS[ci][1] === 0) return { x: ox + PARCEL_W / 2, y: oy + 70, rx: 200, ry: 50, scale: 3 };
+		if (this.seaTop(ci)) return { x: ox + PARCEL_W / 2, y: oy + 70, rx: 200, ry: 50, scale: 3 };
 		for (const [k, d] of Object.entries(DECOR)) {
 			if (!d.water || this.heart(d.place) !== ci || !this.decorVisible(k)) continue;
 			return { x: ox + d.x, y: oy + d.y, rx: 95 * (d.scale ?? 1), ry: 48 * (d.scale ?? 1), scale: d.scale ?? 1 };
@@ -3668,13 +3726,10 @@ export class Garden {
 		for (const i of cells) {
 			const [ox, oy] = cellOrigin(i);
 			const isOpen = i < cellsOpen(place);
-			const title = isOpen ? cellName(place, i) : 'Nouvelle parcelle';
-			const left = Math.max(0.1, Math.ceil((CELL_KM[i] - km) * 10) / 10);
-			// Assez de kilomètres : la parcelle attend qu'on choisisse son milieu.
-			const ready = !isOpen && km >= CELL_KM[i];
-			const sub = isOpen
-				? `${place.plants.filter(p => cellOf(p) === i && p.growth >= 1).length} plantes`
-				: ready ? 'touche pour choisir son milieu' : `encore ${left.toLocaleString('fr-FR', { maximumFractionDigits: 1 })} km`;
+			const info = isOpen ? null : this.lockedInfo?.(i) ?? { title: 'Nouvelle parcelle', sub: '', hint: '' };
+			const title = isOpen ? cellName(place, i) : info.title;
+			// Vu de loin, une parcelle fermée ne dit que l'essentiel (le prix, ou ce qu'il manque).
+			const sub = isOpen ? `${place.plants.filter(p => cellOf(p) === i && p.growth >= 1).length} plantes` : all ? info.hint : info.sub;
 			// Centre de la parcelle à l'écran ; une parcelle fermée garde son étiquette visible tant qu'on en voit un bout.
 			const cw = this.canvas.width, ch = this.canvas.height;
 			const sx0 = ox * S + tx, sx1 = (ox + PARCEL_W) * S + tx, sy0 = oy * S + ty, sy1 = (oy + PARCEL_H) * S + ty;
@@ -3698,7 +3753,8 @@ export class Garden {
 				const seenW = Math.min(sx1, cw) - Math.max(sx0, 0), seenH = Math.min(sy1, ch) - Math.max(sy0, 0);
 				// Parcelle hors de l'écran ou à peine visible : une petite flèche au bord, vers elle.
 				if (seenW < w + 16 * dpr || seenH < 200 * dpr) {
-					this.drawEdgeHint(ctx, sx0, sx1, sy0, sy1, ready ? 'à choisir' : `${left.toLocaleString('fr-FR', { maximumFractionDigits: 1 })} km`);
+					// Plusieurs voisines possibles : on ne montre que celles qu'on voit, sans flèche au bord.
+					if (this.lockedCells().length === 1) this.drawEdgeHint(ctx, sx0, sx1, sy0, sy1, info.hint);
 					continue;
 				}
 				x = Math.max(Math.max(sx0, 0) + w / 2 + 8 * dpr, Math.min(Math.min(sx1, cw) - w / 2 - 8 * dpr, x));
