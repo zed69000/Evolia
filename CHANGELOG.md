@@ -3,6 +3,14 @@
 Chaque version, la plus récente en haut. Le site (evolia.sebastienalzamora.workers.dev) est toujours à jour ;
 le Play Store (tests internes) reçoit les versions indiquées « Play ».
 
+## 0.7.51 — 12 novembre 2026
+Ce que le joueur n’avait pas appris (nouvelles parties) :
+- Nouvelles bulles d’aide, au moment où elles servent : les habitats, l’élan, la valeur d’un km, les améliorations, et le besoin de plantes autour des habitats.
+- La page Écosystème montre la nouvelle économie : production par heure d’élan, élan restant, ce que rapporte chaque habitat, plantes, bonus des espèces, valeur d’un km.
+Corrigé :
+- Les anciennes astuces (gouttes de nectar sur les fleurs, collecteur, niveaux d’abris) ne s’affichent plus dans les nouvelles parties, et le collecteur, devenu inutile, n’est plus proposé dans Aménager.
+- L’astuce « Ton monde » montre l’icône d’activité (le nom de la parcelle n’est plus affiché en haut).
+
 ## 0.7.50 — 12 novembre 2026
 - Correctif : dans l’introduction, la fiche de l’abeille paraissait figée (on ne pouvait plus la faire défiler jusqu’au bouton Fermer). Le verrou du tutoriel ne bloque plus que les touchers, jamais le défilement.
 

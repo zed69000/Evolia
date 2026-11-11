@@ -977,3 +977,13 @@ body:has(.panel.open) #debug { display: none; }
 #app:has(.panel.open) #track-alert, #app:has(.modal:not([hidden])) #track-alert { display: none; }
 #species .sp-credit { text-align: center; }
 .sp-close-bottom { display: block; width: 100%; max-width: 320px; margin: 8px auto 4px; }
+/* Écosystème, nouvelle économie */
+.eco2-hero { display: grid; gap: 2px; padding: 14px 16px; margin-bottom: 10px; text-align: center; }
+.eco2-hero > b { font: 400 34px/1.1 Courgette, cursive; color: var(--foret); }
+.eco2-hero > span { color: var(--doux); font-size: 13px; }
+.eco2-hero p { margin: 8px 0 0; color: var(--encre); font-size: 14px; }
+.eco2-table { overflow-x: auto; }
+.eco2-table table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.eco2-table th, .eco2-table td { padding: 6px 8px; border-bottom: 1px solid var(--trait); text-align: left; }
+.eco2-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
+.eco2-list { margin: 0; padding-left: 18px; display: grid; gap: 6px; color: var(--encre); font-size: 14px; }

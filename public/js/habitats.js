@@ -64,7 +64,7 @@ export function nextUpgrade(state, kind) {
 export const unitProd = (state, kind) => LADDER[kind].prod * Math.pow(2, upgOf(state, kind));
 
 /** Ce que les plantes permettent : les habitats ne produisent pleinement qu'avec deux plantes chacun, au moins. */
-function plantCover(state) {
+export function plantCover(state) {
 	let green = 0, homes = 0;
 	for (const p of Object.values(state.places ?? {})) {
 		for (const pl of p.plants ?? []) if (pl.growth >= 1) green += pl.type === 'arbre' ? 8 : pl.type === 'buisson' ? 3 : pl.type === 'fleur' ? 1 : 0.25;

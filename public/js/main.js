@@ -15,7 +15,7 @@ import { Soundscape } from './audio.js';
 import { ITEMS, ITEM_ORDER, itemHelp, itemCost, fitsPlace, CATS, MAX_LEVEL, LEVEL_NAME, LEVEL_KM, canLevel, levelCost, CABIN_STYLES } from './deco.js';
 import { VERSION } from './version.js';
 import { startIntro, INTRO_NECTAR } from './intro.js';
-import { LADDER, isLadder, ladderPrice, ladderLock, nextUpgrade, unitProd, prodPerHour, produce, KM_HOURS, UPG_AT } from './habitats.js';
+import { LADDER, isLadder, ladderPrice, ladderLock, nextUpgrade, unitProd, prodPerHour, produce, KM_HOURS, UPG_AT, REST, plantCover, ownedOf } from './habitats.js';
 import { exportCode, importCode, backupAge } from './backup.js';
 import { DebugPanel, debugOn, setDebug, debugLog, ago, dur, trace, traceFlush } from './debug.js';
 import { canNotify, askNotify, scheduleReminders, clearReminders } from './notify.js';
@@ -717,33 +717,44 @@ const totalKm = () => state.totals.distance / 1000;
 
 const TIPS = [
 	// La bourse d'abord, dès l'arrivée : tout le reste du guide en découle.
-	{ id: 'purse', target: '#hud-steps', when: () => true,
+	{ id: 'purse', old: true, target: '#hud-steps', when: () => true,
 		title: 'Ta bourse de nectar', get text() { return `Le nectar sert à aménager ton jardin. Tes pas en produisent (environ ${nectarPerKm()} par km en marchant, davantage en courant), tes animaux aussi : il se dépose sur les fleurs, et tu le cueilles. Dessous, ce qui t’attend.`; } },
-	{ id: 'dew', target: '#hud-steps', when: () => groundOf(state) >= 2, show: () => focusDew(),
+	{ id: 'dew', old: true, target: '#hud-steps', when: () => groundOf(state) >= 2, show: () => focusDew(),
 		title: 'Du nectar sur les fleurs', text: 'Tes butineurs déposent leur récolte en gouttes dorées sur les fleurs. Touche-les pour la cueillir : sinon elle attend, sans entrer dans ta bourse.' },
-	{ id: 'deco', target: '#btn-deco', when: () => (state.nectar ?? 0) >= 60 && !hasCollector(state),
+	{ id: 'deco', old: true, target: '#btn-deco', when: () => (state.nectar ?? 0) >= 60 && !hasCollector(state),
 		title: 'Aménager', text: 'Tu as de quoi poser un collecteur : il garde la récolte de tes butineurs, plus besoin de cueillir les gouttes une à une.' },
-	{ id: 'jar', target: '#hud-steps', when: () => jarOf(state) >= 5, show: () => focusJar(),
+	{ id: 'jar', old: true, target: '#hud-steps', when: () => jarOf(state) >= 5, show: () => focusJar(),
 		title: 'Ton collecteur se remplit', text: 'L’étiquette au-dessus montre ce qu’il contient. Touche-le pour tout récupérer. Plein, il ne prend plus rien : le nectar reste au sol, en gouttes sur les fleurs. Vide-le, ou améliore-le.' },
-	{ id: 'jarup', target: '#hud-steps', show: () => focusJar(),
+	{ id: 'jarup', old: true, target: '#hud-steps', show: () => focusJar(),
 		when: () => hasCollector(state) && jarOf(state) >= jarCap(state) && groundOf(state) >= 100 && garden.items.some(it => it.kind === 'collecteur' && (it.level ?? 1) < 3),
 		title: 'Ton collecteur déborde', text: 'Ta récolte ne tient plus dans ton collecteur : le reste attend en gouttes sur les fleurs. Touche le collecteur au jardin pour l’améliorer (il garde 400, puis 1 000 nectar), ou poses-en un deuxième.' },
-	{ id: 'eco', target: '#btn-eco', when: () => !!state.tips?.purse && SPECIES.some(sp => sp.kind === 'animal' && state.species[sp.id]),
+	{ id: 'eco', old: true, target: '#btn-eco', when: () => !!state.tips?.purse && SPECIES.some(sp => sp.kind === 'animal' && state.species[sp.id]),
 		title: 'Ton écosystème', get text() { return `Les animaux découverts travaillent pour toi, même appli fermée : ils font pousser le jardin et récoltent du nectar. Quand tu bouges, ils travaillent ${fmtNum(boostMult())} fois plus.`; } },
-	{ id: 'species', target: '#btn-species', when: () => !!state.tips?.purse && Object.keys(state.species).length >= 1,
+	{ id: 'species', target: '#btn-species', when: () => (!!state.tips?.purse || state.eco2) && Object.keys(state.species).length >= 1,
 		title: 'Les espèces', text: 'Chaque plante et chaque animal découvert a sa fiche : son rôle dans la nature, et comment l’aider chez toi.' },
-	{ id: 'habitats', target: '#btn-deco', when: () => ownedAny('habitat') || ((state.nectar ?? 0) >= 40 && hasCollector(state)),
+	{ id: 'habitats', old: true, target: '#btn-deco', when: () => ownedAny('habitat') || ((state.nectar ?? 0) >= 40 && hasCollector(state)),
 		title: 'Des abris pour la faune', text: 'Dans Aménager › Habitats : chaque abri renforce une équipe d’animaux, et chaque niveau d’abri relève de 3 % ce que ton écosystème peut produire. Améliore-les plutôt que d’en poser partout.' },
-	{ id: 'level', target: '#btn-deco', when: () => ownedAny('habitat') && totalKm() >= LEVEL_KM[2],
+	{ id: 'level', old: true, target: '#btn-deco', when: () => ownedAny('habitat') && totalKm() >= LEVEL_KM[2],
 		title: 'Tes abris peuvent grandir', text: `Avec ${LEVEL_KM[2]} km parcourus, tes habitats passent au niveau 2. Touche-en un au jardin, ou ouvre Aménager, pour l’améliorer.` },
-	{ id: 'cabane', target: '#btn-deco', when: () => totalKm() >= 5 && !owned('cabane'),
+	{ id: 'cabane', old: true, target: '#btn-deco', when: () => totalKm() >= 5 && !owned('cabane'),
 		title: 'Une cabane !', text: 'Avec 5 km parcourus, tu peux poser une cabane (Aménager › Récolte). Un fermier ou une fermière s’y installe et cultivera ton potager.' },
 	{ id: 'potager', target: '#btn-deco', when: () => owned('cabane') && !owned('potager'),
 		title: 'Le potager', text: 'Pose des carrés de potager près de la cabane, côte à côte : les légumes poussent quand tu marches, et chaque récolte rapporte du nectar.' },
 	{ id: 'journal', target: '#btn-journal', when: () => (state.walks?.length ?? 0) >= 1,
 		title: 'Ton carnet', text: 'Tes sorties, tes kilomètres de la semaine et ce qu’ils ont fait pousser.' },
-	{ id: 'biomes', target: '#hud-day', when: () => Object.keys(state.placesOpen ?? {}).length >= 2,
-		title: 'Un nouveau milieu', text: 'Ton monde est fait de milieux : une mare au marais, de vieux arbres en forêt… Agrandis ton terrain, puis explore une parcelle voisine pour y entrer. Touche le nom en haut pour voir tous les milieux.' },
+	{ id: 'biomes', target: '#hud-act', when: () => cellsOpen(here()) >= 2,
+		title: 'Ton monde', text: 'Il est fait de milieux : une mare au marais, de vieux arbres en forêt, la montagne… Chaque parcelle explorée te fait découvrir le sien, avec ses espèces. Touche l’icône d’activité, puis « Voir tout mon monde ».' },
+	// ─── La nouvelle économie (nouvelles parties) : ce qu'il faut savoir, au moment où ça sert ───
+	{ id: 'habitats2', eco2: true, target: '#btn-deco', when: () => (state.nectar ?? 0) >= 50 && !owned('massif'),
+		title: 'Des habitats pour la faune', text: 'Dans Aménager › Habitats : chaque habitat accueille des animaux et te rapporte du nectar. Chaque exemplaire coûte un peu plus que le précédent ; d’autres habitats s’ouvrent ensuite (hôtel à insectes, nichoir, mare, haie).' },
+	{ id: 'elan', eco2: true, target: '#hud-act', when: () => (state.walks?.length ?? 0) >= 1 && boostLeft(state) > 0 && prodPerHour(state) > 0,
+		title: 'L’élan', text: 'Après une sortie, tes habitats travaillent à plein : environ 7 minutes par minute de marche, jusqu’à 8 heures. Au repos, ils ne font presque rien. C’est en bougeant que ton jardin tourne.' },
+	{ id: 'kmvalue', eco2: true, target: '#hud-steps', when: () => prodPerHour(state) >= 3,
+		title: 'Tes pas prennent de la valeur', get text() { return `Chaque km te rapporte 60 nectar, plus quatre heures de la production de ton jardin (en ce moment, environ ${fmtInt(60 + 4 * prodPerHour(state))} nectar par km). Plus ton jardin grandit, plus tes pas valent.`; } },
+	{ id: 'upgrade', eco2: true, target: '#btn-deco', when: () => Object.keys(LADDER).some(k => { const u = nextUpgrade(state, k); return u?.ok && (state.nectar ?? 0) >= u.cost; }),
+		title: 'Une amélioration', text: 'Tu as assez d’habitats d’une même sorte pour les améliorer : leur production double. Ouvre Aménager › Habitats, le bouton « Amélioration (× 2) » est sur leur carte.' },
+	{ id: 'plants', eco2: true, target: '#btn-deco', when: () => { const n = Object.keys(LADDER).reduce((a, k) => a + ownedCount(k), 0); return n >= 4 && here().plants.filter(p => p.growth >= 1 && p.type !== 'herbe').length < n * 2; },
+		title: 'Il faut des plantes', text: 'Tes habitats ne produisent bien que s’il y a assez de fleurs, d’arbustes et d’arbres autour d’eux (deux plantes par habitat). Marche pour en faire pousser : en marchant vite, des arbustes ; en courant, des arbres.' },
 	{ id: 'daily', target: '#daily', when: () => totalKm() >= 1,
 		title: 'Les défis du jour', text: 'Chaque jour, un cadeau et trois petits défis. Bouger quelques jours de suite fait grossir le cadeau.' },
 ];
@@ -796,7 +807,7 @@ function focusJar() {
 function nextTip() {
 	if (state.intro || $('#app').classList.contains('booting') || tipShown || Date.now() - lastTipEnd < 20000 || placing || !$('#modal').hidden || !$('#coach').hidden || document.querySelector('.panel.open') || session) return;
 	const done = (state.tips ??= {});
-	const tip = TIPS.find(t => !done[t.id] && t.when());
+	const tip = TIPS.find(t => !done[t.id] && !(t.old && state.eco2) && !(t.eco2 && !state.eco2) && t.when());
 	if (!tip) return;
 	const target = $(tip.target);
 	if (!target || target.offsetParent === null) return;
@@ -1845,7 +1856,7 @@ function renderDeco() {
 	const cat = CATS.find(c => c.id === decoTab), biome = garden.biomeOf(garden.active);
 	// Pendant l'introduction, seulement la ruche, tout en haut ; le reste est grisé (il viendra plus tard).
 	const first = !!state.intro;
-	const order = first ? ['ruche', ...ITEM_ORDER.filter(k => k !== 'ruche' && ITEMS[k].cat === 'habitat')] : ITEM_ORDER.filter(k => ITEMS[k].cat === decoTab && fitsPlace(k, biome));
+	const order = first ? ['ruche', ...ITEM_ORDER.filter(k => k !== 'ruche' && ITEMS[k].cat === 'habitat')] : ITEM_ORDER.filter(k => ITEMS[k].cat === decoTab && fitsPlace(k, biome) && !(state.eco2 && k === 'collecteur'));
 	$('#deco').innerHTML = `
 		<div class="panel-head"><h2>Aménager</h2><button class="close" data-close-deco aria-label="Fermer">×</button></div>
 		${first ? '' : `<div class="deco-tabs" role="tablist">${CATS.map(c => `<button role="tab" aria-selected="${c.id === decoTab}" data-tab="${c.id}">${c.name}</button>`).join('')}</div>`}
@@ -2600,12 +2611,38 @@ $('#options').addEventListener('input', e => {
 $('#btn-journal').addEventListener('click', openJournal);
 $('#btn-options').addEventListener('click', openOptions);
 $('#btn-species').addEventListener('click', () => species.open());
-$('#btn-eco').addEventListener('click', () => eco.open());
-$('#status').addEventListener('click', () => { if (!session) eco.open(); });
+// Nouvelle économie : la page Écosystème montre ce qui se passe vraiment (production, élan, habitats, plantes).
+function openEco2() {
+	const byKind = {}, perH = prodPerHour(state, byKind), left = boostLeft(state);
+	const h = Math.floor(left / 3600000), m = Math.round((left % 3600000) / 60000);
+	const cover = plantCover(state), sp = Object.keys(state.species).length;
+	const plants = here().plants.filter(p => p.growth >= 1), count = t => plants.filter(p => p.type === t).length;
+	const rows = Object.keys(LADDER).filter(k => ownedOf(state, k)).map(k => `<tr><td>${ITEMS[k].name}</td><td class="num">${ownedOf(state, k)}</td><td class="num">${state.upg?.[k] ? `× ${2 ** state.upg[k]}` : '—'}</td><td class="num">${fmtNum(byKind[k])}</td></tr>`).join('');
+	$('#eco').innerHTML = `
+		<div class="panel-head"><h2>Écosystème</h2><button class="close" data-close-eco aria-label="Fermer">×</button></div>
+		<div class="eco2-hero card">
+			<b>${fmtNum(perH)}</b><span>nectar par heure d’élan</span>
+			<p>${left > 0 ? `Élan : encore <b>${h ? `${h} h ` : ''}${m} min</b>. Tes habitats travaillent à plein.` : `Au repos : tes habitats ne produisent que ${Math.round(REST * 100)} % (${fmtNum(perH * REST)} nectar par heure). Une sortie relance l’élan : environ 7 minutes par minute de marche.`}</p>
+		</div>
+		<p class="sp-intro">Chaque km te rapporte <b>${fmtInt(60 + KM_HOURS * perH)} nectar</b> : 60, plus ${KM_HOURS} heures de cette production.</p>
+		${rows ? `<h3 class="sp-section">Tes habitats</h3><div class="eco2-table"><table><thead><tr><th>Habitat</th><th>Posés</th><th>Amélioré</th><th>Nectar / h</th></tr></thead><tbody>${rows}</tbody></table></div>`
+			: '<p class="sp-intro">Pas encore d’habitat : ouvre Aménager › Habitats pour en poser un.</p>'}
+		<h3 class="sp-section">Ce qui les fait produire</h3>
+		<ul class="eco2-list">
+			<li><b>Plantes</b> : ${count('fleur')} fleurs, ${count('buisson')} arbustes, ${count('arbre')} arbres. ${cover < 1 ? `Il en faudrait plus : tes habitats ne tournent qu’à ${Math.round(cover * 100)} %. Marche pour en faire pousser.` : 'Assez pour tous tes habitats.'}</li>
+			<li><b>Biodiversité</b> : ${sp} espèces découvertes, soit +${sp} % de production.</li>
+			<li><b>Élan</b> : après une sortie, tout tourne à plein ; au repos, ${Math.round(REST * 100)} % seulement.</li>
+		</ul>`;
+	$('#eco').classList.add('open');
+	$('#eco').setAttribute('aria-hidden', 'false');
+}
+const openEco = () => (state.eco2 ? openEco2() : eco.open());
+$('#btn-eco').addEventListener('click', openEco);
+$('#status').addEventListener('click', () => { if (!session) openEco(); });
 $('#hud').addEventListener('click', e => {
 	if (e.target.closest('#hud-act')) return showActivity();
 	if (!e.target.closest('#hud-steps')) return;
-	if ((state.pending ?? 0) < 1) { if (!session) eco.open(); return; }
+	if ((state.pending ?? 0) < 1) { if (!session) openEco(); return; }
 	if (jarOf(state) >= 1) { focusJar(); toast(`Ta récolte t’attend dans le collecteur${groundOf(state) >= 1 ? ', et en gouttes sur les fleurs' : ''} : touche-le pour le vider`, '#E3A33A'); }
 	else { focusDew(); toast('Ta récolte perle sur les fleurs : touche les gouttes dorées', '#E3A33A'); }
 });
