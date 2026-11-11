@@ -2014,6 +2014,8 @@ export class Garden {
 	bindInput() {
 		const c = this.canvas;
 		let drag = null, pinch = null, lastTap = 0;
+		// Pendant l'introduction, la vue est tenue : ni zoom ni déplacement (poser la ruche reste possible).
+		const held = () => !!this.state.intro;
 		const local = e => { const r = c.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
 		// Chaque geste, sur le jardin comme sur un bouton, remet à zéro le temps d'inactivité et arrête le suivi en cours.
 		const touched = () => { this.lastTouch = performance.now(); };
@@ -2060,6 +2062,7 @@ export class Garden {
 			if (!this.pointers.has(e.pointerId)) return;
 			this.pointers.set(e.pointerId, local(e));
 			if (pinch && this.pointers.size >= 2) {
+				if (held()) return;
 				const [a, b] = [...this.pointers.values()];
 				const dist = Math.hypot(a[0] - b[0], a[1] - b[1]);
 				const mid = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
@@ -2076,6 +2079,7 @@ export class Garden {
 				this.moveGhostTo(drag, x, y);
 				return;
 			}
+			if (held()) return;
 			if (drag.zoom) {
 				if (!drag.moved && Math.abs(y - drag.y) > 6) { drag.moved = true; clearTimeout(drag.hold); }
 				if (drag.moved) { this.zoomAt(Math.exp((y - drag.ly) * 0.008), drag.x, drag.y); drag.ly = y; }
@@ -2116,7 +2120,7 @@ export class Garden {
 			if (!drag.moved) {
 				const now = performance.now();
 				// Double toucher : zoomer d'un cran (ou revenir au zoom normal de très près).
-				if (now - lastTap < 300) { this.zoomAt(this.cam.z > 2.4 ? 1 / this.cam.z : 2, x, y); lastTap = 0; }
+				if (now - lastTap < 300 && !held()) { this.zoomAt(this.cam.z > 2.4 ? 1 / this.cam.z : 2, x, y); lastTap = 0; }
 				else { lastTap = now; this.onTap?.(this.pick(x, y)); }
 				this.vel = { x: 0, y: 0 };
 			} else {
@@ -2130,6 +2134,7 @@ export class Garden {
 		c.addEventListener('pointercancel', end);
 		c.addEventListener('wheel', e => {
 			e.preventDefault();
+			if (held()) return;
 			const [x, y] = local(e);
 			this.zoomAt(Math.exp(-e.deltaY * 0.0015), x, y);
 		}, { passive: false });
