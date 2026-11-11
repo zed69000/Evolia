@@ -139,12 +139,7 @@ function fresh() {
 		goalKm: 2.5,
 		v: 3,
 		place: GARDEN,
-		// Une nouvelle partie commence par l'introduction (intro.js), sur une minuscule motte de terre.
-		places: { [GARDEN]: { ...newPlace(), cellSize: { 0: 0.15 } } },
-		intro: 'scene',
-		// La nouvelle économie : pas de nectar déposé en gouttes sur les fleurs ; le nectar vient des pas, des fiches
-		// lues et du troc (miel, œufs…).
-		eco2: true,
+		places: { [GARDEN]: newPlace() },
 		walks: [],
 		days: {},
 		totals: { distance: 0, effort: 0, walks: 0, steps: 0 },
@@ -155,6 +150,35 @@ function fresh() {
 		lastIdle: Date.now(),
 		boostUntil: 0,
 	};
+}
+
+/**
+ * Une toute nouvelle partie (aucune sauvegarde) : elle commence par l'introduction (intro.js), sur une minuscule motte
+ * de terre, avec la nouvelle économie (pas de nectar déposé en gouttes sur les fleurs ; il vient des pas, des fiches
+ * lues et du troc). Ces réglages ne sont jamais donnés à une partie déjà commencée.
+ */
+function newGame() {
+	const s = fresh();
+	s.places[GARDEN].cellSize = { 0: 0.15 };
+	s.intro = 'scene';
+	s.eco2 = true;
+	return s;
+}
+
+/**
+ * Réparation (0.7.48) : une partie commencée avant l'introduction l'a reçue par erreur au chargement, et la finir
+ * réduisait sa première parcelle. On lui rend son jardin entier, son économie et on retire l'introduction.
+ */
+const INTRO_RELEASE = Date.UTC(2026, 10, 11, 19, 0);
+function repairOld(s) {
+	if (!((s.createdAt ?? 0) < INTRO_RELEASE) || s.repaired748) return s;
+	s.repaired748 = true;
+	delete s.intro;
+	delete s.introD0;
+	delete s.eco2;
+	s.seenIntro = true;
+	for (const p of Object.values(s.places ?? {})) delete p.cellSize;
+	return s;
 }
 
 /** Avant les lieux (v1), il n'y avait qu'un jardin : il devient la prairie. */
@@ -270,9 +294,9 @@ export function deleteSlot(id) {
 export function load() {
 	try {
 		const raw = localStorage.getItem(keyOf(slots().active));
-		if (raw) return mergePlaces(migrate({ ...fresh(), v: 1, ...JSON.parse(raw) }));
+		if (raw) return repairOld(mergePlaces(migrate({ ...fresh(), v: 1, ...JSON.parse(raw) })));
 	} catch (e) { /* stockage indisponible : on repart d'un jardin neuf */ }
-	return fresh();
+	return newGame();
 }
 
 /** Tous les spécimens, tous lieux confondus. */

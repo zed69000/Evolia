@@ -374,7 +374,7 @@ function toast(text, color = '#F4C23E', onClick = null) {
 
 /** Lance `fn` dès qu'aucune page (écosystème, espèces, carnet…) n'est ouverte par-dessus le jardin. */
 function whenFree(fn) {
-	if (!document.querySelector('.panel.open') && $('#coach').hidden && !placing) return fn();
+	if (!document.querySelector('.panel.open') && $('#coach').hidden && !placing && !$('#app').classList.contains('booting')) return fn();
 	setTimeout(() => whenFree(fn), 1000);
 }
 
@@ -773,7 +773,7 @@ function focusJar() {
 
 /** Montre la prochaine explication utile, quand rien d'autre n'est ouvert. */
 function nextTip() {
-	if (state.intro || tipShown || Date.now() - lastTipEnd < 20000 || placing || !$('#modal').hidden || !$('#coach').hidden || document.querySelector('.panel.open') || session) return;
+	if (state.intro || $('#app').classList.contains('booting') || tipShown || Date.now() - lastTipEnd < 20000 || placing || !$('#modal').hidden || !$('#coach').hidden || document.querySelector('.panel.open') || session) return;
 	const done = (state.tips ??= {});
 	const tip = TIPS.find(t => !done[t.id] && t.when());
 	if (!tip) return;
@@ -2590,12 +2590,24 @@ function coach(step = 0) {
 
 // ─── Démarrage ────────────────────────────────────────────────
 
-// Le logo pendant 1 s, puis un fondu doux vers le jardin.
+// Au lancement : une nouvelle partie n'a pas de logo ici (l'introduction le présente). Sinon, le papier s'efface sur
+// le jardin du joueur, le logo détouré et sa phrase apparaissent par-dessus, puis s'en vont ; l'interface n'arrive
+// qu'après, jamais en même temps que le logo.
 const splash = $('#splash');
-setTimeout(() => {
+if (state.intro) {
 	splash.classList.add('out');
 	setTimeout(() => splash.remove(), 1300);
-}, 1000);
+} else {
+	$('#app').classList.add('booting');
+	const logo = document.createElement('div');
+	logo.className = 'intro-logo';
+	logo.innerHTML = '<img src="assets/logo-detoure.png" alt="Evolia"><p>À chacun de tes pas, la nature s’éveille.</p>';
+	$('#app').append(logo);
+	setTimeout(() => { splash.classList.add('out'); logo.classList.add('in'); }, 300);
+	setTimeout(() => splash.remove(), 1600);
+	setTimeout(() => logo.classList.remove('in'), 3400);
+	setTimeout(() => { logo.remove(); $('#app').classList.remove('booting'); }, 4900);
+}
 
 // Glisser dans le jardin efface l'interface pour le voir en entier ; relâcher la fait revenir.
 // Le petit œil garde l'interface effacée tant qu'on ne le touche pas de nouveau : on explore le jardin seul.
