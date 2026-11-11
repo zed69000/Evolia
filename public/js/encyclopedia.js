@@ -225,7 +225,7 @@ export class Encyclopedia {
 		}
 		const date = known ? new Date(this.state.species[id]).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' }) : '';
 		this.panel.innerHTML = `
-			<div class="panel-head"><button class="close" data-back aria-label="Retour">‹</button><button class="close" data-close-species aria-label="Fermer">×</button></div>
+			<div class="panel-head"><button class="close" data-back aria-label="Retour">‹</button></div>
 			<div class="sp-detail">
 				<div class="sp-hero" id="sp-hero"></div>
 				${known ? '<p class="sp-credit" id="sp-credit" hidden></p>' : ''}
@@ -238,7 +238,8 @@ export class Encyclopedia {
 					<h3>Le savais-tu ?</h3><p>${esc(s.fact)}</p>
 					<p class="sp-date">Découverte le ${date}</p>
 					<button class="btn primary sp-close-bottom" data-close-species>Fermer</button>`
-				: `<p class="latin">Pas encore découverte</p><div class="sp-help"><h3>Pour la faire venir</h3><p>${esc(s.hint)}</p></div>`}
+				: `<p class="latin">Pas encore découverte</p><div class="sp-help"><h3>Pour la faire venir</h3><p>${esc(s.hint)}</p></div>
+					<button class="btn primary sp-close-bottom" data-close-species>Fermer</button>`}
 			</div>`;
 		const hero = this.panel.querySelector('#sp-hero');
 		hero.appendChild(thumbCopy(s, 170, !known));
