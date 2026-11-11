@@ -3,7 +3,18 @@
 Chaque version, la plus récente en haut. Le site (evolia.sebastienalzamora.workers.dev) est toujours à jour ;
 le Play Store (tests internes) reçoit les versions indiquées « Play ».
 
-## Prochaine version — 11 novembre 2026
+## 0.7.48 — 11 novembre 2026
+La refonte de la progression, d'après le message vocal de Seb (détail : docs/refonte-progression.md).
+- **Un nouveau départ** : une partie neuve s'ouvre sur une minuscule motte de terre. Un oiseau y laisse tomber une graine, quelques pas la font fleurir, une abeille vient la butiner, puis le logo apparaît : « Chaque pas fait fleurir. »
+- **Un tutoriel qui se fait** : une consigne à la fois. On ouvre les espèces, on lit la fiche de l'abeille (100 nectar, la première monnaie), le nectar arrive dans la bourse, on pose sa première ruche, on voit l'icône d'activité passer à la marche. Un bouton permet de passer l'introduction.
+- **Un bandeau discret** : en haut, seulement une icône d'activité (au repos, marche, course, vélo), cerclée de l'avancée du jour, et la bourse. Le détail (kilomètres, objectif, milieux) s'ouvre en touchant l'icône. L'interface se dévoile au fil du jeu (Aménager, carnet, défis du jour, écosystème).
+- **La ruche dès le départ** (100 nectar) : 6 abeilles au plus, autant que les fleurs en attirent ; leur miel va au panier et se troque contre du nectar. La part de miel prise est réglable.
+- **Des espèces au compte-gouttes** : 6 le premier jour, 4, 3, puis 2 par jour. La cabane et le fermier arrivent quand la nature est installée (8 nouvelles espèces, 3 arbustes, un arbre). L'objectif du jour rapporte du nectar.
+- **Un terrain qu'on agrandit** : il commence petit et s'agrandit en nectar, un cran à la fois, de plus en plus cher. Une fois plein, on explore une parcelle voisine de son choix (« Terre inconnue ») en nectar et en kilomètres. Chaque partie a son propre monde (mare, forêts, montagne, côte), qu'on découvre en l'explorant.
+- **La ferme produit** : œufs, légumes, fruits et miel vont dans le panier et se troquent contre du nectar. Le compost booste le potager, et on peut soigner un arbre fruitier pour qu'il donne plus.
+- Les parties déjà commencées gardent leur jardin entier et toute leur interface.
+
+## 0.7.48 (suite) — 11 novembre 2026
 Les bêtes regardent enfin là où elles vont (retour de Seb : papillons et oiseaux qui volaient « en crabe ») :
 - **Le corps suit la vitesse** : les bêtes vues de dessus (papillons, papillons de nuit, libellules, syrphes, bombyles, chauves-souris, hirondelles, rapaces, goélands, coléoptères, coccinelles, punaises, lézards, serpents, araignées) tournent vers leur trajectoire avec un léger retard, et leurs ailes se resserrent dans les virages. Le papillon avait la tête toujours tournée vers le haut de l'écran.
 - **De profil** (abeilles, oiseaux, mésanges, sauterelles) : le nez monte ou pique selon qu'elles montent ou descendent, et un demi-tour prend quelques images au lieu de retourner le dessin d'un coup.
