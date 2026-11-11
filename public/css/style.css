@@ -948,7 +948,9 @@ body:has(.panel.open) #debug { display: none; }
 #app:has(.panel.open) .intro-cap.card { background: rgba(31, 107, 71, .9); border-color: transparent; box-shadow: 0 6px 22px rgba(20, 50, 30, .35); }
 #app:has(.panel.open) .intro-cap p, #app:has(.panel.open) .intro-cap p b { color: #FDF7E7; }
 /* Pendant le tutoriel, une page ouverte s'arrête au-dessus de la consigne, qui se pose en bas, sous la page. */
-#app.intro:has(.intro-cap.in:not([hidden])) .panel { bottom: var(--cap-h, 150px); box-shadow: 0 6px 16px rgba(40, 60, 30, .12); }
+#app.intro:has(.intro-cap.in:not(.placed):not([hidden])) .panel { bottom: var(--cap-h, 150px); box-shadow: 0 6px 16px rgba(40, 60, 30, .12); }
+/* Posée à côté de ce qu'elle montre (bouton, carte d'un menu). */
+#app .intro-cap.placed, #app .intro-cap.placed.in { bottom: auto !important; transform: none !important; transition: opacity .5s ease, left .3s ease, top .3s ease; }
 /* ─── Les bulles d'aide (tutoriel et astuces) : toujours le même vert, texte blanc, en forme de bulle ─── */
 .intro-cap.card, #app:has(.panel.open) .intro-cap.card, .tip.card { background: rgba(31, 107, 71, .93); border-color: transparent; border-radius: 22px; box-shadow: 0 6px 22px rgba(20, 50, 30, .3); -webkit-backdrop-filter: none; backdrop-filter: none; }
 .intro-cap p, .intro-cap p b, .tip p, .tip b { color: #FDF7E7; }

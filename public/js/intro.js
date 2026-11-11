@@ -48,19 +48,35 @@ export function startIntro(c) {
 	// La pointe de la bulle montre où regarder : un bouton, la bourse, ou le jardin au milieu de l'écran.
 	let aim = null;
 	const updateTail = () => {
-		if (cap.hidden || !aim) { cap.classList.add('no-tail'); return; }
-		const r = cap.getBoundingClientRect();
-		let tx, ty;
-		if (aim === 'center') { const a = app.getBoundingClientRect(); tx = a.left + a.width / 2; ty = a.top + a.height * 0.42; }
-		else {
-			const el = $(aim);
-			if (!el || el.offsetParent === null) { cap.classList.add('no-tail'); return; }
-			const e = el.getBoundingClientRect();
-			tx = e.left + e.width / 2; ty = e.top + e.height / 2;
+		const free = () => {
+			cap.classList.remove('placed');
+			cap.style.left = cap.style.top = '';
+		};
+		if (cap.hidden || !aim) { free(); cap.classList.add('no-tail'); return; }
+		const A = app.getBoundingClientRect();
+		if (aim === 'center') {
+			// Regarder le jardin : la bulle reste en bas, sa pointe vers le milieu de l'écran.
+			free();
+			const r = cap.getBoundingClientRect();
+			cap.classList.remove('no-tail');
+			cap.classList.add('tail-up');
+			cap.style.setProperty('--tail-x', `${Math.max(26, Math.min(r.width - 26, A.left + A.width / 2 - r.left))}px`);
+			return;
 		}
+		const el = $(aim);
+		if (!el || el.offsetParent === null) { free(); cap.classList.add('no-tail'); return; }
+		// Un bouton, une carte d'un menu : la bulle se pose juste à côté (dessous, ou dessus s'il n'y a pas la place),
+		// sa pointe sur lui.
+		const e = el.getBoundingClientRect(), w = cap.offsetWidth, h = cap.offsetHeight;
+		let top = e.bottom - A.top + 14, below = true;
+		if (top + h > A.height - 8) { top = e.top - A.top - h - 14; below = false; }
+		const left = Math.max(10, Math.min(A.width - w - 10, e.left - A.left + e.width / 2 - w / 2));
+		cap.classList.add('placed');
+		cap.style.left = `${left}px`;
+		cap.style.top = `${Math.max(8, top)}px`;
 		cap.classList.remove('no-tail');
-		cap.classList.toggle('tail-up', ty < r.top);
-		cap.style.setProperty('--tail-x', `${Math.max(26, Math.min(r.width - 26, tx - r.left))}px`);
+		cap.classList.toggle('tail-up', below);
+		cap.style.setProperty('--tail-x', `${Math.max(26, Math.min(w - 26, e.left - A.left + e.width / 2 - left))}px`);
 	};
 	const tailTimer = setInterval(updateTail, 200);
 	const say = (html, buttons = [], target = null) => new Promise(res => {
