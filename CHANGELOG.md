@@ -3,6 +3,13 @@
 Chaque version, la plus récente en haut. Le site (evolia.sebastienalzamora.workers.dev) est toujours à jour ;
 le Play Store (tests internes) reçoit les versions indiquées « Play ».
 
+## Prochaine version — 11 novembre 2026
+Les bêtes regardent enfin là où elles vont (retour de Seb : papillons et oiseaux qui volaient « en crabe ») :
+- **Le corps suit la vitesse** : les bêtes vues de dessus (papillons, papillons de nuit, libellules, syrphes, bombyles, chauves-souris, hirondelles, rapaces, goélands, coléoptères, coccinelles, punaises, lézards, serpents, araignées) tournent vers leur trajectoire avec un léger retard, et leurs ailes se resserrent dans les virages. Le papillon avait la tête toujours tournée vers le haut de l'écran.
+- **De profil** (abeilles, oiseaux, mésanges, sauterelles) : le nez monte ou pique selon qu'elles montent ou descendent, et un demi-tour prend quelques images au lieu de retourner le dessin d'un coup.
+- **Du vol avec de l'élan** : les bêtes tournent en courbe au lieu de virages à angle droit, freinent en arrivant sur une fleur ou une branche, et chacune a sa propre allure (± 15 %).
+- **Des intentions lisibles** : l'abeille chargée rentre droit et plus vite à la ruche ; un papillon posé s'envole vers le haut quand le jardinier, le chien ou le chat passe tout près ; les oiseaux au sol s'envolent vers un arbre, et leurs voisins suivent en cascade, chacun avec son temps de réaction.
+
 ## 0.7.47 — 8 novembre 2026 · Play
 Bug remonté par les testeurs (catalogue, n° 11) :
 - Le panneau de débogage recouvrait encore la page Options (il passait seulement sous les fenêtres) : il se masque maintenant tant qu'une page est ouverte, et revient au jardin.
