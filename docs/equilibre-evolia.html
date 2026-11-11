@@ -127,7 +127,7 @@ td .chip { display: inline-block; font-size: 12px; font-weight: 700; padding: 1p
         <h2 id="c4">Les règles du modèle</h2>
         <p><b>Les maisons des animaux</b>, de la moins chère à la plus chère : massif mellifère (50 nectar, 0,6 nectar par heure d'élan), ruche (300, 3), hôtel à insectes (1 200, 14), nichoir (6 000, 60), mare (30 000, 280), haie vive (150 000, 1 300). Chacune n'apparaît qu'une fois la précédente posée, et à partir d'un certain nombre de kilomètres parcourus (1, 4, 8, 15, 25 km).</p>
         <p><b>Améliorations</b> : posséder 1, 5, 25 puis 50 exemplaires d'une maison débloque une amélioration qui double sa production (10, 50, 500 puis 50 000 fois son prix de base).</p>
-        <p><b>Les pas font pousser les plantes</b> : environ 1,5 fleur, 0,3 arbuste et 0,06 arbre par km, dans la limite de la surface du terrain. <b>Sans plantes, pas de biodiversité</b> : les espèces ne viennent qu'avec elles (au plus 6, 4, 3 puis 2 par jour), et chaque espèce découverte augmente toute la production. Les maisons ne produisent pleinement que s'il y a assez de plantes autour (deux par maison). <b>Papillon doré</b> : un par jour de sortie ; le toucher donne 7 fois la production pendant une minute, plus 20 nectar.</p>
+        <p><b>Les pas font pousser les plantes</b> : environ 1,5 fleur, 0,3 arbuste et 0,06 arbre par km, dans la limite de la surface du terrain. <b>D'où viennent les espèces</b> (au plus 6, 4, 3 puis 2 par jour) : beaucoup avec les plantes (une pour deux fleurs, deux par arbuste, quatre par arbre, jusqu'à 140), d'autres avec les maisons et abris (8 par sorte de maison : hérisson, lézard, mésange…), avec les milieux explorés (10 par nouvelle parcelle : grenouilles, libellules…), et les prédateurs avec leurs proies (une espèce de plus pour huit). Chaque espèce découverte augmente toute la production. Les maisons ne produisent pleinement que s'il y a assez de plantes autour (deux par maison). <b>Papillon doré</b> : un par jour de sortie ; le toucher donne 7 fois la production pendant une minute, plus 20 nectar.</p>
         <p><b>Terrain</b> : 4 crans par parcelle (60 nectar, +35 % à chaque cran). <b>Parcelles</b> : 500 nectar, puis × 1,7, et des kilomètres d'exploration (1,5 km, puis × 1,5). Le joueur achète toujours le terrain dès qu'il peut, puis ce qui rapporte le plus pour son prix. Le modèle ne compte ni la ferme, ni les fruits, ni les défis du jour.</p>
       </section>
     </main>
@@ -155,8 +155,14 @@ function simulate(p) {
     flowers = Math.min(40 * area, flowers + 1.5 * p.km);
     bushes = Math.min(6 * area, bushes + 0.3 * p.km);
     trees = Math.min(2 * area, trees + 0.06 * p.km);
-    // Les espèces viennent avec les plantes : sans elles, pas de biodiversité. Au plus 6, 4, 3 puis 2 par jour.
-    const open = Math.min(319, 2 + Math.floor(flowers / 2) + Math.floor(bushes * 2) + Math.floor(trees * 4));
+    // D'où viennent les espèces (au plus 6, 4, 3 puis 2 par jour) : les plantes (pollinisateurs, herbivores…),
+    // les maisons et abris (hérisson, lézard, mésange…), les milieux explorés (marais, forêt…) et la chaîne
+    // alimentaire (les prédateurs suivent leurs proies).
+    const byPlants = Math.min(140, Math.floor(flowers / 2) + Math.floor(bushes * 2) + Math.floor(trees * 4));
+    const byHomes = own.filter(n => n > 0).length * 8;
+    const byPlaces = (cells - 1) * 10;
+    const prey = 2 + byPlants + byHomes + byPlaces;
+    const open = Math.min(319, prey + Math.floor(prey / 8));
     const found = Math.max(0, Math.min([6, 4, 3][d - 1] ?? 2, open - species));
     species += found;
     const bio = 1 + p.bio * species / 100;
