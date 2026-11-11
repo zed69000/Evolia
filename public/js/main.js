@@ -2018,11 +2018,13 @@ function renderOptions() {
 		<p class="empty">Efface ton jardin, tes espèces et tes balades sur ce téléphone, pour repartir d'une prairie neuve.</p>
 		<button class="btn ghost wide danger" id="opt-reset">Recommencer à zéro</button>
 		</details>
-		${optGroup('tech', 'Technique', 'Affichage, batterie, débogage, mode test')}
+		${optGroup('tech', 'Technique', 'Affichage, batterie')}
 		<h3>Effet miniature</h3>
 		<label class="switch"><input type="checkbox" id="opt-fx" ${fxOn() ? 'checked' : ''}><i></i><span>Haut et bas de l'écran un peu flous, bords adoucis : le jardin comme une maquette</span></label>
 		<h3>Économie d'énergie</h3>
 		<label class="switch"><input type="checkbox" id="opt-eco" ${state.eco30 ? 'checked' : ''}><i></i><span>30 images par seconde : le téléphone chauffe moins, la batterie dure plus</span></label>
+		</details>
+		${optGroup('dev', 'Outils du développeur', 'Débogage, mode test')}
 		<h3>Débogage</h3>
 		<label class="switch"><input type="checkbox" id="opt-debug" ${debugOn() ? 'checked' : ''}><i></i><span>Afficher en jeu ce que voit le suivi (GPS, pas, balade, relecture) et le journal des événements</span></label>
 		<h3>Mode test</h3>
@@ -2041,7 +2043,6 @@ function renderOptions() {
 			<button id="dev-km10">+10 km (ouvrir des milieux)</button>
 			<button id="dev-nectar">+500 nectar</button>
 			<button id="dev-day">Nouveau jour (cadeau et défis)</button>
-			<button id="opt-bug">Signaler un bug ou une idée</button>
 			<button id="dev-reset" class="danger">Effacer le jardin</button></div>` : ''}
 		</details>`;
 }
@@ -2082,7 +2083,6 @@ $('#options').addEventListener('click', async e => {
 	if (id === 'opt-harvest') { closeOptions(); offerHarvest(true); }
 	if (id === 'opt-harvest-now') { closeOptions(); maybeHarvest(); }
 	if (id === 'opt-coach') { closeOptions(); coach(0); }
-	if (id === 'opt-bug') { closeOptions(); window.BugReport?.open(); }
 	if (id === 'opt-backup') showBackup();
 	// Les sauvegardes : changer, dupliquer, commencer, renommer, effacer.
 	const sl = e.target.closest('[data-slot]');
