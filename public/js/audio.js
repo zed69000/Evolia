@@ -71,7 +71,7 @@ export class Soundscape {
 		const t = this.ctx.currentTime;
 		this.master.gain.setTargetAtTime(this.settings.on ? this.settings.vol * 1.3 : 0, t, 0.3);
 		// Pendant une sortie suivie en direct, la musique se tait (sauf si on la veut aussi), la nature reste.
-		const music = this.musicSettings.on && (!this.walking || this.musicSettings.walk);
+		const music = this.musicSettings.on && (!this.walking || this.musicSettings.walk || this.mood === 'joy');
 		this.musicBus.gain.setTargetAtTime(music ? this.musicSettings.vol * 0.7 : 0, t, 0.8);
 		if (!this.anyOn) this.ctx.suspend();
 	}
@@ -515,6 +515,7 @@ export class Soundscape {
 	 */
 	music(now, night) {
 		if (!this.musicSettings.on) return;
+		if (this.mood === 'joy') return this.joy(now);
 		const slow = night > 0.5 ? 1.5 : 1;
 		if (now >= this.nextPad) {
 			this.pad(night > 0.5);
@@ -529,6 +530,72 @@ export class Soundscape {
 			this.bell(SCALE[this.deg], 0.5 + Math.random() * 0.5);
 			this.phrase--;
 			this.nextNote = now + (this.phrase > 0 ? 0.9 + Math.random() * 1.6 : 9 + Math.random() * 14) * slow;
+		}
+	}
+
+	/**
+	 * Le thème de l'introduction, plein d'élan : une suite d'accords lumineuse (ré, la, si mineur, sol), un arpège
+	 * pincé en croches à 96 battements par minute, une basse à chaque mesure et, de temps en temps, une note de mélodie
+	 * qui monte dans la gamme. Les notes sont posées un peu à l'avance, à l'heure exacte du son.
+	 */
+	setMood(mood) {
+		if (this.mood === mood) return;
+		this.mood = mood;
+		this.nextBeat = 0;
+	}
+
+	joy(now) {
+		const EIGHTH = 60 / 96 / 2, ROOT = 146.83, CHORDS = [[0, 4, 7], [7, 11, 14], [9, 12, 16], [5, 9, 12]];
+		if (!this.nextBeat || this.nextBeat < now) { this.nextBeat = now + 0.15; this.beatN = 0; }
+		while (this.nextBeat < now + 0.7) {
+			const n = this.beatN++, t = this.nextBeat, step = n % 8, chord = CHORDS[Math.floor(n / 8) % 4];
+			const notes = [...chord, chord[0] + 12], semi = notes[[0, 1, 2, 3, 2, 1, 2, 3][step]];
+			this.pluck(ROOT * 2 * Math.pow(2, semi / 12), t, step % 2 ? 0.55 : 0.85, 0.045);
+			if (step === 0) {
+				this.pluck(ROOT / 2 * Math.pow(2, chord[0] / 12), t, 1, 0.09, 1.8, 'sine');
+				this.chordPad(chord, ROOT * 2, t, EIGHTH * 8);
+			}
+			// Une note de mélodie sur les temps forts, dans l'accord, une octave au-dessus.
+			if ((step === 0 || step === 3 || step === 6) && Math.random() < 0.5) {
+				this.pluck(ROOT * 4 * Math.pow(2, notes[Math.floor(Math.random() * notes.length)] / 12), t, 0.7, 0.03, 1.2, 'sine');
+			}
+			this.nextBeat += EIGHTH;
+		}
+	}
+
+	/** Une note pincée, posée à l'instant `t` (temps de l'audio). */
+	pluck(f, t, vel, amp, dur = 0.5, type = 'triangle') {
+		const ctx = this.ctx, o = ctx.createOscillator(), e = ctx.createGain(), lp = ctx.createBiquadFilter();
+		o.type = type;
+		o.frequency.value = f;
+		lp.type = 'lowpass'; lp.frequency.value = 2600;
+		e.gain.setValueAtTime(0, t);
+		e.gain.linearRampToValueAtTime(amp * vel, t + 0.006);
+		e.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+		o.connect(e).connect(lp);
+		lp.connect(this.musicBus);
+		lp.connect(this.musicVerb);
+		o.start(t);
+		o.stop(t + dur + 0.05);
+	}
+
+	/** L'accord de la mesure, tenu doucement derrière l'arpège. */
+	chordPad(chord, base, t, dur) {
+		const ctx = this.ctx, lp = ctx.createBiquadFilter();
+		lp.type = 'lowpass'; lp.frequency.value = 1100;
+		lp.connect(this.musicBus);
+		lp.connect(this.musicVerb);
+		for (const semi of chord) {
+			const o = ctx.createOscillator(), e = ctx.createGain();
+			o.type = 'sine';
+			o.frequency.value = base * Math.pow(2, semi / 12);
+			e.gain.setValueAtTime(0, t);
+			e.gain.linearRampToValueAtTime(0.014, t + 0.3);
+			e.gain.setValueAtTime(0.014, t + dur - 0.4);
+			e.gain.linearRampToValueAtTime(0, t + dur);
+			o.connect(e).connect(lp);
+			o.start(t);
+			o.stop(t + dur + 0.05);
 		}
 	}
 

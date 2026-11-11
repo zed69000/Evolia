@@ -32,6 +32,8 @@ export function startIntro(c) {
 	const place = garden.place;
 	app.classList.add('intro');
 	let over = false;
+	// Une musique pleine d'élan pour l'introduction ; la musique calme du jardin revient à la fin.
+	c.sound.setMood?.('joy');
 	// La nuit, les abeilles dorment : le temps de l'introduction, on la joue en plein jour.
 	const dayForced = garden.hourOverride == null && garden.night() > 0.2;
 	if (dayForced) garden.hourOverride = 11;
@@ -79,8 +81,24 @@ export function startIntro(c) {
 		cap.style.setProperty('--tail-x', `${Math.max(26, Math.min(w - 26, e.left - A.left + e.width / 2 - left))}px`);
 	};
 	const tailTimer = setInterval(updateTail, 200);
-	const say = (html, buttons = [], target = null) => new Promise(res => {
+	// Pas à pas : pendant l'introduction, on ne peut toucher que ce que la bulle montre (et ses boutons) ; tout le
+	// reste est bloqué jusqu'à son tour, pour qu'aucun geste ne casse le tutoriel.
+	let allow = null;
+	const guard = e => {
+		if (over || !(e.target instanceof Element)) return;
+		const ok = ['.intro-cap'];
+		if (allow) ok.push(allow);
+		if (app.classList.contains('placing')) ok.push('#placing', '#garden');
+		if (!$('#modal').hidden) ok.push('#modal');
+		if (e.target.closest(ok.join(','))) return;
+		e.preventDefault();
+		e.stopImmediatePropagation();
+	};
+	const GUARDED = ['pointerdown', 'pointerup', 'click', 'touchstart', 'touchend', 'dblclick', 'wheel', 'contextmenu'];
+	for (const ev of GUARDED) document.addEventListener(ev, guard, { capture: true, passive: false });
+	const say = (html, buttons = [], target = null, allowed) => new Promise(res => {
 		aim = target;
+		allow = allowed !== undefined ? allowed : target && target !== 'center' ? target : null;
 		cap.innerHTML = `<p>${html}</p>${buttons.length ? `<div class="intro-actions">${buttons.map((b, i) => `<button class="btn ${i ? 'ghost' : 'primary'} small" data-i="${i}">${b.label}</button>`).join('')}</div>` : ''}`;
 		cap.hidden = false;
 		cap.classList.remove('in');
@@ -288,7 +306,7 @@ export function startIntro(c) {
 		$('#hud-steps').classList.add('ui-new');
 		c.sound.chime(2);
 		await wait(700);
-		await say('Voici ta <b>bourse</b> : le nectar que tu gagnes s’y range.', [{ label: 'Compris' }], '#hud-steps');
+		await say('Voici ta <b>bourse</b> : le nectar que tu gagnes s’y range.', [{ label: 'Compris' }], '#hud-steps', null);
 	}
 
 	/**
@@ -394,7 +412,7 @@ export function startIntro(c) {
 		const act = $('#hud-act');
 		act.classList.add('tip-glow');
 		say('Ici, ton <b>activité</b> : au repos.<br>Fais quelques pas : l’icône passe à la marche.',
-			c.DEV ? [{ label: 'Simuler une marche', once: true, stay: true, run: () => c.simWalk() }] : [], '#hud-act');
+			c.DEV ? [{ label: 'Simuler une marche', once: true, stay: true, run: () => c.simWalk() }] : [], '#hud-act', null);
 		await until(() => over || c.moving());
 		if (over) throw new Skip();
 		act.classList.remove('tip-glow');
@@ -406,7 +424,9 @@ export function startIntro(c) {
 		if (over) return;
 		over = true;
 		garden.introFx = null;
+		c.sound.setMood?.(null);
 		clearInterval(tailTimer);
+		for (const ev of GUARDED) document.removeEventListener(ev, guard, { capture: true });
 		(place.cellSize ??= {})[0] = Math.max(place.cellSize[0] ?? 0.4, 0.4);
 		// Passée trop tôt : on donne quand même la fleur, l'abeille et de quoi s'offrir la ruche.
 		if (skipped) {
