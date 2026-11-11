@@ -928,7 +928,7 @@ const growable = () => garden.openCells().find(i => garden.cellScale(i) < 1);
 const paid = price => { state.nectar -= price; here().buys = (here().buys ?? 0) + 1; };
 
 /** Ce qu'on lit sur une parcelle ouverte encore petite. */
-garden.growInfo = i => `${Math.round(garden.cellScale(i) * 100)} % · agrandir ${fmtInt(growPrice())} nectar`;
+garden.growInfo = i => `${Math.round(garden.cellScale(i) * 100)} % · agrandir : ${fmtInt(growPrice())} nectar`;
 
 /** Toucher une parcelle ouverte encore petite : l'agrandir d'un cran. */
 function offerGrow(i) {
@@ -954,23 +954,23 @@ function offerGrow(i) {
 
 /** Ce qu'on lit sur une parcelle fermée : son milieu, et ce qu'il faut pour l'avoir. */
 garden.lockedInfo = i => {
+	// Rien n'est dévoilé à l'avance : ni le milieu qui attend, ni les parcelles qu'on ne peut pas encore explorer.
 	const p = PLACE_BY_ID[garden.worldBiomeAt(i)], price = parcelPrice(), nectar = state.nectar ?? 0, km = parcelKm();
-	if (!placeOpen(state, p)) return { title: p.name, sub: `dès ${p.km} km et ${p.found} espèces`, hint: `dès ${p.km} km` };
-	if (growable() != null) return { title: p.name, sub: 'agrandis d’abord ton terrain', hint: 'plus tard' };
+	if (!placeOpen(state, p) || growable() != null) return null;
 	const ok = nectar >= price && kmFree() >= km;
-	return { title: p.name, sub: `${fmtInt(price)} nectar · ${kmTxt(km)}${ok ? ' · touche pour l’explorer' : ''}`, hint: `${fmtInt(price)} nectar · ${kmTxt(km)}` };
+	return { title: 'Terre inconnue', sub: `${fmtInt(price)} nectar · ${kmTxt(km)}${ok ? ' · touche pour l’explorer' : ''}`, hint: `${fmtInt(price)} nectar · ${kmTxt(km)}` };
 };
 
 /** Toucher une parcelle voisine : ce qu'elle est, et l'acheter si on peut. */
 function offerParcel(i) {
 	const biome = garden.worldBiomeAt(i), p = PLACE_BY_ID[biome], price = parcelPrice();
-	if (!placeOpen(state, p)) return toast(`${p.name} : ce milieu s’ouvre dès ${p.km} km et ${p.found} espèces découvertes`, p.color);
+	if (!placeOpen(state, p)) return toast('Ce coin-là n’est pas encore accessible : continue de marcher et de découvrir des espèces', '#9A7448');
 	const g = growable();
 	if (g != null) return offerGrow(g);
 	const nectar = state.nectar ?? 0, km = parcelKm(), free = kmFree();
 	const missing = [nectar < price && `${fmtInt(price - nectar)} nectar`, free < km && kmTxt(km - free)].filter(Boolean);
 	showModal(`<h2>Explorer une nouvelle parcelle</h2>
-		<p>Cette parcelle est ${PLACE_IN[biome] ?? `en ${p.name.toLowerCase()}`} : la nature s’y installera avec ses propres plantes et ses animaux.</p>
+		<p>Personne ne sait ce qu’il y a là-bas : encore de la prairie, une mare, une forêt ? Tu le découvriras en l’explorant.</p>
 		<p class="item-tip">Il faut du nectar et des kilomètres d’exploration (tu en as ${fmt(Math.floor(free * 10) / 10, 1)} km en réserve). Chaque parcelle coûte plus que la précédente.</p>
 		<div class="chips"><span class="chip gold">${fmtInt(price)} nectar</span><span class="chip">${kmTxt(km)} d’exploration</span></div>
 		<button class="btn primary" id="btn-parcel" ${missing.length ? 'disabled' : ''}>${missing.length ? `Il manque ${missing.join(' et ')}` : 'Explorer cette parcelle'}</button>
@@ -1216,6 +1216,8 @@ function renderDaily() {
 
 /** Le panneau du jour ; `gift` : premier passage de la journée, avec le cadeau à ouvrir. */
 function showDaily(gift = false) {
+	// Les défis du jour ne s'ouvrent seuls qu'une fois dévoilés (voir revealUi).
+	if (gift && !state.ui?.['#daily']) return;
 	const d = state.daily;
 	const g = giftFor(state);
 	const ready = giftReady(state);

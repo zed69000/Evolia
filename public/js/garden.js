@@ -239,8 +239,13 @@ export class Garden {
 		if (t) return t;
 		const ci = LAYOUT.findIndex(([x, y]) => x === gx && y === gy);
 		if (ci >= 0 && ci < n) t = { biome: this.biomeOf(ci), rank: rankOf(this.place, ci) };
-		// Au-delà de la clôture, le paysage du monde : on voit la mare, la forêt ou la montagne qui attendent.
-		else { const b = worldBiome(this.place.world, gx, gy); t = { biome: b === 'sea' ? 'littoral' : b, rank: -1 }; }
+		// Au-delà de la clôture, rien ne dit ce qui attend : la campagne du milieu ouvert le plus proche. On découvre
+		// la mare ou la forêt en explorant la parcelle.
+		else {
+			let best = 0, bd = Infinity;
+			for (let j = 0; j < n; j++) { const [cx, cy] = cellPos(j), d = Math.hypot(cx - gx, (cy - gy) * 1.2); if (d < bd) { bd = d; best = j; } }
+			t = { biome: this.biomeOf(best), rank: -1 };
+		}
 		this.tileMemo.map.set(k, t);
 		return t;
 	}
@@ -715,8 +720,10 @@ export class Garden {
 		m.clearRect(0, 0, cw, ch);
 		const S = this.scale / 2;
 		if (this.glyph) {
-			m.fillStyle = 'rgba(232,226,204,0.72)';
+			// Vu de loin : la terre inconnue, un papier crème uni, avec quelques lavis très doux.
+			m.fillStyle = 'rgb(241,236,220)';
 			m.fillRect(0, 0, cw, ch);
+			this.fogLayer(m, cw, ch, S, 0.35, 1, 0, 0);
 		} else {
 			// Le brouillard de la lisière (voile qui s'épaissit, nuages du bord), accroché au monde ; au-delà, dense.
 			// Puis des bancs de brume qui dérivent lentement par-dessus.
@@ -742,14 +749,9 @@ export class Garden {
 			m.fillRect(ox, -1e5, PARCEL_W, 1e5 + 190);
 			m.fillStyle = prev;
 		}
-		m.globalAlpha = 0.55;
-		if (this.glyph) for (const i of this.lockedCells()) { m.beginPath(); this.tracePath(m, this.blob(i)); m.fill(); }
-		else { const rim = this.fogRim(); m.drawImage(rim.next, rim.x0, rim.y0, rim.x1 - rim.x0, rim.y1 - rim.y0); }
-		m.globalAlpha = 1;
 		if (this.glyph) {
-			m.beginPath();
-			for (const i of this.openCells()) this.tracePath(m, this.blob(i));
-			m.fill();
+			const mk = this.gardenMask();
+			m.drawImage(mk.canvas, mk.x0, mk.y0, mk.canvas.width / mk.k, mk.canvas.height / mk.k);
 		} else {
 			// Tout l'intérieur du jardin, poches entre les clairières comprises, au bord déjà fondu.
 			const mk = this.gardenMask();
@@ -868,8 +870,6 @@ export class Garden {
 					const px = ax + ((bx - ax) * d) / L, py = ay + ((by - ay) * d) / L;
 					if (this.inOpen(px + nx * 40, py + ny * 40)) { nx = -nx; ny = -ny; }
 					if (r() < 0.15) continue;
-					// Pas de nuage sur la prochaine parcelle, à demi dégagée : il y flotterait comme une boule de coton.
-					if (this.lockedCells().some(c => this.inBlob(this.blob(c), px + nx * 60, py + ny * 60, -80))) continue;
 					const n = r() < 0.3 ? 2 + Math.floor(r() * 2) : 1;
 					for (let q = 0; q < n; q++) {
 						// Le centre reste dehors ; le bord vient mordre un peu sur la clairière.
@@ -3676,7 +3676,8 @@ export class Garden {
 
 		// Lumière de l'heure, de la saison et du temps
 		ctx.setTransform(1, 0, 0, 1, 0, 0);
-		if (amb.a > 0.001) {
+		// Vu de loin, c'est une carte : ni l'heure ni le temps ne l'assombrissent.
+		if (!glyph && amb.a > 0.001) {
 			ctx.globalCompositeOperation = 'multiply';
 			ctx.fillStyle = rgba(amb.color, amb.a);
 			ctx.fillRect(0, 0, cw, ch);
@@ -3690,7 +3691,7 @@ export class Garden {
 		if (!glyph) this.drawSunlight(ctx, cw, ch, S, hour, day, wk);
 		ctx.globalCompositeOperation = 'multiply';
 		const grey = { overcast: 0.22, rain: 0.28, drizzle: 0.18, storm: 0.38, snow: 0.12, clouds: 0.08 }[wk] ?? 0;
-		if (grey) {
+		if (grey && !glyph) {
 			ctx.fillStyle = `rgba(130,140,152,${grey})`;
 			ctx.fillRect(0, 0, cw, ch);
 		}
@@ -3800,7 +3801,7 @@ export class Garden {
 		ctx.fillRect(0, 0, cw, ch);
 		ctx.drawImage(this.vignette, 0, 0);
 
-		if (glyph || this.lockedCells().length) this.drawLabels(ctx, glyph, S, tx, ty);
+		if (glyph || this.lockedCells().some(c => this.lockedInfo?.(c))) this.drawLabels(ctx, glyph, S, tx, ty);
 		// Les pastilles passent par-dessus tout, étiquettes des parcelles comprises.
 		if (this.cam.z < POI_Z && !this.ghost) this.drawPOI(ctx, S, tx, ty);
 		else this.poiHits = null;
@@ -3848,7 +3849,9 @@ export class Garden {
 		for (const i of cells) {
 			const [ox, oy] = cellOrigin(i);
 			const isOpen = i < cellsOpen(place);
-			const info = isOpen ? null : this.lockedInfo?.(i) ?? { title: 'Nouvelle parcelle', sub: '', hint: '' };
+			const info = isOpen ? null : this.lockedInfo?.(i);
+			// Une parcelle qu'on ne peut pas encore explorer ne dit rien : on ne dévoile pas la suite.
+			if (!isOpen && !info) continue;
 			const title = isOpen ? cellName(place, i) : info.title;
 			// Vu de loin, une parcelle fermée ne dit que l'essentiel (le prix, ou ce qu'il manque).
 			const grow = isOpen && this.cellScale(i) < 1 ? this.growInfo?.(i) : null;
@@ -3858,7 +3861,7 @@ export class Garden {
 			const sx0 = ox * S + tx, sx1 = (ox + PARCEL_W) * S + tx, sy0 = oy * S + ty, sy1 = (oy + PARCEL_H) * S + ty;
 			ctx.font = `${Math.round((all ? 15 : 20) * dpr)}px Courgette, cursive`;
 			// Un nom trop long pour la parcelle passe sur deux lignes.
-			const room = (all ? sx1 - sx0 - 12 * dpr : cw - 40 * dpr);
+			const room = (all ? Math.max(sx1 - sx0 - 12 * dpr, isOpen ? 210 * dpr : 0) : cw - 40 * dpr);
 			let lines = [title];
 			if (ctx.measureText(title).width > room - 16 * dpr && title.includes(' ')) {
 				const words = title.split(' ');
@@ -3870,14 +3873,18 @@ export class Garden {
 				lines = [words.slice(0, best).join(' '), words.slice(best).join(' ')];
 			}
 			const lh = (all ? 18 : 23) * dpr, extra = (lines.length - 1) * lh;
-			const w = Math.min(room, Math.max(...lines.map(l => ctx.measureText(l).width), (all ? 70 : 130) * dpr) + (all ? 16 : 32) * dpr);
+			const tw = Math.max(...lines.map(l => ctx.measureText(l).width));
+			ctx.font = `${Math.round((all ? 12 : 13) * dpr)}px Nunito, sans-serif`;
+			const sw = ctx.measureText(sub).width;
+			ctx.font = `${Math.round((all ? 15 : 20) * dpr)}px Courgette, cursive`;
+			const w = Math.min(room, Math.max(tw, sw, (all ? 70 : 130) * dpr) + (all ? 16 : 32) * dpr);
 			let x = (sx0 + sx1) / 2, y = (sy0 + sy1) / 2;
 			if (!all) {
 				const seenW = Math.min(sx1, cw) - Math.max(sx0, 0), seenH = Math.min(sy1, ch) - Math.max(sy0, 0);
 				// Parcelle hors de l'écran ou à peine visible : une petite flèche au bord, vers elle.
 				if (seenW < w + 16 * dpr || seenH < 200 * dpr) {
 					// Plusieurs voisines possibles : on ne montre que celles qu'on voit, sans flèche au bord.
-					if (this.lockedCells().length === 1) this.drawEdgeHint(ctx, sx0, sx1, sy0, sy1, info.hint);
+					if (this.lockedCells().filter(c => this.lockedInfo?.(c)).length === 1) this.drawEdgeHint(ctx, sx0, sx1, sy0, sy1, info.hint);
 					continue;
 				}
 				x = Math.max(Math.max(sx0, 0) + w / 2 + 8 * dpr, Math.min(Math.min(sx1, cw) - w / 2 - 8 * dpr, x));
