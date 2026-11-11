@@ -1180,6 +1180,8 @@ export class Garden {
 
 	/** Fait pousser un lieu, affiché ou non, sans déplacer la plante suivie à l'écran. */
 	growIn(pid, type, amount) {
+		// Pendant l'introduction, rien ne pousse tout seul : seule la fleur de l'oiseau grandit, avec les pas.
+		if (this.state.intro) return [];
 		return this.addEffort(type, amount, pid, false);
 	}
 

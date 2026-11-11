@@ -80,6 +80,7 @@ export function startIntro(c) {
 		const [ox, oy] = cellOrigin(0);
 		const f = garden.spawn(state.place, 'fleur', 0.03, { x: p.x - ox, y: p.y - oy + 12 }, 0);
 		f.intro = true;
+		f.single = true;
 		garden.burst(p.x, p.y + 12, 8, '#9A7448');
 		c.persist(true);
 		await wait(900);
@@ -184,7 +185,7 @@ export function startIntro(c) {
 		}
 		const el = document.createElement('div');
 		el.className = 'intro-logo';
-		el.innerHTML = `<img src="assets/logo.png" alt="Evolia"><p>${TAGLINE}</p>`;
+		el.innerHTML = `<img src="assets/logo-detoure.png" alt="Evolia"><p>${TAGLINE}</p>`;
 		app.append(el);
 		void el.offsetWidth;
 		el.classList.add('in');
@@ -303,6 +304,7 @@ export function startIntro(c) {
 				const p = center(), [ox, oy] = cellOrigin(0);
 				const f = garden.spawn(state.place, 'fleur', 1, { x: p.x - ox, y: p.y - oy + 12 }, 0);
 				f.intro = true;
+		f.single = true;
 			}
 			state.species[c.speciesOf(flowerOf())] ??= Date.now();
 			state.species.abeille ??= Date.now();

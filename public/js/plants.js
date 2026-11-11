@@ -879,6 +879,8 @@ export function lookOf(p) {
  * des détails, et la saison colore ou dénude le feuillage. Renvoie { top, r } (hauteur et rayon au sol, unités monde).
  */
 export function paintPlant(ctx, p, growth = p.growth, env = {}) {
+	// La fleur de l'introduction est seule sur sa tige : pas de touffe, l'abeille sait où se poser.
+	if (p.single && p.type === 'fleur') return paintFleurOne(ctx, growth, p.seed, lookOf(p), env);
 	return PAINTERS[p.type](ctx, growth, p.seed, lookOf(p), env);
 }
 

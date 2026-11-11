@@ -13,6 +13,7 @@ La refonte de la progression, d'après le message vocal de Seb (détail : docs/r
 - **Un terrain qu'on agrandit** : il commence petit et s'agrandit en nectar, un cran à la fois, de plus en plus cher. Une fois plein, on explore une parcelle voisine de son choix (« Terre inconnue ») en nectar et en kilomètres. Chaque partie a son propre monde (mare, forêts, montagne, côte), qu'on découvre en l'explorant.
 - **La ferme produit** : œufs, légumes, fruits et miel vont dans le panier et se troquent contre du nectar. Le compost booste le potager, et on peut soigner un arbre fruitier pour qu'il donne plus.
 - Les parties déjà commencées gardent leur jardin entier et toute leur interface.
+- Introduction (retours de Seb) : une seule fleur sur sa tige (l'abeille se pose bien dessus), rien ne pousse d'autre pendant l'introduction, logo détouré, phrase « À chacun de tes pas, la nature s’éveille. » centrée.
 
 ## 0.7.48 (suite) — 11 novembre 2026
 Les bêtes regardent enfin là où elles vont (retour de Seb : papillons et oiseaux qui volaient « en crabe ») :
