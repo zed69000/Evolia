@@ -77,7 +77,7 @@ td .chip { display: inline-block; font-size: 12px; font-weight: 700; padding: 1p
 <div class="wrap">
   <header>
     <h1>Équilibre d'Evolia</h1>
-    <p>Un modèle de jeu incrémental où l'activité physique est le moteur : elle rapporte du nectar, elle met les maisons des animaux au travail (l'élan après une sortie), et ses kilomètres ouvrent de nouvelles maisons et de nouvelles parcelles. Au repos, presque rien ne se passe. Déplace les curseurs pour essayer un autre réglage.</p>
+    <p>Un modèle de jeu incrémental où l'activité physique est le moteur : elle rapporte du nectar, elle met les habitats des animaux au travail (l'élan après une sortie), et ses kilomètres ouvrent de nouveaux habitats et de nouvelles parcelles. Au repos, presque rien ne se passe. Déplace les curseurs pour essayer un autre réglage.</p>
   </header>
 
   <div class="grid">
@@ -92,7 +92,7 @@ td .chip { display: inline-block; font-size: 12px; font-weight: 700; padding: 1p
       <div class="ctl"><label for="goal">Objectif du jour atteint <output id="goal-o"></output></label><input id="goal" type="range" min="0" max="100" step="5" value="50"></div>
       <h2>Les réglages du jeu</h2>
       <div class="ctl"><label for="npk">Nectar par km de marche <output id="npk-o"></output></label><input id="npk" type="range" min="10" max="250" step="5" value="60"></div>
-      <div class="ctl"><label for="growth">Hausse de prix par maison achetée <output id="growth-o"></output></label><input id="growth" type="range" min="1.05" max="1.4" step="0.01" value="1.15"><small>Chaque exemplaire d'une même maison coûte un peu plus que le précédent.</small></div>
+      <div class="ctl"><label for="growth">Hausse de prix par habitat posé <output id="growth-o"></output></label><input id="growth" type="range" min="1.05" max="1.4" step="0.01" value="1.15"><small>Chaque exemplaire d'un même habitat coûte un peu plus que le précédent.</small></div>
       <div class="ctl"><label for="elan">Heures d'élan après une sortie <output id="elan-o"></output></label><input id="elan" type="range" min="1" max="10" step="0.5" value="4"><small>Pour 2,5 km ; plus longues si l'on marche plus (jusqu'au double).</small></div>
       <div class="ctl"><label for="rest">Rythme au repos <output id="rest-o"></output></label><input id="rest" type="range" min="0" max="0.5" step="0.01" value="0.05"><small>La part de la production quand on ne bouge pas.</small></div>
       <div class="ctl"><label for="bio">Bonus par espèce découverte <output id="bio-o"></output></label><input id="bio" type="range" min="0" max="3" step="0.25" value="1"></div>
@@ -106,28 +106,28 @@ td .chip { display: inline-block; font-size: 12px; font-weight: 700; padding: 1p
       <section class="card" aria-labelledby="c1">
         <h2 id="c1">D'où vient le nectar, jour après jour</h2>
         <p class="sub">Part de chaque source dans le nectar du jour. La marche, l'élan et le papillon doré dépendent tous de l'activité physique ; seule la production au repos est de l'idle pur.</p>
-        <div class="legend"><span><i style="background:var(--s-act)"></i>Marche et objectif</span><span><i style="background:var(--s-idle)"></i>Maisons pendant l'élan</span><span><i style="background:var(--s-gold)"></i>Papillon doré</span><span><i style="background:var(--s-rest)"></i>Maisons au repos</span></div>
+        <div class="legend"><span><i style="background:var(--s-act)"></i>Marche et objectif</span><span><i style="background:var(--s-idle)"></i>Habitats pendant l'élan</span><span><i style="background:var(--s-gold)"></i>Papillon doré</span><span><i style="background:var(--s-rest)"></i>Habitats au repos</span></div>
         <div class="chart" id="ch1"></div>
       </section>
 
       <section class="card" aria-labelledby="c2">
         <h2 id="c2">Nectar gagné par jour</h2>
-        <p class="sub">Échelle logarithmique : chaque ligne de la grille vaut dix fois la précédente. La production des maisons grandit comme dans tout jeu incrémental ; la marche reste plate, mais c'est elle qui déclenche l'élan.</p>
+        <p class="sub">Échelle logarithmique : chaque ligne de la grille vaut dix fois la précédente. La production des habitats grandit comme dans tout jeu incrémental ; la marche reste plate, mais c'est elle qui déclenche l'élan.</p>
         <div class="legend"><span><i class="line" style="background:var(--s-total)"></i>Total du jour</span><span><i class="line" style="background:var(--s-act)"></i>Marche et objectif seuls</span></div>
         <div class="chart" id="ch2"></div>
       </section>
 
       <section class="card" aria-labelledby="c3">
         <h2 id="c3">Les grandes étapes</h2>
-        <p class="sub">Nouvelles maisons, améliorations et parcelles, dans l'ordre où le joueur peut se les offrir.</p>
+        <p class="sub">Nouveaux habitats, améliorations et parcelles, dans l'ordre où le joueur peut se les offrir.</p>
         <div class="tl"><table><thead><tr><th>Étape</th><th>Jour</th><th>Prix</th></tr></thead><tbody id="tl"></tbody></table></div>
       </section>
 
       <section class="card notes" aria-labelledby="c4">
         <h2 id="c4">Les règles du modèle</h2>
-        <p><b>Les maisons des animaux</b>, de la moins chère à la plus chère : massif mellifère (50 nectar, 0,6 nectar par heure d'élan), ruche (300, 3), hôtel à insectes (1 200, 14), nichoir (6 000, 60), mare (30 000, 280), haie vive (150 000, 1 300). Chacune n'apparaît qu'une fois la précédente posée, et à partir d'un certain nombre de kilomètres parcourus (1, 4, 8, 15, 25 km).</p>
-        <p><b>Améliorations</b> : posséder 1, 5, 25 puis 50 exemplaires d'une maison débloque une amélioration qui double sa production (10, 50, 500 puis 50 000 fois son prix de base).</p>
-        <p><b>Les pas font pousser les plantes</b> : environ 1,5 fleur, 0,3 arbuste et 0,06 arbre par km, dans la limite de la surface du terrain. <b>D'où viennent les espèces</b> (au plus 6, 4, 3 puis 2 par jour) : beaucoup avec les plantes (une pour deux fleurs, deux par arbuste, quatre par arbre, jusqu'à 140), d'autres avec les maisons et abris (8 par sorte de maison : hérisson, lézard, mésange…), avec les milieux explorés (10 par nouvelle parcelle : grenouilles, libellules…), et les prédateurs avec leurs proies (une espèce de plus pour huit). Chaque espèce découverte augmente toute la production. Les maisons ne produisent pleinement que s'il y a assez de plantes autour (deux par maison). <b>Papillon doré</b> : un par jour de sortie ; le toucher donne 7 fois la production pendant une minute, plus 20 nectar.</p>
+        <p><b>Les habitats des animaux</b>, de la moins chère à la plus chère : massif mellifère (50 nectar, 0,6 nectar par heure d'élan), ruche (300, 3), hôtel à insectes (1 200, 14), nichoir (6 000, 60), mare (30 000, 280), haie vive (150 000, 1 300). Chacun n'apparaît qu'une fois le précédent posé, et à partir d'un certain nombre de kilomètres parcourus (1, 4, 8, 15, 25 km).</p>
+        <p><b>Améliorations</b> : posséder 1, 5, 25 puis 50 exemplaires d'un habitat débloque une amélioration qui double sa production (10, 50, 500 puis 50 000 fois son prix de base).</p>
+        <p><b>Les pas font pousser les plantes</b> : environ 1,5 fleur, 0,3 arbuste et 0,06 arbre par km, dans la limite de la surface du terrain. <b>D'où viennent les espèces</b> (au plus 6, 4, 3 puis 2 par jour) : beaucoup avec les plantes (une pour deux fleurs, deux par arbuste, quatre par arbre, jusqu'à 140), d'autres avec les habitats (8 par sorte d'habitat : hérisson, lézard, mésange…), avec les milieux explorés (10 par nouvelle parcelle : grenouilles, libellules…), et les prédateurs avec leurs proies (une espèce de plus pour huit). Chaque espèce découverte augmente toute la production. Les habitats ne produisent pleinement que s'il y a assez de plantes autour (deux par habitat). <b>Papillon doré</b> : un par jour de sortie ; le toucher donne 7 fois la production pendant une minute, plus 20 nectar.</p>
         <p><b>Terrain</b> : 4 crans par parcelle (60 nectar, +35 % à chaque cran). <b>Parcelles</b> : 500 nectar, puis × 1,7, et des kilomètres d'exploration (1,5 km, puis × 1,5). Le joueur achète toujours le terrain dès qu'il peut, puis ce qui rapporte le plus pour son prix. Le modèle ne compte ni la ferme, ni les fruits, ni les défis du jour.</p>
       </section>
     </main>
@@ -156,7 +156,7 @@ function simulate(p) {
     bushes = Math.min(6 * area, bushes + 0.3 * p.km);
     trees = Math.min(2 * area, trees + 0.06 * p.km);
     // D'où viennent les espèces (au plus 6, 4, 3 puis 2 par jour) : les plantes (pollinisateurs, herbivores…),
-    // les maisons et abris (hérisson, lézard, mésange…), les milieux explorés (marais, forêt…) et la chaîne
+    // les habitats (hérisson, lézard, mésange…), les milieux explorés (marais, forêt…) et la chaîne
     // alimentaire (les prédateurs suivent leurs proies).
     const byPlants = Math.min(140, Math.floor(flowers / 2) + Math.floor(bushes * 2) + Math.floor(trees * 4));
     const byHomes = own.filter(n => n > 0).length * 8;
@@ -166,7 +166,7 @@ function simulate(p) {
     const found = Math.max(0, Math.min([6, 4, 3][d - 1] ?? 2, open - species));
     species += found;
     const bio = 1 + p.bio * species / 100;
-    // Les maisons ne produisent bien que s'il y a assez de plantes autour d'elles.
+    // Les habitats ne produisent bien que s'il y a assez de plantes autour d'eux.
     const homes = own.reduce((a, n) => a + n, 0), green = flowers + 3 * bushes + 8 * trees;
     const eff = Math.min(1, green / Math.max(1, 2 * homes));
     const perH = LADDER.reduce((a, b, i) => a + own[i] * b[2] * mult[i], 0) * bio * eff;
@@ -283,7 +283,7 @@ function render() {
   $('#kpis').innerHTML = [
     [`${Math.round(act * 100)} %`, 'du nectar dépend de l’activité physique (marche, élan, papillon doré)'],
     [`${Math.round(idle * 100)} %`, 'vient du repos, sans bouger (idle pur)'],
-    [`${reached} / ${LADDER.length}`, `sortes de maisons ouvertes au jour ${p.days}`],
+    [`${reached} / ${LADDER.length}`, `sortes d'habitats posées au jour ${p.days}`],
     [`${cells}`, `parcelles au jour ${p.days}`],
     [`${days[days.length - 1].species}`, `espèces découvertes (${days[days.length - 1].plants} plantes)`],
   ].map(([v, l]) => `<div class="kpi"><b>${v}</b><span>${l}</span></div>`).join('');
@@ -291,10 +291,10 @@ function render() {
   if (idle > 0.25) issues.push(`<b>L'idle pèse trop.</b> ${Math.round(idle * 100)} % du nectar vient du repos : un joueur qui ne bouge pas avance presque autant.`);
   if (act < 0.7) issues.push(`<b>L'activité ne mène plus.</b> Elle ne fait que ${Math.round(act * 100)} % des gains.`);
   if ((first('Hôtel à insectes') ?? 99) <= 7) issues.push(`<b>Trop rapide.</b> L'hôtel à insectes arrive dès le jour ${first('Hôtel à insectes')}.`);
-  if (p.km >= 2 && p.days >= 45 && !first('Hôtel à insectes')) issues.push(`<b>Trop lent.</b> Même en marchant ${p.km.toLocaleString('fr-FR')} km par jour, la troisième maison n'est pas ouverte en ${p.days} jours.`);
+  if (p.km >= 2 && p.days >= 45 && !first('Hôtel à insectes')) issues.push(`<b>Trop lent.</b> Même en marchant ${p.km.toLocaleString('fr-FR')} km par jour, le troisième habitat n'est pas posé en ${p.days} jours.`);
   $('#verdict').innerHTML = issues.length
     ? `<div class="verdict warn"><span class="pill">À revoir</span><p>${issues.join('<br>')}</p></div>`
-    : `<div class="verdict good"><span class="pill">Équilibré</span><p>L'activité physique fait ${Math.round(act * 100)} % des gains et le repos seulement ${Math.round(idle * 100)} %. Les maisons s'ouvrent une à une sur des semaines (${reached} sortes en ${p.days} jours), et le terrain s'étend à ${cells} parcelles.</p></div>`;
+    : `<div class="verdict good"><span class="pill">Équilibré</span><p>L'activité physique fait ${Math.round(act * 100)} % des gains et le repos seulement ${Math.round(idle * 100)} %. Les habitats arrivent un à un sur des semaines (${reached} sortes en ${p.days} jours), et le terrain s'étend à ${cells} parcelles.</p></div>`;
   chartShare($('#ch1'), days);
   chartLog($('#ch2'), days);
   $('#tl').innerHTML = log.map(b => `<tr><td>${b.label}</td><td class="num"><span class="chip">J${b.day}</span></td><td class="num">${fmt(b.price)}</td></tr>`).join('');
