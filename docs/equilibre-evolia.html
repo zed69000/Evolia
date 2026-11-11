@@ -92,6 +92,7 @@ td .chip { display: inline-block; font-size: 12px; font-weight: 700; padding: 1p
       <div class="ctl"><label for="goal">Objectif du jour atteint <output id="goal-o"></output></label><input id="goal" type="range" min="0" max="100" step="5" value="50"></div>
       <h2>Les réglages du jeu</h2>
       <div class="ctl"><label for="npk">Nectar par km de marche <output id="npk-o"></output></label><input id="npk" type="range" min="10" max="250" step="5" value="60"></div>
+      <div class="ctl"><label for="kmShare">Chaque km vaut aussi <output id="kmShare-o"></output></label><input id="kmShare" type="range" min="0" max="5" step="0.25" value="2"><small>…heures de production du jardin. Le pas prend de la valeur à mesure que le jardin grandit.</small></div>
       <div class="ctl"><label for="growth">Hausse de prix par habitat posé <output id="growth-o"></output></label><input id="growth" type="range" min="1.05" max="1.4" step="0.01" value="1.15"><small>Chaque exemplaire d'un même habitat coûte un peu plus que le précédent.</small></div>
       <div class="ctl"><label for="elan">Heures d'élan après une sortie <output id="elan-o"></output></label><input id="elan" type="range" min="1" max="10" step="0.5" value="4"><small>Pour 2,5 km ; plus longues si l'on marche plus (jusqu'au double).</small></div>
       <div class="ctl"><label for="rest">Rythme au repos <output id="rest-o"></output></label><input id="rest" type="range" min="0" max="0.5" step="0.01" value="0.05"><small>La part de la production quand on ne bouge pas.</small></div>
@@ -128,6 +129,7 @@ td .chip { display: inline-block; font-size: 12px; font-weight: 700; padding: 1p
         <p><b>Les habitats des animaux</b>, de la moins chère à la plus chère : massif mellifère (50 nectar, 0,6 nectar par heure d'élan), ruche (300, 3), hôtel à insectes (1 200, 14), nichoir (6 000, 60), mare (30 000, 280), haie vive (150 000, 1 300). Chacun n'apparaît qu'une fois le précédent posé, et à partir d'un certain nombre de kilomètres parcourus (1, 4, 8, 15, 25 km).</p>
         <p><b>Améliorations</b> : posséder 1, 5, 25 puis 50 exemplaires d'un habitat débloque une amélioration qui double sa production (10, 50, 500 puis 50 000 fois son prix de base).</p>
         <p><b>Les pas font pousser les plantes</b> : environ 1,5 fleur, 0,3 arbuste et 0,06 arbre par km, dans la limite de la surface du terrain. <b>D'où viennent les espèces</b> (au plus 6, 4, 3 puis 2 par jour) : beaucoup avec les plantes (une pour deux fleurs, deux par arbuste, quatre par arbre, jusqu'à 140), d'autres avec les habitats (8 par sorte d'habitat : hérisson, lézard, mésange…), avec les milieux explorés (10 par nouvelle parcelle : grenouilles, libellules…), et les prédateurs avec leurs proies (une espèce de plus pour huit). Chaque espèce découverte augmente toute la production. Les habitats ne produisent pleinement que s'il y a assez de plantes autour (deux par habitat). <b>Papillon doré</b> : un par jour de sortie ; le toucher donne 7 fois la production pendant une minute, plus 20 nectar.</p>
+        <p><b>Le pas grandit avec le jardin</b> : en plus de son nectar fixe, chaque km rapporte quelques heures de la production du jardin (2 h par défaut). Sans cela, la marche deviendrait vite négligeable face à la production des habitats, qui grandit sans cesse.</p>
         <p><b>Terrain</b> : 4 crans par parcelle (60 nectar, +35 % à chaque cran). <b>Parcelles</b> : 500 nectar, puis × 1,7, et des kilomètres d'exploration (1,5 km, puis × 1,5). Le joueur achète toujours le terrain dès qu'il peut, puis ce qui rapporte le plus pour son prix. Le modèle ne compte ni la ferme, ni les fruits, ni les défis du jour.</p>
       </section>
     </main>
@@ -172,7 +174,9 @@ function simulate(p) {
     const perH = LADDER.reduce((a, b, i) => a + own[i] * b[2] * mult[i], 0) * bio * eff;
     const active = p.km >= 0.3;
     const elanH = active ? p.elan * Math.min(2, p.km / 2.5 + 0.5) : 0;
-    const walk = p.km * p.npk + (Math.floor(d * p.goal / 100) > Math.floor((d - 1) * p.goal / 100) ? 150 : 0);
+    // Chaque km vaut aussi une part de la production du jardin : le pas prend de la valeur à mesure que le jardin
+    // grandit, et la marche reste le premier levier à tous les stades.
+    const walk = p.km * (p.npk + p.kmShare * perH) + (Math.floor(d * p.goal / 100) > Math.floor((d - 1) * p.goal / 100) ? 150 : 0);
     const elan = perH * elanH, rest = perH * (24 - elanH) * p.rest;
     const gold = active ? perH * 7 / 60 + 20 : 0;
     const fiche = found * 10;
@@ -265,10 +269,11 @@ function chartLog(el, days) {
 }
 
 function render() {
-  const p = { km: +$('#km').value, goal: +$('#goal').value, npk: +$('#npk').value, growth: +$('#growth').value, elan: +$('#elan').value, rest: +$('#rest').value, bio: +$('#bio').value, days: +$('#days').value };
+  const p = { kmShare: +$('#kmShare').value, km: +$('#km').value, goal: +$('#goal').value, npk: +$('#npk').value, growth: +$('#growth').value, elan: +$('#elan').value, rest: +$('#rest').value, bio: +$('#bio').value, days: +$('#days').value };
   $('#km-o').textContent = `${p.km.toLocaleString('fr-FR')} km`;
   $('#goal-o').textContent = `${p.goal} % des jours`;
   $('#npk-o').textContent = p.npk;
+  $('#kmShare-o').textContent = `${p.kmShare.toLocaleString('fr-FR')} h`;
   $('#growth-o').textContent = `+${Math.round((p.growth - 1) * 100)} %`;
   $('#elan-o').textContent = `${p.elan.toLocaleString('fr-FR')} h`;
   $('#rest-o').textContent = `${Math.round(p.rest * 100)} %`;
@@ -300,7 +305,7 @@ function render() {
   $('#tl').innerHTML = log.map(b => `<tr><td>${b.label}</td><td class="num"><span class="chip">J${b.day}</span></td><td class="num">${fmt(b.price)}</td></tr>`).join('');
 }
 
-for (const id of ['km', 'goal', 'npk', 'growth', 'elan', 'rest', 'bio', 'days']) $('#' + id).addEventListener('input', render);
+for (const id of ['km', 'goal', 'npk', 'kmShare', 'growth', 'elan', 'rest', 'bio', 'days']) $('#' + id).addEventListener('input', render);
 for (const b of document.querySelectorAll('.presets button')) b.addEventListener('click', () => { $('#km').value = b.dataset.km; render(); });
 render();
 </script>
