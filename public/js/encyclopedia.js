@@ -236,7 +236,8 @@ export class Encyclopedia {
 					<h3>Son rôle</h3><p>${esc(s.role)}</p>
 					<div class="sp-help"><h3>Comment l'aider</h3><p>${esc(s.help)}</p></div>
 					<h3>Le savais-tu ?</h3><p>${esc(s.fact)}</p>
-					<p class="sp-date">Découverte le ${date}</p>`
+					<p class="sp-date">Découverte le ${date}</p>
+					<button class="btn primary sp-close-bottom" data-close-species>Fermer</button>`
 				: `<p class="latin">Pas encore découverte</p><div class="sp-help"><h3>Pour la faire venir</h3><p>${esc(s.hint)}</p></div>`}
 			</div>`;
 		const hero = this.panel.querySelector('#sp-hero');

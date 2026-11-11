@@ -976,3 +976,4 @@ body:has(.panel.open) #debug { display: none; }
 #app.booting #hud, #app.booting .sheet, #app.booting #daily, #app.booting #quest, #app.booting #mission, #app.booting #btn-peek, #app.booting #toasts, #app.booting #track-alert, #app.booting #tip, #app.booting #fps { opacity: 0 !important; pointer-events: none; }
 #app:has(.panel.open) #track-alert, #app:has(.modal:not([hidden])) #track-alert { display: none; }
 #species .sp-credit { text-align: center; }
+.sp-close-bottom { display: block; width: 100%; max-width: 320px; margin: 8px auto 4px; }

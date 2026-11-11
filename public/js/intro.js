@@ -290,7 +290,7 @@ export function startIntro(c) {
 				return over || state.speciesSeen?.abeille;
 			});
 			if (over) throw new Skip();
-			say('Voilà ton premier nectar !<br>Ferme la fiche pour le ramasser.', [], '#species [data-close-species]');
+			say('Voilà ton premier nectar !<br>Lis sa fiche, puis ferme-la en bas pour le ramasser.', [], '#species .sp-close-bottom');
 		}
 		btn.classList.remove('tip-glow');
 		await until(() => over || !$('#species').classList.contains('open'));
