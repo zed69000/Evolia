@@ -12,6 +12,8 @@ import { cellOrigin } from './garden.js';
 const WALK_M = 20;
 /** Le nectar que rapporte la toute première fiche lue : de quoi s'offrir la première ruche. */
 export const INTRO_NECTAR = 100;
+// La fleur de l'introduction, la même pour tous les joueurs : un coquelicot, toujours dessiné pareil.
+const FLOWER = 'coquelicot', FLOWER_SEED = 20261111;
 const TAGLINE = 'À chacun de tes pas, la nature s’éveille.';
 
 const wait = ms => new Promise(r => setTimeout(r, ms));
@@ -81,6 +83,7 @@ export function startIntro(c) {
 		const f = garden.spawn(state.place, 'fleur', 0.03, { x: p.x - ox, y: p.y - oy + 12 }, 0);
 		f.intro = true;
 		f.single = true;
+		f.seed = FLOWER_SEED; f.variant = { species: FLOWER };
 		garden.burst(p.x, p.y + 12, 8, '#9A7448');
 		c.persist(true);
 		await wait(900);
@@ -325,6 +328,7 @@ export function startIntro(c) {
 				const f = garden.spawn(state.place, 'fleur', 1, { x: p.x - ox, y: p.y - oy + 12 }, 0);
 				f.intro = true;
 		f.single = true;
+		f.seed = FLOWER_SEED; f.variant = { species: FLOWER };
 			}
 			state.species[c.speciesOf(flowerOf())] ??= Date.now();
 			state.species.abeille ??= Date.now();

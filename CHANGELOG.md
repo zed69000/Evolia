@@ -18,6 +18,7 @@ La refonte de la progression, d'après le message vocal de Seb (détail : docs/r
 - Les abeilles : une seule au départ, une de plus par trois fleurs écloses. Une ruche en accueille 3 ; on l'améliore (3 de plus par niveau, de plus en plus cher) ou on en pose une autre.
 - Quand une abeille se pose sur une fleur : une petite onde dorée et quelques grains de pollen, tout doux. Dans l'introduction, on la voit de près rentrer dans la ruche.
 - Introduction : plus de bouton pour la passer (elle reprend où l'on s'était arrêté), toujours de jour, sans moucherons, vue plus rapprochée, passage en fondu du papier à la brume.
+- La fleur de l’introduction est la même pour tous : un coquelicot, toujours dessiné pareil.
 - La page Espèces, au début : seulement ce qu'on a découvert, en plantes et insectes, avec une icône.
 - Fonds et boutons à demi transparents ; la consigne du tutoriel passe en vert sombre sur les pages claires.
 - Moins de moucherons, et jamais en nuée serrée.
