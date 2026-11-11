@@ -1230,6 +1230,8 @@ function showActivity() {
 
 function renderStatus() {
 	renderAct();
+	// Sans suivi des pas, le jeu ne peut rien faire pousser : une alerte reste affichée tant qu'il n'est pas actif.
+	$('#track-alert').hidden = !!state.intro || (!!state.tracking && !!(tracking.motion || tracking.gps));
 	const dot = $('#status-dot'), title = $('#status-title'), sub = $('#status-sub');
 	$('#btn-track').hidden = !!state.tracking;
 	$('#live').hidden = !session;
@@ -2134,6 +2136,7 @@ $('#deco').addEventListener('click', e => {
 	if (b && !b.disabled) startPlacing(b.dataset.buy);
 });
 // Pendant la mission du collecteur, Aménager s'ouvre directement sur l'onglet Récolte.
+$('#track-alert').addEventListener('click', async () => { sky.locate(true); await enableTracking(true); renderStatus(); });
 $('#btn-deco').addEventListener('click', () => openDeco(state.intro ? 'habitat' : currentMission()?.id === 'collector' ? 'recolte' : undefined));
 
 // ─── Options : version, réglages, mode test ───────────────────

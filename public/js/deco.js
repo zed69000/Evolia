@@ -25,7 +25,7 @@ export const ITEMS = {
 		levels: { max: 3, cost: [0, 0, 600, 2000], km: [0, 0, 10, 30], name: ['', 'petite cabane', 'cabane à auvent', 'chalet'] },
 		boxes: [null, null, { w: 220, h: 235, ax: 110, ay: 180 }, { w: 340, h: 255, ax: 125, ay: 195 }] },
 	abri: { cat: 'habitat', name: 'Un abri à hérisson', cost: 70, km: 6, turn: true, team: 'regulateur', power: 1, attracts: 'herisson', text: 'Une petite maison sous les feuilles, où il passe l’hiver.', box: { w: 90, h: 70, ax: 45, ay: 50 } },
-	ruche: { cat: 'habitat', name: 'Une ruche en paille', cost: 100, km: 0, team: 'pollinisateur', power: 2, attracts: 'abeille', text: 'Une colonie d’abeilles : 3 au départ, plus en l’améliorant. Elles pollinisent tes fleurs et font du miel, à troquer contre du nectar. Les fleurs les attirent.', box: { w: 80, h: 90, ax: 40, ay: 78 } },
+	ruche: { cat: 'habitat', name: 'Une ruche', cost: 100, km: 0, team: 'pollinisateur', power: 2, attracts: 'abeille', text: 'Une ruche en bois et sa colonie d’abeilles : 3 au départ, plus en l’améliorant. Elles pollinisent tes fleurs et font du miel, à troquer contre du nectar. Les fleurs les attirent.', box: { w: 84, h: 104, ax: 40, ay: 94 } },
 	bain: { cat: 'habitat', name: 'Un bain d’oiseaux', cost: 100, km: 8, team: 'semeur', power: 1, attracts: 'merle', text: 'De l’eau fraîche : les oiseaux reviennent, et sèment autour.', box: { w: 80, h: 90, ax: 40, ay: 80 } },
 	potager: { cat: 'recolte', name: 'Un carré de potager', cost: 90, km: 5, needs: 'cabane', team: 'semeur', power: 2, attracts: ['lapin', 'lievre'], text: 'Salades, choux et tomates, cultivés par ton fermier ou ta fermière, poussent quand tu marches. Pose les carrés côte à côte pour agrandir le potager.', box: { w: 150, h: 100, ax: 75, ay: 64 } },
 	sandarium: { cat: 'habitat', name: 'Un sandarium', cost: 70, km: 4, team: 'pollinisateur', power: 1, attracts: 'abeille', text: 'Un carré de sable au soleil : les abeilles sauvages qui nichent au sol y creusent leurs terriers.', box: { w: 130, h: 70, ax: 65, ay: 42 } },
@@ -607,18 +607,58 @@ function paintPoulailler(g, rot, lv = 1) {
 	return { top: -78 };
 }
 
+/**
+ * Une ruche en bois, vue de trois quarts : trois hausses empilées avec leurs poignées, la fente d'entrée en bas,
+ * un petit toit à deux pans et quatre pieds (d'après le dessin de référence de Seb).
+ */
 function paintRuche(g) {
 	const d = rng(48);
-	shade(g, d, 36, 9);
-	plank(g, -30, -10, 60, 10, '#7A5232', d);
-	// Ruche en paille : un dôme cerclé.
-	for (let k = 0; k < 6; k++) {
-		const y = -14 - k * 10, w = 30 * Math.cos((k / 6) * 1.3) + 4;
-		wash(g, 0, y, w, 7, k % 2 ? '#D8B060' : '#C89A48', d, { layers: 7, alpha: 0.3, edge: 0.3 });
+	shade(g, d, 34, 9);
+	const ink = rgba('#4A2E1A', 0.75);
+	const poly = (pts, fill) => {
+		g.beginPath();
+		pts.forEach(([x, y], i) => (i ? g.lineTo(x, y) : g.moveTo(x, y)));
+		g.closePath();
+		g.fillStyle = fill;
+		g.fill();
+		g.strokeStyle = ink;
+		g.lineWidth = 1.1;
+		g.stroke();
+	};
+	const L = -24, R = 16, S = 11, K = -5; // face avant de L à R ; le côté a S de large et remonte de K
+	// Les pieds (ceux du fond d'abord).
+	g.lineCap = 'round';
+	for (const [x, y0, w, c] of [[R + S - 2, K - 2, 3.4, '#6E4A2C'], [L + 3, 0, 4, '#8A5E36'], [R - 3, 0, 4, '#8A5E36']]) {
+		g.strokeStyle = rgba(c, 0.95); g.lineWidth = w;
+		g.beginPath(); g.moveTo(x, y0); g.lineTo(x, y0 - 16); g.stroke();
 	}
-	wash(g, 0, -74, 10, 7, '#D8B060', d, { layers: 6, alpha: 0.3, edge: 0.3 });
-	g.fillStyle = rgba('#2A1A0E', 0.9); g.beginPath(); g.ellipse(0, -16, 6, 4, 0, 0, 6.28); g.fill();
-	return { top: -80 };
+	// Le plateau, puis les trois hausses, de bas en haut.
+	poly([[L - 2, -16], [R + 2, -16], [R + 2, -20], [L - 2, -20]], rgba('#9A6A3E', 0.97));
+	poly([[R + 2, -16], [R + S + 2, -16 + K], [R + S + 2, -20 + K], [R + 2, -20]], rgba('#7A5230', 0.97));
+	for (let k = 0; k < 3; k++) {
+		const y1 = -20 - k * 16, y0 = y1 - 16;
+		const tone_ = ['#C99A5E', '#C3925A', '#CDA066'][k];
+		poly([[L, y1], [R, y1], [R, y0], [L, y0]], rgba(tone_, 0.97));
+		poly([[R, y1], [R + S, y1 + K], [R + S, y0 + K], [R, y0]], rgba('#A0733F', 0.97));
+		// Le fil du bois.
+		g.strokeStyle = rgba('#6A4426', 0.25);
+		g.lineWidth = 0.6;
+		for (let j = 1; j <= 2; j++) {
+			const yy = y0 + (16 * j) / 3 + d.gauss() * 0.5;
+			g.beginPath(); g.moveTo(L + 2, yy); g.bezierCurveTo(L + 12, yy + d.gauss() * 0.6, R - 12, yy + d.gauss() * 0.6, R - 2, yy); g.stroke();
+		}
+		// La poignée (ou, en bas, la fente d'entrée des abeilles).
+		g.fillStyle = rgba('#3A2414', 0.85);
+		g.beginPath();
+		if (k === 0) g.roundRect(-11, y1 - 5, 14, 3, 1.5); else g.roundRect(-9, y0 + 6, 10, 3, 1.5);
+		g.fill();
+	}
+	// Le toit à deux pans : le pignon devant, le pan de côté qui fuit vers l'arrière.
+	const top = -68, ridge = -86;
+	poly([[L - 5, top], [(L + R) / 2, ridge], [(L + R) / 2 + S, ridge + K], [R + S + 5, top + K], [R + 5, top]], rgba('#8E5E36', 0.97));
+	poly([[L - 5, top], [(L + R) / 2, ridge], [R + 5, top]], rgba('#B8854E', 0.97));
+	wash(g, (L + R) / 2, top - 6, 10, 4, '#FFF4DC', d, { layers: 2, alpha: 0.08, edge: 0 });
+	return { top: ridge - 4 };
 }
 
 function paintBain(g) {

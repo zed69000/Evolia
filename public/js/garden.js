@@ -3075,7 +3075,7 @@ export class Garden {
 					}
 					// Chargée, elle rentre droit et plus vite : ce trajet net, opposé au va-et-vient du butinage,
 					// dit tout de suite « je rentre à la ruche ».
-					if (flyTo(it.x, it.y - (it.kind === 'ruche' ? 16 : 60), 85, 4) < 4) { b.hidden = true; b.timer = 4 + Math.random() * 5; }
+					if (flyTo(it.x - (it.kind === 'ruche' ? 4 : 0), it.y - (it.kind === 'ruche' ? 25 : 60), 85, 4) < 4) { b.hidden = true; b.timer = 4 + Math.random() * 5; }
 					return;
 				}
 				if (b.mode === 'hover' && b.target && has(b.target)) {
