@@ -1223,9 +1223,10 @@ function showActivity() {
 	showModal(`<h2>Ton activité</h2>${now}
 		<div class="chips"><span class="chip">${fmt(km, 1)} km aujourd’hui</span><span class="chip">objectif ${fmt(goal, goal % 1 ? 1 : 0)} km</span></div>
 		${next ? `<p class="item-tip">${next}</p>` : ''}
-		<button class="btn ghost wide" id="btn-act-places">${cellName(here(), garden.active)} · tes milieux</button>
+		<button class="btn ghost wide" id="btn-act-places">Voir tout mon monde</button>
 		<button class="btn primary" data-close>Fermer</button>`);
-	$('#btn-act-places').onclick = () => { closeModal(); places.open(); };
+	// La carte des cinq milieux fixes n'a plus de sens dans un monde tiré pour chaque partie : on montre le sien, de loin.
+	$('#btn-act-places').onclick = () => { closeModal(); if (!garden.glyph) garden.toggleOverview(); };
 }
 
 function renderStatus() {
