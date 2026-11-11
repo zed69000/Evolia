@@ -44,7 +44,7 @@ qui est fait sur la branche, et ce qui reste.
   1. une minuscule motte de terre ; un oiseau passe et laisse tomber une graine ;
   2. « Marche quelques pas » : la fleur pousse en quelques secondes de marche ;
   3. une abeille vient la butiner, puis repart (pas encore de nectar) ;
-  4. la vue s'éloigne doucement, le logo apparaît avec une phrase : « Chaque pas fait fleurir. » ;
+  4. la vue s'éloigne doucement, le logo apparaît avec une phrase : « À chacun de tes pas, la nature s’éveille. » ;
   5. le bouton des espèces apparaît et palpite : on l'ouvre, on lit la fiche de l'abeille, elle rapporte la première
      monnaie, le nectar ; on la voit arriver dans la bourse, qui apparaît à ce moment ;
   6. le bouton Aménager apparaît : on achète sa première ruche ;

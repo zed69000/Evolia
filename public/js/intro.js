@@ -12,7 +12,7 @@ import { cellOrigin } from './garden.js';
 const WALK_M = 20;
 /** Le nectar que rapporte la toute première fiche lue : de quoi s'offrir la première ruche. */
 export const INTRO_NECTAR = 100;
-const TAGLINE = 'Chaque pas fait fleurir.';
+const TAGLINE = 'À chacun de tes pas, la nature s’éveille.';
 
 const wait = ms => new Promise(r => setTimeout(r, ms));
 const until = (test, every = 250) => new Promise(r => {
