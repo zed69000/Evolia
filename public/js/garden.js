@@ -1955,13 +1955,16 @@ export class Garden {
 
 	/** Une abeille se pose sur une fleur : une petite onde dorée, et quelques grains de pollen qui flottent, tout doux. */
 	pollen(x, y) {
-		this.particles.push({ x, y, vx: 0, vy: 0, life: 1, decay: 1.1, size: 3, ring: true, color: '#F4C23E' });
-		for (let i = 0; i < 5; i++) {
+		// Deux ondes, la seconde un peu après, puis du pollen qui s'échappe de la fleur et flotte.
+		this.particles.push({ x, y, vx: 0, vy: 0, life: 1, decay: 0.9, size: 4, ring: true, color: '#F4C23E' });
+		this.particles.push({ x, y, vx: 0, vy: 0, life: 1.25, decay: 0.9, size: 1, ring: true, color: '#FBE7A8' });
+		for (let i = 0; i < 8; i++) {
+			const a = Math.random() * Math.PI * 2, v = 8 + Math.random() * 14;
 			this.particles.push({
 				x: x + (Math.random() - 0.5) * 8, y: y + (Math.random() - 0.5) * 4,
-				vx: (Math.random() - 0.5) * 10, vy: -6 - Math.random() * 10,
-				life: 1, decay: 0.55 + Math.random() * 0.3, size: 0.9 + Math.random() * 1.1, glow: true, ph: Math.random() * 6,
-				color: pick(['#F8D46A', '#FBE7A8', '#F4C23E']),
+				vx: Math.cos(a) * v, vy: Math.sin(a) * v * 0.6 - 8,
+				life: 1, decay: 0.45 + Math.random() * 0.3, size: 1.2 + Math.random() * 1.3, glow: true, ph: Math.random() * 6,
+				color: pick(['#F8D46A', '#FBE7A8', '#F4C23E', '#FFFFFF']),
 			});
 		}
 	}
@@ -2289,7 +2292,7 @@ export class Garden {
 			// La poussière gonfle et ralentit ; le reste retombe.
 			if (p.puff) { p.size += 16 * dt; p.vx *= 0.94; p.vy *= 0.94; }
 			// L'onde du butinage s'élargit sur place ; le pollen flotte et monte doucement.
-			else if (p.ring) p.size += 22 * dt;
+			else if (p.ring) p.size += 30 * dt;
 			else if (p.glow) { p.vx *= 0.97; p.vy *= 0.97; p.x += Math.sin(this.t * 2.4 + p.ph) * 4 * dt; }
 			// Une feuille tombe lentement en se balançant et en tournant.
 			else if (p.leaf) { p.vy = Math.min(16, p.vy + 22 * dt); p.x += Math.sin(this.t * 3 + p.ph) * 14 * dt; p.rot += p.spin * dt; }
@@ -3736,9 +3739,9 @@ export class Garden {
 		if (!glyph) for (const b of this.insects) if (!onGround(b) && !b.p.swim) this.drawInsect(ctx, b);
 		for (const p of this.particles) {
 			if (p.ring) {
-				ctx.globalAlpha = Math.max(0, p.life) * 0.45;
+				ctx.globalAlpha = Math.min(1, Math.max(0, p.life)) * 0.85;
 				ctx.strokeStyle = p.color;
-				ctx.lineWidth = 1.2;
+				ctx.lineWidth = 2;
 				ctx.beginPath();
 				ctx.ellipse(p.x, p.y, p.size, p.size * 0.55, 0, 0, Math.PI * 2);
 				ctx.stroke();

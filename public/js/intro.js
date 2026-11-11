@@ -230,31 +230,64 @@ export function startIntro(c) {
 	async function purse() {
 		step('purse');
 		cap.hidden = true;
-		// La bourse apparaît vide ; la goutte de nectar la rejoint et le compteur monte jusqu'à 100.
-		c.countPurse(0, 1000, 1300);
+		// La bourse apparaît vide ; une volée de gouttes de nectar la rejoint, et le compteur monte avec elles
+		// jusqu'à 100, assez lentement pour qu'on le voie défiler.
+		const N = 12, GAP = 140, FLY = 950;
+		c.countPurse(0, FLY, (N - 1) * GAP + 500);
 		app.classList.add('i-hud');
 		c.renderHud();
-		await flyCoin();
+		await flyCoins(N, GAP, FLY);
 		$('#hud-steps').classList.add('ui-new');
 		c.sound.chime(2);
-		await wait(1300);
+		await wait(700);
 		await say('Voici ta <b>bourse</b> : le nectar que tu gagnes s’y range.', [{ label: 'Compris' }]);
 	}
 
-	/** Une goutte de nectar part du centre de l'écran et rejoint la bourse. */
-	async function flyCoin() {
+	/**
+	 * Une volée de gouttes de nectar part du milieu de l'écran et rejoint la bourse, l'une après l'autre, en courbe,
+	 * avec une traînée légère.
+	 */
+	function flyCoins(n, gap, fly) {
 		const to = $('#hud-steps').getBoundingClientRect(), box = app.getBoundingClientRect();
-		const d = document.createElement('i');
-		d.className = 'intro-coin';
-		d.style.left = `${box.width / 2}px`;
-		d.style.top = `${box.height * 0.45}px`;
-		app.append(d);
-		void d.offsetWidth;
-		d.style.left = `${to.left - box.left + to.width / 2}px`;
-		d.style.top = `${to.top - box.top + to.height / 2}px`;
-		d.style.transform = 'scale(0.6)';
-		await wait(1100);
-		d.remove();
+		const tx = to.left - box.left + to.width / 2, ty = to.top - box.top + to.height / 2;
+		const coins = Array.from({ length: n }, (_, i) => {
+			const el = document.createElement('i');
+			el.className = 'intro-coin';
+			app.append(el);
+			const sx = box.width / 2 + (Math.random() - 0.5) * 70, sy = box.height * 0.46 + (Math.random() - 0.5) * 40;
+			return { el, sx, sy, cx: (sx + tx) / 2 + (Math.random() - 0.5) * 120, cy: Math.min(sy, ty) - 60 - Math.random() * 80, t0: i * gap, trail: 0 };
+		});
+		const start = performance.now();
+		return new Promise(res => {
+			const frame = () => {
+				const now = performance.now() - start;
+				let alive = false;
+				for (const k of coins) {
+					const t = (now - k.t0) / fly;
+					if (t < 0) { k.el.style.opacity = '0'; alive = true; continue; }
+					if (t >= 1) { if (k.el.isConnected) k.el.remove(); continue; }
+					alive = true;
+					const e = t * t * (3 - 2 * t), u = 1 - e;
+					const x = u * u * k.sx + 2 * u * e * k.cx + e * e * tx, y = u * u * k.sy + 2 * u * e * k.cy + e * e * ty;
+					k.el.style.opacity = '1';
+					k.el.style.left = `${x}px`;
+					k.el.style.top = `${y}px`;
+					k.el.style.transform = `scale(${1 - 0.4 * e})`;
+					// La traînée : de petits points dorés qui s'effacent derrière la goutte.
+					if (now - k.trail > 45) {
+						k.trail = now;
+						const dot = document.createElement('i');
+						dot.className = 'intro-trail';
+						dot.style.left = `${x}px`;
+						dot.style.top = `${y}px`;
+						app.append(dot);
+						setTimeout(() => dot.remove(), 500);
+					}
+				}
+				if (alive) requestAnimationFrame(frame); else res();
+			};
+			requestAnimationFrame(frame);
+		});
 	}
 
 	// ─── 7. La première ruche ───
