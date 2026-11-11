@@ -84,6 +84,11 @@ export function thumbCopy(sp, size, locked) {
 // Lire la fiche d'une espèce qu'on vient de découvrir rapporte un peu de nectar : on apprend à la connaître.
 export const READ_REWARD = 10;
 
+// Les vraies photos des espèces, passées au filtre aquarelle (public/species/<id>.webp), et leurs crédits.
+// Le dessin du jeu est symbolique ; la photo apprend à reconnaître l'espèce en vrai.
+let PHOTO_CREDITS = null;
+const loadCredits = () => (PHOTO_CREDITS ??= fetch('species/credits.json').then(r => (r.ok ? r.json() : {})).catch(() => ({})));
+
 const esc = s => s.replace(/[&<>"]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
 
 export class Encyclopedia {
@@ -223,6 +228,7 @@ export class Encyclopedia {
 			<div class="panel-head"><button class="close" data-back aria-label="Retour">‹</button><button class="close" data-close-species aria-label="Fermer">×</button></div>
 			<div class="sp-detail">
 				<div class="sp-hero" id="sp-hero"></div>
+				${known ? '<p class="sp-credit" id="sp-credit" hidden></p>' : ''}
 				<span class="chip">${KINDS[s.kind]}</span> <span class="chip">${PLACE_BY_ID[s.place].name}</span>
 				<h2>${known ? esc(s.name) : 'Espèce inconnue'}</h2>
 				${reward ? `<p class="sp-reward">+${reward} nectar pour avoir lu sa fiche</p>` : ''}
@@ -233,7 +239,24 @@ export class Encyclopedia {
 					<p class="sp-date">Découverte le ${date}</p>`
 				: `<p class="latin">Pas encore découverte</p><div class="sp-help"><h3>Pour la faire venir</h3><p>${esc(s.hint)}</p></div>`}
 			</div>`;
-		this.panel.querySelector('#sp-hero').appendChild(thumbCopy(s, 170, !known));
+		const hero = this.panel.querySelector('#sp-hero');
+		hero.appendChild(thumbCopy(s, 170, !known));
+		// La vraie photo dans le rond (masque rond) ; le dessin du jeu devient un petit médaillon sur son bord.
+		const credit = this.panel.querySelector('#sp-credit');
+		if (credit) loadCredits().then(credits => {
+			const cr = credits[id];
+			if (!cr || !hero.isConnected) return;
+			const img = new Image();
+			img.className = 'sp-photo';
+			img.alt = s.name;
+			img.onload = () => {
+				hero.classList.add('photo');
+				hero.prepend(img);
+				credit.textContent = `Photo : ${cr.author}${cr.license === 'cc0' ? ' (domaine public)' : ' (CC BY)'} · iNaturalist`;
+				credit.hidden = false;
+			};
+			img.src = `species/${id}.webp`;
+		});
 		this.panel.scrollTop = 0;
 	}
 }

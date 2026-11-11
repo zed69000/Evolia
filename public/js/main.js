@@ -2650,7 +2650,8 @@ if (Tuning.preview) {
 	if (state.intro) {
 		startIntro({
 			garden, state, sound, DEV, persist, renderHud, updateSpeciesDot, countPurse, showModal, speciesOf, SPECIES_BY_ID,
-			enableTracking: () => { enableTracking(true); sky.locate(true); },
+			enableTracking: () => { sky.locate(true); return enableTracking(true); },
+			trackingOk: () => !!state.tracking && !!(tracking.motion || tracking.gps),
 			addMeters: m => { addMeters(m); renderHud(); },
 			moving: () => !!session,
 			simWalk: () => {

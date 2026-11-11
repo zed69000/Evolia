@@ -961,3 +961,8 @@ body:has(.panel.open) #debug { display: none; }
 .tip::after { border-top-color: rgba(31, 107, 71, .78); }
 .tip.below::after { border-top-color: transparent; border-bottom-color: rgba(31, 107, 71, .78); }
 .intro-cap .btn.ghost, .tip .btn.ghost { background: rgba(253, 247, 231, .18); color: #FDF7E7; box-shadow: none; }
+/* La vraie photo de l'espèce, à l'aquarelle, dans le rond de la fiche ; le dessin du jeu en médaillon sur son bord. */
+.sp-hero.photo { position: relative; width: 170px; height: 170px; margin: 4px auto 4px; }
+.sp-hero .sp-photo { width: 170px; height: 170px; border-radius: 50%; object-fit: cover; display: block; box-shadow: 0 0 0 4px var(--papier-2), 0 4px 14px rgba(40, 60, 30, .18); }
+.sp-hero.photo canvas { position: absolute; right: -10px; bottom: -6px; width: 62px !important; height: 62px !important; box-shadow: 0 2px 8px rgba(40, 60, 30, .2); }
+.sp-credit { text-align: center; font-size: 11px; color: var(--doux); opacity: .75; margin: 2px 0 10px; }

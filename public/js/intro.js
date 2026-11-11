@@ -179,8 +179,20 @@ export function startIntro(c) {
 		step('walk');
 		const f = flowerOf();
 		const d0 = (state.introD0 ??= state.totals.distance);
+		// Le suivi des pas est indispensable : on ne va pas plus loin tant qu'il n'est pas activé (et qu'il marche).
+		if (!c.trackingOk()) {
+			let devPass = false, tried = false;
+			const ask = () => say(tried
+				? 'Le suivi n’a pas pu démarrer.<br>Autorise le <b>mouvement</b> et la <b>position</b> pour Evolia, puis réessaie.'
+				: 'Pour que tes pas fassent pousser la graine, Evolia doit les suivre.<br><b>Active le suivi de tes pas</b> pour continuer.', [
+				{ label: tried ? 'Réessayer' : 'Activer le suivi de mes pas', stay: true, run: async () => { await c.enableTracking(); if (!c.trackingOk()) { tried = true; ask(); } } },
+				...(c.DEV ? [{ label: 'Passer (test)', stay: true, run: () => { devPass = true; } }] : []),
+			], 'center');
+			ask();
+			await until(() => over || devPass || c.trackingOk());
+			if (over) throw new Skip();
+		}
 		const buttons = [];
-		if (!state.tracking) buttons.push({ label: 'Activer le suivi de mes pas', once: true, stay: true, run: () => c.enableTracking() });
 		if (c.DEV) buttons.push({ label: 'Simuler 5 m', stay: true, run: () => c.addMeters(5) });
 		say('Un oiseau a laissé tomber une graine.<br><b>Marche quelques pas</b> pour la faire pousser.', buttons, 'center');
 		await until(() => {
