@@ -14,6 +14,7 @@ import { paperTexture } from './watercolor.js';
 import { Soundscape } from './audio.js';
 import { ITEMS, ITEM_ORDER, itemHelp, itemCost, fitsPlace, CATS, MAX_LEVEL, LEVEL_NAME, LEVEL_KM, canLevel, levelCost, CABIN_STYLES } from './deco.js';
 import { VERSION } from './version.js';
+import { startIntro, INTRO_NECTAR } from './intro.js';
 import { exportCode, importCode, backupAge } from './backup.js';
 import { DebugPanel, debugOn, setDebug, debugLog, ago, dur, trace, traceFlush } from './debug.js';
 import { canNotify, askNotify, scheduleReminders, clearReminders } from './notify.js';
@@ -78,6 +79,8 @@ const species = new Encyclopedia($('#species'), state, e => {
 	persist();
 	updateSpeciesDot();
 });
+// Pendant l'introduction, la toute première fiche lue rapporte de quoi s'offrir la première ruche.
+species.rewardFor = () => (state.intro && !state.introPaid ? ((state.introPaid = true), INTRO_NECTAR) : null);
 const places = new PlacesMap($('#map'), state, showBiome);
 // Aider une équipe de l'écosystème, c'est poser l'objet qui l'attire (s'il est débloqué et payable), sinon voir la liste.
 // La récolte en attente : sans collecteur, elle perle sur les fleurs ; avec, elle remplit les jarres.
@@ -252,11 +255,18 @@ garden.onPick = tree => {
 };
 
 // Les ruches : la colonie produit du miel ; le fermier en prend une part (réglable), le reste nourrit les abeilles.
-const HONEY_PER_HOUR = 0.35; // pots par heure et par ruche si l'on prenait tout
-setInterval(() => {
+// Une ruche accueille 6 abeilles au plus ; il en vient autant que les fleurs en attirent (une, plus une par trois
+// fleurs écloses). Chaque abeille fait du miel ; il faut du temps (et des fleurs) pour en remplir un pot.
+const HIVE_BEES = 6, HONEY_PER_BEE = 0.15; // pots par heure et par abeille si l'on prenait tout
+const hiveBees = () => {
 	const hives = garden.items.filter(it => it.kind === 'ruche').length;
-	if (!hives || !garden.items.some(it => it.kind === 'cabane') || (garden.season?.winter ?? 0) > 0.6) return;
-	state.honeyAcc = (state.honeyAcc ?? 0) + hives * HONEY_PER_HOUR * (state.honeyShare ?? 0.3) / 60;
+	const flowers = here().plants.filter(p => p.type === 'fleur' && p.growth >= 1).length;
+	return Math.min(HIVE_BEES * hives, hives ? 1 + Math.floor(flowers / 3) : 0);
+};
+setInterval(() => {
+	const bees = hiveBees();
+	if (!bees || (garden.season?.winter ?? 0) > 0.6) return;
+	state.honeyAcc = (state.honeyAcc ?? 0) + bees * HONEY_PER_BEE * (state.honeyShare ?? 0.3) / 60;
 	if (state.honeyAcc >= 1) {
 		const n = Math.floor(state.honeyAcc);
 		state.honeyAcc -= n;
@@ -303,7 +313,7 @@ function renderHud() {
 		: `${fmt(km, 1)} km sur ${goal} aujourd'hui`;
 	// La bourse de nectar, bien en vue ; dessous, ce qui attend d'être récolté (dans les fleurs ou le collecteur).
 	// Plein : le collecteur ne prend plus rien, ou sans collecteur, les fleurs sont chargées.
-	const pend = Math.floor(state.pending ?? 0), full = hasCollector(state) ? jarOf(state) >= jarCap(state) : groundOf(state) >= 30;
+	const pend = state.intro ? 0 : Math.floor(state.pending ?? 0), full = !state.intro && (hasCollector(state) ? jarOf(state) >= jarCap(state) : groundOf(state) >= 30);
 	$('#hud-steps').innerHTML = `<span class="nectar${boostLeft(state) ? ' boost' : ''}">${fmtInt(shownNectar())}</span>`
 		+ `<small class="${full ? 'full' : pend >= 1 ? 'wait' : ''}">${pend >= 1 ? `+${fmtInt(pend)} à récolter` : 'nectar'}</small>`;
 	const k = Math.min(1, km / state.goalKm);
@@ -377,6 +387,7 @@ const speciesQuota = () => SPECIES_PER_DAY[gardenDay()] ?? SPECIES_LATER;
 const speciesToday = () => (state.speciesDay?.day === dayKey() ? state.speciesDay.n : 0);
 
 function announceSpecies(quiet = false) {
+	if (state.intro) return;
 	let found = [];
 	if (quiet) {
 		// Premier lancement : le jardin de départ arrive d'un coup, sans compter dans les fiches à lire.
@@ -626,7 +637,7 @@ const MISSIONS = [
 const MISSION_REWARD = 30;
 
 function currentMission() {
-	if (state.onboarded) return null;
+	if (state.onboarded || state.intro) return null;
 	return MISSIONS.find(m => !(state.missions ??= {})[m.id]) ?? null;
 }
 
@@ -711,6 +722,7 @@ const UI_STEPS = [
 	{ sel: '#daily', name: 'les défis du jour', when: () => totalKm() >= 1 || gardenDay() >= 1 },
 ];
 function revealUi() {
+	if (state.intro) return;
 	if (!state.ui) {
 		state.ui = {};
 		const advanced = totalKm() >= 3 || owned('cabane') || Object.values(state.places).some(p => cellsOpen(p) > 1);
@@ -744,7 +756,7 @@ function focusJar() {
 
 /** Montre la prochaine explication utile, quand rien d'autre n'est ouvert. */
 function nextTip() {
-	if (tipShown || Date.now() - lastTipEnd < 20000 || placing || !$('#modal').hidden || !$('#coach').hidden || document.querySelector('.panel.open') || session) return;
+	if (state.intro || tipShown || Date.now() - lastTipEnd < 20000 || placing || !$('#modal').hidden || !$('#coach').hidden || document.querySelector('.panel.open') || session) return;
 	const done = (state.tips ??= {});
 	const tip = TIPS.find(t => !done[t.id] && t.when());
 	if (!tip) return;
@@ -847,7 +859,7 @@ $('#quest').addEventListener('click', () => {
 setInterval(() => {
 	if (document.hidden || !$('#coach').hidden) return;
 	if (quest && !garden.insects.some(b => b.sp === quest && !b.leaving)) endQuest();
-	else if (!quest && $('#modal').hidden && !garden.glyph) pickQuest();
+	else if (!quest && !state.intro && $('#modal').hidden && !garden.glyph) pickQuest();
 }, 9000);
 
 // ─── Distance et décor ────────────────────────────────────────
@@ -855,6 +867,8 @@ setInterval(() => {
 /** Chaque mètre compte pour la journée, pour la parcelle, et rapporte du nectar (1 pour 5 m). */
 /** L'effort d'une sortie, réparti entre la plante de l'allure et les étages du dessous (la dominante en dernier : c'est elle qu'on suit). */
 function growMix(plant, effort) {
+	// Pendant l'introduction, les pas ne font pousser que la première fleur (intro.js).
+	if (state.intro) return [];
 	return effortMix(plant).flatMap(([type, share]) => garden.addEffort(type, effort * share));
 }
 
@@ -1167,7 +1181,38 @@ setInterval(() => {
 	else renderStatus();
 }, 5000);
 
+// ─── L'icône d'activité, en haut : au repos, marche, course ou vélo ───
+const ACT_ICONS = {
+	rest: '<circle cx="12" cy="4.6" r="2.2"/><path d="M12 7.5v6.5M12 14l-2.6 7M12 14l2.6 7M12 9.2l-3.4 3.4M12 9.2l3.4 3.4"/>',
+	walk: '<circle cx="13" cy="4.6" r="2.2"/><path d="M12.6 7.6l-1.8 6M10.8 13.6l-2.8 7.2M10.8 13.6l3.2 3 .8 4.4M12.2 9.4l-3.4 2.8M12.2 9.4l3.4 2"/>',
+	run: '<circle cx="15.4" cy="4.4" r="2.2"/><path d="M14.6 7.4l-3.4 6M11.2 13.4l-4 3.4-2.4-.8M11.2 13.4l4 2.6-1 5M13.6 9.2l-4.2.2M13.6 9.2l3.8 3.4"/>',
+	bike: '<circle cx="6" cy="17" r="3.6"/><circle cx="18" cy="17" r="3.6"/><circle cx="13.5" cy="4.6" r="2"/><path d="M6 17l4-6h5l3 6M10 11l2.4 6L15 11M12.6 7.2l-1.6 3.8"/>',
+};
+function renderAct() {
+	const a = session?.act, kind = !session ? 'rest' : a?.bike ? 'bike' : a && a.mult >= 2 ? 'run' : 'walk';
+	const el = $('#hud-act');
+	if (!el || el.dataset.act === kind) return;
+	el.dataset.act = kind;
+	el.setAttribute('aria-label', kind === 'rest' ? 'Au repos' : a?.name ?? 'En mouvement');
+	$('#act-ico').innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ACT_ICONS[kind]}</svg>`;
+}
+
+/** Le détail derrière l'icône : l'activité en cours, les kilomètres du jour, l'objectif, les milieux. */
+function showActivity() {
+	const km = todayMeters(state) / 1000, goal = state.goalKm, next = nextGoal(state);
+	const now = session
+		? `<p><b>${session.act?.name ?? 'En mouvement'}</b> · ${fmt(session.distance / 1000)} km · ${fmtTime(sessionSeconds(session))}</p>`
+		: `<p><b>${state.tracking ? 'Au repos' : 'Suivi en pause'}</b>${state.tracking ? '' : ' : active le suivi pour que tes pas comptent.'}</p>`;
+	showModal(`<h2>Ton activité</h2>${now}
+		<div class="chips"><span class="chip">${fmt(km, 1)} km aujourd’hui</span><span class="chip">objectif ${fmt(goal, goal % 1 ? 1 : 0)} km</span></div>
+		${next ? `<p class="item-tip">${next}</p>` : ''}
+		<button class="btn ghost wide" id="btn-act-places">${cellName(here(), garden.active)} · tes milieux</button>
+		<button class="btn primary" data-close>Fermer</button>`);
+	$('#btn-act-places').onclick = () => { closeModal(); places.open(); };
+}
+
 function renderStatus() {
+	renderAct();
 	const dot = $('#status-dot'), title = $('#status-title'), sub = $('#status-sub');
 	$('#btn-track').hidden = !!state.tracking;
 	$('#live').hidden = !session;
@@ -1951,7 +1996,7 @@ function tapItem(hit, card) {
 	// La ferme : le panier à la cabane, la part de miel prise aux ruches, le compost à épandre.
 	const share = Math.round((state.honeyShare ?? 0.3) * 100), fill = it.kind === 'compost' ? compostFill(it) : 0;
 	const farm = it.kind === 'cabane' && ITEMS.cabane ? `<div class="item-actions"><button class="btn primary" data-market>Le panier${basketCount() ? ` (${fmtInt(basketCount())})` : ''}</button></div>`
-		: it.kind === 'ruche' ? `<div class="coop-row"><span>Miel récolté <small>le reste nourrit la colonie</small></span><span class="coop-step"><button class="btn ghost small" data-share="-1" ${share <= 0 ? 'disabled' : ''}>−</button><b>${share} %</b><button class="btn ghost small" data-share="1" ${share >= 60 ? 'disabled' : ''}>+</button></span></div>`
+		: it.kind === 'ruche' ? `<small class="item-tip">${hiveBees()} abeille${hiveBees() > 1 ? 's' : ''} sur ${HIVE_BEES} : plante des fleurs pour en attirer d’autres.</small><div class="item-actions"><button class="btn primary" data-market>Le panier${basketCount() ? ` (${fmtInt(basketCount())})` : ''}</button></div><div class="coop-row"><span>Miel récolté <small>le reste nourrit la colonie</small></span><span class="coop-step"><button class="btn ghost small" data-share="-1" ${share <= 0 ? 'disabled' : ''}>−</button><b>${share} %</b><button class="btn ghost small" data-share="1" ${share >= 60 ? 'disabled' : ''}>+</button></span></div>`
 		: it.kind === 'compost' ? `<small class="item-tip">${fill >= 1 ? 'Plein : épands-le sur le potager, ses prochaines récoltes donneront plus.' : `Rempli à ${Math.round(fill * 100)} % (il se remplit quand tu marches).`}</small>${fill >= 1 ? '<div class="item-actions"><button class="btn primary" data-spread>Épandre sur le potager</button></div>' : ''}`
 		: '';
 	card.innerHTML = `<b>${def.name}</b>${short}${info}${tip}
@@ -2064,7 +2109,7 @@ $('#deco').addEventListener('click', e => {
 	if (b && !b.disabled) startPlacing(b.dataset.buy);
 });
 // Pendant la mission du collecteur, Aménager s'ouvre directement sur l'onglet Récolte.
-$('#btn-deco').addEventListener('click', () => openDeco(currentMission()?.id === 'collector' ? 'recolte' : undefined));
+$('#btn-deco').addEventListener('click', () => openDeco(state.intro ? 'habitat' : currentMission()?.id === 'collector' ? 'recolte' : undefined));
 
 // ─── Options : version, réglages, mode test ───────────────────
 
@@ -2470,7 +2515,8 @@ $('#btn-species').addEventListener('click', () => species.open());
 $('#btn-eco').addEventListener('click', () => eco.open());
 $('#status').addEventListener('click', () => { if (!session) eco.open(); });
 $('#hud').addEventListener('click', e => {
-	if (!e.target.closest('#hud-steps')) return places.open();
+	if (e.target.closest('#hud-act')) return showActivity();
+	if (!e.target.closest('#hud-steps')) return;
 	if ((state.pending ?? 0) < 1) { if (!session) eco.open(); return; }
 	if (jarOf(state) >= 1) { focusJar(); toast(`Ta récolte t’attend dans le collecteur${groundOf(state) >= 1 ? ', et en gouttes sur les fleurs' : ''} : touche-le pour le vider`, '#E3A33A'); }
 	else { focusDew(); toast('Ta récolte perle sur les fleurs : touche les gouttes dorées', '#E3A33A'); }
@@ -2572,7 +2618,22 @@ if (Tuning.preview) {
 } else {
 	if (!sky.override) sky.start();
 	resumeTracking();
-	if (firstRun) {
+	if (state.intro) {
+		startIntro({
+			garden, state, sound, DEV, persist, renderHud, updateSpeciesDot, showModal, speciesOf, SPECIES_BY_ID,
+			enableTracking: () => { enableTracking(true); sky.locate(true); },
+			addMeters: m => { addMeters(m); renderHud(); },
+			moving: () => !!session,
+			simWalk: () => {
+				if (tracking.sim) return;
+				tracking.sim = new SimTracker(s => onSample({ ...s, sim: true }), () => {});
+				tracking.sim.speedKmh = 5;
+				tracking.sim.timeScale = 1;
+				tracking.sim.start();
+			},
+			onDone: () => { renderDaily(); renderStatus(); setTimeout(offerHarvest, 600); },
+		});
+	} else if (firstRun) {
 		setTimeout(() => coach(0), 1600);
 	} else {
 		runIdle(true);

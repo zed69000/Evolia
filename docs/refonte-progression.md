@@ -33,6 +33,28 @@ qui est fait sur la branche, et ce qui reste.
 | Le compost : une fois plein, l'utiliser au potager pour que les légumes rapportent plus | Le compost se remplit en marchant (3 km) ; plein, « Épandre sur le potager » : les 3 récoltes suivantes donnent 6 légumes au lieu de 4. |
 | Les ruches : en prendre une partie, laisser le reste aux abeilles | Bulle de la ruche : part de miel récoltée réglable (0 à 60 %, 30 % au départ) ; le reste nourrit la colonie. |
 
+## Le début du jeu, précisé (11 novembre au soir)
+
+- **HUD discret** : plus de bandeau avec le nom, les kilomètres et l'objectif en permanence. En haut : une icône
+  d'activité (au repos, marche, course, vélo) entourée de l'avancée du jour, et la bourse. Toucher l'icône montre le
+  détail (kilomètres, pas, objectif du jour, milieux). L'objectif et la mission ne restent plus affichés.
+- **Le tutoriel se fait, il ne se raconte pas** : une consigne à la fois, sur ce qu'on est en train de faire ; rien
+  d'autre à l'écran pendant ce temps.
+- **L'introduction** (dans le jeu, avec ses dessins, sans HUD) :
+  1. une minuscule motte de terre ; un oiseau passe et laisse tomber une graine ;
+  2. « Marche quelques pas » : la fleur pousse en quelques secondes de marche ;
+  3. une abeille vient la butiner, puis repart (pas encore de nectar) ;
+  4. la vue s'éloigne doucement, le logo apparaît avec une phrase : « Chaque pas fait fleurir. » ;
+  5. le bouton des espèces apparaît et palpite : on l'ouvre, on lit la fiche de l'abeille, elle rapporte la première
+     monnaie, le nectar ; on la voit arriver dans la bourse, qui apparaît à ce moment ;
+  6. le bouton Aménager apparaît : on achète sa première ruche ;
+  7. on explique : la ruche accueille un nombre limité d'abeilles, elles font du miel qu'on troque (ça prend du temps),
+     les fleurs les attirent, et les fleurs poussent quand on bouge ;
+  8. on montre l'icône d'activité : « fais quelques pas », elle passe à la marche ; une autre fleur pousse, une autre
+     abeille vient.
+- **Chaque espèce s'attire par quelque chose** (les fleurs pour les abeilles, un tronc pour d'autres…) : à étendre
+  espèce par espèce.
+
 ## Reste à faire
 
 - **Fiches d'espèces avec une vraie photo**, passée en filtre aquarelle pour rester dans la direction artistique

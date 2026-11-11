@@ -899,3 +899,34 @@ body:has(.panel.open) #debug { display: none; }
 .dbg-copy button { margin-top: 8px; }
 #debug button.rec { border-color: #E8503A; color: #FFB4A8; }
 .opt-error { white-space: pre-wrap; word-break: break-word; font-size: 12px; background: var(--papier-2); padding: 10px; border-radius: 12px; user-select: text; }
+
+/* ─── Le bandeau, discret : l'icône d'activité (cerclée de l'avancée du jour) et la bourse ─── */
+#hud { right: auto; width: auto; padding: 5px 6px 5px 5px; gap: 6px; }
+.hud-act { position: relative; width: 46px; height: 46px; flex: none; border: none; background: none; padding: 0; cursor: pointer; color: var(--foret); border-radius: 50%; }
+.hud-act .ring { position: absolute; inset: 0; width: 46px; height: 46px; }
+.act-ico { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; }
+.act-ico svg { width: 24px; height: 24px; }
+.hud-act:not([data-act="rest"]) .act-ico svg { animation: act-bob .5s ease-in-out infinite alternate; }
+@keyframes act-bob { from { transform: translateY(0); } to { transform: translateY(-1.5px); } }
+/* Plus d'objectif ni de statut affichés en permanence : tout est derrière l'icône. */
+#home .status, #next-goal, #live, #mission { display: none !important; }
+
+/* ─── L'introduction : rien d'autre à l'écran que le jardin et la consigne ─── */
+#app.intro #daily, #app.intro #quest, #app.intro #mission, #app.intro #btn-peek, #app.intro #toasts, #app.intro #tip,
+#app.intro #btn-zoom-info, #app.intro #zoom-info, #app.intro #coach, #app.intro #btn-track, #app.intro #map-filters { display: none !important; }
+#app.intro:not(.i-hud) #hud, #app.intro:not(.i-sheet) #home { display: none !important; }
+#app.intro #home .btn.round:not(.i-on) { display: none !important; }
+.intro-cap { position: absolute; left: 50%; bottom: calc(env(safe-area-inset-bottom, 0px) + 28px); transform: translate(-50%, 10px); width: min(340px, calc(100% - 32px)); box-sizing: border-box; padding: 14px 16px; text-align: center; z-index: 70; opacity: 0; transition: opacity .6s ease, transform .6s ease; }
+.intro-cap.in { opacity: 1; transform: translate(-50%, 0); }
+.intro-cap p { margin: 0; font-size: 15px; line-height: 1.45; color: var(--foret); }
+.intro-actions { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-top: 10px; }
+#app.i-sheet .intro-cap { bottom: calc(env(safe-area-inset-bottom, 0px) + 130px); }
+#app:has(.panel.open) .intro-cap { bottom: calc(env(safe-area-inset-bottom, 0px) + 14px); }
+#app.placing .intro-cap, #app:has(.modal:not([hidden])) .intro-cap { display: none; }
+.intro-skip { position: absolute; top: calc(env(safe-area-inset-top, 0px) + 14px); right: 12px; z-index: 70; border: none; background: rgba(253, 247, 231, .75); color: var(--doux); font: 700 12px Nunito, sans-serif; padding: 6px 10px; border-radius: 12px; cursor: pointer; }
+#app:has(.panel.open) .intro-skip { display: none; }
+.intro-logo { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; pointer-events: none; opacity: 0; transition: opacity 1.6s ease; z-index: 60; }
+.intro-logo.in { opacity: 1; }
+.intro-logo img { width: min(220px, 55vw); filter: drop-shadow(0 4px 18px rgba(253, 247, 231, .9)); }
+.intro-logo p { margin: 0; font-family: Courgette, cursive; font-size: 23px; color: var(--foret); text-shadow: 0 0 12px rgba(253, 247, 231, .95), 0 0 4px rgba(253, 247, 231, .95); }
+.intro-coin { position: absolute; width: 22px; height: 22px; margin: -11px 0 0 -11px; border-radius: 50%; z-index: 80; background: radial-gradient(circle at 35% 35%, #FFE7A0, #F4C23E 60%, #C8901A); box-shadow: 0 0 14px rgba(244, 194, 62, .85); transition: left 1s cubic-bezier(.5, 0, .3, 1), top 1s cubic-bezier(.5, .4, .3, 1), transform 1s; }

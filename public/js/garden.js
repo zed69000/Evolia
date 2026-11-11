@@ -307,6 +307,8 @@ export class Garden {
 	ensurePlace() {
 		this.syncLayout();
 		const place = this.place;
+		// Pendant l'introduction, la motte reste nue : c'est l'oiseau qui apporte la première graine.
+		if (this.state.intro) return;
 		if (!place.seeded && !place.plants.length) this.seedStarterGarden(this.biomeOf(0), 0);
 		place.seeded = true;
 		for (const b of biomesIn(place)) this.renewBiome(b);
@@ -719,7 +721,9 @@ export class Garden {
 		m.globalAlpha = 1;
 		m.clearRect(0, 0, cw, ch);
 		const S = this.scale / 2;
-		if (this.glyph) {
+		// Vu de loin, et au tout début de l'introduction (la motte de terre seule au milieu du papier).
+		const paper = this.glyph || (this.state.intro && this.cellScale(0) < 0.3);
+		if (paper) {
 			// Vu de loin : la terre inconnue, un papier crème uni, avec quelques lavis très doux.
 			m.fillStyle = 'rgb(241,236,220)';
 			m.fillRect(0, 0, cw, ch);
@@ -749,7 +753,7 @@ export class Garden {
 			m.fillRect(ox, -1e5, PARCEL_W, 1e5 + 190);
 			m.fillStyle = prev;
 		}
-		if (this.glyph) {
+		if (paper) {
 			const mk = this.gardenMask();
 			m.drawImage(mk.canvas, mk.x0, mk.y0, mk.canvas.width / mk.k, mk.canvas.height / mk.k);
 		} else {
@@ -1581,7 +1585,7 @@ export class Garden {
 	// Sans collecteur, la récolte des butineurs perle sur les fleurs : une goutte pour quelques nectar.
 
 	updateDew() {
-		const amount = this.glyph ? 0 : (this.dewAmount?.() ?? 0);
+		const amount = this.glyph || this.state.intro ? 0 : (this.dewAmount?.() ?? 0);
 		const want = amount >= 1 ? Math.min(10, Math.ceil(amount / 3)) : 0;
 		this.dew ??= [];
 		while (this.dew.length > want) this.dew.pop();
@@ -2329,7 +2333,7 @@ export class Garden {
 		for (const sp of SPECIES) {
 			if (sp.kind !== 'animal' || !present.has(sp.place) || !sp.critter.behavior) continue;
 			const n = want.get(sp) ?? 0;
-			const active = this.insects.filter(i => i.sp === sp.id && !i.leaving);
+			const active = this.insects.filter(i => i.sp === sp.id && !i.leaving && !i.intro);
 			for (let k = active.length; k < n; k++) {
 				let b = null;
 				for (const ci of visible.filter(ci => this.biomeOf(ci) === sp.place).sort(() => Math.random() - 0.5)) if ((b = this.newCritter(sp, this.pdata[ci]))) break;
@@ -3677,7 +3681,7 @@ export class Garden {
 		// Lumière de l'heure, de la saison et du temps
 		ctx.setTransform(1, 0, 0, 1, 0, 0);
 		// Vu de loin, c'est une carte : ni l'heure ni le temps ne l'assombrissent.
-		if (!glyph && amb.a > 0.001) {
+		if (!glyph && !this.state.intro && amb.a > 0.001) {
 			ctx.globalCompositeOperation = 'multiply';
 			ctx.fillStyle = rgba(amb.color, amb.a);
 			ctx.fillRect(0, 0, cw, ch);
@@ -3788,6 +3792,7 @@ export class Garden {
 
 		world();
 		this.drawWeather(ctx);
+		if (this.introFx) { world(); this.introFx(ctx); }
 		if (wk === 'storm' && this.flash > 0) {
 			ctx.setTransform(1, 0, 0, 1, 0, 0);
 			ctx.fillStyle = `rgba(255,255,250,${this.flash * 0.35})`;
@@ -3803,7 +3808,7 @@ export class Garden {
 
 		if (glyph || this.lockedCells().some(c => this.lockedInfo?.(c))) this.drawLabels(ctx, glyph, S, tx, ty);
 		// Les pastilles passent par-dessus tout, étiquettes des parcelles comprises.
-		if (this.cam.z < POI_Z && !this.ghost) this.drawPOI(ctx, S, tx, ty);
+		if (this.cam.z < POI_Z && !this.ghost && !this.state.intro) this.drawPOI(ctx, S, tx, ty);
 		else this.poiHits = null;
 		this.drawNectarDrops(ctx, S, tx, ty);
 	}

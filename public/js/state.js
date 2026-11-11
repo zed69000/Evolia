@@ -139,7 +139,9 @@ function fresh() {
 		goalKm: 2.5,
 		v: 3,
 		place: GARDEN,
-		places: { [GARDEN]: newPlace() },
+		// Une nouvelle partie commence par l'introduction (intro.js), sur une minuscule motte de terre.
+		places: { [GARDEN]: { ...newPlace(), cellSize: { 0: 0.15 } } },
+		intro: 'scene',
 		walks: [],
 		days: {},
 		totals: { distance: 0, effort: 0, walks: 0, steps: 0 },
