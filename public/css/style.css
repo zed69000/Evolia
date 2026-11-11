@@ -953,7 +953,9 @@ body:has(.panel.open) #debug { display: none; }
 .intro-cap.card, #app:has(.panel.open) .intro-cap.card, .tip.card { background: rgba(31, 107, 71, .93); border-color: transparent; border-radius: 22px; box-shadow: 0 6px 22px rgba(20, 50, 30, .3); -webkit-backdrop-filter: none; backdrop-filter: none; }
 .intro-cap p, .intro-cap p b, .tip p, .tip b { color: #FDF7E7; }
 .intro-cap.card { overflow: visible; }
-.intro-cap.card::after { content: ''; position: absolute; left: 50%; bottom: -9px; margin-left: -9px; border: 9px solid transparent; border-bottom: 0; border-top-color: rgba(31, 107, 71, .93); }
+.intro-cap.card::after { content: ''; position: absolute; left: var(--tail-x, 50%); bottom: -9px; margin-left: -9px; border: 9px solid transparent; border-bottom: 0; border-top-color: rgba(31, 107, 71, .93); transition: left .3s ease; }
+.intro-cap.card.tail-up::after { bottom: auto; top: -9px; border: 9px solid transparent; border-top: 0; border-bottom-color: rgba(31, 107, 71, .93); }
+.intro-cap.card.no-tail::after { display: none; }
 .tip::after { border-top-color: rgba(31, 107, 71, .93); }
 .tip.below::after { border-top-color: transparent; border-bottom-color: rgba(31, 107, 71, .93); }
 .intro-cap .btn.ghost, .tip .btn.ghost { background: rgba(253, 247, 231, .18); color: #FDF7E7; box-shadow: none; }

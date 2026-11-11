@@ -45,7 +45,26 @@ export function startIntro(c) {
 	// route, elle reprend à l'étape où l'on s'était arrêté.
 
 	/** Affiche une consigne. Avec des boutons, la promesse attend celui qui termine l'étape. */
-	const say = (html, buttons = []) => new Promise(res => {
+	// La pointe de la bulle montre où regarder : un bouton, la bourse, ou le jardin au milieu de l'écran.
+	let aim = null;
+	const updateTail = () => {
+		if (cap.hidden || !aim) { cap.classList.add('no-tail'); return; }
+		const r = cap.getBoundingClientRect();
+		let tx, ty;
+		if (aim === 'center') { const a = app.getBoundingClientRect(); tx = a.left + a.width / 2; ty = a.top + a.height * 0.42; }
+		else {
+			const el = $(aim);
+			if (!el || el.offsetParent === null) { cap.classList.add('no-tail'); return; }
+			const e = el.getBoundingClientRect();
+			tx = e.left + e.width / 2; ty = e.top + e.height / 2;
+		}
+		cap.classList.remove('no-tail');
+		cap.classList.toggle('tail-up', ty < r.top);
+		cap.style.setProperty('--tail-x', `${Math.max(26, Math.min(r.width - 26, tx - r.left))}px`);
+	};
+	const tailTimer = setInterval(updateTail, 200);
+	const say = (html, buttons = [], target = null) => new Promise(res => {
+		aim = target;
 		cap.innerHTML = `<p>${html}</p>${buttons.length ? `<div class="intro-actions">${buttons.map((b, i) => `<button class="btn ${i ? 'ghost' : 'primary'} small" data-i="${i}">${b.label}</button>`).join('')}</div>` : ''}`;
 		cap.hidden = false;
 		cap.classList.remove('in');
@@ -53,6 +72,7 @@ export function startIntro(c) {
 		cap.classList.add('in');
 		// Une page ouverte (fiche, espèces…) s'arrête au-dessus de la consigne : elle ne cache jamais le texte.
 		app.style.setProperty('--cap-h', `${cap.offsetHeight + 24}px`);
+		updateTail();
 		cap.onclick = e => {
 			const el = e.target.closest('[data-i]');
 			if (!el) return;
@@ -146,7 +166,7 @@ export function startIntro(c) {
 		const buttons = [];
 		if (!state.tracking) buttons.push({ label: 'Activer le suivi de mes pas', once: true, stay: true, run: () => c.enableTracking() });
 		if (c.DEV) buttons.push({ label: 'Simuler 5 m', stay: true, run: () => c.addMeters(5) });
-		say('Un oiseau a laissé tomber une graine.<br><b>Marche quelques pas</b> pour la faire pousser.', buttons);
+		say('Un oiseau a laissé tomber une graine.<br><b>Marche quelques pas</b> pour la faire pousser.', buttons, 'center');
 		await until(() => {
 			if (over) return true;
 			f.growth = Math.max(f.growth, Math.min(1, 0.03 + (state.totals.distance - d0) / WALK_M));
@@ -158,7 +178,7 @@ export function startIntro(c) {
 		garden.burst(p.x, p.y - 20, 18, '#F4C23E');
 		c.sound.chime(3);
 		state.species[c.speciesOf(f)] ??= Date.now();
-		say('Elle a fleuri !');
+		say('Elle a fleuri !', [], 'center');
 		await wait(2400);
 	}
 
@@ -168,10 +188,10 @@ export function startIntro(c) {
 		const P = garden.pdata?.[0];
 		const b = P ? garden.newCritter(c.SPECIES_BY_ID.abeille, P) : null;
 		if (b) { b.intro = true; garden.insects.push(b); }
-		say('Une abeille vient la butiner…');
+		say('Une abeille vient la butiner…', [], 'center');
 		await wait(9000);
 		if (b) b.leaving = true;
-		say('… puis elle repart, chargée de pollen.');
+		say('… puis elle repart, chargée de pollen.', [], 'center');
 		state.species.abeille ??= Date.now();
 		c.persist(true);
 		await wait(3500);
@@ -211,16 +231,16 @@ export function startIntro(c) {
 		const btn = $('#btn-species');
 		btn.classList.add('i-on', 'ui-new', 'tip-glow');
 		if (!state.speciesSeen?.abeille) {
-			say('Deux espèces sont venues dans ton jardin.<br>Touche <b>Espèces</b> pour les découvrir.');
+			say('Deux espèces sont venues dans ton jardin.<br>Touche <b>Espèces</b> pour les découvrir.', [], '#btn-species');
 			await until(() => over || $('#species').classList.contains('open'));
 			btn.classList.remove('tip-glow');
-			say('Touche l’<b>abeille</b> pour lire sa fiche :<br>lire une fiche te rapporte du <b>nectar</b>, ta première monnaie.');
+			say('Touche l’<b>abeille</b> pour lire sa fiche :<br>lire une fiche te rapporte du <b>nectar</b>, ta première monnaie.', [], '#species [data-sp="abeille"]');
 			await until(() => {
 				$('#species [data-sp="abeille"]')?.classList.add('tip-glow');
 				return over || state.speciesSeen?.abeille;
 			});
 			if (over) throw new Skip();
-			say('Voilà ton premier nectar !<br>Ferme la fiche pour le ramasser.');
+			say('Voilà ton premier nectar !<br>Ferme la fiche pour le ramasser.', [], '#species [data-close-species]');
 		}
 		btn.classList.remove('tip-glow');
 		await until(() => over || !$('#species').classList.contains('open'));
@@ -240,7 +260,7 @@ export function startIntro(c) {
 		$('#hud-steps').classList.add('ui-new');
 		c.sound.chime(2);
 		await wait(700);
-		await say('Voici ta <b>bourse</b> : le nectar que tu gagnes s’y range.', [{ label: 'Compris' }]);
+		await say('Voici ta <b>bourse</b> : le nectar que tu gagnes s’y range.', [{ label: 'Compris' }], '#hud-steps');
 	}
 
 	/**
@@ -300,10 +320,10 @@ export function startIntro(c) {
 		deco.classList.add('i-on', 'ui-new');
 		if (!hasHive()) {
 			deco.classList.add('tip-glow');
-			say('Avec ce nectar, offre une <b>ruche</b> à tes abeilles.<br>Touche <b>Aménager</b>.');
+			say('Avec ce nectar, offre une <b>ruche</b> à tes abeilles.<br>Touche <b>Aménager</b>.', [], '#btn-deco');
 			await until(() => over || hasHive() || $('#deco').classList.contains('open'));
 			deco.classList.remove('tip-glow');
-			say('Choisis la <b>ruche</b>, puis pose-la dans ton jardin.');
+			say('Choisis la <b>ruche</b>, puis pose-la dans ton jardin.', [], '#deco [data-buy="ruche"]');
 			await until(() => {
 				$('#deco [data-buy="ruche"]')?.classList.add('tip-glow');
 				return over || hasHive();
@@ -333,7 +353,7 @@ export function startIntro(c) {
 		b.intro = true;
 		b.visits = 8; // chargée après une fleur : elle rentre tout de suite
 		garden.insects.push(b);
-		say('Ton abeille butine, puis rapporte son nectar à la ruche.<br>C’est là qu’elle fait le <b>miel</b>.');
+		say('Ton abeille butine, puis rapporte son nectar à la ruche.<br>C’est là qu’elle fait le <b>miel</b>.', [], 'center');
 		const t0 = Date.now();
 		await until(() => over || b.hidden || Date.now() - t0 > 25000);
 		await wait(1800);
@@ -346,7 +366,7 @@ export function startIntro(c) {
 		const act = $('#hud-act');
 		act.classList.add('tip-glow');
 		say('Ici, ton <b>activité</b> : au repos.<br>Fais quelques pas : l’icône passe à la marche.',
-			c.DEV ? [{ label: 'Simuler une marche', once: true, stay: true, run: () => c.simWalk() }] : []);
+			c.DEV ? [{ label: 'Simuler une marche', once: true, stay: true, run: () => c.simWalk() }] : [], '#hud-act');
 		await until(() => over || c.moving());
 		if (over) throw new Skip();
 		act.classList.remove('tip-glow');
@@ -358,6 +378,7 @@ export function startIntro(c) {
 		if (over) return;
 		over = true;
 		garden.introFx = null;
+		clearInterval(tailTimer);
 		(place.cellSize ??= {})[0] = Math.max(place.cellSize[0] ?? 0.4, 0.4);
 		// Passée trop tôt : on donne quand même la fleur, l'abeille et de quoi s'offrir la ruche.
 		if (skipped) {

@@ -1799,17 +1799,22 @@ function renderDeco() {
 	const nectar = state.nectar ?? 0;
 	const here_ = garden.items;
 	const cat = CATS.find(c => c.id === decoTab), biome = garden.biomeOf(garden.active);
+	// Pendant l'introduction, seulement la ruche, tout en haut ; le reste est grisé (il viendra plus tard).
+	const first = !!state.intro;
+	const order = first ? ['ruche', ...ITEM_ORDER.filter(k => k !== 'ruche' && ITEMS[k].cat === 'habitat')] : ITEM_ORDER.filter(k => ITEMS[k].cat === decoTab && fitsPlace(k, biome));
 	$('#deco').innerHTML = `
 		<div class="panel-head"><h2>Aménager</h2><button class="close" data-close-deco aria-label="Fermer">×</button></div>
-		<div class="deco-tabs" role="tablist">${CATS.map(c => `<button role="tab" aria-selected="${c.id === decoTab}" data-tab="${c.id}">${c.name}</button>`).join('')}</div>
-		<p class="sp-intro">${cat.intro} Tout se paie en nectar, et se range quand tu veux (le nectar t'est rendu).${biome !== 'prairie' ? ` Ici, seulement ce qui a sa place ${PLACE_IN[biome]}.` : ''}</p>
-		<div class="deco-list">${ITEM_ORDER.filter(k => ITEMS[k].cat === decoTab && fitsPlace(k, biome)).map(k => {
-			const it = ITEMS[k], cost = priceOf(k), need = needsFirst(k), wild = natureLock(k), locked = km < it.km || !!need || !!wild, poor = nectar < cost;
+		${first ? '' : `<div class="deco-tabs" role="tablist">${CATS.map(c => `<button role="tab" aria-selected="${c.id === decoTab}" data-tab="${c.id}">${c.name}</button>`).join('')}</div>`}
+		<p class="sp-intro">${first ? 'Ta première ruche : tes abeilles y vivront et y feront leur miel. Le reste viendra plus tard.' : `${cat.intro} Tout se paie en nectar, et se range quand tu veux (le nectar t'est rendu).${biome !== 'prairie' ? ` Ici, seulement ce qui a sa place ${PLACE_IN[biome]}.` : ''}`}</p>
+		<div class="deco-list">${order.map(k => {
+			const later = first && k !== 'ruche';
+			const it = ITEMS[k], cost = priceOf(k), need = needsFirst(k), wild = natureLock(k), locked = later || km < it.km || !!need || !!wild, poor = nectar < cost;
 			const mine = here_.filter(x => x.kind === k), n = mine.length;
 			// L'habitat le moins avancé d'ici, qu'on peut améliorer depuis la liste.
 			const low = mine.filter(x => nextLevel(x)).sort((a, b) => (a.level ?? 1) - (b.level ?? 1))[0], nx = low && nextLevel(low);
 			const up = nx ? nx.ok ? `<button class="btn primary small" data-level="${k}" ${nectar < nx.cost ? 'disabled' : ''}>Améliorer · ${fmtInt(nx.cost)}</button>` : `<span class="deco-lock">niveau ${nx.level} dès ${nx.km} km</span>` : '';
-			const action = km < it.km ? `<span class="deco-lock">dès ${it.km} km parcourus</span>`
+			const action = later ? '<span class="deco-lock">plus tard</span>'
+				: km < it.km ? `<span class="deco-lock">dès ${it.km} km parcourus</span>`
 				: wild ? `<span class="deco-lock">quand la nature sera installée : ${wild}</span>`
 				: need ? `<span class="deco-lock">après avoir posé ${ITEMS[need].name.toLowerCase()}</span>`
 				: `<button class="btn ${n && canLevel(k) ? 'ghost' : 'primary'} small" data-buy="${k}" ${poor ? 'disabled' : ''}>${poor ? `il manque ${fmtInt(cost - nectar)}` : n ? 'Un de plus' : 'Installer'}</button>`;
