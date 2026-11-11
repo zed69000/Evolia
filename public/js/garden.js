@@ -40,6 +40,21 @@ const FRUIT_TREES = { pommier: '#D8402E', poirier: '#C8B848', merisier: '#B0283A
 // Construire un objet : la durée, et les instants des coups de marteau.
 const BUILD_TIME = 1.25, BUILD_TAPS = [0.2, 0.5, 0.8];
 const smoothstep = k => k * k * (3 - 2 * k);
+
+// ─── Le corps des bêtes : on regarde là où on va ───────────────────
+// Une bête qui glisse de côté (« vol en crabe ») ressemble à un objet qu'on déplace, pas à un animal qui va
+// quelque part. Le corps suit donc sa vitesse, avec un léger retard, penche dans les virages et ne se retourne
+// pas d'un coup. Voir la fiche « ia-creatures-jeux ».
+/** Bêtes dessinées vues de dessus : on les tourne vers leur vitesse (décalage = sens de la tête dans le dessin). */
+const TOPDOWN = { butterfly: Math.PI / 2, moth: 0, dragonfly: 0, hoverfly: 0, beefly: 0, bat: 0, swallow: 0, eagle: Math.PI / 2, gull: Math.PI / 2, beetle: 0, ladybug: 0, firebug: 0, lizard: 0, snake: 0, spider: Math.PI / 2, crab: Math.PI / 2 };
+/** Bêtes de profil qui lèvent ou piquent du nez selon qu'elles montent ou descendent (amplitude). */
+const PITCH = { bee: 0.45, bird: 0.5, tit: 0.5, grasshopper: 0.6 };
+/** Vivacité des virages (1/s) : plus c'est haut, plus la bête change vite de cap. */
+const TURN = { butterfly: 6, moth: 7, bee: 9, hoverfly: 14, beefly: 12, dragonfly: 16, bat: 12, swallow: 8, bird: 6, tit: 7, owl: 4, eagle: 3, gull: 3 };
+/** Modes où la bête ne bouge pas vraiment : elle garde son cap au lieu de suivre ses petits tremblements. */
+const STILL = new Set(['perch', 'hover', 'sit']);
+const wrapAngle = a => Math.atan2(Math.sin(a), Math.cos(a));
+const clampN = (v, a, b) => Math.max(a, Math.min(b, v));
 // Les vieux arbres déjà là en arrivant (cœur du lieu, sur les bords pour laisser la place au milieu).
 const OLD_TREES = {
 	foret: [[55, 300], [365, 330], [40, 600], [385, 660], [60, 930], [360, 1000], [160, 1110], [250, 250]],
@@ -2195,7 +2210,7 @@ export class Garden {
 		if (ci >= 0 && ci < cellsOpen(this.place) && ci !== this.active) { this.active = ci; this.onActive?.(ci); }
 
 		if (this.t > this.nextPopulate) { this.populate(); this.updateDew(); this.nextPopulate = this.t + 1; }
-		for (const i of this.insects) this.updateInsect(i, dt);
+		for (const i of this.insects) { this.updateInsect(i, dt); this.steerBody(i, dt); }
 		this.insects = this.insects.filter(i => !i.gone);
 		this.updateFarmer(dt);
 		this.updatePet(dt);
@@ -2877,17 +2892,79 @@ export class Garden {
 		return true;
 	}
 
+	/**
+	 * Un danger tout proche (le jardinier, son chien ou son chat) ? Renvoie vrai une fois le temps de réaction
+	 * écoulé (0,1 à 0,35 s, propre à chaque fois) : une fuite instantanée paraîtrait mécanique.
+	 */
+	startled(b, r, dt) {
+		if (b.fright != null) {
+			b.fright -= dt;
+			if (b.fright > 0) return false;
+			b.fright = null;
+			return true;
+		}
+		if ([this.farmer, this.pet].some(a => a && !a.hidden && Math.hypot(a.x - b.x, a.y - b.y) < r)) b.fright = 0.1 + Math.random() * 0.25;
+		return false;
+	}
+
+	/**
+	 * Le corps suit la vitesse réellement parcourue (quel que soit le comportement qui a bougé la bête) :
+	 * cap lissé avec un léger retard, inclinaison dans les virages, nez qui monte ou pique, et demi-tour
+	 * de profil en quelques images au lieu d'un retournement sec. À l'arrêt, la bête garde son cap.
+	 */
+	steerBody(b, dt) {
+		if (dt <= 0 || b.behavior === 'bound' || b.behavior === 'roam' || b.behavior === 'trail') return;
+		if (b.lx == null || b.hidden) { b.lx = b.x; b.ly = b.y; b.svx = b.svy = 0; b.flew = false; return; }
+		let vx = (b.x - b.lx) / dt, vy = (b.y - b.ly) / dt;
+		b.lx = b.x; b.ly = b.y;
+		// Un bond imposé (le chat qui la rate, une réapparition) : on ne tourne pas pour ça.
+		if (vx * vx + vy * vy > 600 * 600) { vx = vy = 0; b.svx = b.svy = 0; }
+		const s = 1 - Math.exp(-dt * 12);
+		b.svx += (vx - b.svx) * s;
+		b.svy += (vy - b.svy) * s;
+		// Bougée par autre chose que flyTo (posée, en balade) : son élan repart de ce qu'elle fait vraiment.
+		if (!b.flew) { b.vx = b.svx; b.vy = b.svy; }
+		b.flew = false;
+		const still = STILL.has(b.mode) || b.gk === 'peck' || b.vk === 'sit';
+		const moving = !still && Math.hypot(b.svx, b.svy) > 6;
+		let bank = 0;
+		if (moving) {
+			const want = Math.atan2(b.svy, b.svx);
+			if (b.head == null) b.head = want;
+			const turn = wrapAngle(want - b.head) * (1 - Math.exp(-dt * (TURN[b.kind] ?? 8)));
+			b.head += turn;
+			bank = clampN((turn / dt) * 0.25, -0.6, 0.6);
+			if (b.svx > 5) b.dir = 1;
+			else if (b.svx < -5) b.dir = -1;
+		}
+		b.bank = (b.bank ?? 0) + (bank - (b.bank ?? 0)) * s;
+		const pitch = moving && PITCH[b.kind] ? (b.dir || 1) * clampN(Math.atan2(b.svy, Math.abs(b.svx)), -1, 1) * PITCH[b.kind] : 0;
+		b.pitch = (b.pitch ?? 0) + (pitch - (b.pitch ?? 0)) * s;
+		b.face = (b.face ?? (b.dir || 1)) + ((b.dir || 1) - (b.face ?? (b.dir || 1))) * (1 - Math.exp(-dt * 14));
+	}
+
 	updateInsect(b, dt) {
 		b.t += dt;
 		const P = this.pdata[b.ci];
 		if (!P) { b.gone = true; return; }
+		// Vol vers une cible : la bête a de l'élan (sa vitesse tourne peu à peu, d'où des courbes au lieu de
+		// virages à angle droit), freine en arrivant, et ses zigzags font partie du trajet, donc le corps les suit.
+		// Chaque individu a sa propre allure (± 15 %), pour qu'aucun ne soit le clone d'un autre.
 		const flyTo = (tx, ty, speed, wobble) => {
+			speed *= b.vary ??= 0.85 + Math.random() * 0.3;
 			const dx = tx - b.x, dy = ty - b.y, dist = Math.hypot(dx, dy) || 1;
-			const step = Math.min(dist, speed * dt);
-			b.x += (dx / dist) * step + (-dy / dist) * Math.sin(b.t * 7) * wobble * dt;
-			b.y += (dy / dist) * step + (dx / dist) * Math.sin(b.t * 7) * wobble * dt;
-			if (Math.abs(dx) > 1) b.dir = Math.sign(dx);
-			return dist;
+			const want = speed * Math.min(1, dist / Math.max(10, speed * 0.3));
+			const wob = Math.sin(b.t * 7 + (b.seed2 ??= Math.random() * 6.28)) * wobble * Math.min(1, dist / 40);
+			const wx = (dx * want - dy * wob) / dist, wy = (dy * want + dx * wob) / dist;
+			const k = 1 - Math.exp(-dt * (TURN[b.kind] ?? 8) * 0.8);
+			b.vx = (b.vx ?? 0) + (wx - (b.vx ?? 0)) * k;
+			b.vy = (b.vy ?? 0) + (wy - (b.vy ?? 0)) * k;
+			b.x += b.vx * dt;
+			b.y += b.vy * dt;
+			// Tout près, on finit de se poser en douceur (pas de ronde autour de la cible).
+			if (dist < 8) { const g = Math.min(1, dt * 8); b.x += (tx - b.x) * g; b.y += (ty - b.y) * g; }
+			b.flew = true;
+			return Math.hypot(tx - b.x, ty - b.y);
 		};
 		const midX = P.ox + PARCEL_W / 2;
 		const flyAway = () => {
@@ -2910,7 +2987,9 @@ export class Garden {
 						if (b.timer <= 0) { b.hidden = false; b.mode = 'seek'; b.visits = 0; b.target = null; }
 						return;
 					}
-					if (flyTo(it.x, it.y - (it.kind === 'ruche' ? 16 : 60), 60, 15) < 4) { b.hidden = true; b.timer = 4 + Math.random() * 5; }
+					// Chargée, elle rentre droit et plus vite : ce trajet net, opposé au va-et-vient du butinage,
+					// dit tout de suite « je rentre à la ruche ».
+					if (flyTo(it.x, it.y - (it.kind === 'ruche' ? 16 : 60), 85, 4) < 4) { b.hidden = true; b.timer = 4 + Math.random() * 5; }
 					return;
 				}
 				if (b.mode === 'hover' && b.target && has(b.target)) {
@@ -2943,6 +3022,8 @@ export class Garden {
 					b.timer -= dt;
 					const [hx, hy] = head(b.target);
 					b.x = hx + b.ox; b.y = hy + b.oy;
+					// Quelqu'un passe tout près : après un temps de réaction, il s'envole vers le haut.
+					if (this.startled(b, 40, dt)) { b.mode = 'wander'; b.target = null; b.timer = 2 + Math.random() * 2; b.ang = -Math.PI / 2 + (Math.random() - 0.5) * 1.2; return; }
 					if (b.timer <= 0) { b.mode = 'wander'; b.target = null; b.timer = 3 + Math.random() * 4; }
 					return;
 				}
@@ -2965,9 +3046,9 @@ export class Garden {
 					b.ang += Math.sign(Math.sin(back - b.ang)) * dt * 2;
 				}
 				b.ang += (Math.random() - 0.5) * dt * 4;
-				b.x += Math.cos(b.ang) * 35 * dt;
-				b.y += Math.sin(b.ang) * 35 * dt + Math.sin(b.t * 5) * 8 * dt;
-				b.dir = Math.cos(b.ang) >= 0 ? 1 : -1;
+				const fs = 35 * (b.vary ??= 0.85 + Math.random() * 0.3);
+				b.x += Math.cos(b.ang) * fs * dt;
+				b.y += Math.sin(b.ang) * fs * dt + Math.sin(b.t * 5) * 8 * dt;
 				return;
 			}
 			case 'water': {
@@ -3071,6 +3152,16 @@ export class Garden {
 					return;
 				}
 				if (b.mode === 'ground') {
+					// Dérangé au sol : il s'envole vers un arbre, et ses voisins suivent en cascade, chacun avec son
+					// propre temps de réaction (c'est l'envol en groupe, décalé, qui fait « nature »).
+					if (this.startled(b, 60, dt)) {
+						for (const o of this.insects) if (o !== b && o.behavior === 'perch' && o.mode === 'ground' && o.fright == null && Math.hypot(o.x - b.x, o.y - b.y) < 110) o.fright = 0.12 + Math.random() * 0.3;
+						b.mode = 'seek'; b.gk = null;
+						b.target = pick(b.p.on === 'buisson' ? P.bushes : P.trees) ?? b.target;
+						b.ox = (Math.random() - 0.5) * (b.p.on === 'buisson' ? 30 : 60);
+						b.vx = (b.vx ?? 0) * 0.3; b.vy = -70; b.flew = true;
+						return;
+					}
 					// Au sol : quelques sautillements, des coups de bec. En picorant, les oiseaux sèment.
 					if (b.gk !== 'peck') { if (flyTo(b.gx, b.gy, 110, 10) < 3) { b.gk = 'peck'; b.timer = 3 + Math.random() * 3; } return; }
 					b.timer -= dt;
@@ -3882,14 +3973,17 @@ export class Garden {
 				return;
 			}
 		}
-		if (b.kind === 'swallow' || b.behavior === 'soar') {
-			const vx = b.x - (b.px ?? b.x), vy = b.y - (b.py ?? b.y);
-			if (Math.hypot(vx, vy) > 0.01) b.head = Math.atan2(vy, vx);
-			b.px = b.x; b.py = b.y;
-			// Le dessin des planeurs regarde vers le haut, celui des hirondelles vers la droite.
-			ctx.rotate((b.head ?? 0) + (b.kind === 'swallow' ? 0 : Math.PI / 2));
-			ctx.scale(k, k);
-		} else ctx.scale((b.dir || 1) * k, k);
+		const off = TOPDOWN[b.kind];
+		if (off != null && b.head != null) {
+			// Vue de dessus : la tête pointe vers la vitesse ; dans un virage, les ailes se resserrent (inclinaison).
+			ctx.rotate(b.head + off);
+			ctx.scale(k, k * (1 - Math.min(0.3, Math.abs(b.bank ?? 0) * 0.5)));
+		} else {
+			// De profil : nez qui monte ou pique, et demi-tour en quelques images (la bête s'amincit puis se retourne).
+			if (b.pitch) ctx.rotate(b.pitch);
+			const f = b.face ?? (b.dir || 1);
+			ctx.scale((Math.abs(f) < 0.15 ? (f < 0 ? -0.15 : 0.15) : f) * k, k);
+		}
 		if (b.kind === 'hare') b.winter = (this.season?.winter ?? 0) > 0.5;
 		drawCritter(ctx, b.kind, b.t, b.mode, b.p, b);
 		ctx.restore();
