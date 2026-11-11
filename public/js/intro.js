@@ -51,6 +51,8 @@ export function startIntro(c) {
 		cap.classList.remove('in');
 		void cap.offsetWidth;
 		cap.classList.add('in');
+		// Une page ouverte (fiche, espèces…) s'arrête au-dessus de la consigne : elle ne cache jamais le texte.
+		app.style.setProperty('--cap-h', `${cap.offsetHeight + 24}px`);
 		cap.onclick = e => {
 			const el = e.target.closest('[data-i]');
 			if (!el) return;

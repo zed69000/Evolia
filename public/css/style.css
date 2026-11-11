@@ -945,3 +945,5 @@ body:has(.panel.open) #debug { display: none; }
 /* Sur une page claire (fiche, espèces, aménager), la consigne passe en vert sombre pour bien se voir. */
 #app:has(.panel.open) .intro-cap.card { background: rgba(31, 107, 71, .9); border-color: transparent; box-shadow: 0 6px 22px rgba(20, 50, 30, .35); }
 #app:has(.panel.open) .intro-cap p, #app:has(.panel.open) .intro-cap p b { color: #FDF7E7; }
+/* Pendant le tutoriel, une page ouverte s'arrête au-dessus de la consigne, qui se pose en bas, sous la page. */
+#app.intro:has(.intro-cap.in:not([hidden])) .panel { bottom: var(--cap-h, 150px); box-shadow: 0 6px 16px rgba(40, 60, 30, .12); }
