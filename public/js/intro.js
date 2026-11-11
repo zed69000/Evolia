@@ -214,13 +214,13 @@ export function startIntro(c) {
 			say('Deux espèces sont venues dans ton jardin.<br>Touche <b>Espèces</b> pour les découvrir.');
 			await until(() => over || $('#species').classList.contains('open'));
 			btn.classList.remove('tip-glow');
-			say('Touche l’<b>abeille</b> pour lire sa fiche.');
+			say('Touche l’<b>abeille</b> pour lire sa fiche :<br>lire une fiche te rapporte du <b>nectar</b>, ta première monnaie.');
 			await until(() => {
 				$('#species [data-sp="abeille"]')?.classList.add('tip-glow');
 				return over || state.speciesSeen?.abeille;
 			});
 			if (over) throw new Skip();
-			say('Lire une fiche te rapporte du <b>nectar</b>, ta première monnaie.<br>Ferme la fiche pour le ramasser.');
+			say('Voilà ton premier nectar !<br>Ferme la fiche pour le ramasser.');
 		}
 		btn.classList.remove('tip-glow');
 		await until(() => over || !$('#species').classList.contains('open'));
