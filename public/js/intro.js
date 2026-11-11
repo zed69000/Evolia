@@ -91,10 +91,14 @@ export function startIntro(c) {
 		if (app.classList.contains('placing')) ok.push('#placing', '#garden');
 		if (!$('#modal').hidden) ok.push('#modal');
 		if (e.target.closest(ok.join(','))) return;
+		// Le jardin : on n'y bloque que le toucher qui ouvrirait une plante ou une bête (la vue est déjà tenue).
+		if (e.type === 'pointerup' && !e.target.closest('#garden')) return;
 		e.preventDefault();
 		e.stopImmediatePropagation();
 	};
-	const GUARDED = ['pointerdown', 'pointerup', 'click', 'touchstart', 'touchend', 'dblclick', 'wheel', 'contextmenu'];
+	// Seuls les « touchers » sont bloqués (clic, et le relâcher du doigt sur le jardin) : glisser pour faire défiler une
+	// fiche ou une page reste libre, sinon la page paraît figée.
+	const GUARDED = ['click', 'dblclick', 'contextmenu', 'pointerup'];
 	for (const ev of GUARDED) document.addEventListener(ev, guard, { capture: true, passive: false });
 	const say = (html, buttons = [], target = null, allowed) => new Promise(res => {
 		aim = target;

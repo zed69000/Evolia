@@ -3,6 +3,9 @@
 Chaque version, la plus récente en haut. Le site (evolia.sebastienalzamora.workers.dev) est toujours à jour ;
 le Play Store (tests internes) reçoit les versions indiquées « Play ».
 
+## 0.7.50 — 12 novembre 2026
+- Correctif : dans l’introduction, la fiche de l’abeille paraissait figée (on ne pouvait plus la faire défiler jusqu’au bouton Fermer). Le verrou du tutoriel ne bloque plus que les touchers, jamais le défilement.
+
 ## 0.7.49 — 12 novembre 2026
 L'économie façon jeu incrémental (nouvelles parties ; réglée avec le simulateur docs/equilibre-evolia.html) :
 - **Six habitats en échelle** : massif mellifère, ruche, hôtel à insectes, nichoir, mare, haie. Chacun coûte environ cinq fois le précédent et produit environ cinq fois plus ; chaque exemplaire coûte 15 % de plus ; l'hôtel demande une ruche, le nichoir un hôtel, etc.
