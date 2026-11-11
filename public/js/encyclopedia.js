@@ -185,7 +185,7 @@ export class Encyclopedia {
 		let reward = 0;
 		if (known) {
 			this.state.speciesSeen ??= {};
-			if (!this.state.speciesSeen[id]) { this.state.speciesSeen[id] = true; reward = READ_REWARD; this.onChange?.({ reward }); }
+			if (!this.state.speciesSeen[id]) { this.state.speciesSeen[id] = true; reward = this.rewardFor?.(id) ?? READ_REWARD; this.onChange?.({ reward }); }
 		}
 		const date = known ? new Date(this.state.species[id]).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' }) : '';
 		this.panel.innerHTML = `

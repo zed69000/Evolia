@@ -11,11 +11,16 @@ import { GAIT, strideOf, HEN_LOOKS, drawFromSheet, loadSheets, SHEETS, sheetIdOf
 import { SPECIES, PLACE_BY_ID, speciesOf } from './species.js';
 import { PARCEL_W, PARCEL_H, CELLS, CELL_KM, GROUND, zoneOf, zoneName, tileSteps, tileSig, keepOut, cellIndexAt, riversIn } from './zones.js';
 import { biomeOf, heartOf, rankOf, biomesIn } from './state.js';
+import { makeWorld, worldBiome } from './world.js';
 import { ITEMS, ITEM_PAINTERS, attracted, paintSoil, PLOT, paintAdorn, canLevel, itemBox, LINK, linkEnds, fitsPlace } from './deco.js';
 
 export { PARCEL_W, PARCEL_H, CELLS, CELL_KM };
 export const cellsOpen = place => Math.min(CELLS.length, place?.cells ?? 1);
-export const cellOrigin = i => [CELLS[i][0] * PARCEL_W, CELLS[i][1] * PARCEL_H];
+// Où se trouve chaque parcelle sur la grille : les ouvertes dans l'ordre de leur ouverture (choisie par le joueur),
+// puis leurs voisines encore fermées, qu'on peut acheter. Fixé par le jardin (syncLayout), une partie à la fois.
+let LAYOUT = CELLS;
+export const cellPos = i => LAYOUT[i] ?? CELLS[i] ?? [0, 0];
+export const cellOrigin = i => { const [x, y] = cellPos(i); return [x * PARCEL_W, y * PARCEL_H]; };
 const cellOf = p => p.c ?? 0;
 /** Le nom d'une parcelle : le milieu pour son cœur (« Le marais »), puis ses coins (« La roselière »…). */
 export function cellName(place, ci) {
@@ -95,6 +100,8 @@ const GLYPH_Z = 0.5, DETAIL_Z = 1.6, DETAIL_DENSITY = 2.2;
 // En dessous de ce zoom, des pastilles signalent ce qui attend (collecteur, œufs, potager mûr, gouttes) ;
 // les toucher ramène la vue dessus.
 const POI_Z = 0.85, POI_ZOOM = 1.4;
+// Une parcelle s'ouvre à cette fraction de sa taille ; on l'agrandit d'un cran à chaque achat, jusqu'à sa taille pleine.
+export const CELL_START = 0.4, CELL_STEP = 0.15;
 // La caméra ne repart toute seule qu'après ce temps sans aucun geste (toucher, glisser, zoomer, bouton).
 const CAM_IDLE_MS = 20000;
 const Z_MAX = 3.2;
@@ -225,16 +232,18 @@ export class Garden {
 	 * (et pour la prochaine parcelle, encore dans la brume), la campagne sauvage du milieu ouvert le plus proche.
 	 */
 	tileAt(gx, gy) {
-		const n = cellsOpen(this.place), sig = (this.place.biomes ?? []).slice(0, n).join(',');
+		const n = cellsOpen(this.place), sig = `${(this.place.biomes ?? []).slice(0, n).join(',')}|${this.layoutSig}`;
 		if (this.tileMemo?.sig !== sig) this.tileMemo = { sig, map: new Map() };
 		const k = `${gx},${gy}`;
 		let t = this.tileMemo.map.get(k);
 		if (t) return t;
-		const ci = cellIndexAt(gx, gy);
+		const ci = LAYOUT.findIndex(([x, y]) => x === gx && y === gy);
 		if (ci >= 0 && ci < n) t = { biome: this.biomeOf(ci), rank: rankOf(this.place, ci) };
+		// Au-delà de la clôture, rien ne dit ce qui attend : la campagne du milieu ouvert le plus proche. On découvre
+		// la mare ou la forêt en explorant la parcelle.
 		else {
 			let best = 0, bd = Infinity;
-			for (let j = 0; j < n; j++) { const d = Math.hypot(CELLS[j][0] - gx, (CELLS[j][1] - gy) * 1.2); if (d < bd) { bd = d; best = j; } }
+			for (let j = 0; j < n; j++) { const [cx, cy] = cellPos(j), d = Math.hypot(cx - gx, (cy - gy) * 1.2); if (d < bd) { bd = d; best = j; } }
 			t = { biome: this.biomeOf(best), rank: -1 };
 		}
 		this.tileMemo.map.set(k, t);
@@ -242,8 +251,64 @@ export class Garden {
 	}
 
 	/** Le premier jardin : quelques plantes de départ ; puis le caractère de chaque milieu déjà là. */
+	/**
+	 * Le plan du jardin : les parcelles ouvertes (dans leur ordre d'ouverture), puis toutes leurs voisines libres du
+	 * monde, qu'on peut acheter pour agrandir. Le monde est tiré une fois par partie.
+	 */
+	syncLayout() {
+		const place = this.place, n = cellsOpen(place);
+		// Une partie déjà commencée garde son jardin tel quel (pas de côte au nord, parcelles entières).
+		place.world ??= makeWorld(Math.floor(Math.random() * 1e9), n > 1 || !!place.seeded);
+		place.layout ??= CELLS.slice(0, n).map(c => [...c]);
+		while (place.layout.length < n) place.layout.push([...CELLS[place.layout.length]]);
+		const open = place.layout, seen = new Set(open.map(p => p.join(','))), front = [];
+		if (n < CELLS.length) {
+			for (const [x, y] of open) {
+				for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+					const gx = x + dx, gy = y + dy, k = `${gx},${gy}`;
+					if (seen.has(k) || Math.abs(gx) > 8 || Math.abs(gy) > 8 || worldBiome(place.world, gx, gy) === 'sea') continue;
+					seen.add(k);
+					front.push([gx, gy]);
+				}
+			}
+		}
+		front.sort((a, b) => a[1] - b[1] || a[0] - b[0]);
+		const lay = [...open, ...front], sig = lay.map(p => p.join(',')).join(';');
+		if (sig === this.layoutSig) return;
+		this.layoutSig = sig;
+		LAYOUT = lay;
+		this.tileMemo = null;
+		this.edgeCache = null;
+	}
+
+	/** Le milieu que le monde réserve à une parcelle (ouverte ou non) ; la mer compte comme du littoral. */
+	worldBiomeAt(i) {
+		const b = worldBiome(this.place.world, ...cellPos(i));
+		return b === 'sea' ? 'littoral' : b;
+	}
+
+	/** Achète la parcelle voisine `i` : elle devient la suivante du jardin, dans le milieu que lui donne le monde. */
+	openAt(i, biome = this.worldBiomeAt(i)) {
+		const place = this.place, n = cellsOpen(place);
+		if (i < n) return i;
+		place.layout = [...place.layout.slice(0, n), [...cellPos(i)]];
+		this.syncLayout();
+		this.openCell(n, biome);
+		this.syncLayout();
+		return n;
+	}
+
+	/** La mer, en haut des parcelles du littoral qui longent la côte. */
+	seaTop(ci) {
+		const y = cellPos(ci)[1], w = this.place.world;
+		return this.biomeOf(ci) === 'littoral' && (w?.seaRow != null ? y === w.seaRow : y === 0);
+	}
+
 	ensurePlace() {
+		this.syncLayout();
 		const place = this.place;
+		// Pendant l'introduction, la motte reste nue : c'est l'oiseau qui apporte la première graine.
+		if (this.state.intro) return;
 		if (!place.seeded && !place.plants.length) this.seedStarterGarden(this.biomeOf(0), 0);
 		place.seeded = true;
 		for (const b of biomesIn(place)) this.renewBiome(b);
@@ -286,12 +351,12 @@ export class Garden {
 	/** La prochaine parcelle, dans la brume, avec les kilomètres qu'il reste à faire ici pour l'ouvrir. */
 	lockedCells() {
 		const n = cellsOpen(this.place);
-		return n < CELLS.length ? [n] : [];
+		return Array.from({ length: Math.max(0, LAYOUT.length - n) }, (_, k) => n + k);
 	}
 
 	cellAt(wx, wy) {
 		const gx = Math.floor(wx / PARCEL_W), gy = Math.floor(wy / PARCEL_H);
-		return CELLS.findIndex(([x, y]) => x === gx && y === gy);
+		return LAYOUT.findIndex(([x, y]) => x === gx && y === gy);
 	}
 
 	/**
@@ -301,7 +366,9 @@ export class Garden {
 	openCell(i, biome = 'prairie') {
 		const place = this.place;
 		(place.biomes ??= ['prairie'])[i] = biome;
+		(place.cellSize ??= {})[i] = CELL_START;
 		place.cells = Math.max(cellsOpen(place), i + 1);
+		this.syncLayout();
 		if (this.heart(biome) === i) {
 			(place.heartKm ??= {})[biome] = place.km ?? 0;
 			this.seedStarterGarden(biome, i);
@@ -321,11 +388,35 @@ export class Garden {
 	// ─── Clairières : chaque parcelle est une forme ronde ou ovale, un peu bosselée ; elles se fondent entre elles.
 
 	/** Forme d'une parcelle : ovale tiré au hasard (mais toujours le même pour cette parcelle), bord ondulé. */
+	/**
+	 * Une parcelle commence petite (le terrain du début, pour qu'on s'y attache) : 40 % de sa taille à l'ouverture.
+	 * Elle ne grandit que si on l'agrandit (en nectar, un cran de 15 % à la fois). Les parcelles d'avant sont entières.
+	 */
+	cellScale(ci) {
+		const place = this.place, s = place.cellSize?.[ci] ?? (ci === 0 && !place.world?.legacy ? CELL_START : 1);
+		return Math.round(Math.min(1, s) * 20) / 20;
+	}
+
+	/** Agrandit la parcelle d'un cran ; renvoie sa nouvelle taille. */
+	growCell(ci) {
+		const place = this.place, s = Math.min(1, this.cellScale(ci) + CELL_STEP);
+		(place.cellSize ??= {})[ci] = s;
+		const [ox, oy] = cellOrigin(ci);
+		this.burst(ox + PARCEL_W / 2, oy + PARCEL_H / 2, 24, '#8BC34A');
+		return s;
+	}
+
+	/** La taille de chaque clairière ouverte, pour savoir quand redessiner leur pourtour. */
+	scaleSig() { return this.openCells().map(i => this.cellScale(i)).join(','); }
+
 	blob(ci) {
-		const key = `${ci}`;
+		// La forme tient à la place sur la grille (les anciennes parcelles gardent exactement la leur) ; sa taille
+		// suit les kilomètres faits depuis son ouverture.
+		const [gx, gy] = cellPos(ci), sc = ci < cellsOpen(this.place) ? this.cellScale(ci) : 1, key = `${gx},${gy},${sc}`;
 		let b = this.blobs.get(key);
 		if (b) return b;
-		const r = rng(7 + 7 * 97 + ci * 53);
+		const old = CELLS.findIndex(([x, y]) => x === gx && y === gy);
+		const r = rng(7 + 7 * 97 + (old >= 0 ? old : 1000 + (gx + 50) * 131 + (gy + 50)) * 53);
 		const [ox, oy] = cellOrigin(ci);
 		b = {
 			cx: ox + PARCEL_W / 2 + r.range(-20, 20), cy: oy + PARCEL_H / 2 + r.range(-40, 40),
@@ -335,6 +426,8 @@ export class Garden {
 		// Vers les parcelles voisines (haut, bas, côtés), le bord ne rentre jamais : les clairières se rejoignent toujours.
 		b.ry *= 1.02 / Math.min(1.02, this.blobRadius(b, Math.PI / 2), this.blobRadius(b, -Math.PI / 2));
 		b.rx *= 1.02 / Math.min(1.02, this.blobRadius(b, 0), this.blobRadius(b, Math.PI));
+		b.rx *= sc;
+		b.ry *= sc;
 		const per = Math.PI * (b.rx + b.ry);
 		const n = Math.max(48, Math.round(per / 12));
 		b.pts = Array.from({ length: n }, (_, k) => this.blobPoint(b, (k / n) * Math.PI * 2));
@@ -628,9 +721,13 @@ export class Garden {
 		m.globalAlpha = 1;
 		m.clearRect(0, 0, cw, ch);
 		const S = this.scale / 2;
-		if (this.glyph) {
-			m.fillStyle = 'rgba(232,226,204,0.72)';
+		// Vu de loin, et au tout début de l'introduction (la motte de terre seule au milieu du papier).
+		const paper = this.glyph || (this.state.intro && this.cellScale(0) < 0.3);
+		if (paper) {
+			// Vu de loin : la terre inconnue, un papier crème uni, avec quelques lavis très doux.
+			m.fillStyle = 'rgb(241,236,220)';
 			m.fillRect(0, 0, cw, ch);
+			this.fogLayer(m, cw, ch, S, 0.35, 1, 0, 0);
 		} else {
 			// Le brouillard de la lisière (voile qui s'épaissit, nuages du bord), accroché au monde ; au-delà, dense.
 			// Puis des bancs de brume qui dérivent lentement par-dessus.
@@ -648,7 +745,7 @@ export class Garden {
 		m.globalCompositeOperation = 'destination-out';
 		// Au littoral de la première rangée, la mer reste nette : la brume s'efface au-dessus du rivage.
 		if (!this.glyph) for (const ci of this.openCells()) {
-			if (this.biomeOf(ci) !== 'littoral' || CELLS[ci][1] !== 0) continue;
+			if (!this.seaTop(ci)) continue;
 			const prev = m.fillStyle, fade = m.createLinearGradient(0, 120, 0, 190), [ox] = cellOrigin(ci);
 			fade.addColorStop(0, 'rgba(0,0,0,0.85)');
 			fade.addColorStop(1, 'rgba(0,0,0,0)');
@@ -656,14 +753,9 @@ export class Garden {
 			m.fillRect(ox, -1e5, PARCEL_W, 1e5 + 190);
 			m.fillStyle = prev;
 		}
-		m.globalAlpha = 0.55;
-		if (this.glyph) for (const i of this.lockedCells()) { m.beginPath(); this.tracePath(m, this.blob(i)); m.fill(); }
-		else { const rim = this.fogRim(); m.drawImage(rim.next, rim.x0, rim.y0, rim.x1 - rim.x0, rim.y1 - rim.y0); }
-		m.globalAlpha = 1;
-		if (this.glyph) {
-			m.beginPath();
-			for (const i of this.openCells()) this.tracePath(m, this.blob(i));
-			m.fill();
+		if (paper) {
+			const mk = this.gardenMask();
+			m.drawImage(mk.canvas, mk.x0, mk.y0, mk.canvas.width / mk.k, mk.canvas.height / mk.k);
 		} else {
 			// Tout l'intérieur du jardin, poches entre les clairières comprises, au bord déjà fondu.
 			const mk = this.gardenMask();
@@ -684,7 +776,7 @@ export class Garden {
 	 */
 	gardenMask() {
 		const open = this.openCells();
-		const key = open.join(',');
+		const key = `${open.join(',')}|${this.scaleSig()}`;
 		if (this.maskCache?.key === key) return this.maskCache;
 		const k = 1 / 8, pad = FOG_FAR + 200;
 		let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
@@ -782,8 +874,6 @@ export class Garden {
 					const px = ax + ((bx - ax) * d) / L, py = ay + ((by - ay) * d) / L;
 					if (this.inOpen(px + nx * 40, py + ny * 40)) { nx = -nx; ny = -ny; }
 					if (r() < 0.15) continue;
-					// Pas de nuage sur la prochaine parcelle, à demi dégagée : il y flotterait comme une boule de coton.
-					if (this.lockedCells().some(c => this.inBlob(this.blob(c), px + nx * 60, py + ny * 60, -80))) continue;
 					const n = r() < 0.3 ? 2 + Math.floor(r() * 2) : 1;
 					for (let q = 0; q < n; q++) {
 						// Le centre reste dehors ; le bord vient mordre un peu sur la clairière.
@@ -954,7 +1044,7 @@ export class Garden {
 
 	/** Pas de plante dans la mer, en haut des parcelles du littoral de la première rangée. */
 	minY(pid, type, ci = 0) {
-		return MIN_Y[type] + (this.biomeOf(ci) === 'littoral' && CELLS[ci][1] === 0 ? 240 : 0);
+		return MIN_Y[type] + (this.seaTop(ci) ? 240 : 0);
 	}
 
 	/** Trouve une place libre dans une parcelle ; si elle est pleine, on serre un peu les plantes. */
@@ -1315,7 +1405,7 @@ export class Garden {
 	}
 
 	placeItem(kind, x, y, rot = 0) {
-		const it = { id: uid(), kind, x: Math.round(x), y: Math.round(y), rot, at: Date.now(), ...(kind === 'potager' || kind === 'poulailler' ? { km0: this.state.totals.distance / 1000 } : {}), ...(kind === 'poulailler' ? { flock: { hens: 3, roosters: 1 } } : {}) };
+		const it = { id: uid(), kind, x: Math.round(x), y: Math.round(y), rot, at: Date.now(), ...(kind === 'potager' || kind === 'poulailler' || kind === 'compost' ? { km0: this.state.totals.distance / 1000 } : {}), ...(kind === 'poulailler' ? { flock: { hens: 3, roosters: 1 } } : {}) };
 		this.items.push(it);
 		this.clearUnder(it);
 		this.popItem(it, true);
@@ -1495,7 +1585,7 @@ export class Garden {
 	// Sans collecteur, la récolte des butineurs perle sur les fleurs : une goutte pour quelques nectar.
 
 	updateDew() {
-		const amount = this.glyph ? 0 : (this.dewAmount?.() ?? 0);
+		const amount = this.glyph || this.state.intro ? 0 : (this.dewAmount?.() ?? 0);
 		const want = amount >= 1 ? Math.min(10, Math.ceil(amount / 3)) : 0;
 		this.dew ??= [];
 		while (this.dew.length > want) this.dew.pop();
@@ -1830,7 +1920,7 @@ export class Garden {
 	/** Point d'eau d'une parcelle (mare, grande mare, mer), en coordonnées du monde. */
 	water(ci) {
 		const [ox, oy] = cellOrigin(ci);
-		if (this.biomeOf(ci) === 'littoral' && CELLS[ci][1] === 0) return { x: ox + PARCEL_W / 2, y: oy + 70, rx: 200, ry: 50, scale: 3 };
+		if (this.seaTop(ci)) return { x: ox + PARCEL_W / 2, y: oy + 70, rx: 200, ry: 50, scale: 3 };
 		for (const [k, d] of Object.entries(DECOR)) {
 			if (!d.water || this.heart(d.place) !== ci || !this.decorVisible(k)) continue;
 			return { x: ox + d.x, y: oy + d.y, rx: 95 * (d.scale ?? 1), ry: 48 * (d.scale ?? 1), scale: d.scale ?? 1 };
@@ -2243,7 +2333,7 @@ export class Garden {
 		for (const sp of SPECIES) {
 			if (sp.kind !== 'animal' || !present.has(sp.place) || !sp.critter.behavior) continue;
 			const n = want.get(sp) ?? 0;
-			const active = this.insects.filter(i => i.sp === sp.id && !i.leaving);
+			const active = this.insects.filter(i => i.sp === sp.id && !i.leaving && !i.intro);
 			for (let k = active.length; k < n; k++) {
 				let b = null;
 				for (const ci of visible.filter(ci => this.biomeOf(ci) === sp.place).sort(() => Math.random() - 0.5)) if ((b = this.newCritter(sp, this.pdata[ci]))) break;
@@ -2688,6 +2778,8 @@ export class Garden {
 		if (f.mode === 'pick') {
 			f.basket = true;
 			this.burst(f.x + f.dir * 10, f.y - 40, 8, f.fruit);
+			if (f.tree) this.onPick?.(f.tree);
+			f.tree = null;
 			f.goal = { x: door.x, y: door.y, task: 'in' };
 			return;
 		}
@@ -2777,7 +2869,7 @@ export class Garden {
 			if (p.type !== 'arbre' || p.growth < 1) continue;
 			const sp = speciesOf(p), col = FRUIT_TREES[sp];
 			const P = this.pdata[cellOf(p)];
-			if (col && P) out.push({ x: P.ox + p.x, y: P.oy + p.y, fruit: col });
+			if (col && P) out.push({ x: P.ox + p.x, y: P.oy + p.y, fruit: col, plant: p });
 		}
 		return out;
 	}
@@ -2793,6 +2885,7 @@ export class Garden {
 			f.goal = { x: tr.x + side * 16, y: tr.y + 4, task: 'pick' };
 			f.face = -side;
 			f.fruit = tr.fruit;
+			f.tree = tr.plant;
 		});
 		options.push(() => {
 			const a = Math.random() * Math.PI * 2, r = 60 + Math.random() * 90;
@@ -3587,7 +3680,8 @@ export class Garden {
 
 		// Lumière de l'heure, de la saison et du temps
 		ctx.setTransform(1, 0, 0, 1, 0, 0);
-		if (amb.a > 0.001) {
+		// Vu de loin, c'est une carte : ni l'heure ni le temps ne l'assombrissent.
+		if (!glyph && !this.state.intro && amb.a > 0.001) {
 			ctx.globalCompositeOperation = 'multiply';
 			ctx.fillStyle = rgba(amb.color, amb.a);
 			ctx.fillRect(0, 0, cw, ch);
@@ -3601,7 +3695,7 @@ export class Garden {
 		if (!glyph) this.drawSunlight(ctx, cw, ch, S, hour, day, wk);
 		ctx.globalCompositeOperation = 'multiply';
 		const grey = { overcast: 0.22, rain: 0.28, drizzle: 0.18, storm: 0.38, snow: 0.12, clouds: 0.08 }[wk] ?? 0;
-		if (grey) {
+		if (grey && !glyph) {
 			ctx.fillStyle = `rgba(130,140,152,${grey})`;
 			ctx.fillRect(0, 0, cw, ch);
 		}
@@ -3698,6 +3792,7 @@ export class Garden {
 
 		world();
 		this.drawWeather(ctx);
+		if (this.introFx) { world(); this.introFx(ctx); }
 		if (wk === 'storm' && this.flash > 0) {
 			ctx.setTransform(1, 0, 0, 1, 0, 0);
 			ctx.fillStyle = `rgba(255,255,250,${this.flash * 0.35})`;
@@ -3711,9 +3806,9 @@ export class Garden {
 		ctx.fillRect(0, 0, cw, ch);
 		ctx.drawImage(this.vignette, 0, 0);
 
-		if (glyph || this.lockedCells().length) this.drawLabels(ctx, glyph, S, tx, ty);
+		if (glyph || this.lockedCells().some(c => this.lockedInfo?.(c))) this.drawLabels(ctx, glyph, S, tx, ty);
 		// Les pastilles passent par-dessus tout, étiquettes des parcelles comprises.
-		if (this.cam.z < POI_Z && !this.ghost) this.drawPOI(ctx, S, tx, ty);
+		if (this.cam.z < POI_Z && !this.ghost && !this.state.intro) this.drawPOI(ctx, S, tx, ty);
 		else this.poiHits = null;
 		this.drawNectarDrops(ctx, S, tx, ty);
 	}
@@ -3737,7 +3832,7 @@ export class Garden {
 
 	/** Le pourtour des clairières ouvertes, calculé une fois par forme du jardin : la brume de la lisière s'y pose. */
 	edges() {
-		const n = cellsOpen(this.place), key = `${n}`;
+		const n = cellsOpen(this.place), key = `${n}|${this.scaleSig()}`;
 		if (this.edgeCache?.key === key) return this.edgeCache;
 		const open = this.openCells();
 		const box = pts => {
@@ -3759,19 +3854,19 @@ export class Garden {
 		for (const i of cells) {
 			const [ox, oy] = cellOrigin(i);
 			const isOpen = i < cellsOpen(place);
-			const title = isOpen ? cellName(place, i) : 'Nouvelle parcelle';
-			const left = Math.max(0.1, Math.ceil((CELL_KM[i] - km) * 10) / 10);
-			// Assez de kilomètres : la parcelle attend qu'on choisisse son milieu.
-			const ready = !isOpen && km >= CELL_KM[i];
-			const sub = isOpen
-				? `${place.plants.filter(p => cellOf(p) === i && p.growth >= 1).length} plantes`
-				: ready ? 'touche pour choisir son milieu' : `encore ${left.toLocaleString('fr-FR', { maximumFractionDigits: 1 })} km`;
+			const info = isOpen ? null : this.lockedInfo?.(i);
+			// Une parcelle qu'on ne peut pas encore explorer ne dit rien : on ne dévoile pas la suite.
+			if (!isOpen && !info) continue;
+			const title = isOpen ? cellName(place, i) : info.title;
+			// Vu de loin, une parcelle fermée ne dit que l'essentiel (le prix, ou ce qu'il manque).
+			const grow = isOpen && this.cellScale(i) < 1 ? this.growInfo?.(i) : null;
+			const sub = isOpen ? grow ?? `${place.plants.filter(p => cellOf(p) === i && p.growth >= 1).length} plantes` : all ? info.hint : info.sub;
 			// Centre de la parcelle à l'écran ; une parcelle fermée garde son étiquette visible tant qu'on en voit un bout.
 			const cw = this.canvas.width, ch = this.canvas.height;
 			const sx0 = ox * S + tx, sx1 = (ox + PARCEL_W) * S + tx, sy0 = oy * S + ty, sy1 = (oy + PARCEL_H) * S + ty;
 			ctx.font = `${Math.round((all ? 15 : 20) * dpr)}px Courgette, cursive`;
 			// Un nom trop long pour la parcelle passe sur deux lignes.
-			const room = (all ? sx1 - sx0 - 12 * dpr : cw - 40 * dpr);
+			const room = (all ? Math.max(sx1 - sx0 - 12 * dpr, isOpen ? 210 * dpr : 0) : cw - 40 * dpr);
 			let lines = [title];
 			if (ctx.measureText(title).width > room - 16 * dpr && title.includes(' ')) {
 				const words = title.split(' ');
@@ -3783,13 +3878,18 @@ export class Garden {
 				lines = [words.slice(0, best).join(' '), words.slice(best).join(' ')];
 			}
 			const lh = (all ? 18 : 23) * dpr, extra = (lines.length - 1) * lh;
-			const w = Math.min(room, Math.max(...lines.map(l => ctx.measureText(l).width), (all ? 70 : 130) * dpr) + (all ? 16 : 32) * dpr);
+			const tw = Math.max(...lines.map(l => ctx.measureText(l).width));
+			ctx.font = `${Math.round((all ? 12 : 13) * dpr)}px Nunito, sans-serif`;
+			const sw = ctx.measureText(sub).width;
+			ctx.font = `${Math.round((all ? 15 : 20) * dpr)}px Courgette, cursive`;
+			const w = Math.min(room, Math.max(tw, sw, (all ? 70 : 130) * dpr) + (all ? 16 : 32) * dpr);
 			let x = (sx0 + sx1) / 2, y = (sy0 + sy1) / 2;
 			if (!all) {
 				const seenW = Math.min(sx1, cw) - Math.max(sx0, 0), seenH = Math.min(sy1, ch) - Math.max(sy0, 0);
 				// Parcelle hors de l'écran ou à peine visible : une petite flèche au bord, vers elle.
 				if (seenW < w + 16 * dpr || seenH < 200 * dpr) {
-					this.drawEdgeHint(ctx, sx0, sx1, sy0, sy1, ready ? 'à choisir' : `${left.toLocaleString('fr-FR', { maximumFractionDigits: 1 })} km`);
+					// Plusieurs voisines possibles : on ne montre que celles qu'on voit, sans flèche au bord.
+					if (this.lockedCells().filter(c => this.lockedInfo?.(c)).length === 1) this.drawEdgeHint(ctx, sx0, sx1, sy0, sy1, info.hint);
 					continue;
 				}
 				x = Math.max(Math.max(sx0, 0) + w / 2 + 8 * dpr, Math.min(Math.min(sx1, cw) - w / 2 - 8 * dpr, x));

@@ -1,0 +1,345 @@
+// L'introduction d'une nouvelle partie, jouée dans le jardin lui-même, sans HUD : une minuscule motte de terre, un
+// oiseau qui laisse tomber une graine, quelques pas qui la font fleurir, une abeille qui passe. Puis le logo, et un
+// tutoriel qui se fait plutôt qu'il ne se raconte : une seule consigne à la fois, sur ce qu'on est en train de faire
+// (ouvrir les espèces, lire la fiche de l'abeille, voir le nectar arriver dans la bourse, acheter sa première ruche,
+// regarder l'icône d'activité passer à la marche).
+//
+// L'étape en cours est gardée dans state.intro : si l'appli est fermée en route, on reprend là où on en était.
+
+import { cellOrigin } from './garden.js';
+
+/** Les mètres de marche qui font fleurir la première graine (une vingtaine de secondes). */
+const WALK_M = 20;
+/** Le nectar que rapporte la toute première fiche lue : de quoi s'offrir la première ruche. */
+export const INTRO_NECTAR = 100;
+const TAGLINE = 'Chaque pas fait fleurir.';
+
+const wait = ms => new Promise(r => setTimeout(r, ms));
+const until = (test, every = 250) => new Promise(r => {
+	if (test()) return r();
+	const id = setInterval(() => { if (test()) { clearInterval(id); r(); } }, every);
+});
+const ease = t => t * t * (3 - 2 * t);
+
+class Skip extends Error {}
+
+export function startIntro(c) {
+	const { garden, state } = c;
+	const $ = s => document.querySelector(s);
+	const app = $('#app');
+	const place = garden.place;
+	app.classList.add('intro');
+	let over = false;
+
+	// La consigne : une petite carte, une phrase, parfois un bouton.
+	const cap = document.createElement('div');
+	cap.className = 'intro-cap card';
+	cap.hidden = true;
+	app.append(cap);
+	const skip = document.createElement('button');
+	skip.className = 'intro-skip';
+	skip.textContent = 'Passer l’introduction';
+	app.append(skip);
+	skip.onclick = () => finish(true);
+
+	/** Affiche une consigne. Avec des boutons, la promesse attend celui qui termine l'étape. */
+	const say = (html, buttons = []) => new Promise(res => {
+		cap.innerHTML = `<p>${html}</p>${buttons.length ? `<div class="intro-actions">${buttons.map((b, i) => `<button class="btn ${i ? 'ghost' : 'primary'} small" data-i="${i}">${b.label}</button>`).join('')}</div>` : ''}`;
+		cap.hidden = false;
+		cap.classList.remove('in');
+		void cap.offsetWidth;
+		cap.classList.add('in');
+		cap.onclick = e => {
+			const el = e.target.closest('[data-i]');
+			if (!el) return;
+			const b = buttons[Number(el.dataset.i)];
+			b.run?.();
+			if (b.once) el.remove();
+			if (b.stay) return;
+			res(b);
+		};
+		if (!buttons.some(b => !b.stay)) res();
+	});
+	const step = s => {
+		if (over) throw new Skip();
+		state.intro = s;
+		c.persist(true);
+	};
+	const center = () => { const b = garden.blob(0); return { x: b.cx, y: b.cy }; };
+	const flowerOf = () => place.plants.find(p => p.intro);
+
+	// ─── 1. La motte de terre, l'oiseau, la graine ───
+	async function scene() {
+		step('scene');
+		const p = center();
+		garden.cam.cx = p.x; garden.cam.cy = p.y; garden.cam.z = 1.5;
+		garden.flyTo(p.x, p.y, 1.5);
+		if (flowerOf()) return;
+		await wait(1800);
+		await birdPass(p);
+		const [ox, oy] = cellOrigin(0);
+		const f = garden.spawn(state.place, 'fleur', 0.03, { x: p.x - ox, y: p.y - oy + 12 }, 0);
+		f.intro = true;
+		garden.burst(p.x, p.y + 12, 8, '#9A7448');
+		c.persist(true);
+		await wait(900);
+	}
+
+	/** Un oiseau traverse la vue ; à mi-chemin, une graine tombe sur la motte. */
+	function birdPass(p) {
+		return new Promise(res => {
+			const t0 = performance.now(), D = 3600, drop = 0.42, fall = 900;
+			const from = { x: p.x - 420, y: p.y - 230 }, to = { x: p.x + 420, y: p.y - 170 };
+			let landed = false;
+			garden.introFx = ctx => {
+				const t = (performance.now() - t0) / D;
+				if (t <= 1) {
+					const x = from.x + (to.x - from.x) * t, y = from.y + (to.y - from.y) * t - Math.sin(t * Math.PI) * 30;
+					drawBird(ctx, x, y, performance.now() / 1000);
+					// Son ombre, très pâle, glisse sur le sol.
+					ctx.fillStyle = 'rgba(60,50,40,0.10)';
+					ctx.beginPath(); ctx.ellipse(x, p.y + 30, 12, 4, 0, 0, Math.PI * 2); ctx.fill();
+				}
+				// La graine : lâchée par l'oiseau, elle tombe sur la motte.
+				const ts = (performance.now() - t0 - drop * D) / fall;
+				if (ts > 0 && ts < 1) {
+					const sx = from.x + (to.x - from.x) * drop, sy = from.y + (to.y - from.y) * drop - Math.sin(drop * Math.PI) * 30;
+					const k = ease(ts), gx = sx + (p.x - sx) * k, gy = sy + (p.y + 12 - sy) * ts * ts;
+					ctx.fillStyle = '#6B4A2E';
+					ctx.beginPath(); ctx.ellipse(gx, gy, 2.6, 1.8, ts * 6, 0, Math.PI * 2); ctx.fill();
+				} else if (ts >= 1 && !landed) { landed = true; res(); }
+				if (t > 1 && landed) garden.introFx = null;
+			};
+		});
+	}
+
+	function drawBird(ctx, x, y, t) {
+		const flap = Math.sin(t * 16) * 0.9;
+		ctx.save();
+		ctx.translate(x, y);
+		ctx.strokeStyle = 'rgba(70,52,40,0.9)';
+		ctx.fillStyle = 'rgba(92,70,52,0.92)';
+		ctx.lineCap = 'round';
+		ctx.lineWidth = 3.2;
+		// Les ailes, qui battent.
+		ctx.beginPath(); ctx.moveTo(-2, 0); ctx.quadraticCurveTo(-10, -10 * flap, -20, -4 - 12 * flap); ctx.stroke();
+		ctx.beginPath(); ctx.moveTo(2, 0); ctx.quadraticCurveTo(10, -10 * flap, 20, -4 - 12 * flap); ctx.stroke();
+		// Le corps, la tête et le bec.
+		ctx.beginPath(); ctx.ellipse(0, 1, 9, 5, 0, 0, Math.PI * 2); ctx.fill();
+		ctx.beginPath(); ctx.arc(9, -1, 3.6, 0, Math.PI * 2); ctx.fill();
+		ctx.fillStyle = '#E3A33A';
+		ctx.beginPath(); ctx.moveTo(12, -2); ctx.lineTo(16, -0.5); ctx.lineTo(12, 0.5); ctx.fill();
+		ctx.restore();
+	}
+
+	// ─── 2. Quelques pas : la fleur pousse ───
+	async function walk() {
+		step('walk');
+		const f = flowerOf();
+		const d0 = (state.introD0 ??= state.totals.distance);
+		const buttons = [];
+		if (!state.tracking) buttons.push({ label: 'Activer le suivi de mes pas', once: true, stay: true, run: () => c.enableTracking() });
+		if (c.DEV) buttons.push({ label: 'Simuler 5 m', stay: true, run: () => c.addMeters(5) });
+		say('Un oiseau a laissé tomber une graine.<br><b>Marche quelques pas</b> pour la faire pousser.', buttons);
+		await until(() => {
+			if (over) return true;
+			f.growth = Math.max(f.growth, Math.min(1, 0.03 + (state.totals.distance - d0) / WALK_M));
+			return f.growth >= 1;
+		});
+		if (over) throw new Skip();
+		delete state.introD0;
+		const p = center();
+		garden.burst(p.x, p.y - 20, 18, '#F4C23E');
+		c.sound.chime(3);
+		state.species[c.speciesOf(f)] ??= Date.now();
+		say('Elle a fleuri !');
+		await wait(2400);
+	}
+
+	// ─── 3. Une abeille passe ───
+	async function bee() {
+		step('bee');
+		const P = garden.pdata?.[0];
+		const b = P ? garden.newCritter(c.SPECIES_BY_ID.abeille, P) : null;
+		if (b) { b.intro = true; garden.insects.push(b); }
+		say('Une abeille vient la butiner…');
+		await wait(9000);
+		if (b) b.leaving = true;
+		say('… puis elle repart, chargée de pollen.');
+		state.species.abeille ??= Date.now();
+		c.persist(true);
+		await wait(3500);
+	}
+
+	// ─── 4. La vue s'éloigne, le terrain s'étend un peu, le logo apparaît ───
+	async function logo() {
+		cap.hidden = true;
+		const p = center(), z0 = garden.cam.z, z1 = 0.8;
+		for (let k = 1; k <= 45; k++) {
+			const e = ease(k / 45);
+			garden.flyTo(p.x, p.y, z0 + (z1 - z0) * e);
+			if (k === 18) (place.cellSize ??= {})[0] = 0.25;
+			if (k === 32) place.cellSize[0] = 0.4;
+			await wait(110);
+		}
+		const el = document.createElement('div');
+		el.className = 'intro-logo';
+		el.innerHTML = `<img src="assets/logo.png" alt="Evolia"><p>${TAGLINE}</p>`;
+		app.append(el);
+		void el.offsetWidth;
+		el.classList.add('in');
+		await wait(4200);
+		el.classList.remove('in');
+		await wait(1500);
+		el.remove();
+	}
+
+	// ─── 5. Les espèces : ouvrir, lire la fiche de l'abeille ───
+	async function species() {
+		step('species');
+		const f = flowerOf();
+		if (f) state.species[c.speciesOf(f)] ??= Date.now();
+		state.species.abeille ??= Date.now();
+		c.updateSpeciesDot();
+		app.classList.add('i-sheet');
+		const btn = $('#btn-species');
+		btn.classList.add('i-on', 'ui-new', 'tip-glow');
+		if (!state.speciesSeen?.abeille) {
+			say('Deux espèces sont venues dans ton jardin.<br>Touche <b>Espèces</b> pour les découvrir.');
+			await until(() => over || $('#species').classList.contains('open'));
+			btn.classList.remove('tip-glow');
+			say('Touche l’<b>abeille</b> pour lire sa fiche.');
+			await until(() => {
+				$('#species [data-sp="abeille"]')?.classList.add('tip-glow');
+				return over || state.speciesSeen?.abeille;
+			});
+			if (over) throw new Skip();
+			say('Lire une fiche te rapporte du <b>nectar</b>, ta première monnaie.<br>Ferme la fiche pour le ramasser.');
+		}
+		btn.classList.remove('tip-glow');
+		await until(() => over || !$('#species').classList.contains('open'));
+	}
+
+	// ─── 6. La bourse apparaît, le nectar y arrive ───
+	async function purse() {
+		step('purse');
+		cap.hidden = true;
+		app.classList.add('i-hud');
+		c.renderHud();
+		await flyCoin();
+		$('#hud-steps').classList.add('ui-new');
+		c.sound.chime(2);
+		await say('Voici ta <b>bourse</b> : le nectar que tu gagnes s’y range.', [{ label: 'Compris' }]);
+	}
+
+	/** Une goutte de nectar part du centre de l'écran et rejoint la bourse. */
+	async function flyCoin() {
+		const to = $('#hud-steps').getBoundingClientRect(), box = app.getBoundingClientRect();
+		const d = document.createElement('i');
+		d.className = 'intro-coin';
+		d.style.left = `${box.width / 2}px`;
+		d.style.top = `${box.height * 0.45}px`;
+		app.append(d);
+		void d.offsetWidth;
+		d.style.left = `${to.left - box.left + to.width / 2}px`;
+		d.style.top = `${to.top - box.top + to.height / 2}px`;
+		d.style.transform = 'scale(0.6)';
+		await wait(1100);
+		d.remove();
+	}
+
+	// ─── 7. La première ruche ───
+	const hasHive = () => garden.items.some(it => it.kind === 'ruche');
+	async function hive() {
+		step('hive');
+		(state.ui ??= {})['#btn-deco'] = Date.now();
+		const deco = $('#btn-deco');
+		deco.classList.remove('ui-locked');
+		deco.classList.add('i-on', 'ui-new');
+		if (!hasHive()) {
+			deco.classList.add('tip-glow');
+			say('Avec ce nectar, offre une <b>ruche</b> à tes abeilles.<br>Touche <b>Aménager</b>.');
+			await until(() => over || hasHive() || $('#deco').classList.contains('open'));
+			deco.classList.remove('tip-glow');
+			say('Choisis la <b>ruche</b>, puis pose-la dans ton jardin.');
+			await until(() => {
+				$('#deco [data-buy="ruche"]')?.classList.add('tip-glow');
+				return over || hasHive();
+			});
+			if (over) throw new Skip();
+			cap.hidden = true;
+			await wait(1400);
+		}
+		deco.classList.remove('tip-glow');
+		c.showModal(`<h2>Ta ruche</h2>
+			<p>Elle accueille jusqu’à <b>6 abeilles</b>. Elles font du <b>miel</b>, que tu pourras troquer contre du nectar : il faut un peu de temps.</p>
+			<p>Pour attirer des abeilles, il faut des <b>fleurs</b> : plus il y en a, plus il en vient. Et les fleurs poussent quand tu bouges.</p>
+			<button class="btn primary" data-close>Compris</button>`);
+		await until(() => over || $('#modal').hidden);
+	}
+
+	// ─── 8. L'icône d'activité ───
+	async function activity() {
+		step('activity');
+		const act = $('#hud-act');
+		act.classList.add('tip-glow');
+		say('Ici, ton <b>activité</b> : au repos.<br>Fais quelques pas : l’icône passe à la marche.',
+			c.DEV ? [{ label: 'Simuler une marche', once: true, stay: true, run: () => c.simWalk() }] : []);
+		await until(() => over || c.moving());
+		if (over) throw new Skip();
+		act.classList.remove('tip-glow');
+		await wait(1500);
+		await say('Tu marches : ton jardin pousse.<br>D’autres fleurs viendront, et d’autres abeilles avec elles.', [{ label: 'C’est parti' }]);
+	}
+
+	function finish(skipped = false) {
+		if (over) return;
+		over = true;
+		garden.introFx = null;
+		(place.cellSize ??= {})[0] = Math.max(place.cellSize[0] ?? 0.4, 0.4);
+		// Passée trop tôt : on donne quand même la fleur, l'abeille et de quoi s'offrir la ruche.
+		if (skipped) {
+			if (!flowerOf()) {
+				const p = center(), [ox, oy] = cellOrigin(0);
+				const f = garden.spawn(state.place, 'fleur', 1, { x: p.x - ox, y: p.y - oy + 12 }, 0);
+				f.intro = true;
+			}
+			state.species[c.speciesOf(flowerOf())] ??= Date.now();
+			state.species.abeille ??= Date.now();
+			if (!state.introPaid && !hasHive()) { state.introPaid = true; state.nectar = (state.nectar ?? 0) + INTRO_NECTAR; }
+			(state.ui ??= {})['#btn-deco'] = Date.now();
+		}
+		delete state.intro;
+		delete state.introD0;
+		state.seenIntro = true;
+		place.seeded = true;
+		(place.renewed ??= {}).prairie = 1;
+		app.classList.remove('intro', 'i-sheet', 'i-hud');
+		for (const el of document.querySelectorAll('.i-on, .tip-glow, .ui-new')) el.classList.remove('i-on', 'tip-glow', 'ui-new');
+		cap.remove();
+		skip.remove();
+		document.querySelector('.intro-logo')?.remove();
+		c.persist(true);
+		c.renderHud();
+		c.updateSpeciesDot();
+		c.onDone();
+	}
+
+	// L'enchaînement, avec reprise à l'étape gardée.
+	(async () => {
+		const at = state.intro;
+		const order = ['scene', 'walk', 'bee', 'species', 'purse', 'hive', 'activity'];
+		const from = Math.max(0, order.indexOf(at === 'logo' ? 'species' : at));
+		if (from >= 1) { (place.cellSize ??= {})[0] = Math.max(place.cellSize[0] ?? 0.15, from >= 3 ? 0.4 : 0.15); }
+		if (from <= 1) { await scene(); await walk(); }
+		if (from <= 2) { await bee(); await logo(); }
+		if (from >= 3) { const p = center(); garden.flyTo(p.x, p.y, 0.8); }
+		if (from >= 4) app.classList.add('i-sheet'), $('#btn-species').classList.add('i-on');
+		if (from >= 5) app.classList.add('i-hud');
+		if (from <= 3) await species();
+		if (from <= 4) await purse();
+		if (from <= 5) await hive();
+		await activity();
+		finish();
+	})().catch(e => { if (!(e instanceof Skip)) { console.warn('intro', e); finish(true); } });
+}

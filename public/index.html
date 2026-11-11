@@ -26,16 +26,19 @@
 	<div id="splash" aria-hidden="true"><img src="assets/logo.png" alt=""></div>
 
 	<header id="hud" class="card">
-		<img src="assets/logo.png" alt="Evolia" class="hud-logo">
-		<div class="hud-text">
+		<!-- L'icône d'activité (au repos, marche, course, vélo), cerclée de l'avancée du jour ; le détail au toucher. -->
+		<button id="hud-act" class="hud-act" aria-label="Ton activité">
+			<svg class="ring" viewBox="0 0 44 44" aria-hidden="true">
+				<circle class="ring-bg" cx="22" cy="22" r="18"/>
+				<circle class="ring-fg" id="ring-fg" cx="22" cy="22" r="18"/>
+			</svg>
+			<span class="act-ico" id="act-ico"></span>
+		</button>
+		<div class="hud-text" hidden>
 			<div class="hud-title" id="hud-day">Jour 1</div>
 			<div class="hud-sub"><b id="hud-km">0 / 3 km</b></div>
 		</div>
 		<button id="hud-steps" class="hud-purse" aria-label="Ton nectar"></button>
-		<svg class="ring" viewBox="0 0 44 44" aria-hidden="true">
-			<circle class="ring-bg" cx="22" cy="22" r="18"/>
-			<circle class="ring-fg" id="ring-fg" cx="22" cy="22" r="18"/>
-		</svg>
 	</header>
 
 	<button id="quest" class="quest card" hidden>

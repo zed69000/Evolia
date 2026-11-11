@@ -14,6 +14,7 @@ import { paperTexture } from './watercolor.js';
 import { Soundscape } from './audio.js';
 import { ITEMS, ITEM_ORDER, itemHelp, itemCost, fitsPlace, CATS, MAX_LEVEL, LEVEL_NAME, LEVEL_KM, canLevel, levelCost, CABIN_STYLES } from './deco.js';
 import { VERSION } from './version.js';
+import { startIntro, INTRO_NECTAR } from './intro.js';
 import { exportCode, importCode, backupAge } from './backup.js';
 import { DebugPanel, debugOn, setDebug, debugLog, ago, dur, trace, traceFlush } from './debug.js';
 import { canNotify, askNotify, scheduleReminders, clearReminders } from './notify.js';
@@ -78,6 +79,8 @@ const species = new Encyclopedia($('#species'), state, e => {
 	persist();
 	updateSpeciesDot();
 });
+// Pendant l'introduction, la toute première fiche lue rapporte de quoi s'offrir la première ruche.
+species.rewardFor = () => (state.intro && !state.introPaid ? ((state.introPaid = true), INTRO_NECTAR) : null);
 const places = new PlacesMap($('#map'), state, showBiome);
 // Aider une équipe de l'écosystème, c'est poser l'objet qui l'attire (s'il est débloqué et payable), sinon voir la liste.
 // La récolte en attente : sans collecteur, elle perle sur les fleurs ; avec, elle remplit les jarres.
@@ -174,35 +177,133 @@ function chooseFarmer(then) {
 	});
 }
 
-// Le jardinier ramasse les œufs du poulailler : chacun vaut un peu de nectar.
-const EGG_NECTAR = 15;
-garden.onEggs = (coop, n) => {
-	const gain = n * EGG_NECTAR;
-	state.nectar = (state.nectar ?? 0) + gain;
-	toast(`${farmerName(true)} a ramassé ${n} œuf${n > 1 ? 's' : ''} · +${gain} nectar`, '#5F933E');
-	garden.say(n === 1 ? 'Un œuf de plus !' : `${['', '', 'Deux', 'Trois', 'Quatre', 'Cinq', 'Six'][n] ?? n} œufs de plus !`);
-	renderHud();
+// ─── Le panier du fermier, et le troc ─────────────────────────
+// Ce que produit la ferme (œufs, légumes, fruits, miel) va dans le panier, rangé à la cabane. On le troque
+// ensuite contre du nectar, quand on veut : de quoi s'offrir un compost, des poules, une parcelle de plus…
+
+// Le prix de chaque produit au troc, en nectar (par œuf, par légume, par kilo de fruits, par pot de miel).
+const GOODS = {
+	oeufs: { one: 'œuf', many: 'œufs', price: 15, icon: '🥚' },
+	legumes: { one: 'légume', many: 'légumes', price: 15, icon: '🥬' },
+	pommes: { one: 'kg de pommes', many: 'kg de pommes', price: 20, icon: '🍎' },
+	poires: { one: 'kg de poires', many: 'kg de poires', price: 22, icon: '🍐' },
+	cerises: { one: 'kg de cerises', many: 'kg de cerises', price: 30, icon: '🍒' },
+	prunes: { one: 'kg de prunes', many: 'kg de prunes', price: 22, icon: '🫐' },
+	miel: { one: 'pot de miel', many: 'pots de miel', price: 60, icon: '🍯' },
+};
+const EGG_NECTAR = GOODS.oeufs.price;
+const FRUIT_OF = { pommier: 'pommes', poirier: 'poires', merisier: 'cerises', prunier: 'prunes' };
+const basket = () => (state.stock ??= {});
+const basketCount = () => Object.values(basket()).reduce((a, n) => a + n, 0);
+const goodLabel = (k, n) => `${fmtInt(n)} ${n > 1 ? GOODS[k].many : GOODS[k].one}`;
+
+/** Range des produits dans le panier, avec un message qui ouvre le troc. */
+function addGood(k, n, by) {
+	if (n <= 0) return;
+	basket()[k] = (basket()[k] ?? 0) + n;
 	persist();
+	toast(`${by} : ${GOODS[k].icon} ${goodLabel(k, n)} dans le panier · touche pour troquer`, '#5F933E', openMarket);
+}
+
+/** Le troc : le panier, le prix de chaque produit, et ce qu'il rapporte en nectar. */
+function openMarket() {
+	const goods = Object.entries(basket()).filter(([k, n]) => n > 0 && GOODS[k]);
+	const total = goods.reduce((a, [k, n]) => a + n * GOODS[k].price, 0);
+	showModal(`<div class="modal-body"><h2>Le panier de la ferme</h2>
+		${goods.length ? `<p>Troque ce que ta ferme a produit contre du nectar, pour t'offrir de nouveaux aménagements.</p>
+		<ul class="harvest-rows">${goods.map(([k, n]) => `<li><span>${GOODS[k].icon} <b>${goodLabel(k, n)}</b> · ${GOODS[k].price} nectar ${GOODS[k].one.startsWith('kg') ? 'le kg' : 'pièce'}</span>
+			<button class="btn ghost small" data-sell="${k}">Troquer · ${fmtInt(n * GOODS[k].price)}</button></li>`).join('')}</ul>`
+		: `<p>Le panier est vide. ${farmerName(true)} y range les œufs des poules, les légumes du potager, les fruits du verger et le miel des ruches.</p>`}</div>
+		<div class="modal-foot">${goods.length ? `<button class="btn primary" data-sell="all">Tout troquer · ${fmtInt(total)} nectar</button>` : ''}<button class="btn ghost" data-close>Fermer</button></div>`);
+	for (const b of $('#modal').querySelectorAll('[data-sell]')) b.addEventListener('click', () => {
+		const keys = b.dataset.sell === 'all' ? goods.map(([k]) => k) : [b.dataset.sell];
+		let gain = 0;
+		for (const k of keys) { gain += (basket()[k] ?? 0) * GOODS[k].price; basket()[k] = 0; }
+		state.nectar = (state.nectar ?? 0) + gain;
+		persist(true);
+		renderHud();
+		sound.chime(2);
+		toast(`Troc : +${fmtInt(gain)} nectar`, '#E3A33A');
+		openMarket();
+	});
+}
+
+// Le jardinier ramasse les œufs du poulailler : ils vont dans le panier.
+garden.onEggs = (coop, n) => {
+	addGood('oeufs', n, farmerName(true));
+	garden.say(n === 1 ? 'Un œuf de plus !' : `${['', '', 'Deux', 'Trois', 'Quatre', 'Cinq', 'Six'][n] ?? n} œufs de plus !`);
 };
 
-// Le jardinier récolte une parcelle mûre : un panier de légumes, en nectar.
+// Le jardinier récolte une parcelle mûre du potager : des légumes (plus, si on y a épandu du compost).
 garden.onHarvest = () => {
-	state.nectar = (state.nectar ?? 0) + 60;
-	toast(`${farmerName(true)} a récolté ses légumes · +60 nectar`, '#5F933E');
-	garden.say(['Belle récolte !', 'Des légumes pour ce soir !', 'Le panier est plein !'][Math.floor(Math.random() * 3)]);
-	renderHud();
-	persist();
+	const boosted = (state.compostBoost ?? 0) > 0;
+	if (boosted) state.compostBoost--;
+	addGood('legumes', boosted ? 6 : 4, farmerName(true));
+	garden.say(boosted ? 'Le compost a fait des merveilles !' : ['Belle récolte !', 'Des légumes pour ce soir !', 'Le panier est plein !'][Math.floor(Math.random() * 3)]);
 };
+
+// Il cueille aussi les fruits mûrs des arbres fruitiers (une fois toutes les quelques heures par arbre) ;
+// un arbre soigné en donne davantage.
+const PICK_EVERY = 4 * 3600000;
+garden.onPick = tree => {
+	const fruit = FRUIT_OF[speciesOf(tree)];
+	if (!fruit || Date.now() - (tree.pickedAt ?? 0) < PICK_EVERY) return;
+	tree.pickedAt = Date.now();
+	const kg = 2 + 2 * (tree.care ?? 0);
+	addGood(fruit, kg, farmerName(true));
+	garden.say(`${kg} kg de ${fruit} !`);
+};
+
+// Les ruches : la colonie produit du miel ; le fermier en prend une part (réglable), le reste nourrit les abeilles.
+// Une ruche accueille 6 abeilles au plus ; il en vient autant que les fleurs en attirent (une, plus une par trois
+// fleurs écloses). Chaque abeille fait du miel ; il faut du temps (et des fleurs) pour en remplir un pot.
+const HIVE_BEES = 6, HONEY_PER_BEE = 0.15; // pots par heure et par abeille si l'on prenait tout
+const hiveBees = () => {
+	const hives = garden.items.filter(it => it.kind === 'ruche').length;
+	const flowers = here().plants.filter(p => p.type === 'fleur' && p.growth >= 1).length;
+	return Math.min(HIVE_BEES * hives, hives ? 1 + Math.floor(flowers / 3) : 0);
+};
+setInterval(() => {
+	const bees = hiveBees();
+	if (!bees || (garden.season?.winter ?? 0) > 0.6) return;
+	state.honeyAcc = (state.honeyAcc ?? 0) + bees * HONEY_PER_BEE * (state.honeyShare ?? 0.3) / 60;
+	if (state.honeyAcc >= 1) {
+		const n = Math.floor(state.honeyAcc);
+		state.honeyAcc -= n;
+		addGood('miel', n, 'Les ruches');
+	}
+}, 60000);
+
+// Le compost : il se remplit en marchant (épluchures, feuilles mortes) ; plein, on l'épand sur le potager.
+const COMPOST_KM = 3;
+const compostFill = it => Math.max(0, Math.min(1, (state.totals.distance / 1000 - (it.km0 ?? 0)) / COMPOST_KM));
 
 const eco = new EcoPanel($('#eco'), state, kind => {
 	const it = ITEMS[kind];
-	if (state.totals.distance / 1000 >= it.km && !needsFirst(kind) && (state.nectar ?? 0) >= priceOf(kind)) startPlacing(kind);
+	if (state.totals.distance / 1000 >= it.km && !needsFirst(kind) && !natureLock(kind) && (state.nectar ?? 0) >= priceOf(kind)) startPlacing(kind);
 	else openDeco(it.cat);
 });
 
 // ─── Bandeau ──────────────────────────────────────────────────
 
+/**
+ * L'objectif du jour atteint rapporte une récompense en nectar (les « jetons » du jeu), une fois par jour : on la
+ * cumule pour s'offrir la cabane, un aménagement, un agrandissement… à chacun de choisir.
+ */
+const goalReward = () => Math.round(Math.max(1, state.goalKm ?? 2) * 60 / 10) * 10;
+function checkDailyGoal() {
+	if (!state.goalKm || state.goalPaid === dayKey() || todayMeters(state) < state.goalKm * 1000) return;
+	state.goalPaid = dayKey();
+	const gain = goalReward();
+	state.nectar = (state.nectar ?? 0) + gain;
+	persist(true);
+	sound.chime(3);
+	toast(`Objectif du jour atteint : +${fmtInt(gain)} nectar à dépenser comme tu veux`, '#E3A33A', () => openDeco());
+}
+
 function renderHud() {
+	checkDailyGoal();
+	revealUi();
 	const km = todayMeters(state) / 1000;
 	$('#hud-day').textContent = cellName(here(), garden.active);
 	// En toutes lettres : ce qu'on a fait aujourd'hui, puis l'objectif du jour (ou qu'il est atteint).
@@ -212,7 +313,7 @@ function renderHud() {
 		: `${fmt(km, 1)} km sur ${goal} aujourd'hui`;
 	// La bourse de nectar, bien en vue ; dessous, ce qui attend d'être récolté (dans les fleurs ou le collecteur).
 	// Plein : le collecteur ne prend plus rien, ou sans collecteur, les fleurs sont chargées.
-	const pend = Math.floor(state.pending ?? 0), full = hasCollector(state) ? jarOf(state) >= jarCap(state) : groundOf(state) >= 30;
+	const pend = state.intro ? 0 : Math.floor(state.pending ?? 0), full = !state.intro && (hasCollector(state) ? jarOf(state) >= jarCap(state) : groundOf(state) >= 30);
 	$('#hud-steps').innerHTML = `<span class="nectar${boostLeft(state) ? ' boost' : ''}">${fmtInt(shownNectar())}</span>`
 		+ `<small class="${full ? 'full' : pend >= 1 ? 'wait' : ''}">${pend >= 1 ? `+${fmtInt(pend)} à récolter` : 'nectar'}</small>`;
 	const k = Math.min(1, km / state.goalKm);
@@ -276,17 +377,37 @@ function updateSpeciesDot() {
 /** Annonce les espèces et les parcelles qui viennent de s'ouvrir. `quiet` : au tout premier lancement, sans bruit. */
 // Entre deux découvertes, au moins ce délai : le temps de voir arriver la bête et d'ouvrir sa fiche.
 const SPECIES_GAP = 30000;
+// Les découvertes au compte-gouttes : quelques-unes les premiers jours pour lancer le jardin, puis une ou deux par
+// jour, pour avoir le temps de lire chaque fiche et d'attendre la suivante.
+const SPECIES_PER_DAY = [6, 4, 3];
+const SPECIES_LATER = 2;
+const gardenDay = () => Math.floor((Date.now() - (state.createdAt ?? Date.now())) / 86400000);
+const speciesQuota = () => SPECIES_PER_DAY[gardenDay()] ?? SPECIES_LATER;
+/** Les découvertes du jour (le compteur repart chaque matin). */
+const speciesToday = () => (state.speciesDay?.day === dayKey() ? state.speciesDay.n : 0);
 
 function announceSpecies(quiet = false) {
+	if (state.intro) return;
 	let found = [];
 	if (quiet) {
 		// Premier lancement : le jardin de départ arrive d'un coup, sans compter dans les fiches à lire.
 		found = checkSpecies(state);
 		for (const sp of found) (state.speciesStart ??= {})[sp.id] = true;
+	} else if (speciesToday() >= speciesQuota()) {
+		// Le compte du jour est atteint : on le dit une fois, si d'autres espèces attendent déjà.
+		if (state.speciesDoneNote !== dayKey() && speciesWaiting(state)) {
+			state.speciesDoneNote = dayKey();
+			persist();
+			toast('C’est tout pour aujourd’hui : d’autres espèces viendront demain dans ton jardin', '#9A7448');
+		}
 	} else if (unreadSpecies(state).length < UNREAD_MAX) {
 		if (Date.now() >= (state.nextSpeciesAt ?? 0)) {
 			found = checkSpecies(state, 1);
-			if (found.length) state.nextSpeciesAt = Date.now() + SPECIES_GAP;
+			if (found.length) {
+				// Le premier jour, elles se suivent de près ; ensuite, au moins une heure entre deux.
+				state.nextSpeciesAt = Date.now() + (gardenDay() === 0 ? SPECIES_GAP : 3600000);
+				state.speciesDay = { day: dayKey(), n: speciesToday() + 1 };
+			}
 		}
 	} else if (Date.now() - (state.readNudgeAt ?? 0) > 15 * 60000 && speciesWaiting(state)) {
 		// Trop de fiches en attente : on le dit (tous les quarts d'heure au plus), et le message ouvre la première.
@@ -302,7 +423,7 @@ function announceSpecies(quiet = false) {
 	if (quiet) return;
 	if (found.length || opened.length) sound.chime(opened.length ? 3 : 2);
 	for (const sp of found) toast(`${sp.kind === 'milieu' ? 'Nouveau milieu' : 'Nouvelle espèce'} : ${sp.name}`, '#F08A3C', () => species.open(sp.id));
-	for (const p of opened) toast(`Nouveau milieu : ${p.name.toLowerCase()} ! Choisis-le pour une prochaine parcelle`, p.color, () => places.open(p.id));
+	for (const p of opened) toast(`Nouveau milieu : ${p.name.toLowerCase()} ! Ses parcelles autour de ton jardin peuvent s’acheter`, p.color, () => garden.toggleOverview());
 	celebrateHerbarium();
 }
 
@@ -440,7 +561,7 @@ garden.onTap = hit => {
 		if (one?.msg) toast(one.msg, '#5F933E', one.open ?? null);
 		// Les œufs ne se ramassent pas à la main : le jardinier passe les chercher.
 		const eggs = hit.poi.items?.find(p => p.eggs);
-		if (eggs) toast(`${eggs.eggs} œuf${eggs.eggs > 1 ? 's' : ''} : ${owned('cabane') ? `${farmerName(true).toLowerCase()} viendra les chercher` : 'pose une cabane, ton jardinier viendra les chercher'} (+${eggs.eggs * EGG_NECTAR} nectar)`, '#5F933E');
+		if (eggs) toast(`${eggs.eggs} œuf${eggs.eggs > 1 ? 's' : ''} : ${owned('cabane') ? `${farmerName(true).toLowerCase()} viendra les chercher pour le panier` : 'pose une cabane, ton jardinier viendra les chercher'} (${eggs.eggs * EGG_NECTAR} nectar au troc)`, '#5F933E');
 		return;
 	}
 	if (hit.dew) {
@@ -451,9 +572,9 @@ garden.onTap = hit => {
 	if (hit.item) return tapItem(hit, card);
 	if (hit.critter) return tapCritter(hit, card);
 	if (hit.cell != null) {
-		if (hit.open) garden.flyToCell(hit.cell);
-		else if (here().km >= CELL_KM[hit.cell]) chooseBiome(hit.cell);
-		else toast(`Nouvelle parcelle : encore ${fmt(Math.max(0.1, Math.ceil((CELL_KM[hit.cell] - here().km) * 10) / 10), 1)} km`, '#9A7448');
+		if (hit.open && garden.cellScale(hit.cell) < 1) offerGrow(hit.cell);
+		else if (hit.open) garden.flyToCell(hit.cell);
+		else offerParcel(hit.cell);
 		return;
 	}
 	const p = hit.plant;
@@ -465,10 +586,23 @@ garden.onTap = hit => {
 		<div class="bar"><i style="width:${pct}%"></i></div>Née le ${born}
 		${known ? '<span class="more">Son rôle dans la nature ›</span>' : ''}`;
 	// Un arbre ou un arbuste adulte peut être replanté ailleurs.
-	if (pct >= 100 && (p.type === 'arbre' || p.type === 'buisson')) card.insertAdjacentHTML('beforeend', '<div class="item-actions"><button class="btn ghost" data-move-plant>Déplacer</button></div>');
+	const fruit = pct >= 100 && FRUIT_OF[id], care = p.care ?? 0, careCost = 150 * (care + 1);
+	if (fruit) card.insertAdjacentHTML('beforeend', `<small class="item-tip">Arbre fruitier : ${2 + 2 * care} kg de ${fruit} par cueillette${care ? ` (soigné ${care}/3)` : ''}.</small>`);
+	if (pct >= 100 && (p.type === 'arbre' || p.type === 'buisson')) card.insertAdjacentHTML('beforeend', `<div class="item-actions">${fruit && care < 3 ? `<button class="btn primary" data-care ${(state.nectar ?? 0) < careCost ? 'disabled' : ''}>Le soigner · ${fmtInt(careCost)}</button>` : ''}<button class="btn ghost" data-move-plant>Déplacer</button></div>`);
 	card.classList.toggle('link', known);
 	card.onclick = e => {
 		if (e.target.closest('[data-move-plant]')) { card.hidden = true; startMovingPlant(p); return; }
+		if (e.target.closest('[data-care]')) {
+			if ((state.nectar ?? 0) < careCost) return;
+			state.nectar -= careCost;
+			p.care = care + 1;
+			persist(true);
+			renderHud();
+			sound.chime(1);
+			card.hidden = true;
+			toast(`${plantName(p)} soigné : ${2 + 2 * p.care} kg de ${fruit} par cueillette`, '#5F933E');
+			return;
+		}
 		if (known) { card.hidden = true; species.open(id); }
 	};
 	placeCard(card, hit);
@@ -503,7 +637,7 @@ const MISSIONS = [
 const MISSION_REWARD = 30;
 
 function currentMission() {
-	if (state.onboarded) return null;
+	if (state.onboarded || state.intro) return null;
 	return MISSIONS.find(m => !(state.missions ??= {})[m.id]) ?? null;
 }
 
@@ -571,12 +705,42 @@ const TIPS = [
 	{ id: 'journal', target: '#btn-journal', when: () => (state.walks?.length ?? 0) >= 1,
 		title: 'Ton carnet', text: 'Tes sorties, tes kilomètres de la semaine et ce qu’ils ont fait pousser.' },
 	{ id: 'biomes', target: '#hud-day', when: () => Object.keys(state.placesOpen ?? {}).length >= 2,
-		title: 'Un nouveau milieu', text: 'À chaque nouvelle parcelle, tu choisis son milieu : une mare au marais, de vieux arbres en forêt… Touche le nom en haut pour voir tous les milieux.' },
+		title: 'Un nouveau milieu', text: 'Ton monde est fait de milieux : une mare au marais, de vieux arbres en forêt… Agrandis ton terrain, puis explore une parcelle voisine pour y entrer. Touche le nom en haut pour voir tous les milieux.' },
 	{ id: 'daily', target: '#daily', when: () => totalKm() >= 1,
 		title: 'Les défis du jour', text: 'Chaque jour, un cadeau et trois petits défis. Bouger quelques jours de suite fait grossir le cadeau.' },
 ];
 
 let tipShown = null, lastTipEnd = 0;
+
+// ─── L'interface se dévoile au fil du jeu ───
+// Au départ : le jardin, la bourse, les espèces et les options. Le reste arrive quand il devient utile, avec un petit
+// message ; l'astuce du bouton suit (elle attend qu'il soit visible). Une partie déjà avancée a tout d'un coup.
+const UI_STEPS = [
+	{ sel: '#btn-journal', name: 'le carnet de tes sorties', when: () => (state.walks?.length ?? 0) >= 1 || totalKm() >= 0.5 },
+	{ sel: '#btn-deco', name: 'Aménager ton jardin', when: () => (here().buys ?? 0) >= 1 || (state.nectar ?? 0) >= 60 || Object.values(state.places).some(p => (p.items ?? []).length) },
+	{ sel: '#btn-eco', name: 'ton écosystème', when: () => Object.keys(state.species).length - Object.keys(state.speciesStart ?? {}).length >= 3 },
+	{ sel: '#daily', name: 'les défis du jour', when: () => totalKm() >= 1 || gardenDay() >= 1 },
+];
+function revealUi() {
+	if (state.intro) return;
+	if (!state.ui) {
+		state.ui = {};
+		const advanced = totalKm() >= 3 || owned('cabane') || Object.values(state.places).some(p => cellsOpen(p) > 1);
+		if (advanced) for (const st of UI_STEPS) state.ui[st.sel] = 1;
+	}
+	for (const st of UI_STEPS) {
+		const el = $(st.sel);
+		if (!el) continue;
+		if (!state.ui[st.sel] && st.when()) {
+			state.ui[st.sel] = Date.now();
+			el.classList.add('ui-new');
+			setTimeout(() => el.classList.remove('ui-new'), 2600);
+			toast(`Nouveau : ${st.name}`, '#5F933E');
+			persist();
+		}
+		el.classList.toggle('ui-locked', !state.ui[st.sel]);
+	}
+}
 
 /** La goutte de nectar la plus proche du centre de la vue, ou à défaut une fleur du jardin. */
 function focusDew() {
@@ -592,7 +756,7 @@ function focusJar() {
 
 /** Montre la prochaine explication utile, quand rien d'autre n'est ouvert. */
 function nextTip() {
-	if (tipShown || Date.now() - lastTipEnd < 20000 || placing || !$('#modal').hidden || !$('#coach').hidden || document.querySelector('.panel.open') || session) return;
+	if (state.intro || tipShown || Date.now() - lastTipEnd < 20000 || placing || !$('#modal').hidden || !$('#coach').hidden || document.querySelector('.panel.open') || session) return;
 	const done = (state.tips ??= {});
 	const tip = TIPS.find(t => !done[t.id] && t.when());
 	if (!tip) return;
@@ -695,7 +859,7 @@ $('#quest').addEventListener('click', () => {
 setInterval(() => {
 	if (document.hidden || !$('#coach').hidden) return;
 	if (quest && !garden.insects.some(b => b.sp === quest && !b.leaving)) endQuest();
-	else if (!quest && $('#modal').hidden && !garden.glyph) pickQuest();
+	else if (!quest && !state.intro && $('#modal').hidden && !garden.glyph) pickQuest();
 }, 9000);
 
 // ─── Distance et décor ────────────────────────────────────────
@@ -703,6 +867,8 @@ setInterval(() => {
 /** Chaque mètre compte pour la journée, pour la parcelle, et rapporte du nectar (1 pour 5 m). */
 /** L'effort d'une sortie, réparti entre la plante de l'allure et les étages du dessous (la dominante en dernier : c'est elle qu'on suit). */
 function growMix(plant, effort) {
+	// Pendant l'introduction, les pas ne font pousser que la première fleur (intro.js).
+	if (state.intro) return [];
 	return effortMix(plant).flatMap(([type, share]) => garden.addEffort(type, effort * share));
 }
 
@@ -713,7 +879,7 @@ function addMeters(m, nectar = m / 5) {
 	// Un nouvel aménagement devient possible (la cabane à 5 km…).
 	const after = state.totals.distance / 1000;
 	for (const k of ITEM_ORDER) {
-		if (ITEMS[k].km > 0 && before < ITEMS[k].km && after >= ITEMS[k].km) {
+		if (ITEMS[k].km > 0 && before < ITEMS[k].km && after >= ITEMS[k].km && !natureLock(k)) {
 			sound.chime(2);
 			toast(`Tu peux maintenant installer ${ITEMS[k].name.toLowerCase()}`, '#9A7448', () => openDeco(ITEMS[k].cat));
 		}
@@ -735,18 +901,15 @@ function addEffortXp(effort) {
 }
 
 function checkUnlocks(events) {
-	const pl = here(), n = cellsOpen(pl);
-	// La clôture recule : une nouvelle parcelle tous les quelques kilomètres. On choisit son milieu ; tant qu'il
-	// n'y en a qu'un d'ouvert (la prairie), elle s'ouvre tout de suite.
-	if (n < CELLS.length && pl.km >= CELL_KM[n] && pl.pendingCell !== n) {
-		pl.pendingCell = n;
-		events?.push({ kind: 'cell', n });
-		if (PLACES.filter(p => placeOpen(state, p)).length <= 1) openParcel(n, 'prairie');
-		else {
-			sound.chime(3);
-			toast('Une nouvelle parcelle t’attend : choisis son milieu', '#9A7448', () => chooseBiome(n));
-			whenFree(() => chooseBiome(n));
-		}
+	const pl = here(), buys = pl.buys ?? 0;
+	// Assez de nectar pour le prochain achat (agrandir, ou une nouvelle parcelle) : on le dit une fois par achat.
+	const next = growable(), price = next != null ? growPrice() : parcelPrice();
+	if (cellsOpen(pl) < CELLS.length && (state.nectar ?? 0) >= price && (next != null || kmFree() >= parcelKm()) && pl.cellReady !== buys) {
+		pl.cellReady = buys;
+		events?.push({ kind: 'cell', n: buys });
+		sound.chime(2);
+		if (next != null) toast(`Tu peux agrandir ton terrain (${fmtInt(price)} nectar) · touche pour voir`, '#9A7448', () => offerGrow(next));
+		else toast(`Tu peux explorer une parcelle voisine (${fmtInt(price)} nectar et ${kmTxt(parcelKm())}) : dézoome et touche-la`, '#9A7448', () => garden.toggleOverview());
 	}
 	for (const [key, d] of Object.entries(DECOR)) {
 		if (heartOf(pl, d.place) < 0 || d.always || pl.unlocked[key] || biomeKm(pl, d.place) < d.km) continue;
@@ -757,11 +920,90 @@ function checkUnlocks(events) {
 	}
 }
 
-/** Ouvre la parcelle `n` dans le milieu choisi ; s'il reste assez de kilomètres, la suivante attend déjà son tour. */
+// ─── Agrandir : on achète, en nectar, chaque cran de terrain et chaque parcelle voisine ───
+// Pas de terrain gagné en marchant : la marche rapporte du nectar (et l'objectif du jour), et c'est avec lui qu'on
+// agrandit. Comme dans un jeu de gestion, chaque achat fait monter le prix du suivant. On agrandit d'abord son terrain
+// jusqu'à sa taille pleine ; ensuite seulement on peut acheter une parcelle voisine (qui commence petite à son tour).
+
+/** Le prix du prochain cran d'agrandissement (40 nectar, puis +40 % à chaque achat). */
+const growPrice = () => Math.round((40 * Math.pow(1.4, here().buys ?? 0)) / 10) * 10;
+/** Une nouvelle parcelle coûte deux fois et demie un cran. */
+const parcelPrice = () => Math.round((2.5 * growPrice()) / 10) * 10;
+// Une parcelle voisine se paie aussi en kilomètres : c'est partir l'explorer. Les kilomètres marchés ici
+// s'accumulent ; acheter une parcelle en dépense (de plus en plus à chaque parcelle). Les autres déblocages, eux,
+// comptent toujours tout ce qu'on a marché.
+/** Les kilomètres d'exploration qu'il faut pour la prochaine parcelle (1,5 km, puis ×1,5 à chaque parcelle). */
+const parcelKm = () => Math.round(1.5 * Math.pow(1.5, Math.max(0, cellsOpen(here()) - 1)) * 10) / 10;
+/** Les kilomètres d'exploration qu'on a en réserve (marchés ici, moins ceux déjà dépensés). */
+const kmFree = () => Math.max(0, (here().km ?? 0) - (here().kmSpent ?? 0));
+const kmTxt = v => `${fmt(Math.max(0.1, Math.ceil(v * 10) / 10), 1)} km`;
+/** La première parcelle ouverte qui n'a pas encore sa taille pleine. */
+const growable = () => garden.openCells().find(i => garden.cellScale(i) < 1);
+const paid = price => { state.nectar -= price; here().buys = (here().buys ?? 0) + 1; };
+
+/** Ce qu'on lit sur une parcelle ouverte encore petite. */
+garden.growInfo = i => `${Math.round(garden.cellScale(i) * 100)} % · agrandir : ${fmtInt(growPrice())} nectar`;
+
+/** Toucher une parcelle ouverte encore petite : l'agrandir d'un cran. */
+function offerGrow(i) {
+	const price = growPrice(), nectar = state.nectar ?? 0, pct = Math.round(garden.cellScale(i) * 100);
+	showModal(`<h2>Agrandir ton terrain</h2>
+		<p>${cellName(here(), i)} fait ${pct} % de sa taille. Un cran de plus : ${Math.min(100, pct + 15)} %, de la place pour de nouvelles plantes et de nouveaux animaux.</p>
+		<p class="item-tip">Chaque achat fait monter le prix du suivant. Le nectar se gagne en marchant, avec l’objectif du jour et au troc.</p>
+		<div class="chips"><span class="chip gold">${fmtInt(price)} nectar</span></div>
+		<button class="btn primary" id="btn-grow" ${nectar < price ? 'disabled' : ''}>${nectar < price ? `Il manque ${fmtInt(price - nectar)} nectar` : 'Agrandir'}</button>
+		<button class="btn ghost wide" data-close>Plus tard</button>`);
+	$('#btn-grow').onclick = () => {
+		if ((state.nectar ?? 0) < price) return;
+		paid(price);
+		closeModal();
+		const s = garden.growCell(i);
+		sound.chime(3);
+		toast(s >= 1 ? `${cellName(here(), i)} a sa taille pleine : tu peux acheter une parcelle voisine` : `Le terrain s’agrandit : ${Math.round(s * 100)} %`, '#5F933E');
+		renderHud();
+		persist(true);
+		checkUnlocks();
+	};
+}
+
+/** Ce qu'on lit sur une parcelle fermée : son milieu, et ce qu'il faut pour l'avoir. */
+garden.lockedInfo = i => {
+	// Rien n'est dévoilé à l'avance : ni le milieu qui attend, ni les parcelles qu'on ne peut pas encore explorer.
+	const p = PLACE_BY_ID[garden.worldBiomeAt(i)], price = parcelPrice(), nectar = state.nectar ?? 0, km = parcelKm();
+	if (!placeOpen(state, p) || growable() != null) return null;
+	const ok = nectar >= price && kmFree() >= km;
+	return { title: 'Terre inconnue', sub: `${fmtInt(price)} nectar · ${kmTxt(km)}${ok ? ' · touche pour l’explorer' : ''}`, hint: `${fmtInt(price)} nectar · ${kmTxt(km)}` };
+};
+
+/** Toucher une parcelle voisine : ce qu'elle est, et l'acheter si on peut. */
+function offerParcel(i) {
+	const biome = garden.worldBiomeAt(i), p = PLACE_BY_ID[biome], price = parcelPrice();
+	if (!placeOpen(state, p)) return toast('Ce coin-là n’est pas encore accessible : continue de marcher et de découvrir des espèces', '#9A7448');
+	const g = growable();
+	if (g != null) return offerGrow(g);
+	const nectar = state.nectar ?? 0, km = parcelKm(), free = kmFree();
+	const missing = [nectar < price && `${fmtInt(price - nectar)} nectar`, free < km && kmTxt(km - free)].filter(Boolean);
+	showModal(`<h2>Explorer une nouvelle parcelle</h2>
+		<p>Personne ne sait ce qu’il y a là-bas : encore de la prairie, une mare, une forêt ? Tu le découvriras en l’explorant.</p>
+		<p class="item-tip">Il faut du nectar et des kilomètres d’exploration (tu en as ${fmt(Math.floor(free * 10) / 10, 1)} km en réserve). Chaque parcelle coûte plus que la précédente.</p>
+		<div class="chips"><span class="chip gold">${fmtInt(price)} nectar</span><span class="chip">${kmTxt(km)} d’exploration</span></div>
+		<button class="btn primary" id="btn-parcel" ${missing.length ? 'disabled' : ''}>${missing.length ? `Il manque ${missing.join(' et ')}` : 'Explorer cette parcelle'}</button>
+		<button class="btn ghost wide" data-close>Plus tard</button>`);
+	$('#btn-parcel').onclick = () => {
+		if ((state.nectar ?? 0) < price || kmFree() < km) return;
+		here().kmSpent = (here().kmSpent ?? 0) + km;
+		paid(price);
+		closeModal();
+		openParcel(garden.openAt(i, biome), biome);
+		renderHud();
+	};
+}
+
+/** Ouvre la parcelle `n` (déjà placée sur la grille) ; on le fête et la caméra y va. */
 function openParcel(n, biome) {
 	const pl = here();
-	if (cellsOpen(pl) !== n) return;
-	garden.openCell(n, biome);
+	if (cellsOpen(pl) !== n + 1 && cellsOpen(pl) !== n) return;
+	if (cellsOpen(pl) === n) garden.openCell(n, biome);
 	delete pl.pendingCell;
 	(pl.cellDates ??= {})[n] = Date.now();
 	garden.flyToCell(n);
@@ -769,22 +1011,6 @@ function openParcel(n, biome) {
 	toast(`La clôture recule : ${cellName(pl, n).toLowerCase()} !`, PLACE_BY_ID[biome].color);
 	persist(true);
 	checkUnlocks();
-}
-
-/** Le choix du milieu d'une nouvelle parcelle : les milieux ouverts, et ce qu'il faut pour les autres. */
-function chooseBiome(n) {
-	const pl = here();
-	if (cellsOpen(pl) !== n || pl.km < CELL_KM[n]) return;
-	const present = pl.biomes ?? ['prairie'];
-	showModal(`<div class="modal-body"><h2>Une nouvelle parcelle</h2>
-		<p>Choisis son milieu : chacun a ses plantes, ses animaux et ses aménagements.</p>
-		<div class="biome-pick">${PLACES.map(p => {
-			const open = placeOpen(state, p), count = present.filter(b => b === p.id).length;
-			const note = !open ? `dès ${p.km} km et ${p.found} espèces` : count ? `${count} parcelle${count > 1 ? 's' : ''} dans ton jardin` : 'nouveau dans ton jardin !';
-			return `<button class="biome-opt${count || !open ? '' : ' fresh'}" data-biome="${p.id}" ${open ? '' : 'disabled'} style="--pc:${p.color}"><i></i><span><b>${p.name}</b><small>${note}</small></span></button>`;
-		}).join('')}</div></div>
-		<div class="modal-foot"><button class="btn ghost" data-close>Plus tard</button></div>`);
-	for (const b of $('#modal').querySelectorAll('[data-biome]')) b.addEventListener('click', () => { closeModal(); openParcel(n, b.dataset.biome); });
 }
 
 // ─── Suivi automatique : pas de bouton, l'appli voit seule quand on bouge ─
@@ -955,7 +1181,38 @@ setInterval(() => {
 	else renderStatus();
 }, 5000);
 
+// ─── L'icône d'activité, en haut : au repos, marche, course ou vélo ───
+const ACT_ICONS = {
+	rest: '<circle cx="12" cy="4.6" r="2.2"/><path d="M12 7.5v6.5M12 14l-2.6 7M12 14l2.6 7M12 9.2l-3.4 3.4M12 9.2l3.4 3.4"/>',
+	walk: '<circle cx="13" cy="4.6" r="2.2"/><path d="M12.6 7.6l-1.8 6M10.8 13.6l-2.8 7.2M10.8 13.6l3.2 3 .8 4.4M12.2 9.4l-3.4 2.8M12.2 9.4l3.4 2"/>',
+	run: '<circle cx="15.4" cy="4.4" r="2.2"/><path d="M14.6 7.4l-3.4 6M11.2 13.4l-4 3.4-2.4-.8M11.2 13.4l4 2.6-1 5M13.6 9.2l-4.2.2M13.6 9.2l3.8 3.4"/>',
+	bike: '<circle cx="6" cy="17" r="3.6"/><circle cx="18" cy="17" r="3.6"/><circle cx="13.5" cy="4.6" r="2"/><path d="M6 17l4-6h5l3 6M10 11l2.4 6L15 11M12.6 7.2l-1.6 3.8"/>',
+};
+function renderAct() {
+	const a = session?.act, kind = !session ? 'rest' : a?.bike ? 'bike' : a && a.mult >= 2 ? 'run' : 'walk';
+	const el = $('#hud-act');
+	if (!el || el.dataset.act === kind) return;
+	el.dataset.act = kind;
+	el.setAttribute('aria-label', kind === 'rest' ? 'Au repos' : a?.name ?? 'En mouvement');
+	$('#act-ico').innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ACT_ICONS[kind]}</svg>`;
+}
+
+/** Le détail derrière l'icône : l'activité en cours, les kilomètres du jour, l'objectif, les milieux. */
+function showActivity() {
+	const km = todayMeters(state) / 1000, goal = state.goalKm, next = nextGoal(state);
+	const now = session
+		? `<p><b>${session.act?.name ?? 'En mouvement'}</b> · ${fmt(session.distance / 1000)} km · ${fmtTime(sessionSeconds(session))}</p>`
+		: `<p><b>${state.tracking ? 'Au repos' : 'Suivi en pause'}</b>${state.tracking ? '' : ' : active le suivi pour que tes pas comptent.'}</p>`;
+	showModal(`<h2>Ton activité</h2>${now}
+		<div class="chips"><span class="chip">${fmt(km, 1)} km aujourd’hui</span><span class="chip">objectif ${fmt(goal, goal % 1 ? 1 : 0)} km</span></div>
+		${next ? `<p class="item-tip">${next}</p>` : ''}
+		<button class="btn ghost wide" id="btn-act-places">${cellName(here(), garden.active)} · tes milieux</button>
+		<button class="btn primary" data-close>Fermer</button>`);
+	$('#btn-act-places').onclick = () => { closeModal(); places.open(); };
+}
+
 function renderStatus() {
+	renderAct();
 	const dot = $('#status-dot'), title = $('#status-title'), sub = $('#status-sub');
 	$('#btn-track').hidden = !!state.tracking;
 	$('#live').hidden = !session;
@@ -1004,6 +1261,8 @@ function renderDaily() {
 
 /** Le panneau du jour ; `gift` : premier passage de la journée, avec le cadeau à ouvrir. */
 function showDaily(gift = false) {
+	// Les défis du jour ne s'ouvrent seuls qu'une fois dévoilés (voir revealUi).
+	if (gift && !state.ui?.['#daily']) return;
 	const d = state.daily;
 	const g = giftFor(state);
 	const ready = giftReady(state);
@@ -1408,6 +1667,50 @@ garden.camLock = () => !!placing || $('#deco').classList.contains('open');
 // Elle ne part pas non plus d'elle-même pendant qu'on lit une fiche, une fenêtre ou une page.
 garden.camBusy = () => !$('#plant-card').hidden || !$('#modal').hidden || !$('#coach').hidden || !!document.querySelector('.panel.open');
 
+/**
+ * La nature d'abord, la ferme ensuite : la cabane (et avec elle le fermier, le potager, les poules et les ruches)
+ * n'arrive qu'une fois le jardin peuplé : assez d'espèces, quelques arbustes et un premier arbre.
+ */
+// species : espèces arrivées depuis le début (celles du jardin de départ ne comptent pas).
+const NATURE_FARM = { species: 8, bushes: 3, trees: 1 };
+function natureProgress() {
+	const plants = allPlants(state), mature = t => plants.filter(p => p.type === t && p.growth >= 1).length;
+	const start = Object.keys(state.speciesStart ?? {}).length;
+	return { species: Object.keys(state.species).length - start, bushes: mature('buisson'), trees: mature('arbre') };
+}
+function natureReady() {
+	if (state.natureReady) return true;
+	// Les parties déjà avancées (une cabane posée) gardent leur ferme.
+	if (Object.values(state.places).some(p => (p.items ?? []).some(i => i.kind === 'cabane'))) return (state.natureReady = Date.now());
+	const n = natureProgress();
+	return n.species >= NATURE_FARM.species && n.bushes >= NATURE_FARM.bushes && n.trees >= NATURE_FARM.trees;
+}
+/** Ce qui manque encore à la nature, en clair. */
+function natureMissing() {
+	const n = natureProgress(), out = [];
+	if (n.species < NATURE_FARM.species) out.push(`${n.species}/${NATURE_FARM.species} nouvelles espèces`);
+	if (n.bushes < NATURE_FARM.bushes) out.push(`${n.bushes}/${NATURE_FARM.bushes} arbustes`);
+	if (n.trees < NATURE_FARM.trees) out.push(`${n.trees}/${NATURE_FARM.trees} arbre`);
+	return out.join(', ');
+}
+/** Une fois la nature installée, c'est la fête : un fermier peut venir vivre au jardin. */
+function checkNature() {
+	if (state.natureReady || !natureReady()) return;
+	state.natureReady = Date.now();
+	persist(true);
+	sound.chime(3);
+	whenFree(() => {
+		showModal(`<h2>La nature s’est installée</h2>
+		<p>Ton jardin vit tout seul : des espèces s’y sont installées, des arbustes ont poussé, un premier arbre aussi. Un fermier peut maintenant venir s’y installer avec sa cabane, puis cultiver un potager, élever des poules et poser des ruches.</p>
+		<button class="btn primary" id="btn-farm">Voir la cabane</button>`);
+		$('#btn-farm').onclick = () => { closeModal(); openDeco('recolte'); };
+	});
+}
+setInterval(() => { if (!document.hidden) checkNature(); }, 5000);
+
+/** La nature à attendre avant de construire cet objet, en clair, ou null. */
+const natureLock = kind => (ITEMS[kind].nature && !natureReady() ? natureMissing() : null);
+
 /** L'objet qu'il faut d'abord poser ici pour pouvoir construire celui-ci (le potager vient avec la cabane), ou null. */
 function needsFirst(kind) {
 	const need = ITEMS[kind].needs;
@@ -1482,12 +1785,13 @@ function renderDeco() {
 		<div class="deco-tabs" role="tablist">${CATS.map(c => `<button role="tab" aria-selected="${c.id === decoTab}" data-tab="${c.id}">${c.name}</button>`).join('')}</div>
 		<p class="sp-intro">${cat.intro} Tout se paie en nectar, et se range quand tu veux (le nectar t'est rendu).${biome !== 'prairie' ? ` Ici, seulement ce qui a sa place ${PLACE_IN[biome]}.` : ''}</p>
 		<div class="deco-list">${ITEM_ORDER.filter(k => ITEMS[k].cat === decoTab && fitsPlace(k, biome)).map(k => {
-			const it = ITEMS[k], cost = priceOf(k), need = needsFirst(k), locked = km < it.km || !!need, poor = nectar < cost;
+			const it = ITEMS[k], cost = priceOf(k), need = needsFirst(k), wild = natureLock(k), locked = km < it.km || !!need || !!wild, poor = nectar < cost;
 			const mine = here_.filter(x => x.kind === k), n = mine.length;
 			// L'habitat le moins avancé d'ici, qu'on peut améliorer depuis la liste.
 			const low = mine.filter(x => nextLevel(x)).sort((a, b) => (a.level ?? 1) - (b.level ?? 1))[0], nx = low && nextLevel(low);
 			const up = nx ? nx.ok ? `<button class="btn primary small" data-level="${k}" ${nectar < nx.cost ? 'disabled' : ''}>Améliorer · ${fmtInt(nx.cost)}</button>` : `<span class="deco-lock">niveau ${nx.level} dès ${nx.km} km</span>` : '';
 			const action = km < it.km ? `<span class="deco-lock">dès ${it.km} km parcourus</span>`
+				: wild ? `<span class="deco-lock">quand la nature sera installée : ${wild}</span>`
 				: need ? `<span class="deco-lock">après avoir posé ${ITEMS[need].name.toLowerCase()}</span>`
 				: `<button class="btn ${n && canLevel(k) ? 'ghost' : 'primary'} small" data-buy="${k}" ${poor ? 'disabled' : ''}>${poor ? `il manque ${fmtInt(cost - nectar)}` : n ? 'Un de plus' : 'Installer'}</button>`;
 			const levels = n && (canLevel(k) || k === 'collecteur') ? `<small>${mine.map(x => `niv. ${x.level ?? 1}`).join(' · ')}</small>` : n ? `<small>${n} ici</small>` : '';
@@ -1689,11 +1993,35 @@ function tapItem(hit, card) {
 	// Le poulailler, la cabane et le collecteur montrent surtout leur état : pas besoin de les redécrire.
 	const short = ['poulailler', 'cabane', 'collecteur'].includes(it.kind) ? '' : def.text.split(/(?<=[.!?…])\s/)[0];
 	const tip = (state.longPressTips ?? 0) < 3 ? (state.longPressTips = (state.longPressTips ?? 0) + 1, '<small class="item-tip">Astuce : un appui long dessus le soulève directement.</small>') : '';
+	// La ferme : le panier à la cabane, la part de miel prise aux ruches, le compost à épandre.
+	const share = Math.round((state.honeyShare ?? 0.3) * 100), fill = it.kind === 'compost' ? compostFill(it) : 0;
+	const farm = it.kind === 'cabane' && ITEMS.cabane ? `<div class="item-actions"><button class="btn primary" data-market>Le panier${basketCount() ? ` (${fmtInt(basketCount())})` : ''}</button></div>`
+		: it.kind === 'ruche' ? `<small class="item-tip">${hiveBees()} abeille${hiveBees() > 1 ? 's' : ''} sur ${HIVE_BEES} : plante des fleurs pour en attirer d’autres.</small><div class="item-actions"><button class="btn primary" data-market>Le panier${basketCount() ? ` (${fmtInt(basketCount())})` : ''}</button></div><div class="coop-row"><span>Miel récolté <small>le reste nourrit la colonie</small></span><span class="coop-step"><button class="btn ghost small" data-share="-1" ${share <= 0 ? 'disabled' : ''}>−</button><b>${share} %</b><button class="btn ghost small" data-share="1" ${share >= 60 ? 'disabled' : ''}>+</button></span></div>`
+		: it.kind === 'compost' ? `<small class="item-tip">${fill >= 1 ? 'Plein : épands-le sur le potager, ses prochaines récoltes donneront plus.' : `Rempli à ${Math.round(fill * 100)} % (il se remplit quand tu marches).`}</small>${fill >= 1 ? '<div class="item-actions"><button class="btn primary" data-spread>Épandre sur le potager</button></div>' : ''}`
+		: '';
 	card.innerHTML = `<b>${def.name}</b>${short}${info}${tip}
-		${it.kind === 'poulailler' ? coopButtons(it) : ''}<div class="item-actions">${up ? `<button class="btn primary" data-upgrade ${(state.nectar ?? 0) < up ? 'disabled' : ''}>${def.levels ? 'Agrandir' : 'Améliorer'} (${fmtInt(up)})</button>` : ''}${it.kind === 'cabane' ? '<button class="btn ghost" data-style>Couleur</button><button class="btn ghost" data-farmer-swap>' + (state.gardener === 'fermiere' ? 'Un fermier' : 'Une fermière') + '</button><button class="btn ghost" data-pet-swap>' + (state.pet === 'chien' ? 'Un chat' : state.pet === 'chat' ? 'Sans animal' : 'Un chien') + '</button>' : ''}${it.kind === 'banc' ? '<button class="btn primary" data-sit>S’asseoir</button>' : ''}${def.turn ? '<button class="btn ghost" data-turn>Tourner</button>' : ''}<button class="btn ghost" data-move>Déplacer</button><button class="btn ghost" data-store>Ranger (+${fmtInt((it.paid ?? def.cost) + (it.spent ?? 0))})</button></div>`;
+		${it.kind === 'poulailler' ? coopButtons(it) : ''}${farm}<div class="item-actions">${up ? `<button class="btn primary" data-upgrade ${(state.nectar ?? 0) < up ? 'disabled' : ''}>${def.levels ? 'Agrandir' : 'Améliorer'} (${fmtInt(up)})</button>` : ''}${it.kind === 'cabane' ? '<button class="btn ghost" data-style>Couleur</button><button class="btn ghost" data-farmer-swap>' + (state.gardener === 'fermiere' ? 'Un fermier' : 'Une fermière') + '</button><button class="btn ghost" data-pet-swap>' + (state.pet === 'chien' ? 'Un chat' : state.pet === 'chat' ? 'Sans animal' : 'Un chien') + '</button>' : ''}${it.kind === 'banc' ? '<button class="btn primary" data-sit>S’asseoir</button>' : ''}${def.turn ? '<button class="btn ghost" data-turn>Tourner</button>' : ''}<button class="btn ghost" data-move>Déplacer</button><button class="btn ghost" data-store>Ranger (+${fmtInt((it.paid ?? def.cost) + (it.spent ?? 0))})</button></div>`;
 	card.classList.remove('link');
 	card.classList.add('actions');
 	card.onclick = e => {
+		if (e.target.closest('[data-market]')) { card.hidden = true; openMarket(); return; }
+		const sh = e.target.closest('[data-share]');
+		if (sh) {
+			state.honeyShare = Math.max(0, Math.min(0.6, Math.round(((state.honeyShare ?? 0.3) + Number(sh.dataset.share) * 0.1) * 10) / 10));
+			persist(true);
+			tapItem(hit, card);
+			return;
+		}
+		if (e.target.closest('[data-spread]')) {
+			if (!garden.items.some(x => x.kind === 'potager')) { toast('Pose d’abord un carré de potager, près de la cabane', '#9A7448'); return; }
+			it.km0 = state.totals.distance / 1000;
+			state.compostBoost = (state.compostBoost ?? 0) + 3;
+			persist(true);
+			sound.chime(2);
+			card.hidden = true;
+			toast('Compost épandu : les 3 prochaines récoltes du potager donneront 6 légumes au lieu de 4', '#5F933E');
+			return;
+		}
 		if (e.target.closest('[data-turn]')) {
 			it.rot = ((it.rot ?? 0) + 45) % 360;
 			garden.popItem(it);
@@ -1781,7 +2109,7 @@ $('#deco').addEventListener('click', e => {
 	if (b && !b.disabled) startPlacing(b.dataset.buy);
 });
 // Pendant la mission du collecteur, Aménager s'ouvre directement sur l'onglet Récolte.
-$('#btn-deco').addEventListener('click', () => openDeco(currentMission()?.id === 'collector' ? 'recolte' : undefined));
+$('#btn-deco').addEventListener('click', () => openDeco(state.intro ? 'habitat' : currentMission()?.id === 'collector' ? 'recolte' : undefined));
 
 // ─── Options : version, réglages, mode test ───────────────────
 
@@ -2187,7 +2515,8 @@ $('#btn-species').addEventListener('click', () => species.open());
 $('#btn-eco').addEventListener('click', () => eco.open());
 $('#status').addEventListener('click', () => { if (!session) eco.open(); });
 $('#hud').addEventListener('click', e => {
-	if (!e.target.closest('#hud-steps')) return places.open();
+	if (e.target.closest('#hud-act')) return showActivity();
+	if (!e.target.closest('#hud-steps')) return;
 	if ((state.pending ?? 0) < 1) { if (!session) eco.open(); return; }
 	if (jarOf(state) >= 1) { focusJar(); toast(`Ta récolte t’attend dans le collecteur${groundOf(state) >= 1 ? ', et en gouttes sur les fleurs' : ''} : touche-le pour le vider`, '#E3A33A'); }
 	else { focusDew(); toast('Ta récolte perle sur les fleurs : touche les gouttes dorées', '#E3A33A'); }
@@ -2260,7 +2589,7 @@ renderStatus();
 const firstRun = !state.seenIntro;
 rollDay(state);
 checkUnlocks();
-if (here().pendingCell === cellsOpen(here()) && here().km >= CELL_KM[cellsOpen(here())]) whenFree(() => chooseBiome(here().pendingCell));
+delete here().pendingCell; // l'ancien choix du milieu par menu : le monde le donne désormais
 garden.maxFps = state.eco30 ? 30 : 0;
 // En paysage, le panneau du bas devient une colonne à droite : le jardin sait quelle part de l'écran il couvre.
 const measureInset = () => {
@@ -2289,7 +2618,22 @@ if (Tuning.preview) {
 } else {
 	if (!sky.override) sky.start();
 	resumeTracking();
-	if (firstRun) {
+	if (state.intro) {
+		startIntro({
+			garden, state, sound, DEV, persist, renderHud, updateSpeciesDot, showModal, speciesOf, SPECIES_BY_ID,
+			enableTracking: () => { enableTracking(true); sky.locate(true); },
+			addMeters: m => { addMeters(m); renderHud(); },
+			moving: () => !!session,
+			simWalk: () => {
+				if (tracking.sim) return;
+				tracking.sim = new SimTracker(s => onSample({ ...s, sim: true }), () => {});
+				tracking.sim.speedKmh = 5;
+				tracking.sim.timeScale = 1;
+				tracking.sim.start();
+			},
+			onDone: () => { renderDaily(); renderStatus(); setTimeout(offerHarvest, 600); },
+		});
+	} else if (firstRun) {
 		setTimeout(() => coach(0), 1600);
 	} else {
 		runIdle(true);
