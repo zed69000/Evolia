@@ -20,6 +20,11 @@ La refonte de la progression, d'après le message vocal de Seb (détail : docs/r
 - Introduction : plus de bouton pour la passer (elle reprend où l'on s'était arrêté), toujours de jour, sans moucherons, vue plus rapprochée, passage en fondu du papier à la brume.
 - La fleur de l’introduction est la même pour tous : un coquelicot, toujours dessiné pareil.
 - Les feuilles des fleurs alternent toujours à gauche et à droite de la tige (elles se retrouvaient parfois toutes du même côté).
+- **Les fiches des espèces ont une vraie photo**, passée au filtre aquarelle, dans le rond de la fiche ; le dessin du jeu reste en médaillon sur son bord. 311 espèces sur 319, photos d’iNaturalist sous CC0 ou CC BY, choisies une à une (un sujet net, pas un tas), crédit sous la photo et dans CREDITS-IMAGES.md. 3,2 Mo en tout, chargées seulement quand on ouvre une fiche.
+- Correctif important : les parties commencées avant la 0.7.48 recevaient l’introduction au chargement (et la finir réduisait leur première parcelle) ; elles sont réparées.
+- Au lancement, le logo passe sur le jardin, sans interface ; l’interface n’apparaît qu’après. Pas de logo au lancement d’une nouvelle partie (l’introduction le présente).
+- Le suivi des pas est obligatoire dans l’introduction ; ensuite, une alerte reste affichée tant qu’il est coupé.
+- Ruche en bois (trois hausses, toit, pieds) ; logo net ; plus de carte des milieux fixes (on voit son propre monde de loin).
 - La page Espèces, au début : seulement ce qu'on a découvert, en plantes et insectes, avec une icône.
 - Fonds et boutons à demi transparents ; la consigne du tutoriel passe en vert sombre sur les pages claires, et une page ouverte s’arrête au-dessus d’elle (elle ne cache plus le texte).
 - Moins de moucherons, et jamais en nuée serrée.

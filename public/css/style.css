@@ -974,3 +974,5 @@ body:has(.panel.open) #debug { display: none; }
 /* Au lancement, le logo passe seul sur le jardin : aucune interface tant qu'il est là, puis elle apparaît en fondu. */
 #app #daily, #app #btn-peek, #app #track-alert, #app #quest { transition: opacity .6s ease, transform .4s cubic-bezier(.2, .8, .2, 1); }
 #app.booting #hud, #app.booting .sheet, #app.booting #daily, #app.booting #quest, #app.booting #mission, #app.booting #btn-peek, #app.booting #toasts, #app.booting #track-alert, #app.booting #tip, #app.booting #fps { opacity: 0 !important; pointer-events: none; }
+#app:has(.panel.open) #track-alert, #app:has(.modal:not([hidden])) #track-alert { display: none; }
+#species .sp-credit { text-align: center; }
