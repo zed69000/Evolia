@@ -310,8 +310,10 @@ function paintFleurOne(ctx, g, seed, L, env = {}) {
 	const r = rng(seed);
 	const [h0, h1] = L.h ?? [48, 72];
 	const H = r.range(h0, h1), lean = r.gauss() * 0.1, bend = r.gauss() * 0.15;
+	// Les feuilles alternent toujours, une à gauche, une à droite (le tirage d'avant est gardé pour que le reste du
+	// dessin ne change pas).
 	const leaves = [0.1, 0.24, 0.4, 0.56].map((t, i) => ({
-		t, side: (i % 2 ? 1 : -1) * (r() < 0.85 ? 1 : -1), len: r.range(16, 24), w: r.range(5.5, 7.5), ang: r.range(0.5, 0.9),
+		t, side: (r(), i % 2 ? 1 : -1), len: r.range(16, 24), w: r.range(5.5, 7.5), ang: r.range(0.5, 0.9),
 	}));
 	const base = Array.from({ length: 7 }, (_, i) => ({ a: -Math.PI / 2 + (i - 3) * 0.42 + r.gauss() * 0.1, len: r.range(0.55, 0.85), bend: r.gauss() * 0.4 }));
 	const rot = r() * Math.PI * 2;
