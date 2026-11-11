@@ -100,8 +100,8 @@ const GLYPH_Z = 0.5, DETAIL_Z = 1.6, DETAIL_DENSITY = 2.2;
 // En dessous de ce zoom, des pastilles signalent ce qui attend (collecteur, œufs, potager mûr, gouttes) ;
 // les toucher ramène la vue dessus.
 const POI_Z = 0.85, POI_ZOOM = 1.4;
-// Une parcelle s'ouvre à cette fraction de sa taille, et l'atteint toute entière après ces kilomètres.
-const CELL_START = 0.4, CELL_GROW_KM = 2;
+// Une parcelle s'ouvre à cette fraction de sa taille ; on l'agrandit d'un cran à chaque achat, jusqu'à sa taille pleine.
+export const CELL_START = 0.4, CELL_STEP = 0.15;
 // La caméra ne repart toute seule qu'après ce temps sans aucun geste (toucher, glisser, zoomer, bouton).
 const CAM_IDLE_MS = 20000;
 const Z_MAX = 3.2;
@@ -359,7 +359,7 @@ export class Garden {
 	openCell(i, biome = 'prairie') {
 		const place = this.place;
 		(place.biomes ??= ['prairie'])[i] = biome;
-		(place.cellKm ??= {})[i] = place.km ?? 0;
+		(place.cellSize ??= {})[i] = CELL_START;
 		place.cells = Math.max(cellsOpen(place), i + 1);
 		this.syncLayout();
 		if (this.heart(biome) === i) {
@@ -382,13 +382,21 @@ export class Garden {
 
 	/** Forme d'une parcelle : ovale tiré au hasard (mais toujours le même pour cette parcelle), bord ondulé. */
 	/**
-	 * Une parcelle commence petite (le terrain du début, pour qu'on s'y attache) et grandit à mesure qu'on marche :
-	 * 40 % de sa taille à l'ouverture, toute sa taille 2 km plus loin. Les parcelles d'avant ce réglage sont entières.
+	 * Une parcelle commence petite (le terrain du début, pour qu'on s'y attache) : 40 % de sa taille à l'ouverture.
+	 * Elle ne grandit que si on l'agrandit (en nectar, un cran de 15 % à la fois). Les parcelles d'avant sont entières.
 	 */
 	cellScale(ci) {
-		const place = this.place, k0 = place.cellKm?.[ci] ?? (ci === 0 && !place.world?.legacy ? 0 : -1e9);
-		const t = Math.max(0, Math.min(1, ((place.km ?? 0) - k0) / CELL_GROW_KM));
-		return Math.round((CELL_START + (1 - CELL_START) * t) * 20) / 20;
+		const place = this.place, s = place.cellSize?.[ci] ?? (ci === 0 && !place.world?.legacy ? CELL_START : 1);
+		return Math.round(Math.min(1, s) * 20) / 20;
+	}
+
+	/** Agrandit la parcelle d'un cran ; renvoie sa nouvelle taille. */
+	growCell(ci) {
+		const place = this.place, s = Math.min(1, this.cellScale(ci) + CELL_STEP);
+		(place.cellSize ??= {})[ci] = s;
+		const [ox, oy] = cellOrigin(ci);
+		this.burst(ox + PARCEL_W / 2, oy + PARCEL_H / 2, 24, '#8BC34A');
+		return s;
 	}
 
 	/** La taille de chaque clairière ouverte, pour savoir quand redessiner leur pourtour. */
@@ -3843,7 +3851,8 @@ export class Garden {
 			const info = isOpen ? null : this.lockedInfo?.(i) ?? { title: 'Nouvelle parcelle', sub: '', hint: '' };
 			const title = isOpen ? cellName(place, i) : info.title;
 			// Vu de loin, une parcelle fermée ne dit que l'essentiel (le prix, ou ce qu'il manque).
-			const sub = isOpen ? `${place.plants.filter(p => cellOf(p) === i && p.growth >= 1).length} plantes` : all ? info.hint : info.sub;
+			const grow = isOpen && this.cellScale(i) < 1 ? this.growInfo?.(i) : null;
+			const sub = isOpen ? grow ?? `${place.plants.filter(p => cellOf(p) === i && p.growth >= 1).length} plantes` : all ? info.hint : info.sub;
 			// Centre de la parcelle à l'écran ; une parcelle fermée garde son étiquette visible tant qu'on en voit un bout.
 			const cw = this.canvas.width, ch = this.canvas.height;
 			const sx0 = ox * S + tx, sx1 = (ox + PARCEL_W) * S + tx, sy0 = oy * S + ty, sy1 = (oy + PARCEL_H) * S + ty;

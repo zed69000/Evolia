@@ -560,7 +560,8 @@ garden.onTap = hit => {
 	if (hit.item) return tapItem(hit, card);
 	if (hit.critter) return tapCritter(hit, card);
 	if (hit.cell != null) {
-		if (hit.open) garden.flyToCell(hit.cell);
+		if (hit.open && garden.cellScale(hit.cell) < 1) offerGrow(hit.cell);
+		else if (hit.open) garden.flyToCell(hit.cell);
 		else offerParcel(hit.cell);
 		return;
 	}
@@ -692,7 +693,7 @@ const TIPS = [
 	{ id: 'journal', target: '#btn-journal', when: () => (state.walks?.length ?? 0) >= 1,
 		title: 'Ton carnet', text: 'Tes sorties, tes kilomètres de la semaine et ce qu’ils ont fait pousser.' },
 	{ id: 'biomes', target: '#hud-day', when: () => Object.keys(state.placesOpen ?? {}).length >= 2,
-		title: 'Un nouveau milieu', text: 'À chaque nouvelle parcelle, tu choisis son milieu : une mare au marais, de vieux arbres en forêt… Touche le nom en haut pour voir tous les milieux.' },
+		title: 'Un nouveau milieu', text: 'Ton monde est fait de milieux : une mare au marais, de vieux arbres en forêt… Agrandis ton terrain, puis explore une parcelle voisine pour y entrer. Touche le nom en haut pour voir tous les milieux.' },
 	{ id: 'daily', target: '#daily', when: () => totalKm() >= 1,
 		title: 'Les défis du jour', text: 'Chaque jour, un cadeau et trois petits défis. Bouger quelques jours de suite fait grossir le cadeau.' },
 ];
@@ -856,13 +857,15 @@ function addEffortXp(effort) {
 }
 
 function checkUnlocks(events) {
-	const pl = here(), n = cellsOpen(pl);
-	// Assez marché pour agrandir : on le dit une fois ; à chacun de choisir où (et de payer la parcelle en nectar).
-	if (n < CELLS.length && pl.km >= CELL_KM[n] && pl.cellReady !== n) {
-		pl.cellReady = n;
-		events?.push({ kind: 'cell', n });
+	const pl = here(), buys = pl.buys ?? 0;
+	// Assez de nectar pour le prochain achat (agrandir, ou une nouvelle parcelle) : on le dit une fois par achat.
+	const next = growable(), price = next != null ? growPrice() : parcelPrice();
+	if (cellsOpen(pl) < CELLS.length && (state.nectar ?? 0) >= price && (next != null || kmFree() >= parcelKm()) && pl.cellReady !== buys) {
+		pl.cellReady = buys;
+		events?.push({ kind: 'cell', n: buys });
 		sound.chime(2);
-		toast(`Tu peux agrandir ton jardin : dézoome et touche une parcelle voisine (dès ${fmtInt(parcelPrice(n))} nectar)`, '#9A7448', () => garden.toggleOverview());
+		if (next != null) toast(`Tu peux agrandir ton terrain (${fmtInt(price)} nectar) · touche pour voir`, '#9A7448', () => offerGrow(next));
+		else toast(`Tu peux explorer une parcelle voisine (${fmtInt(price)} nectar et ${kmTxt(parcelKm())}) : dézoome et touche-la`, '#9A7448', () => garden.toggleOverview());
 	}
 	for (const [key, d] of Object.entries(DECOR)) {
 		if (heartOf(pl, d.place) < 0 || d.always || pl.unlocked[key] || biomeKm(pl, d.place) < d.km) continue;
@@ -873,36 +876,79 @@ function checkUnlocks(events) {
 	}
 }
 
-// ─── Agrandir : acheter une parcelle voisine, dans le milieu que le monde y a mis ───
+// ─── Agrandir : on achète, en nectar, chaque cran de terrain et chaque parcelle voisine ───
+// Pas de terrain gagné en marchant : la marche rapporte du nectar (et l'objectif du jour), et c'est avec lui qu'on
+// agrandit. Comme dans un jeu de gestion, chaque achat fait monter le prix du suivant. On agrandit d'abord son terrain
+// jusqu'à sa taille pleine ; ensuite seulement on peut acheter une parcelle voisine (qui commence petite à son tour).
 
-/** Le prix de la n-ième parcelle (la deuxième coûte 80 nectar, puis de plus en plus). */
-const parcelPrice = n => Math.round((80 * Math.pow(Math.max(1, n), 1.35)) / 10) * 10;
+/** Le prix du prochain cran d'agrandissement (40 nectar, puis +40 % à chaque achat). */
+const growPrice = () => Math.round((40 * Math.pow(1.4, here().buys ?? 0)) / 10) * 10;
+/** Une nouvelle parcelle coûte deux fois et demie un cran. */
+const parcelPrice = () => Math.round((2.5 * growPrice()) / 10) * 10;
+// Une parcelle voisine se paie aussi en kilomètres : c'est partir l'explorer. Les kilomètres marchés ici
+// s'accumulent ; acheter une parcelle en dépense (de plus en plus à chaque parcelle). Les autres déblocages, eux,
+// comptent toujours tout ce qu'on a marché.
+/** Les kilomètres d'exploration qu'il faut pour la prochaine parcelle (1,5 km, puis ×1,5 à chaque parcelle). */
+const parcelKm = () => Math.round(1.5 * Math.pow(1.5, Math.max(0, cellsOpen(here()) - 1)) * 10) / 10;
+/** Les kilomètres d'exploration qu'on a en réserve (marchés ici, moins ceux déjà dépensés). */
+const kmFree = () => Math.max(0, (here().km ?? 0) - (here().kmSpent ?? 0));
+const kmTxt = v => `${fmt(Math.max(0.1, Math.ceil(v * 10) / 10), 1)} km`;
+/** La première parcelle ouverte qui n'a pas encore sa taille pleine. */
+const growable = () => garden.openCells().find(i => garden.cellScale(i) < 1);
+const paid = price => { state.nectar -= price; here().buys = (here().buys ?? 0) + 1; };
+
+/** Ce qu'on lit sur une parcelle ouverte encore petite. */
+garden.growInfo = i => `${Math.round(garden.cellScale(i) * 100)} % · agrandir ${fmtInt(growPrice())} nectar`;
+
+/** Toucher une parcelle ouverte encore petite : l'agrandir d'un cran. */
+function offerGrow(i) {
+	const price = growPrice(), nectar = state.nectar ?? 0, pct = Math.round(garden.cellScale(i) * 100);
+	showModal(`<h2>Agrandir ton terrain</h2>
+		<p>${cellName(here(), i)} fait ${pct} % de sa taille. Un cran de plus : ${Math.min(100, pct + 15)} %, de la place pour de nouvelles plantes et de nouveaux animaux.</p>
+		<p class="item-tip">Chaque achat fait monter le prix du suivant. Le nectar se gagne en marchant, avec l’objectif du jour et au troc.</p>
+		<div class="chips"><span class="chip gold">${fmtInt(price)} nectar</span></div>
+		<button class="btn primary" id="btn-grow" ${nectar < price ? 'disabled' : ''}>${nectar < price ? `Il manque ${fmtInt(price - nectar)} nectar` : 'Agrandir'}</button>
+		<button class="btn ghost wide" data-close>Plus tard</button>`);
+	$('#btn-grow').onclick = () => {
+		if ((state.nectar ?? 0) < price) return;
+		paid(price);
+		closeModal();
+		const s = garden.growCell(i);
+		sound.chime(3);
+		toast(s >= 1 ? `${cellName(here(), i)} a sa taille pleine : tu peux acheter une parcelle voisine` : `Le terrain s’agrandit : ${Math.round(s * 100)} %`, '#5F933E');
+		renderHud();
+		persist(true);
+		checkUnlocks();
+	};
+}
 
 /** Ce qu'on lit sur une parcelle fermée : son milieu, et ce qu'il faut pour l'avoir. */
 garden.lockedInfo = i => {
-	const pl = here(), n = cellsOpen(pl), p = PLACE_BY_ID[garden.worldBiomeAt(i)], price = parcelPrice(n), nectar = state.nectar ?? 0;
+	const p = PLACE_BY_ID[garden.worldBiomeAt(i)], price = parcelPrice(), nectar = state.nectar ?? 0, km = parcelKm();
 	if (!placeOpen(state, p)) return { title: p.name, sub: `dès ${p.km} km et ${p.found} espèces`, hint: `dès ${p.km} km` };
-	if (pl.km < CELL_KM[n]) {
-		const left = fmt(Math.max(0.1, Math.ceil((CELL_KM[n] - pl.km) * 10) / 10), 1);
-		return { title: p.name, sub: `encore ${left} km pour agrandir`, hint: `${left} km` };
-	}
-	return { title: p.name, sub: nectar >= price ? `${fmtInt(price)} nectar · touche pour l’acheter` : `${fmtInt(price)} nectar (il en manque ${fmtInt(price - nectar)})`, hint: `${fmtInt(price)} nectar` };
+	if (growable() != null) return { title: p.name, sub: 'agrandis d’abord ton terrain', hint: 'plus tard' };
+	const ok = nectar >= price && kmFree() >= km;
+	return { title: p.name, sub: `${fmtInt(price)} nectar · ${kmTxt(km)}${ok ? ' · touche pour l’explorer' : ''}`, hint: `${fmtInt(price)} nectar · ${kmTxt(km)}` };
 };
 
 /** Toucher une parcelle voisine : ce qu'elle est, et l'acheter si on peut. */
 function offerParcel(i) {
-	const pl = here(), n = cellsOpen(pl), biome = garden.worldBiomeAt(i), p = PLACE_BY_ID[biome], price = parcelPrice(n);
+	const biome = garden.worldBiomeAt(i), p = PLACE_BY_ID[biome], price = parcelPrice();
 	if (!placeOpen(state, p)) return toast(`${p.name} : ce milieu s’ouvre dès ${p.km} km et ${p.found} espèces découvertes`, p.color);
-	if (pl.km < CELL_KM[n]) return toast(`Pour agrandir ton jardin : encore ${fmt(Math.max(0.1, Math.ceil((CELL_KM[n] - pl.km) * 10) / 10), 1)} km`, '#9A7448');
-	const nectar = state.nectar ?? 0;
-	showModal(`<h2>Agrandir ton jardin</h2>
+	const g = growable();
+	if (g != null) return offerGrow(g);
+	const nectar = state.nectar ?? 0, km = parcelKm(), free = kmFree();
+	const missing = [nectar < price && `${fmtInt(price - nectar)} nectar`, free < km && kmTxt(km - free)].filter(Boolean);
+	showModal(`<h2>Explorer une nouvelle parcelle</h2>
 		<p>Cette parcelle est ${PLACE_IN[biome] ?? `en ${p.name.toLowerCase()}`} : la nature s’y installera avec ses propres plantes et ses animaux.</p>
-		<div class="chips"><span class="chip gold">${fmtInt(price)} nectar</span></div>
-		<button class="btn primary" id="btn-parcel" ${nectar < price ? 'disabled' : ''}>${nectar < price ? `Il manque ${fmtInt(price - nectar)} nectar` : 'Acheter cette parcelle'}</button>
+		<p class="item-tip">Il faut du nectar et des kilomètres d’exploration (tu en as ${fmt(Math.floor(free * 10) / 10, 1)} km en réserve). Chaque parcelle coûte plus que la précédente.</p>
+		<div class="chips"><span class="chip gold">${fmtInt(price)} nectar</span><span class="chip">${kmTxt(km)} d’exploration</span></div>
+		<button class="btn primary" id="btn-parcel" ${missing.length ? 'disabled' : ''}>${missing.length ? `Il manque ${missing.join(' et ')}` : 'Explorer cette parcelle'}</button>
 		<button class="btn ghost wide" data-close>Plus tard</button>`);
 	$('#btn-parcel').onclick = () => {
-		if ((state.nectar ?? 0) < price) return;
-		state.nectar -= price;
+		if ((state.nectar ?? 0) < price || kmFree() < km) return;
+		here().kmSpent = (here().kmSpent ?? 0) + km;
+		paid(price);
 		closeModal();
 		openParcel(garden.openAt(i, biome), biome);
 		renderHud();

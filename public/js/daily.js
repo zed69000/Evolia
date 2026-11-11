@@ -152,7 +152,6 @@ export function nextGoal(state) {
 	const total = state.totals.distance / 1000;
 	const goals = [];
 	const n = cellsOpen(place);
-	if (n < CELLS.length) goals.push({ km: CELL_KM[n] - place.km, text: 'pour ouvrir une nouvelle parcelle' });
 	for (const [k, d] of Object.entries(DECOR)) {
 		if (present.includes(d.place) && !d.always && !place.unlocked[k]) goals.push({ km: d.km - biomeKm(place, d.place), text: `pour ${DECOR_TEASE[k] ?? 'une surprise'}` });
 	}
