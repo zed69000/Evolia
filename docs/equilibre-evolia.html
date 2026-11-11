@@ -107,14 +107,14 @@ td .chip { display: inline-block; font-size: 12px; font-weight: 700; padding: 1p
       <section class="card" aria-labelledby="c1">
         <h2 id="c1">D'où vient le nectar, jour après jour</h2>
         <p class="sub">Part de chaque source dans le nectar du jour. La marche, l'élan et le papillon doré dépendent tous de l'activité physique ; seule la production au repos est de l'idle pur.</p>
-        <div class="legend"><span><i style="background:var(--s-act)"></i>Marche et objectif</span><span><i style="background:var(--s-idle)"></i>Habitats pendant l'élan</span><span><i style="background:var(--s-gold)"></i>Papillon doré</span><span><i style="background:var(--s-rest)"></i>Habitats au repos</span></div>
+        <div class="legend"><span><i style="background:var(--s-act)"></i>Marche, objectif et ferme</span><span><i style="background:var(--s-idle)"></i>Habitats pendant l'élan</span><span><i style="background:var(--s-gold)"></i>Papillon doré</span><span><i style="background:var(--s-rest)"></i>Habitats au repos</span></div>
         <div class="chart" id="ch1"></div>
       </section>
 
       <section class="card" aria-labelledby="c2">
         <h2 id="c2">Nectar gagné par jour</h2>
         <p class="sub">Échelle logarithmique : chaque ligne de la grille vaut dix fois la précédente. La production des habitats grandit comme dans tout jeu incrémental ; la marche reste plate, mais c'est elle qui déclenche l'élan.</p>
-        <div class="legend"><span><i class="line" style="background:var(--s-total)"></i>Total du jour</span><span><i class="line" style="background:var(--s-act)"></i>Marche et objectif seuls</span></div>
+        <div class="legend"><span><i class="line" style="background:var(--s-total)"></i>Total du jour</span><span><i class="line" style="background:var(--s-act)"></i>Marche, objectif et ferme</span></div>
         <div class="chart" id="ch2"></div>
       </section>
 
@@ -127,10 +127,11 @@ td .chip { display: inline-block; font-size: 12px; font-weight: 700; padding: 1p
       <section class="card notes" aria-labelledby="c4">
         <h2 id="c4">Les règles du modèle</h2>
         <p><b>Les habitats des animaux</b>, de la moins chère à la plus chère : massif mellifère (50 nectar, 0,6 nectar par heure d'élan), ruche (300, 3), hôtel à insectes (1 200, 14), nichoir (6 000, 60), mare (30 000, 280), haie vive (150 000, 1 300). Chacun n'apparaît qu'une fois le précédent posé, et à partir d'un certain nombre de kilomètres parcourus (1, 4, 8, 15, 25 km).</p>
-        <p><b>Améliorations</b> : posséder 1, 5, 25 puis 50 exemplaires d'un habitat débloque une amélioration qui double sa production (10, 50, 500 puis 50 000 fois son prix de base).</p>
+        <p><b>Améliorations</b> : posséder 1, 5, 25 puis 50 exemplaires d'un habitat débloque une amélioration qui double sa production (5, 25, 250 puis 2 500 fois son prix de base : jamais plus cher que l'habitat suivant).</p>
         <p><b>Les pas font pousser les plantes</b> : environ 1,5 fleur, 0,3 arbuste et 0,06 arbre par km, dans la limite de la surface du terrain. <b>D'où viennent les espèces</b> (au plus 6, 4, 3 puis 2 par jour) : beaucoup avec les plantes (une pour deux fleurs, deux par arbuste, quatre par arbre, jusqu'à 140), d'autres avec les habitats (8 par sorte d'habitat : hérisson, lézard, mésange…), avec les milieux explorés (10 par nouvelle parcelle : grenouilles, libellules…), et les prédateurs avec leurs proies (une espèce de plus pour huit). Chaque espèce découverte augmente toute la production. Les habitats ne produisent pleinement que s'il y a assez de plantes autour (deux par habitat). <b>Papillon doré</b> : un par jour de sortie ; le toucher donne 7 fois la production pendant une minute, plus 20 nectar.</p>
         <p><b>Le pas grandit avec le jardin</b> : en plus de son nectar fixe, chaque km rapporte quelques heures de la production du jardin (2 h par défaut). Sans cela, la marche deviendrait vite négligeable face à la production des habitats, qui grandit sans cesse.</p>
-        <p><b>Terrain</b> : 4 crans par parcelle (60 nectar, +35 % à chaque cran). <b>Parcelles</b> : 500 nectar, puis × 1,7, et des kilomètres d'exploration (1,5 km, puis × 1,5). Le joueur achète toujours le terrain dès qu'il peut, puis ce qui rapporte le plus pour son prix. Le modèle ne compte ni la ferme, ni les fruits, ni les défis du jour.</p>
+        <p><b>La ferme</b> suit les kilomètres. La cabane du fermier (600 nectar) arrive quand la nature est installée (10 espèces et 5 km). Ensuite : des carrés de potager (270 nectar, +15 % par carré ; 4 légumes tous les 2,5 km par carré, 15 nectar le légume ; ils attirent lapins, lièvres et piérides), le poulailler (480 nectar pour 3 poules, puis des places en plus ; 1,5 œuf par km et par poule ; le renard rôde), le bac à compost (180 nectar : le potager donne moitié plus ; vers de terre). Le fermier cueille aussi les arbres fruitiers que la marche a fait pousser.</p>
+        <p><b>Terrain</b> : 4 crans par parcelle (60 nectar, +35 % à chaque cran). <b>Parcelles</b> : 600 nectar, puis × 2,3, et des kilomètres d'exploration (1,5 km, puis × 1,5). Le joueur achète toujours le terrain dès qu'il peut, puis ce qui rapporte le plus pour son prix. Le modèle ne compte ni la ferme, ni les fruits, ni les défis du jour.</p>
       </section>
     </main>
   </div>
@@ -143,11 +144,12 @@ const LADDER = [
   ['Massif mellifère', 50, 0.6, 0], ['Ruche', 300, 3, 1], ['Hôtel à insectes', 1200, 14, 4],
   ['Nichoir', 6000, 60, 8], ['Mare', 30000, 280, 15], ['Haie vive', 150000, 1300, 25],
 ];
-const UPG_AT = [1, 5, 25, 50], UPG_COST = [10, 50, 500, 50000];
+const UPG_AT = [1, 5, 25, 50], UPG_COST = [5, 25, 250, 2500];
 
 function simulate(p) {
   let nectar = 0, km = 0, kmSpent = 0, grows = 0, cells = 1, crans = 0, species = 2;
   let flowers = 1, bushes = 0, trees = 0;
+  const farm = { cabane: false, potager: 0, poules: 0, compost: false };
   const own = LADDER.map(() => 0), mult = LADDER.map(() => 1), upg = LADDER.map(() => 0);
   const log = [], days = [];
   for (let d = 1; d <= p.days; d++) {
@@ -161,7 +163,8 @@ function simulate(p) {
     // les habitats (hérisson, lézard, mésange…), les milieux explorés (marais, forêt…) et la chaîne
     // alimentaire (les prédateurs suivent leurs proies).
     const byPlants = Math.min(140, Math.floor(flowers / 2) + Math.floor(bushes * 2) + Math.floor(trees * 4));
-    const byHomes = own.filter(n => n > 0).length * 8;
+    const byHomes = own.filter(n => n > 0).length * 8
+      + (farm.potager ? 4 : 0) + (farm.poules ? 2 : 0) + (farm.compost ? 3 : 0) + (farm.cabane ? 2 : 0);
     const byPlaces = (cells - 1) * 10;
     const prey = 2 + byPlants + byHomes + byPlaces;
     const open = Math.min(319, prey + Math.floor(prey / 8));
@@ -180,14 +183,32 @@ function simulate(p) {
     const elan = perH * elanH, rest = perH * (24 - elanH) * p.rest;
     const gold = active ? perH * 7 / 60 + 20 : 0;
     const fiche = found * 10;
-    nectar += walk + elan + rest + gold + fiche;
+    // La ferme suit les kilomètres : 4 légumes tous les 2,5 km par carré (×1,5 avec le compost), 1,5 œuf par km et
+    // par poule, à 15 nectar ; le fermier cueille les fruitiers (un arbre sur trois), 2 kg par jour de sortie à 20 nectar.
+    const veg = farm.potager * p.km / 2.5 * 4 * (farm.compost ? 1.5 : 1) * 15;
+    const eggs = farm.poules * p.km * 1.5 * 15;
+    const fruit = farm.cabane && active ? Math.floor(trees / 3) * 2 * 20 : 0;
+    const ferme = veg + eggs + fruit;
+    nectar += walk + elan + rest + gold + fiche + ferme;
     for (let g = 0; g < 500; g++) {
       const o = [];
       const gp = Math.round(60 * Math.pow(1.35, grows) / 10) * 10;
       if (crans < 4) o.push({ l: `Terrain : parcelle ${cells}, cran ${crans + 1}/4`, c: gp, v: 1e9, go: () => { crans++; grows++; } });
       else {
         const pk = Math.round(1.5 * Math.pow(1.5, cells - 1) * 10) / 10;
-        if (km - kmSpent >= pk) o.push({ l: `Nouvelle parcelle n° ${cells + 1}`, c: Math.round(500 * Math.pow(1.7, cells - 1) / 10) * 10, v: 1e9, big: true, go: () => { cells++; crans = 0; kmSpent += pk; } });
+        if (km - kmSpent >= pk) o.push({ l: `Nouvelle parcelle n° ${cells + 1}`, c: Math.round(600 * Math.pow(2.3, cells - 1) / 10) * 10, v: 1e9, big: true, go: () => { cells++; crans = 0; kmSpent += pk; } });
+      }
+      // La ferme : la cabane (nature installée : 8 espèces de plus qu'au départ, 5 km), puis potager, poulailler, compost.
+      const daily = elanH + (24 - elanH) * p.rest;
+      if (!farm.cabane && km >= 5 && species >= 10) o.push({ l: 'Cabane du fermier', c: 600, v: 1, big: true, go: () => { farm.cabane = true; } });
+      if (farm.cabane) {
+        const pc = Math.round(270 * Math.pow(1.15, farm.potager));
+        o.push({ l: `Carré de potager n° ${farm.potager + 1}`, c: pc, v: (p.km / 2.5 * 4 * 15) / pc / Math.max(1, daily), big: farm.potager === 0, go: () => { farm.potager++; } });
+        if (km >= 7 && farm.poules < 8) {
+          const pp = farm.poules ? [0, 0, 0, 1200, 1200, 3600, 3600, 6000][farm.poules] : 480;
+          o.push({ l: farm.poules ? `Poulailler : ${farm.poules + 1} poules` : 'Poulailler (3 poules)', c: pp, v: (p.km * 1.5 * 15 * (farm.poules ? 1 : 3)) / pp / Math.max(1, daily), big: !farm.poules || farm.poules === 5 || farm.poules === 7, go: () => { farm.poules = farm.poules ? farm.poules + 1 : 3; } });
+        }
+        if (!farm.compost && farm.potager && km >= 3) o.push({ l: 'Bac à compost (potager × 1,5)', c: 180, v: (farm.potager * p.km / 2.5 * 4 * 15 * 0.5) / 180 / Math.max(1, daily), big: true, go: () => { farm.compost = true; } });
       }
       LADDER.forEach(([n, c0, prod, kmNeed], i) => {
         if (km < kmNeed || (i > 0 && own[i - 1] < 1)) return;
@@ -201,7 +222,7 @@ function simulate(p) {
       if (!x) break;
       nectar -= x.c; x.go(); if (x.big) log.push({ day: d, label: x.l, price: x.c });
     }
-    days.push({ d, walk, elan, rest, gold, fiche, total: walk + elan + rest + gold + fiche, cells, species, eff, plants: Math.round(flowers + bushes + trees) });
+    days.push({ d, walk: walk + ferme, ferme, elan, rest, gold, fiche, total: walk + elan + rest + gold + fiche + ferme, cells, species, eff, plants: Math.round(flowers + bushes + trees) });
   }
   return { days, log, own, cells };
 }
