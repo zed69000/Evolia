@@ -15,6 +15,7 @@ import { Soundscape } from './audio.js';
 import { ITEMS, ITEM_ORDER, itemHelp, itemCost, fitsPlace, CATS, MAX_LEVEL, LEVEL_NAME, LEVEL_KM, canLevel, levelCost, CABIN_STYLES } from './deco.js';
 import { VERSION } from './version.js';
 import { startIntro, INTRO_NECTAR } from './intro.js';
+import { LADDER, isLadder, ladderPrice, ladderLock, nextUpgrade, unitProd, prodPerHour, produce, KM_HOURS, UPG_AT } from './habitats.js';
 import { exportCode, importCode, backupAge } from './backup.js';
 import { DebugPanel, debugOn, setDebug, debugLog, ago, dur, trace, traceFlush } from './debug.js';
 import { canNotify, askNotify, scheduleReminders, clearReminders } from './notify.js';
@@ -284,7 +285,7 @@ const hiveBees = () => {
 };
 setInterval(() => {
 	const bees = hiveBees();
-	if (!bees || (garden.season?.winter ?? 0) > 0.6) return;
+	if (state.eco2 || !bees || (garden.season?.winter ?? 0) > 0.6) return;
 	const pace = !state.eco2 || boostLeft(state) > 0 ? 1 : HONEY_REST;
 	state.honeyAcc = (state.honeyAcc ?? 0) + bees * HONEY_PER_BEE * pace * (state.honeyShare ?? 0.3) / 60;
 	if (state.honeyAcc >= 1) {
@@ -293,6 +294,23 @@ setInterval(() => {
 		addGood('miel', n, 'Les ruches');
 	}
 }, 60000);
+
+// Nouvelle économie : les habitats produisent, à plein pendant l'élan d'une sortie, à 5 % au repos ; la part des
+// ruches devient du miel (un pot pour 60 nectar), le reste va dans la bourse.
+function runHabitats() {
+	if (!state.eco2 || state.intro) { state.prodAt = Date.now(); return; }
+	const got = produce(state);
+	const honey = got.honey * (state.honeyShare ?? 0.3) / 0.3;
+	state.honeyAcc = (state.honeyAcc ?? 0) + honey / 60;
+	state.nectar = (state.nectar ?? 0) + Math.max(0, got.nectar - got.honey);
+	if (state.honeyAcc >= 1) {
+		const n = Math.floor(state.honeyAcc);
+		state.honeyAcc -= n;
+		addGood('miel', n, 'Les ruches');
+	}
+	renderHud();
+}
+setInterval(runHabitats, 60000);
 
 // Le compost : il se remplit en marchant (épluchures, feuilles mortes) ; plein, on l'épand sur le potager.
 const COMPOST_KM = 3;
@@ -908,6 +926,8 @@ function addMeters(m, nectar = m / 5) {
 	// Le nectar de la marche se dépose comme celui des butineurs : en gouttes sur les fleurs, ou dans le collecteur.
 	// Il n'est pas limité par la réserve : ce qu'on a gagné en marchant ne se perd jamais.
 	addWaiting(state, nectar, false, state.place);
+	// Nouvelle économie : chaque km vaut aussi quatre heures de la production du jardin (60 % activité, 40 % idle pour un joueur moyen).
+	if (state.eco2 && !state.intro) state.nectar = (state.nectar ?? 0) + (m / 1000) * KM_HOURS * prodPerHour(state);
 	if (markActive(state)) {
 		const s = state.daily.streak;
 		toast(s > 1 ? `Jour actif : ${s} jours de suite !` : 'Jour actif : ta série commence', '#F08A3C', () => showDaily());
@@ -953,7 +973,7 @@ const growPrice = () => (state.eco2
 	: Math.round((40 * Math.pow(1.4, here().buys ?? 0)) / 10) * 10);
 /** Une nouvelle parcelle : 500 nectar, puis ×1,7 à chaque parcelle (avant : deux fois et demie un cran). */
 const parcelPrice = () => (state.eco2
-	? Math.round((500 * Math.pow(1.7, Math.max(0, cellsOpen(here()) - 1))) / 10) * 10
+	? Math.round((600 * Math.pow(2.3, Math.max(0, cellsOpen(here()) - 1))) / 10) * 10
 	: Math.round((2.5 * growPrice()) / 10) * 10);
 // Une parcelle voisine se paie aussi en kilomètres : c'est partir l'explorer. Les kilomètres marchés ici
 // s'accumulent ; acheter une parcelle en dépense (de plus en plus à chaque parcelle). Les autres déblocages, eux,
@@ -1434,6 +1454,7 @@ async function playHarvest(res, source) {
 	const effortAll = res.groups.reduce((a, g) => a + g.effort, 0), nectar = effortAll * nectarPerEffort();
 	for (const [k, m] of Object.entries(res.days)) if (res.distance > 0) addDayEffort(state, (effortAll * m) / res.distance, k);
 	addWaiting(state, nectar, false, state.place);
+	if (state.eco2 && !state.intro) state.nectar = (state.nectar ?? 0) + (res.distance / 1000) * KM_HOURS * prodPerHour(state);
 	// L'élan des pas relus vaut celui d'une marche suivie en direct : 3 min par minute de vraie marche,
 	// 2 min par minute de petits pas (ménage, marche lente).
 	addBoost(state, res.groups.reduce((n, g) => n + g.minutes * (g.act.id === 'menage' || g.act.id === 'marche-lente' ? 2 : boostPerMin()), 0));
@@ -1755,6 +1776,7 @@ const ownedCount = kind => Object.values(state.places).reduce((a, p) => a + (p.i
 const priceOf = kind => {
 	const n = ownedCount(kind), base = itemCost(kind, n);
 	if (!state.eco2) return base;
+	if (isLadder(kind)) return ladderPrice(state, kind);
 	if (kind === 'ruche') return n ? base * 2 : base;
 	return Math.round((base * 3) / 5) * 5;
 };
@@ -1782,6 +1804,7 @@ function nextLevel(it) {
 	// La cabane a ses propres niveaux (petite cabane, cabane à auvent, chalet).
 	if (own) return lv >= own.max ? null : { level: lv + 1, cost: own.cost[lv + 1], km: own.km[lv + 1], ok: km >= own.km[lv + 1] };
 	if (!canLevel(it.kind) || lv >= MAX_LEVEL) return null;
+	if (state.eco2 && isLadder(it.kind)) return null;
 	// La ruche s'agrandit sans attendre de kilomètres : seulement de plus en plus cher.
 	if (it.kind === 'ruche' && state.eco2) return { level: lv + 1, cost: levelCost(it.kind, lv + 1) * 2, km: 0, ok: true };
 	return { level: lv + 1, cost: levelCost(it.kind, lv + 1), km: LEVEL_KM[lv + 1], ok: km >= LEVEL_KM[lv + 1] };
@@ -1829,20 +1852,26 @@ function renderDeco() {
 		<p class="sp-intro">${first ? 'Ta première ruche : tes abeilles y vivront et y feront leur miel. Le reste viendra plus tard.' : `${cat.intro} Tout se paie en nectar, et se range quand tu veux (le nectar t'est rendu).${biome !== 'prairie' ? ` Ici, seulement ce qui a sa place ${PLACE_IN[biome]}.` : ''}`}</p>
 		<div class="deco-list">${order.map(k => {
 			const later = first && k !== 'ruche';
-			const it = ITEMS[k], cost = priceOf(k), need = needsFirst(k), wild = natureLock(k), locked = later || km < it.km || !!need || !!wild, poor = nectar < cost;
+			const ladder = state.eco2 && isLadder(k), lad = ladder ? ladderLock(state, k) : null;
+			const it = ITEMS[k], cost = priceOf(k), need = needsFirst(k), wild = natureLock(k), locked = later || !!lad || (!ladder && km < it.km) || !!need || !!wild, poor = nectar < cost;
 			const mine = here_.filter(x => x.kind === k), n = mine.length;
 			// L'habitat le moins avancé d'ici, qu'on peut améliorer depuis la liste.
 			const low = mine.filter(x => nextLevel(x)).sort((a, b) => (a.level ?? 1) - (b.level ?? 1))[0], nx = low && nextLevel(low);
 			const up = nx ? nx.ok ? `<button class="btn primary small" data-level="${k}" ${nectar < nx.cost ? 'disabled' : ''}>Améliorer · ${fmtInt(nx.cost)}</button>` : `<span class="deco-lock">niveau ${nx.level} dès ${nx.km} km</span>` : '';
 			const action = later ? '<span class="deco-lock">plus tard</span>'
-				: km < it.km ? `<span class="deco-lock">dès ${it.km} km parcourus</span>`
+				: lad ? `<span class="deco-lock">${lad}</span>`
+				: !ladder && km < it.km ? `<span class="deco-lock">dès ${it.km} km parcourus</span>`
 				: wild ? `<span class="deco-lock">quand la nature sera installée : ${wild}</span>`
 				: need ? `<span class="deco-lock">après avoir posé ${ITEMS[need].name.toLowerCase()}</span>`
 				: `<button class="btn ${n && canLevel(k) ? 'ghost' : 'primary'} small" data-buy="${k}" ${poor ? 'disabled' : ''}>${poor ? `il manque ${fmtInt(cost - nectar)}` : n ? 'Un de plus' : 'Installer'}</button>`;
-			const levels = n && (canLevel(k) || k === 'collecteur') ? `<small>${mine.map(x => `niv. ${x.level ?? 1}`).join(' · ')}</small>` : n ? `<small>${n} ici</small>` : '';
+			const levels = ladder ? (n ? `<small>${n} ici</small>` : '') : n && (canLevel(k) || k === 'collecteur') ? `<small>${mine.map(x => `niv. ${x.level ?? 1}`).join(' · ')}</small>` : n ? `<small>${n} ici</small>` : '';
+			// L'échelle des habitats : ce que chacun rapporte pendant l'élan, et son amélioration (production × 2).
+			const up2 = ladder && !later ? nextUpgrade(state, k) : null;
+			const prodLine = ladder && !later ? `<span class="deco-help">Chacun rapporte ${fmtNum(unitProd(state, k))} nectar par heure d’élan${n ? ` · ${n} posé${n > 1 ? 's' : ''}` : ''}</span>` : '';
+			const upgBtn = up2 ? (up2.ok ? `<button class="btn primary small" data-upg="${k}" ${nectar < up2.cost ? 'disabled' : ''}>Amélioration ${up2.level} (× 2) · ${fmtInt(up2.cost)}</button>` : `<span class="deco-lock">amélioration ${up2.level} (× 2) dès ${up2.need} posés</span>`) : '';
 			return `<div class="deco-card${locked ? ' locked' : ''}"><div class="deco-art" data-art="${k}"></div>
 				<div class="deco-body"><h3>${it.name}</h3><p>${it.text}</p>${itemHelp(k) ? `<span class="deco-help">${itemHelp(k)}</span>` : ''}
-				<div class="deco-row"><span class="nectar">${fmtInt(cost)}</span>${levels}${action}</div>${up ? `<div class="deco-row deco-up">${up}</div>` : ''}</div></div>`;
+				${prodLine}<div class="deco-row"><span class="nectar">${fmtInt(cost)}</span>${levels}${action}</div>${up ? `<div class="deco-row deco-up">${up}</div>` : ''}${upgBtn && n ? `<div class="deco-row deco-up">${upgBtn}</div>` : ''}</div></div>`;
 		}).join('')}</div>`;
 	for (const el of $('#deco').querySelectorAll('[data-art]')) {
 		const sp = garden.itemSprite(el.dataset.art, 315), c = document.createElement('canvas');
@@ -2150,6 +2179,18 @@ $('#deco').addEventListener('click', e => {
 		const low = garden.items.filter(x => x.kind === l.dataset.level && nextLevel(x)).sort((a, b) => (a.level ?? 1) - (b.level ?? 1))[0];
 		if (low && levelUp(low)) renderDeco();
 		return;
+	}
+	const g = e.target.closest('[data-upg]');
+	if (g && !g.disabled) {
+		const kind = g.dataset.upg, up = nextUpgrade(state, kind);
+		if (!up?.ok || (state.nectar ?? 0) < up.cost) return;
+		state.nectar -= up.cost;
+		(state.upg ??= {})[kind] = up.level;
+		sound.chime(3);
+		toast(`${ITEMS[kind].name} : production × 2`, '#5F933E');
+		persist(true);
+		renderHud();
+		return renderDeco();
 	}
 	const b = e.target.closest('[data-buy]');
 	if (b && !b.disabled) startPlacing(b.dataset.buy);
@@ -2647,6 +2688,7 @@ $('#btn-peek').addEventListener('click', () => {
 // gouttes sur les fleurs rejoint la bourse.
 if (!state.eco2 && here().cellSize?.[0] != null && cellsOpen(here()) === 1) state.eco2 = true;
 if (state.eco2 && (state.ground ?? 0) > 0) { state.nectar = (state.nectar ?? 0) + state.ground; state.pending = Math.max(0, (state.pending ?? 0) - state.ground); state.ground = 0; }
+runHabitats();
 renderHud();
 renderStatus();
 const firstRun = !state.seenIntro;

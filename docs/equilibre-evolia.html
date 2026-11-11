@@ -92,7 +92,7 @@ td .chip { display: inline-block; font-size: 12px; font-weight: 700; padding: 1p
       <div class="ctl"><label for="goal">Objectif du jour atteint <output id="goal-o"></output></label><input id="goal" type="range" min="0" max="100" step="5" value="50"></div>
       <h2>Les réglages du jeu</h2>
       <div class="ctl"><label for="npk">Nectar par km de marche <output id="npk-o"></output></label><input id="npk" type="range" min="10" max="250" step="5" value="60"></div>
-      <div class="ctl"><label for="kmShare">Chaque km vaut aussi <output id="kmShare-o"></output></label><input id="kmShare" type="range" min="0" max="5" step="0.25" value="2"><small>…heures de production du jardin. Le pas prend de la valeur à mesure que le jardin grandit.</small></div>
+      <div class="ctl"><label for="kmShare">Chaque km vaut aussi <output id="kmShare-o"></output></label><input id="kmShare" type="range" min="0" max="8" step="0.25" value="4"><small>…heures de production du jardin. Le pas prend de la valeur à mesure que le jardin grandit.</small></div>
       <div class="ctl"><label for="growth">Hausse de prix par habitat posé <output id="growth-o"></output></label><input id="growth" type="range" min="1.05" max="1.4" step="0.01" value="1.15"><small>Chaque exemplaire d'un même habitat coûte un peu plus que le précédent.</small></div>
       <div class="ctl"><label for="elan">Heures d'élan après une sortie <output id="elan-o"></output></label><input id="elan" type="range" min="1" max="10" step="0.5" value="4"><small>Pour 2,5 km ; plus longues si l'on marche plus (jusqu'au double).</small></div>
       <div class="ctl"><label for="rest">Rythme au repos <output id="rest-o"></output></label><input id="rest" type="range" min="0" max="0.5" step="0.01" value="0.05"><small>La part de la production quand on ne bouge pas.</small></div>
@@ -129,7 +129,7 @@ td .chip { display: inline-block; font-size: 12px; font-weight: 700; padding: 1p
         <p><b>Les habitats des animaux</b>, de la moins chère à la plus chère : massif mellifère (50 nectar, 0,6 nectar par heure d'élan), ruche (300, 3), hôtel à insectes (1 200, 14), nichoir (6 000, 60), mare (30 000, 280), haie vive (150 000, 1 300). Chacun n'apparaît qu'une fois le précédent posé, et à partir d'un certain nombre de kilomètres parcourus (1, 4, 8, 15, 25 km).</p>
         <p><b>Améliorations</b> : posséder 1, 5, 25 puis 50 exemplaires d'un habitat débloque une amélioration qui double sa production (5, 25, 250 puis 2 500 fois son prix de base : jamais plus cher que l'habitat suivant).</p>
         <p><b>Les pas font pousser les plantes</b> : environ 1,5 fleur, 0,3 arbuste et 0,06 arbre par km, dans la limite de la surface du terrain. <b>D'où viennent les espèces</b> (au plus 6, 4, 3 puis 2 par jour) : beaucoup avec les plantes (une pour deux fleurs, deux par arbuste, quatre par arbre, jusqu'à 140), d'autres avec les habitats (8 par sorte d'habitat : hérisson, lézard, mésange…), avec les milieux explorés (10 par nouvelle parcelle : grenouilles, libellules…), et les prédateurs avec leurs proies (une espèce de plus pour huit). Chaque espèce découverte augmente toute la production. Les habitats ne produisent pleinement que s'il y a assez de plantes autour (deux par habitat). <b>Papillon doré</b> : un par jour de sortie ; le toucher donne 7 fois la production pendant une minute, plus 20 nectar.</p>
-        <p><b>Le pas grandit avec le jardin</b> : en plus de son nectar fixe, chaque km rapporte quelques heures de la production du jardin (2 h par défaut). Sans cela, la marche deviendrait vite négligeable face à la production des habitats, qui grandit sans cesse.</p>
+        <p><b>Le pas grandit avec le jardin</b> : en plus de son nectar fixe, chaque km rapporte quelques heures de la production du jardin (4 h par défaut : environ 60 % d'activité et 40 % d'idle pour un joueur moyen). Sans cela, la marche deviendrait vite négligeable face à la production des habitats, qui grandit sans cesse.</p>
         <p><b>La ferme</b> suit les kilomètres. La cabane du fermier (600 nectar) arrive quand la nature est installée (10 espèces et 5 km). Ensuite : des carrés de potager (270 nectar, +15 % par carré ; 4 légumes tous les 2,5 km par carré, 15 nectar le légume ; ils attirent lapins, lièvres et piérides), le poulailler (480 nectar pour 3 poules, puis des places en plus ; 1,5 œuf par km et par poule ; le renard rôde), le bac à compost (180 nectar : le potager donne moitié plus ; vers de terre). Le fermier cueille aussi les arbres fruitiers que la marche a fait pousser.</p>
         <p><b>Terrain</b> : 4 crans par parcelle (60 nectar, +35 % à chaque cran). <b>Parcelles</b> : 600 nectar, puis × 2,3, et des kilomètres d'exploration (1,5 km, puis × 1,5). Le joueur achète toujours le terrain dès qu'il peut, puis ce qui rapporte le plus pour son prix. Le modèle ne compte ni la ferme, ni les fruits, ni les défis du jour.</p>
       </section>
@@ -303,24 +303,26 @@ function render() {
   for (const b of document.querySelectorAll('.presets button')) b.setAttribute('aria-pressed', String(+b.dataset.km === p.km));
   const { days, log, cells } = simulate(p);
   const sum = k => days.reduce((a, x) => a + x[k], 0), all = sum('total');
-  const act = (sum('walk') + sum('elan') + sum('gold')) / all, idle = sum('rest') / all;
+  // Activité : ce que rapportent directement les pas (marche, valeur du km, objectif, ferme, papillon doré).
+  // Idle : la production des habitats (pendant l'élan et au repos). Cible : 60 % / 40 % pour un joueur moyen.
+  const act = (sum('walk') + sum('gold') + sum('fiche')) / all, idle = (sum('elan') + sum('rest')) / all;
   const first = n => log.find(b => b.label === `${n} n° 1`)?.day;
   const reached = LADDER.filter(([n]) => first(n)).length;
   $('#kpis').innerHTML = [
-    [`${Math.round(act * 100)} %`, 'du nectar dépend de l’activité physique (marche, élan, papillon doré)'],
-    [`${Math.round(idle * 100)} %`, 'vient du repos, sans bouger (idle pur)'],
+    [`${Math.round(act * 100)} %`, 'activité : marche, valeur du km, objectif, ferme, papillon doré'],
+    [`${Math.round(idle * 100)} %`, 'idle : production des habitats (élan et repos)'],
     [`${reached} / ${LADDER.length}`, `sortes d'habitats posées au jour ${p.days}`],
     [`${cells}`, `parcelles au jour ${p.days}`],
     [`${days[days.length - 1].species}`, `espèces découvertes (${days[days.length - 1].plants} plantes)`],
   ].map(([v, l]) => `<div class="kpi"><b>${v}</b><span>${l}</span></div>`).join('');
   const issues = [];
-  if (idle > 0.25) issues.push(`<b>L'idle pèse trop.</b> ${Math.round(idle * 100)} % du nectar vient du repos : un joueur qui ne bouge pas avance presque autant.`);
-  if (act < 0.7) issues.push(`<b>L'activité ne mène plus.</b> Elle ne fait que ${Math.round(act * 100)} % des gains.`);
+  if (p.km >= 1.5 && act < 0.55) issues.push(`<b>L'idle prend le dessus.</b> L'activité ne fait que ${Math.round(act * 100)} % des gains (cible : 60 %).`);
+  if (p.km >= 1.5 && act > 0.75) issues.push(`<b>L'idle ne pèse presque rien.</b> ${Math.round(idle * 100)} % seulement : les habitats ne valent pas leur prix (cible : 40 %).`);
   if ((first('Hôtel à insectes') ?? 99) <= 7) issues.push(`<b>Trop rapide.</b> L'hôtel à insectes arrive dès le jour ${first('Hôtel à insectes')}.`);
   if (p.km >= 2 && p.days >= 45 && !first('Hôtel à insectes')) issues.push(`<b>Trop lent.</b> Même en marchant ${p.km.toLocaleString('fr-FR')} km par jour, le troisième habitat n'est pas posé en ${p.days} jours.`);
   $('#verdict').innerHTML = issues.length
     ? `<div class="verdict warn"><span class="pill">À revoir</span><p>${issues.join('<br>')}</p></div>`
-    : `<div class="verdict good"><span class="pill">Équilibré</span><p>L'activité physique fait ${Math.round(act * 100)} % des gains et le repos seulement ${Math.round(idle * 100)} %. Les habitats arrivent un à un sur des semaines (${reached} sortes en ${p.days} jours), et le terrain s'étend à ${cells} parcelles.</p></div>`;
+    : `<div class="verdict good"><span class="pill">Équilibré</span><p>L'activité fait ${Math.round(act * 100)} % des gains et l'idle ${Math.round(idle * 100)} % (cible : 60 / 40). Les habitats arrivent un à un sur des semaines (${reached} sortes en ${p.days} jours), et le terrain s'étend à ${cells} parcelles.</p></div>`;
   chartShare($('#ch1'), days);
   chartLog($('#ch2'), days);
   $('#tl').innerHTML = log.map(b => `<tr><td>${b.label}</td><td class="num"><span class="chip">J${b.day}</span></td><td class="num">${fmt(b.price)}</td></tr>`).join('');

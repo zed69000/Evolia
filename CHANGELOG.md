@@ -3,6 +3,15 @@
 Chaque version, la plus récente en haut. Le site (evolia.sebastienalzamora.workers.dev) est toujours à jour ;
 le Play Store (tests internes) reçoit les versions indiquées « Play ».
 
+## Prochaine version — 12 novembre 2026
+L'économie façon jeu incrémental (nouvelles parties ; réglée avec le simulateur docs/equilibre-evolia.html) :
+- **Six habitats en échelle** : massif mellifère, ruche, hôtel à insectes, nichoir, mare, haie. Chacun coûte environ cinq fois le précédent et produit environ cinq fois plus ; chaque exemplaire coûte 15 % de plus ; l'hôtel demande une ruche, le nichoir un hôtel, etc.
+- **Améliorations** : à 1, 5, 25 et 50 exemplaires, une amélioration double la production de l'habitat (5, 25, 250, 2 500 fois son prix de base).
+- **Les habitats travaillent pendant l'élan** d'une sortie (7 minutes d'élan par minute de marche, 8 h au plus), à 5 % au repos, appli fermée comprise. Il leur faut des plantes autour (deux par habitat), et chaque espèce découverte ajoute 1 % à la production. La part des ruches devient du miel.
+- **Chaque km vaut 60 nectar plus 4 heures de la production du jardin** : le pas grandit avec le jardin. Cible : 60 % d'activité, 40 % d'idle pour un joueur moyen.
+- Parcelles : 600 nectar, puis × 2,3.
+- Fiches : bouton Fermer en bas (plus de petite croix) ; bulle du tutoriel qui le montre.
+
 ## 0.7.48 — 11 novembre 2026
 La refonte de la progression, d'après le message vocal de Seb (détail : docs/refonte-progression.md).
 - **Un nouveau départ** : une partie neuve s'ouvre sur une minuscule motte de terre. Un oiseau y laisse tomber une graine, quelques pas la font fleurir, une abeille vient la butiner, puis le logo apparaît : « À chacun de tes pas, la nature s’éveille. »

@@ -70,7 +70,10 @@ export const boostLeft = state => Math.max(0, (state.boostUntil ?? 0) - Date.now
 /** L'élan sportif triple la production ; il s'ajoute à l'élan en cours, sans dépasser 6 h. */
 export function addBoost(state, minutes) {
 	const now = Date.now();
-	state.boostUntil = Math.min(now + maxBoostH() * 3600000, Math.max(now, state.boostUntil ?? 0) + minutes * 60000);
+	// Nouvelle économie : l'élan dure plus longtemps (7 min par minute de marche, 8 h au plus) : c'est lui qui fait
+	// travailler les habitats.
+	const k = state.eco2 ? 7 / 3 : 1, max = state.eco2 ? 8 : maxBoostH();
+	state.boostUntil = Math.min(now + max * 3600000, Math.max(now, state.boostUntil ?? 0) + minutes * k * 60000);
 }
 
 /**
