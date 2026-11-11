@@ -3,7 +3,7 @@
 Chaque version, la plus récente en haut. Le site (evolia.sebastienalzamora.workers.dev) est toujours à jour ;
 le Play Store (tests internes) reçoit les versions indiquées « Play ».
 
-## Prochaine version — 12 novembre 2026
+## 0.7.49 — 12 novembre 2026
 L'économie façon jeu incrémental (nouvelles parties ; réglée avec le simulateur docs/equilibre-evolia.html) :
 - **Six habitats en échelle** : massif mellifère, ruche, hôtel à insectes, nichoir, mare, haie. Chacun coûte environ cinq fois le précédent et produit environ cinq fois plus ; chaque exemplaire coûte 15 % de plus ; l'hôtel demande une ruche, le nichoir un hôtel, etc.
 - **Améliorations** : à 1, 5, 25 et 50 exemplaires, une amélioration double la production de l'habitat (5, 25, 250, 2 500 fois son prix de base).
