@@ -2664,6 +2664,10 @@ if (Tuning.preview) {
 	if (!sky.override) sky.start();
 	resumeTracking();
 	if (state.intro) {
+		// Le temps de l'introduction, il fait beau, quel que soit le vrai ciel.
+		const realSky = sky.override;
+		sky.override = 'clear';
+		sky.apply(false);
 		startIntro({
 			garden, state, sound, DEV, persist, renderHud, updateSpeciesDot, countPurse, showModal, speciesOf, SPECIES_BY_ID,
 			enableTracking: () => { sky.locate(true); return enableTracking(true); },
@@ -2677,7 +2681,7 @@ if (Tuning.preview) {
 				tracking.sim.timeScale = 1;
 				tracking.sim.start();
 			},
-			onDone: () => { renderDaily(); renderStatus(); setTimeout(offerHarvest, 600); },
+			onDone: () => { sky.override = realSky; sky.apply(); renderDaily(); renderStatus(); setTimeout(offerHarvest, 600); },
 		});
 	} else if (firstRun) {
 		setTimeout(() => coach(0), 1600);
