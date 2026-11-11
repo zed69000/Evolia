@@ -182,7 +182,8 @@ export const jarOf = state => Math.max(0, (state.pending ?? 0) - groundOf(state)
 export function addWaiting(state, v, idle = false, placeId = null) {
 	if (!(v > 0)) return 0;
 	// Nouvelle économie : le nectar de la marche va droit dans la bourse ; l'écosystème n'en dépose plus sur les fleurs.
-	if (state.eco2) { if (!idle) state.nectar = (state.nectar ?? 0) + v; return 0; }
+	// Pendant l'introduction, la seule monnaie est celle de la fiche de l'abeille : on la comprend mieux ainsi.
+	if (state.eco2) { if (!idle && !state.intro) state.nectar = (state.nectar ?? 0) + v; return 0; }
 	const ground = groundOf(state), jar = jarOf(state);
 	const toJar = Math.min(v, Math.max(0, jarCap(state) - jar));
 	const rest = v - toJar;
