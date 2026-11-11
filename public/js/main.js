@@ -174,25 +174,99 @@ function chooseFarmer(then) {
 	});
 }
 
-// Le jardinier ramasse les œufs du poulailler : chacun vaut un peu de nectar.
-const EGG_NECTAR = 15;
-garden.onEggs = (coop, n) => {
-	const gain = n * EGG_NECTAR;
-	state.nectar = (state.nectar ?? 0) + gain;
-	toast(`${farmerName(true)} a ramassé ${n} œuf${n > 1 ? 's' : ''} · +${gain} nectar`, '#5F933E');
-	garden.say(n === 1 ? 'Un œuf de plus !' : `${['', '', 'Deux', 'Trois', 'Quatre', 'Cinq', 'Six'][n] ?? n} œufs de plus !`);
-	renderHud();
+// ─── Le panier du fermier, et le troc ─────────────────────────
+// Ce que produit la ferme (œufs, légumes, fruits, miel) va dans le panier, rangé à la cabane. On le troque
+// ensuite contre du nectar, quand on veut : de quoi s'offrir un compost, des poules, une parcelle de plus…
+
+// Le prix de chaque produit au troc, en nectar (par œuf, par légume, par kilo de fruits, par pot de miel).
+const GOODS = {
+	oeufs: { one: 'œuf', many: 'œufs', price: 15, icon: '🥚' },
+	legumes: { one: 'légume', many: 'légumes', price: 15, icon: '🥬' },
+	pommes: { one: 'kg de pommes', many: 'kg de pommes', price: 20, icon: '🍎' },
+	poires: { one: 'kg de poires', many: 'kg de poires', price: 22, icon: '🍐' },
+	cerises: { one: 'kg de cerises', many: 'kg de cerises', price: 30, icon: '🍒' },
+	prunes: { one: 'kg de prunes', many: 'kg de prunes', price: 22, icon: '🫐' },
+	miel: { one: 'pot de miel', many: 'pots de miel', price: 60, icon: '🍯' },
+};
+const EGG_NECTAR = GOODS.oeufs.price;
+const FRUIT_OF = { pommier: 'pommes', poirier: 'poires', merisier: 'cerises', prunier: 'prunes' };
+const basket = () => (state.stock ??= {});
+const basketCount = () => Object.values(basket()).reduce((a, n) => a + n, 0);
+const goodLabel = (k, n) => `${fmtInt(n)} ${n > 1 ? GOODS[k].many : GOODS[k].one}`;
+
+/** Range des produits dans le panier, avec un message qui ouvre le troc. */
+function addGood(k, n, by) {
+	if (n <= 0) return;
+	basket()[k] = (basket()[k] ?? 0) + n;
 	persist();
+	toast(`${by} : ${GOODS[k].icon} ${goodLabel(k, n)} dans le panier · touche pour troquer`, '#5F933E', openMarket);
+}
+
+/** Le troc : le panier, le prix de chaque produit, et ce qu'il rapporte en nectar. */
+function openMarket() {
+	const goods = Object.entries(basket()).filter(([k, n]) => n > 0 && GOODS[k]);
+	const total = goods.reduce((a, [k, n]) => a + n * GOODS[k].price, 0);
+	showModal(`<div class="modal-body"><h2>Le panier de la ferme</h2>
+		${goods.length ? `<p>Troque ce que ta ferme a produit contre du nectar, pour t'offrir de nouveaux aménagements.</p>
+		<ul class="harvest-rows">${goods.map(([k, n]) => `<li><span>${GOODS[k].icon} <b>${goodLabel(k, n)}</b> · ${GOODS[k].price} nectar ${GOODS[k].one.startsWith('kg') ? 'le kg' : 'pièce'}</span>
+			<button class="btn ghost small" data-sell="${k}">Troquer · ${fmtInt(n * GOODS[k].price)}</button></li>`).join('')}</ul>`
+		: `<p>Le panier est vide. ${farmerName(true)} y range les œufs des poules, les légumes du potager, les fruits du verger et le miel des ruches.</p>`}</div>
+		<div class="modal-foot">${goods.length ? `<button class="btn primary" data-sell="all">Tout troquer · ${fmtInt(total)} nectar</button>` : ''}<button class="btn ghost" data-close>Fermer</button></div>`);
+	for (const b of $('#modal').querySelectorAll('[data-sell]')) b.addEventListener('click', () => {
+		const keys = b.dataset.sell === 'all' ? goods.map(([k]) => k) : [b.dataset.sell];
+		let gain = 0;
+		for (const k of keys) { gain += (basket()[k] ?? 0) * GOODS[k].price; basket()[k] = 0; }
+		state.nectar = (state.nectar ?? 0) + gain;
+		persist(true);
+		renderHud();
+		sound.chime(2);
+		toast(`Troc : +${fmtInt(gain)} nectar`, '#E3A33A');
+		openMarket();
+	});
+}
+
+// Le jardinier ramasse les œufs du poulailler : ils vont dans le panier.
+garden.onEggs = (coop, n) => {
+	addGood('oeufs', n, farmerName(true));
+	garden.say(n === 1 ? 'Un œuf de plus !' : `${['', '', 'Deux', 'Trois', 'Quatre', 'Cinq', 'Six'][n] ?? n} œufs de plus !`);
 };
 
-// Le jardinier récolte une parcelle mûre : un panier de légumes, en nectar.
+// Le jardinier récolte une parcelle mûre du potager : des légumes (plus, si on y a épandu du compost).
 garden.onHarvest = () => {
-	state.nectar = (state.nectar ?? 0) + 60;
-	toast(`${farmerName(true)} a récolté ses légumes · +60 nectar`, '#5F933E');
-	garden.say(['Belle récolte !', 'Des légumes pour ce soir !', 'Le panier est plein !'][Math.floor(Math.random() * 3)]);
-	renderHud();
-	persist();
+	const boosted = (state.compostBoost ?? 0) > 0;
+	if (boosted) state.compostBoost--;
+	addGood('legumes', boosted ? 6 : 4, farmerName(true));
+	garden.say(boosted ? 'Le compost a fait des merveilles !' : ['Belle récolte !', 'Des légumes pour ce soir !', 'Le panier est plein !'][Math.floor(Math.random() * 3)]);
 };
+
+// Il cueille aussi les fruits mûrs des arbres fruitiers (une fois toutes les quelques heures par arbre) ;
+// un arbre soigné en donne davantage.
+const PICK_EVERY = 4 * 3600000;
+garden.onPick = tree => {
+	const fruit = FRUIT_OF[speciesOf(tree)];
+	if (!fruit || Date.now() - (tree.pickedAt ?? 0) < PICK_EVERY) return;
+	tree.pickedAt = Date.now();
+	const kg = 2 + 2 * (tree.care ?? 0);
+	addGood(fruit, kg, farmerName(true));
+	garden.say(`${kg} kg de ${fruit} !`);
+};
+
+// Les ruches : la colonie produit du miel ; le fermier en prend une part (réglable), le reste nourrit les abeilles.
+const HONEY_PER_HOUR = 0.35; // pots par heure et par ruche si l'on prenait tout
+setInterval(() => {
+	const hives = garden.items.filter(it => it.kind === 'ruche').length;
+	if (!hives || !garden.items.some(it => it.kind === 'cabane') || (garden.season?.winter ?? 0) > 0.6) return;
+	state.honeyAcc = (state.honeyAcc ?? 0) + hives * HONEY_PER_HOUR * (state.honeyShare ?? 0.3) / 60;
+	if (state.honeyAcc >= 1) {
+		const n = Math.floor(state.honeyAcc);
+		state.honeyAcc -= n;
+		addGood('miel', n, 'Les ruches');
+	}
+}, 60000);
+
+// Le compost : il se remplit en marchant (épluchures, feuilles mortes) ; plein, on l'épand sur le potager.
+const COMPOST_KM = 3;
+const compostFill = it => Math.max(0, Math.min(1, (state.totals.distance / 1000 - (it.km0 ?? 0)) / COMPOST_KM));
 
 const eco = new EcoPanel($('#eco'), state, kind => {
 	const it = ITEMS[kind];
@@ -475,7 +549,7 @@ garden.onTap = hit => {
 		if (one?.msg) toast(one.msg, '#5F933E', one.open ?? null);
 		// Les œufs ne se ramassent pas à la main : le jardinier passe les chercher.
 		const eggs = hit.poi.items?.find(p => p.eggs);
-		if (eggs) toast(`${eggs.eggs} œuf${eggs.eggs > 1 ? 's' : ''} : ${owned('cabane') ? `${farmerName(true).toLowerCase()} viendra les chercher` : 'pose une cabane, ton jardinier viendra les chercher'} (+${eggs.eggs * EGG_NECTAR} nectar)`, '#5F933E');
+		if (eggs) toast(`${eggs.eggs} œuf${eggs.eggs > 1 ? 's' : ''} : ${owned('cabane') ? `${farmerName(true).toLowerCase()} viendra les chercher pour le panier` : 'pose une cabane, ton jardinier viendra les chercher'} (${eggs.eggs * EGG_NECTAR} nectar au troc)`, '#5F933E');
 		return;
 	}
 	if (hit.dew) {
@@ -499,10 +573,23 @@ garden.onTap = hit => {
 		<div class="bar"><i style="width:${pct}%"></i></div>Née le ${born}
 		${known ? '<span class="more">Son rôle dans la nature ›</span>' : ''}`;
 	// Un arbre ou un arbuste adulte peut être replanté ailleurs.
-	if (pct >= 100 && (p.type === 'arbre' || p.type === 'buisson')) card.insertAdjacentHTML('beforeend', '<div class="item-actions"><button class="btn ghost" data-move-plant>Déplacer</button></div>');
+	const fruit = pct >= 100 && FRUIT_OF[id], care = p.care ?? 0, careCost = 150 * (care + 1);
+	if (fruit) card.insertAdjacentHTML('beforeend', `<small class="item-tip">Arbre fruitier : ${2 + 2 * care} kg de ${fruit} par cueillette${care ? ` (soigné ${care}/3)` : ''}.</small>`);
+	if (pct >= 100 && (p.type === 'arbre' || p.type === 'buisson')) card.insertAdjacentHTML('beforeend', `<div class="item-actions">${fruit && care < 3 ? `<button class="btn primary" data-care ${(state.nectar ?? 0) < careCost ? 'disabled' : ''}>Le soigner · ${fmtInt(careCost)}</button>` : ''}<button class="btn ghost" data-move-plant>Déplacer</button></div>`);
 	card.classList.toggle('link', known);
 	card.onclick = e => {
 		if (e.target.closest('[data-move-plant]')) { card.hidden = true; startMovingPlant(p); return; }
+		if (e.target.closest('[data-care]')) {
+			if ((state.nectar ?? 0) < careCost) return;
+			state.nectar -= careCost;
+			p.care = care + 1;
+			persist(true);
+			renderHud();
+			sound.chime(1);
+			card.hidden = true;
+			toast(`${plantName(p)} soigné : ${2 + 2 * p.care} kg de ${fruit} par cueillette`, '#5F933E');
+			return;
+		}
 		if (known) { card.hidden = true; species.open(id); }
 	};
 	placeCard(card, hit);
@@ -1783,11 +1870,35 @@ function tapItem(hit, card) {
 	// Le poulailler, la cabane et le collecteur montrent surtout leur état : pas besoin de les redécrire.
 	const short = ['poulailler', 'cabane', 'collecteur'].includes(it.kind) ? '' : def.text.split(/(?<=[.!?…])\s/)[0];
 	const tip = (state.longPressTips ?? 0) < 3 ? (state.longPressTips = (state.longPressTips ?? 0) + 1, '<small class="item-tip">Astuce : un appui long dessus le soulève directement.</small>') : '';
+	// La ferme : le panier à la cabane, la part de miel prise aux ruches, le compost à épandre.
+	const share = Math.round((state.honeyShare ?? 0.3) * 100), fill = it.kind === 'compost' ? compostFill(it) : 0;
+	const farm = it.kind === 'cabane' && ITEMS.cabane ? `<div class="item-actions"><button class="btn primary" data-market>Le panier${basketCount() ? ` (${fmtInt(basketCount())})` : ''}</button></div>`
+		: it.kind === 'ruche' ? `<div class="coop-row"><span>Miel récolté <small>le reste nourrit la colonie</small></span><span class="coop-step"><button class="btn ghost small" data-share="-1" ${share <= 0 ? 'disabled' : ''}>−</button><b>${share} %</b><button class="btn ghost small" data-share="1" ${share >= 60 ? 'disabled' : ''}>+</button></span></div>`
+		: it.kind === 'compost' ? `<small class="item-tip">${fill >= 1 ? 'Plein : épands-le sur le potager, ses prochaines récoltes donneront plus.' : `Rempli à ${Math.round(fill * 100)} % (il se remplit quand tu marches).`}</small>${fill >= 1 ? '<div class="item-actions"><button class="btn primary" data-spread>Épandre sur le potager</button></div>' : ''}`
+		: '';
 	card.innerHTML = `<b>${def.name}</b>${short}${info}${tip}
-		${it.kind === 'poulailler' ? coopButtons(it) : ''}<div class="item-actions">${up ? `<button class="btn primary" data-upgrade ${(state.nectar ?? 0) < up ? 'disabled' : ''}>${def.levels ? 'Agrandir' : 'Améliorer'} (${fmtInt(up)})</button>` : ''}${it.kind === 'cabane' ? '<button class="btn ghost" data-style>Couleur</button><button class="btn ghost" data-farmer-swap>' + (state.gardener === 'fermiere' ? 'Un fermier' : 'Une fermière') + '</button><button class="btn ghost" data-pet-swap>' + (state.pet === 'chien' ? 'Un chat' : state.pet === 'chat' ? 'Sans animal' : 'Un chien') + '</button>' : ''}${it.kind === 'banc' ? '<button class="btn primary" data-sit>S’asseoir</button>' : ''}${def.turn ? '<button class="btn ghost" data-turn>Tourner</button>' : ''}<button class="btn ghost" data-move>Déplacer</button><button class="btn ghost" data-store>Ranger (+${fmtInt((it.paid ?? def.cost) + (it.spent ?? 0))})</button></div>`;
+		${it.kind === 'poulailler' ? coopButtons(it) : ''}${farm}<div class="item-actions">${up ? `<button class="btn primary" data-upgrade ${(state.nectar ?? 0) < up ? 'disabled' : ''}>${def.levels ? 'Agrandir' : 'Améliorer'} (${fmtInt(up)})</button>` : ''}${it.kind === 'cabane' ? '<button class="btn ghost" data-style>Couleur</button><button class="btn ghost" data-farmer-swap>' + (state.gardener === 'fermiere' ? 'Un fermier' : 'Une fermière') + '</button><button class="btn ghost" data-pet-swap>' + (state.pet === 'chien' ? 'Un chat' : state.pet === 'chat' ? 'Sans animal' : 'Un chien') + '</button>' : ''}${it.kind === 'banc' ? '<button class="btn primary" data-sit>S’asseoir</button>' : ''}${def.turn ? '<button class="btn ghost" data-turn>Tourner</button>' : ''}<button class="btn ghost" data-move>Déplacer</button><button class="btn ghost" data-store>Ranger (+${fmtInt((it.paid ?? def.cost) + (it.spent ?? 0))})</button></div>`;
 	card.classList.remove('link');
 	card.classList.add('actions');
 	card.onclick = e => {
+		if (e.target.closest('[data-market]')) { card.hidden = true; openMarket(); return; }
+		const sh = e.target.closest('[data-share]');
+		if (sh) {
+			state.honeyShare = Math.max(0, Math.min(0.6, Math.round(((state.honeyShare ?? 0.3) + Number(sh.dataset.share) * 0.1) * 10) / 10));
+			persist(true);
+			tapItem(hit, card);
+			return;
+		}
+		if (e.target.closest('[data-spread]')) {
+			if (!garden.items.some(x => x.kind === 'potager')) { toast('Pose d’abord un carré de potager, près de la cabane', '#9A7448'); return; }
+			it.km0 = state.totals.distance / 1000;
+			state.compostBoost = (state.compostBoost ?? 0) + 3;
+			persist(true);
+			sound.chime(2);
+			card.hidden = true;
+			toast('Compost épandu : les 3 prochaines récoltes du potager donneront 6 légumes au lieu de 4', '#5F933E');
+			return;
+		}
 		if (e.target.closest('[data-turn]')) {
 			it.rot = ((it.rot ?? 0) + 45) % 360;
 			garden.popItem(it);

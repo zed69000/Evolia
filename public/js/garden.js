@@ -1358,7 +1358,7 @@ export class Garden {
 	}
 
 	placeItem(kind, x, y, rot = 0) {
-		const it = { id: uid(), kind, x: Math.round(x), y: Math.round(y), rot, at: Date.now(), ...(kind === 'potager' || kind === 'poulailler' ? { km0: this.state.totals.distance / 1000 } : {}), ...(kind === 'poulailler' ? { flock: { hens: 3, roosters: 1 } } : {}) };
+		const it = { id: uid(), kind, x: Math.round(x), y: Math.round(y), rot, at: Date.now(), ...(kind === 'potager' || kind === 'poulailler' || kind === 'compost' ? { km0: this.state.totals.distance / 1000 } : {}), ...(kind === 'poulailler' ? { flock: { hens: 3, roosters: 1 } } : {}) };
 		this.items.push(it);
 		this.clearUnder(it);
 		this.popItem(it, true);
@@ -2731,6 +2731,8 @@ export class Garden {
 		if (f.mode === 'pick') {
 			f.basket = true;
 			this.burst(f.x + f.dir * 10, f.y - 40, 8, f.fruit);
+			if (f.tree) this.onPick?.(f.tree);
+			f.tree = null;
 			f.goal = { x: door.x, y: door.y, task: 'in' };
 			return;
 		}
@@ -2820,7 +2822,7 @@ export class Garden {
 			if (p.type !== 'arbre' || p.growth < 1) continue;
 			const sp = speciesOf(p), col = FRUIT_TREES[sp];
 			const P = this.pdata[cellOf(p)];
-			if (col && P) out.push({ x: P.ox + p.x, y: P.oy + p.y, fruit: col });
+			if (col && P) out.push({ x: P.ox + p.x, y: P.oy + p.y, fruit: col, plant: p });
 		}
 		return out;
 	}
@@ -2836,6 +2838,7 @@ export class Garden {
 			f.goal = { x: tr.x + side * 16, y: tr.y + 4, task: 'pick' };
 			f.face = -side;
 			f.fruit = tr.fruit;
+			f.tree = tr.plant;
 		});
 		options.push(() => {
 			const a = Math.random() * Math.PI * 2, r = 60 + Math.random() * 90;
