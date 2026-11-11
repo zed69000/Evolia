@@ -293,6 +293,7 @@ function checkDailyGoal() {
 
 function renderHud() {
 	checkDailyGoal();
+	revealUi();
 	const km = todayMeters(state) / 1000;
 	$('#hud-day').textContent = cellName(here(), garden.active);
 	// En toutes lettres : ce qu'on a fait aujourd'hui, puis l'objectif du jour (ou qu'il est atteint).
@@ -699,6 +700,35 @@ const TIPS = [
 ];
 
 let tipShown = null, lastTipEnd = 0;
+
+// ─── L'interface se dévoile au fil du jeu ───
+// Au départ : le jardin, la bourse, les espèces et les options. Le reste arrive quand il devient utile, avec un petit
+// message ; l'astuce du bouton suit (elle attend qu'il soit visible). Une partie déjà avancée a tout d'un coup.
+const UI_STEPS = [
+	{ sel: '#btn-journal', name: 'le carnet de tes sorties', when: () => (state.walks?.length ?? 0) >= 1 || totalKm() >= 0.5 },
+	{ sel: '#btn-deco', name: 'Aménager ton jardin', when: () => (here().buys ?? 0) >= 1 || (state.nectar ?? 0) >= 60 || Object.values(state.places).some(p => (p.items ?? []).length) },
+	{ sel: '#btn-eco', name: 'ton écosystème', when: () => Object.keys(state.species).length - Object.keys(state.speciesStart ?? {}).length >= 3 },
+	{ sel: '#daily', name: 'les défis du jour', when: () => totalKm() >= 1 || gardenDay() >= 1 },
+];
+function revealUi() {
+	if (!state.ui) {
+		state.ui = {};
+		const advanced = totalKm() >= 3 || owned('cabane') || Object.values(state.places).some(p => cellsOpen(p) > 1);
+		if (advanced) for (const st of UI_STEPS) state.ui[st.sel] = 1;
+	}
+	for (const st of UI_STEPS) {
+		const el = $(st.sel);
+		if (!el) continue;
+		if (!state.ui[st.sel] && st.when()) {
+			state.ui[st.sel] = Date.now();
+			el.classList.add('ui-new');
+			setTimeout(() => el.classList.remove('ui-new'), 2600);
+			toast(`Nouveau : ${st.name}`, '#5F933E');
+			persist();
+		}
+		el.classList.toggle('ui-locked', !state.ui[st.sel]);
+	}
+}
 
 /** La goutte de nectar la plus proche du centre de la vue, ou à défaut une fleur du jardin. */
 function focusDew() {
