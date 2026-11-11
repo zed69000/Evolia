@@ -102,10 +102,23 @@ garden.jarStock = it => ({ v: stockOf(state, it), cap: jarCapOf(it) });
 let purseAnim = null;
 const shownNectar = () => {
 	if (!purseAnim) return state.nectar ?? 0;
-	const k = Math.min(1, (performance.now() - purseAnim.t0) / purseAnim.dur);
+	const k = Math.max(0, Math.min(1, (performance.now() - purseAnim.t0) / purseAnim.dur));
 	// Départ doux, montée régulière, arrivée qui ralentit : comme le compteur d'une cagnotte.
 	return purseAnim.from + (purseAnim.to - purseAnim.from) * k * k * (3 - 2 * k);
 };
+/** Le compteur de la bourse monte de `from` jusqu'au montant réel, après `delay` ms (l'arrivée du premier nectar). */
+function countPurse(from, delay = 0, dur = 1400) {
+	purseAnim = { from, to: state.nectar ?? 0, t0: performance.now() + delay, dur, drops: 0, got: 0 };
+	const step = () => {
+		const el = $('#hud-steps .nectar');
+		if (el) el.textContent = fmtInt(shownNectar());
+		if (purseAnim && performance.now() < purseAnim.t0 + purseAnim.dur) return requestAnimationFrame(step);
+		purseAnim = null;
+		renderHud();
+	};
+	requestAnimationFrame(step);
+}
+
 function jackpot(v, x, y) {
 	if (v < 1) return;
 	const big = v >= 40;
@@ -2631,7 +2644,7 @@ if (Tuning.preview) {
 	resumeTracking();
 	if (state.intro) {
 		startIntro({
-			garden, state, sound, DEV, persist, renderHud, updateSpeciesDot, showModal, speciesOf, SPECIES_BY_ID,
+			garden, state, sound, DEV, persist, renderHud, updateSpeciesDot, countPurse, showModal, speciesOf, SPECIES_BY_ID,
 			enableTracking: () => { enableTracking(true); sky.locate(true); },
 			addMeters: m => { addMeters(m); renderHud(); },
 			moving: () => !!session,

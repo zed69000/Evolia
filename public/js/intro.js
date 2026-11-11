@@ -230,11 +230,14 @@ export function startIntro(c) {
 	async function purse() {
 		step('purse');
 		cap.hidden = true;
+		// La bourse apparaît vide ; la goutte de nectar la rejoint et le compteur monte jusqu'à 100.
+		c.countPurse(0, 1000, 1300);
 		app.classList.add('i-hud');
 		c.renderHud();
 		await flyCoin();
 		$('#hud-steps').classList.add('ui-new');
 		c.sound.chime(2);
+		await wait(1300);
 		await say('Voici ta <b>bourse</b> : le nectar que tu gagnes s’y range.', [{ label: 'Compris' }]);
 	}
 

@@ -730,34 +730,58 @@ export class Garden {
 		if (Math.abs(this.paperK - want) < 0.01) this.paperK = want;
 		const pk = this.paperK, world2 = g => g.setTransform(S, 0, 0, S, cw / 2 - this.cam.cx * S, ch / 2 - this.cam.cy * S);
 		const mk = this.gardenMask();
-		if (pk < 1) {
-			// Le brouillard de la lisière (voile qui s'épaissit, nuages du bord), accroché au monde ; au-delà, dense.
-			// Puis des bancs de brume qui dérivent lentement par-dessus.
-			const rim = this.fogRim();
-			m.fillStyle = `rgba(247,248,246,${FOG_MAX})`;
-			m.fillRect(0, 0, cw, ch);
-			world2(m);
-			m.globalCompositeOperation = 'destination-out';
-			m.drawImage(rim.haze, rim.x0, rim.y0, rim.x1 - rim.x0, rim.y1 - rim.y0);
-			m.globalCompositeOperation = 'source-over';
-			m.setTransform(1, 0, 0, 1, 0, 0);
-			this.fogLayer(m, cw, ch, S, 0.6, 1, 0);
-			world2(m);
-			m.globalCompositeOperation = 'destination-out';
+		// La brume d'une forme de jardin : voile, bancs qui dérivent, clairières découpées, nuages du bord.
+		const fogInto = (g, rim, mk) => {
+			g.setTransform(1, 0, 0, 1, 0, 0);
+			g.globalCompositeOperation = 'source-over';
+			g.fillStyle = `rgba(247,248,246,${FOG_MAX})`;
+			g.fillRect(0, 0, cw, ch);
+			world2(g);
+			g.globalCompositeOperation = 'destination-out';
+			g.drawImage(rim.haze, rim.x0, rim.y0, rim.x1 - rim.x0, rim.y1 - rim.y0);
+			g.globalCompositeOperation = 'source-over';
+			g.setTransform(1, 0, 0, 1, 0, 0);
+			this.fogLayer(g, cw, ch, S, 0.6, 1, 0);
+			world2(g);
+			g.globalCompositeOperation = 'destination-out';
 			// Au littoral de la première rangée, la mer reste nette : la brume s'efface au-dessus du rivage.
 			for (const ci of this.openCells()) {
 				if (!this.seaTop(ci)) continue;
-				const fade = m.createLinearGradient(0, 120, 0, 190), [ox] = cellOrigin(ci);
+				const fade = g.createLinearGradient(0, 120, 0, 190), [ox] = cellOrigin(ci);
 				fade.addColorStop(0, 'rgba(0,0,0,0.85)');
 				fade.addColorStop(1, 'rgba(0,0,0,0)');
-				m.fillStyle = fade;
-				m.fillRect(ox, -1e5, PARCEL_W, 1e5 + 190);
+				g.fillStyle = fade;
+				g.fillRect(ox, -1e5, PARCEL_W, 1e5 + 190);
 			}
 			// Tout l'intérieur du jardin, poches entre les clairières comprises, au bord déjà fondu.
-			m.drawImage(mk.canvas, mk.x0, mk.y0, mk.canvas.width / mk.k, mk.canvas.height / mk.k);
+			g.drawImage(mk.canvas, mk.x0, mk.y0, mk.canvas.width / mk.k, mk.canvas.height / mk.k);
 			// Les nuages du bord, posés après : leurs volutes débordent un peu sur les clairières et dessinent la lisière.
-			m.globalCompositeOperation = 'source-over';
-			m.drawImage(rim.cloud, rim.x0, rim.y0, rim.x1 - rim.x0, rim.y1 - rim.y0);
+			g.globalCompositeOperation = 'source-over';
+			g.drawImage(rim.cloud, rim.x0, rim.y0, rim.x1 - rim.x0, rim.y1 - rim.y0);
+		};
+		if (pk < 1) {
+			const rim = this.fogRim();
+			// Le jardin change de forme (il s'agrandit) : l'ancienne brume s'efface en fondu, rien ne saute.
+			if (this.fogLast && this.fogLast.mk.key !== mk.key) this.fogPrev = { ...this.fogLast, t0: now };
+			this.fogLast = { rim, mk };
+			fogInto(m, rim, mk);
+			const age = this.fogPrev ? (now - this.fogPrev.t0) / 1400 : 1;
+			if (age < 1) {
+				if (!this.fogCv || this.fogCv.width !== cw || this.fogCv.height !== ch) {
+					this.fogCv = document.createElement('canvas');
+					this.fogCv.width = cw; this.fogCv.height = ch;
+				}
+				const f = this.fogCv.getContext('2d');
+				f.setTransform(1, 0, 0, 1, 0, 0);
+				f.globalCompositeOperation = 'source-over';
+				f.clearRect(0, 0, cw, ch);
+				fogInto(f, this.fogPrev.rim, this.fogPrev.mk);
+				m.setTransform(1, 0, 0, 1, 0, 0);
+				m.globalCompositeOperation = 'source-over';
+				m.globalAlpha = 1 - age * age * (3 - 2 * age);
+				m.drawImage(this.fogCv, 0, 0);
+				m.globalAlpha = 1;
+			} else this.fogPrev = null;
 		}
 		if (pk > 0) {
 			// Le papier, peint à part puis posé par-dessus avec son fondu.
