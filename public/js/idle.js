@@ -179,11 +179,14 @@ export const jarOf = state => Math.max(0, (state.pending ?? 0) - groundOf(state)
  * Celui de l'écosystème (`idle`) ne s'entasse pas au sol au-delà de ce que gardent les fleurs ; celui de la
  * marche, si : ce qu'on a gagné en bougeant ne se perd jamais. Rend ce qui a été perdu.
  */
+/** Nouvelle économie : la marche rapporte 60 nectar par km au lieu de 200 (les prix suivent ; voir docs/equilibre-evolia.html). */
+export const ECO2_WALK = 0.3;
+
 export function addWaiting(state, v, idle = false, placeId = null) {
 	if (!(v > 0)) return 0;
 	// Nouvelle économie : le nectar de la marche va droit dans la bourse ; l'écosystème n'en dépose plus sur les fleurs.
 	// Pendant l'introduction, la seule monnaie est celle de la fiche de l'abeille : on la comprend mieux ainsi.
-	if (state.eco2) { if (!idle && !state.intro) state.nectar = (state.nectar ?? 0) + v; return 0; }
+	if (state.eco2) { if (!idle && !state.intro) state.nectar = (state.nectar ?? 0) + v * ECO2_WALK; return 0; }
 	const ground = groundOf(state), jar = jarOf(state);
 	const toJar = Math.min(v, Math.max(0, jarCap(state) - jar));
 	const rest = v - toJar;

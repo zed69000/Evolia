@@ -385,7 +385,7 @@ export function startIntro(c) {
 		deco.classList.remove('tip-glow');
 		await beeHome();
 		c.showModal(`<h2>Ta ruche</h2>
-			<p>Elle accueille <b>3 abeilles</b> pour commencer. Elles font du <b>miel</b>, que tu pourras troquer contre du nectar : il faut un peu de temps. Pour en accueillir plus, tu l’amélioreras ou tu poseras une autre ruche.</p>
+			<p>Elle accueille <b>3 abeilles</b> pour commencer. Elles font du <b>miel</b>, surtout quand tu bouges, et tu pourras le troquer contre du nectar. Pour en accueillir plus, tu l’amélioreras ou tu poseras une autre ruche.</p>
 			<p>Pour attirer des abeilles, il faut des <b>fleurs</b> : plus il y en a, plus il en vient. Et les fleurs poussent quand tu bouges.</p>
 			<button class="btn primary" data-close>Compris</button>`);
 		await until(() => over || $('#modal').hidden);

@@ -9,7 +9,7 @@ import { SOURCES, bestSource, harvest, classifyCadence } from './harvest.js';
 import { PLACES, PLACE_BY_ID, PLACE_DE, PLACE_IN, SPECIES, SPECIES_BY_ID, checkSpecies, placeOpen, speciesOf, unreadSpecies, speciesWaiting, UNREAD_MAX } from './species.js';
 import { Encyclopedia, READ_REWARD, thumbCopy } from './encyclopedia.js';
 import { Sky, WEATHER_LABEL } from './weather.js';
-import { EcoPanel, tick, summaryHtml, addBoost, boostLeft, visualExtra, rates, GUILDS, boostMult, boostPerMin, maxBoostH, nectarCapacity, hasCollector, COLLECTOR_CAP, COLLECTOR_UPGRADE, addWaiting, groundOf, jarOf, jarCap, stockOf, jarCapOf, emptyJar, drainGround } from './idle.js';
+import { EcoPanel, tick, summaryHtml, addBoost, boostLeft, visualExtra, rates, GUILDS, boostMult, boostPerMin, maxBoostH, nectarCapacity, hasCollector, COLLECTOR_CAP, COLLECTOR_UPGRADE, addWaiting, ECO2_WALK, groundOf, jarOf, jarCap, stockOf, jarCapOf, emptyJar, drainGround } from './idle.js';
 import { paperTexture } from './watercolor.js';
 import { Soundscape } from './audio.js';
 import { ITEMS, ITEM_ORDER, itemHelp, itemCost, fitsPlace, CATS, MAX_LEVEL, LEVEL_NAME, LEVEL_KM, canLevel, levelCost, CABIN_STYLES } from './deco.js';
@@ -274,7 +274,9 @@ garden.onPick = tree => {
 // fleurs écloses). Chaque abeille fait du miel ; il faut du temps (et des fleurs) pour en remplir un pot.
 // Une ruche neuve n'accueille que 3 abeilles : on l'agrandit (3 de plus par niveau, de plus en plus cher) ou l'on en
 // pose une autre (chaque ruche coûte plus que la précédente).
-const HIVE_SEATS = 3, HONEY_PER_BEE = 0.15; // pots par heure et par abeille si l'on prenait tout
+const HIVE_SEATS = 3, HONEY_PER_BEE = 0.05; // pots par heure et par abeille si l'on prenait tout (pendant l'élan)
+// Les abeilles travaillent surtout dans l'élan d'une sortie : au repos, la ruche ne fait presque rien (5 %).
+const HONEY_REST = 0.05;
 const hiveCap = () => garden.items.filter(it => it.kind === 'ruche').reduce((n, it) => n + HIVE_SEATS * (it.level ?? 1), 0);
 const hiveBees = () => {
 	const flowers = here().plants.filter(p => p.type === 'fleur' && p.growth >= 1).length;
@@ -283,7 +285,8 @@ const hiveBees = () => {
 setInterval(() => {
 	const bees = hiveBees();
 	if (!bees || (garden.season?.winter ?? 0) > 0.6) return;
-	state.honeyAcc = (state.honeyAcc ?? 0) + bees * HONEY_PER_BEE * (state.honeyShare ?? 0.3) / 60;
+	const pace = !state.eco2 || boostLeft(state) > 0 ? 1 : HONEY_REST;
+	state.honeyAcc = (state.honeyAcc ?? 0) + bees * HONEY_PER_BEE * pace * (state.honeyShare ?? 0.3) / 60;
 	if (state.honeyAcc >= 1) {
 		const n = Math.floor(state.honeyAcc);
 		state.honeyAcc -= n;
@@ -942,10 +945,16 @@ function checkUnlocks(events) {
 // agrandit. Comme dans un jeu de gestion, chaque achat fait monter le prix du suivant. On agrandit d'abord son terrain
 // jusqu'à sa taille pleine ; ensuite seulement on peut acheter une parcelle voisine (qui commence petite à son tour).
 
-/** Le prix du prochain cran d'agrandissement (40 nectar, puis +40 % à chaque achat). */
-const growPrice = () => Math.round((40 * Math.pow(1.4, here().buys ?? 0)) / 10) * 10;
-/** Une nouvelle parcelle coûte deux fois et demie un cran. */
-const parcelPrice = () => Math.round((2.5 * growPrice()) / 10) * 10;
+// Équilibre (nouvelle économie, voir docs/equilibre-evolia.html) : le terrain et les parcelles ont chacun leur hausse
+// de prix, plus douce qu'avant (plus de mur après quatre parcelles), et l'activité physique reste le moteur.
+/** Le prix du prochain cran d'agrandissement (60 nectar, puis +35 % à chaque cran). */
+const growPrice = () => (state.eco2
+	? Math.round((60 * Math.pow(1.35, here().grows ?? 0)) / 10) * 10
+	: Math.round((40 * Math.pow(1.4, here().buys ?? 0)) / 10) * 10);
+/** Une nouvelle parcelle : 500 nectar, puis ×1,7 à chaque parcelle (avant : deux fois et demie un cran). */
+const parcelPrice = () => (state.eco2
+	? Math.round((500 * Math.pow(1.7, Math.max(0, cellsOpen(here()) - 1))) / 10) * 10
+	: Math.round((2.5 * growPrice()) / 10) * 10);
 // Une parcelle voisine se paie aussi en kilomètres : c'est partir l'explorer. Les kilomètres marchés ici
 // s'accumulent ; acheter une parcelle en dépense (de plus en plus à chaque parcelle). Les autres déblocages, eux,
 // comptent toujours tout ce qu'on a marché.
@@ -956,7 +965,11 @@ const kmFree = () => Math.max(0, (here().km ?? 0) - (here().kmSpent ?? 0));
 const kmTxt = v => `${fmt(Math.max(0.1, Math.ceil(v * 10) / 10), 1)} km`;
 /** La première parcelle ouverte qui n'a pas encore sa taille pleine. */
 const growable = () => garden.openCells().find(i => garden.cellScale(i) < 1);
-const paid = price => { state.nectar -= price; here().buys = (here().buys ?? 0) + 1; };
+const paid = (price, grow = false) => {
+	state.nectar -= price;
+	here().buys = (here().buys ?? 0) + 1;
+	if (grow) here().grows = (here().grows ?? 0) + 1;
+};
 
 /** Ce qu'on lit sur une parcelle ouverte encore petite. */
 garden.growInfo = i => `${Math.round(garden.cellScale(i) * 100)} % · agrandir : ${fmtInt(growPrice())} nectar`;
@@ -972,7 +985,7 @@ function offerGrow(i) {
 		<button class="btn ghost wide" data-close>Plus tard</button>`);
 	$('#btn-grow').onclick = () => {
 		if ((state.nectar ?? 0) < price) return;
-		paid(price);
+		paid(price, true);
 		closeModal();
 		const s = garden.growCell(i);
 		sound.chime(3);
@@ -1739,7 +1752,12 @@ function needsFirst(kind) {
 
 /** Combien d'exemplaires de cet objet sont posés, dans tous les lieux, et donc son prix du moment. */
 const ownedCount = kind => Object.values(state.places).reduce((a, p) => a + (p.items ?? []).filter(i => i.kind === kind).length, 0);
-const priceOf = kind => itemCost(kind, ownedCount(kind));
+const priceOf = kind => {
+	const n = ownedCount(kind), base = itemCost(kind, n);
+	if (!state.eco2) return base;
+	if (kind === 'ruche') return n ? base * 2 : base;
+	return Math.round((base * 3) / 5) * 5;
+};
 
 // ─── Le poulailler ───────────────────────────────────────────
 const BIRD_COST = 40;
@@ -1765,7 +1783,7 @@ function nextLevel(it) {
 	if (own) return lv >= own.max ? null : { level: lv + 1, cost: own.cost[lv + 1], km: own.km[lv + 1], ok: km >= own.km[lv + 1] };
 	if (!canLevel(it.kind) || lv >= MAX_LEVEL) return null;
 	// La ruche s'agrandit sans attendre de kilomètres : seulement de plus en plus cher.
-	if (it.kind === 'ruche' && state.eco2) return { level: lv + 1, cost: levelCost(it.kind, lv + 1), km: 0, ok: true };
+	if (it.kind === 'ruche' && state.eco2) return { level: lv + 1, cost: levelCost(it.kind, lv + 1) * 2, km: 0, ok: true };
 	return { level: lv + 1, cost: levelCost(it.kind, lv + 1), km: LEVEL_KM[lv + 1], ok: km >= LEVEL_KM[lv + 1] };
 }
 
@@ -2024,7 +2042,7 @@ function tapItem(hit, card) {
 	// La ferme : le panier à la cabane, la part de miel prise aux ruches, le compost à épandre.
 	const share = Math.round((state.honeyShare ?? 0.3) * 100), fill = it.kind === 'compost' ? compostFill(it) : 0;
 	const farm = it.kind === 'cabane' && ITEMS.cabane ? `<div class="item-actions"><button class="btn primary" data-market>Le panier${basketCount() ? ` (${fmtInt(basketCount())})` : ''}</button></div>`
-		: it.kind === 'ruche' ? `<small class="item-tip">${hiveBees()} abeille${hiveBees() > 1 ? 's' : ''} au travail · tes ruches en accueillent ${hiveCap()}. Les fleurs attirent les abeilles ; pour en accueillir plus, améliore la ruche ou poses-en une autre. Prochain pot de miel : ${Math.floor(((state.honeyAcc ?? 0) % 1) * 100)} %.</small><div class="item-actions"><button class="btn primary" data-market>Le panier${basketCount() ? ` (${fmtInt(basketCount())})` : ''}</button></div><div class="coop-row"><span>Miel récolté <small>le reste nourrit la colonie</small></span><span class="coop-step"><button class="btn ghost small" data-share="-1" ${share <= 0 ? 'disabled' : ''}>−</button><b>${share} %</b><button class="btn ghost small" data-share="1" ${share >= 60 ? 'disabled' : ''}>+</button></span></div>`
+		: it.kind === 'ruche' ? `<small class="item-tip">${hiveBees()} abeille${hiveBees() > 1 ? 's' : ''} au travail · tes ruches en accueillent ${hiveCap()}. Elles travaillent surtout quand tu bouges. Les fleurs attirent les abeilles ; pour en accueillir plus, améliore la ruche ou poses-en une autre. Prochain pot de miel : ${Math.floor(((state.honeyAcc ?? 0) % 1) * 100)} %.</small><div class="item-actions"><button class="btn primary" data-market>Le panier${basketCount() ? ` (${fmtInt(basketCount())})` : ''}</button></div><div class="coop-row"><span>Miel récolté <small>le reste nourrit la colonie</small></span><span class="coop-step"><button class="btn ghost small" data-share="-1" ${share <= 0 ? 'disabled' : ''}>−</button><b>${share} %</b><button class="btn ghost small" data-share="1" ${share >= 60 ? 'disabled' : ''}>+</button></span></div>`
 		: it.kind === 'compost' ? `<small class="item-tip">${fill >= 1 ? 'Plein : épands-le sur le potager, ses prochaines récoltes donneront plus.' : `Rempli à ${Math.round(fill * 100)} % (il se remplit quand tu marches).`}</small>${fill >= 1 ? '<div class="item-actions"><button class="btn primary" data-spread>Épandre sur le potager</button></div>' : ''}`
 		: '';
 	card.innerHTML = `<b>${def.name}</b>${short}${info}${tip}
@@ -2144,7 +2162,7 @@ $('#btn-deco').addEventListener('click', () => openDeco(state.intro ? 'habitat' 
 
 const isApp = () => !!window.Capacitor?.isNativePlatform?.();
 /** Le nectar d'un kilomètre de marche à 5 km/h (en courant, bien plus), d'après les réglages. */
-const nectarPerKm = () => Math.round(Tuning.num('effort.km_marche', 125) * nectarPerEffort());
+const nectarPerKm = () => Math.round(Tuning.num('effort.km_marche', 125) * nectarPerEffort() * (state.eco2 ? ECO2_WALK : 1));
 
 // ─── Panneau de débogage ──────────────────────────────────────
 
