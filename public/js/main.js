@@ -196,13 +196,29 @@ garden.onHarvest = () => {
 
 const eco = new EcoPanel($('#eco'), state, kind => {
 	const it = ITEMS[kind];
-	if (state.totals.distance / 1000 >= it.km && !needsFirst(kind) && (state.nectar ?? 0) >= priceOf(kind)) startPlacing(kind);
+	if (state.totals.distance / 1000 >= it.km && !needsFirst(kind) && !natureLock(kind) && (state.nectar ?? 0) >= priceOf(kind)) startPlacing(kind);
 	else openDeco(it.cat);
 });
 
 // ─── Bandeau ──────────────────────────────────────────────────
 
+/**
+ * L'objectif du jour atteint rapporte une récompense en nectar (les « jetons » du jeu), une fois par jour : on la
+ * cumule pour s'offrir la cabane, un aménagement, un agrandissement… à chacun de choisir.
+ */
+const goalReward = () => Math.round(Math.max(1, state.goalKm ?? 2) * 60 / 10) * 10;
+function checkDailyGoal() {
+	if (!state.goalKm || state.goalPaid === dayKey() || todayMeters(state) < state.goalKm * 1000) return;
+	state.goalPaid = dayKey();
+	const gain = goalReward();
+	state.nectar = (state.nectar ?? 0) + gain;
+	persist(true);
+	sound.chime(3);
+	toast(`Objectif du jour atteint : +${fmtInt(gain)} nectar à dépenser comme tu veux`, '#E3A33A', () => openDeco());
+}
+
 function renderHud() {
+	checkDailyGoal();
 	const km = todayMeters(state) / 1000;
 	$('#hud-day').textContent = cellName(here(), garden.active);
 	// En toutes lettres : ce qu'on a fait aujourd'hui, puis l'objectif du jour (ou qu'il est atteint).
@@ -276,6 +292,14 @@ function updateSpeciesDot() {
 /** Annonce les espèces et les parcelles qui viennent de s'ouvrir. `quiet` : au tout premier lancement, sans bruit. */
 // Entre deux découvertes, au moins ce délai : le temps de voir arriver la bête et d'ouvrir sa fiche.
 const SPECIES_GAP = 30000;
+// Les découvertes au compte-gouttes : quelques-unes les premiers jours pour lancer le jardin, puis une ou deux par
+// jour, pour avoir le temps de lire chaque fiche et d'attendre la suivante.
+const SPECIES_PER_DAY = [6, 4, 3];
+const SPECIES_LATER = 2;
+const gardenDay = () => Math.floor((Date.now() - (state.createdAt ?? Date.now())) / 86400000);
+const speciesQuota = () => SPECIES_PER_DAY[gardenDay()] ?? SPECIES_LATER;
+/** Les découvertes du jour (le compteur repart chaque matin). */
+const speciesToday = () => (state.speciesDay?.day === dayKey() ? state.speciesDay.n : 0);
 
 function announceSpecies(quiet = false) {
 	let found = [];
@@ -283,10 +307,21 @@ function announceSpecies(quiet = false) {
 		// Premier lancement : le jardin de départ arrive d'un coup, sans compter dans les fiches à lire.
 		found = checkSpecies(state);
 		for (const sp of found) (state.speciesStart ??= {})[sp.id] = true;
+	} else if (speciesToday() >= speciesQuota()) {
+		// Le compte du jour est atteint : on le dit une fois, si d'autres espèces attendent déjà.
+		if (state.speciesDoneNote !== dayKey() && speciesWaiting(state)) {
+			state.speciesDoneNote = dayKey();
+			persist();
+			toast('C’est tout pour aujourd’hui : d’autres espèces viendront demain dans ton jardin', '#9A7448');
+		}
 	} else if (unreadSpecies(state).length < UNREAD_MAX) {
 		if (Date.now() >= (state.nextSpeciesAt ?? 0)) {
 			found = checkSpecies(state, 1);
-			if (found.length) state.nextSpeciesAt = Date.now() + SPECIES_GAP;
+			if (found.length) {
+				// Le premier jour, elles se suivent de près ; ensuite, au moins une heure entre deux.
+				state.nextSpeciesAt = Date.now() + (gardenDay() === 0 ? SPECIES_GAP : 3600000);
+				state.speciesDay = { day: dayKey(), n: speciesToday() + 1 };
+			}
 		}
 	} else if (Date.now() - (state.readNudgeAt ?? 0) > 15 * 60000 && speciesWaiting(state)) {
 		// Trop de fiches en attente : on le dit (tous les quarts d'heure au plus), et le message ouvre la première.
@@ -713,7 +748,7 @@ function addMeters(m, nectar = m / 5) {
 	// Un nouvel aménagement devient possible (la cabane à 5 km…).
 	const after = state.totals.distance / 1000;
 	for (const k of ITEM_ORDER) {
-		if (ITEMS[k].km > 0 && before < ITEMS[k].km && after >= ITEMS[k].km) {
+		if (ITEMS[k].km > 0 && before < ITEMS[k].km && after >= ITEMS[k].km && !natureLock(k)) {
 			sound.chime(2);
 			toast(`Tu peux maintenant installer ${ITEMS[k].name.toLowerCase()}`, '#9A7448', () => openDeco(ITEMS[k].cat));
 		}
@@ -1408,6 +1443,50 @@ garden.camLock = () => !!placing || $('#deco').classList.contains('open');
 // Elle ne part pas non plus d'elle-même pendant qu'on lit une fiche, une fenêtre ou une page.
 garden.camBusy = () => !$('#plant-card').hidden || !$('#modal').hidden || !$('#coach').hidden || !!document.querySelector('.panel.open');
 
+/**
+ * La nature d'abord, la ferme ensuite : la cabane (et avec elle le fermier, le potager, les poules et les ruches)
+ * n'arrive qu'une fois le jardin peuplé : assez d'espèces, quelques arbustes et un premier arbre.
+ */
+// species : espèces arrivées depuis le début (celles du jardin de départ ne comptent pas).
+const NATURE_FARM = { species: 8, bushes: 3, trees: 1 };
+function natureProgress() {
+	const plants = allPlants(state), mature = t => plants.filter(p => p.type === t && p.growth >= 1).length;
+	const start = Object.keys(state.speciesStart ?? {}).length;
+	return { species: Object.keys(state.species).length - start, bushes: mature('buisson'), trees: mature('arbre') };
+}
+function natureReady() {
+	if (state.natureReady) return true;
+	// Les parties déjà avancées (une cabane posée) gardent leur ferme.
+	if (Object.values(state.places).some(p => (p.items ?? []).some(i => i.kind === 'cabane'))) return (state.natureReady = Date.now());
+	const n = natureProgress();
+	return n.species >= NATURE_FARM.species && n.bushes >= NATURE_FARM.bushes && n.trees >= NATURE_FARM.trees;
+}
+/** Ce qui manque encore à la nature, en clair. */
+function natureMissing() {
+	const n = natureProgress(), out = [];
+	if (n.species < NATURE_FARM.species) out.push(`${n.species}/${NATURE_FARM.species} nouvelles espèces`);
+	if (n.bushes < NATURE_FARM.bushes) out.push(`${n.bushes}/${NATURE_FARM.bushes} arbustes`);
+	if (n.trees < NATURE_FARM.trees) out.push(`${n.trees}/${NATURE_FARM.trees} arbre`);
+	return out.join(', ');
+}
+/** Une fois la nature installée, c'est la fête : un fermier peut venir vivre au jardin. */
+function checkNature() {
+	if (state.natureReady || !natureReady()) return;
+	state.natureReady = Date.now();
+	persist(true);
+	sound.chime(3);
+	whenFree(() => {
+		showModal(`<h2>La nature s’est installée</h2>
+		<p>Ton jardin vit tout seul : des espèces s’y sont installées, des arbustes ont poussé, un premier arbre aussi. Un fermier peut maintenant venir s’y installer avec sa cabane, puis cultiver un potager, élever des poules et poser des ruches.</p>
+		<button class="btn primary" id="btn-farm">Voir la cabane</button>`);
+		$('#btn-farm').onclick = () => { closeModal(); openDeco('recolte'); };
+	});
+}
+setInterval(() => { if (!document.hidden) checkNature(); }, 5000);
+
+/** La nature à attendre avant de construire cet objet, en clair, ou null. */
+const natureLock = kind => (ITEMS[kind].nature && !natureReady() ? natureMissing() : null);
+
 /** L'objet qu'il faut d'abord poser ici pour pouvoir construire celui-ci (le potager vient avec la cabane), ou null. */
 function needsFirst(kind) {
 	const need = ITEMS[kind].needs;
@@ -1482,12 +1561,13 @@ function renderDeco() {
 		<div class="deco-tabs" role="tablist">${CATS.map(c => `<button role="tab" aria-selected="${c.id === decoTab}" data-tab="${c.id}">${c.name}</button>`).join('')}</div>
 		<p class="sp-intro">${cat.intro} Tout se paie en nectar, et se range quand tu veux (le nectar t'est rendu).${biome !== 'prairie' ? ` Ici, seulement ce qui a sa place ${PLACE_IN[biome]}.` : ''}</p>
 		<div class="deco-list">${ITEM_ORDER.filter(k => ITEMS[k].cat === decoTab && fitsPlace(k, biome)).map(k => {
-			const it = ITEMS[k], cost = priceOf(k), need = needsFirst(k), locked = km < it.km || !!need, poor = nectar < cost;
+			const it = ITEMS[k], cost = priceOf(k), need = needsFirst(k), wild = natureLock(k), locked = km < it.km || !!need || !!wild, poor = nectar < cost;
 			const mine = here_.filter(x => x.kind === k), n = mine.length;
 			// L'habitat le moins avancé d'ici, qu'on peut améliorer depuis la liste.
 			const low = mine.filter(x => nextLevel(x)).sort((a, b) => (a.level ?? 1) - (b.level ?? 1))[0], nx = low && nextLevel(low);
 			const up = nx ? nx.ok ? `<button class="btn primary small" data-level="${k}" ${nectar < nx.cost ? 'disabled' : ''}>Améliorer · ${fmtInt(nx.cost)}</button>` : `<span class="deco-lock">niveau ${nx.level} dès ${nx.km} km</span>` : '';
 			const action = km < it.km ? `<span class="deco-lock">dès ${it.km} km parcourus</span>`
+				: wild ? `<span class="deco-lock">quand la nature sera installée : ${wild}</span>`
 				: need ? `<span class="deco-lock">après avoir posé ${ITEMS[need].name.toLowerCase()}</span>`
 				: `<button class="btn ${n && canLevel(k) ? 'ghost' : 'primary'} small" data-buy="${k}" ${poor ? 'disabled' : ''}>${poor ? `il manque ${fmtInt(cost - nectar)}` : n ? 'Un de plus' : 'Installer'}</button>`;
 			const levels = n && (canLevel(k) || k === 'collecteur') ? `<small>${mine.map(x => `niv. ${x.level ?? 1}`).join(' · ')}</small>` : n ? `<small>${n} ici</small>` : '';
