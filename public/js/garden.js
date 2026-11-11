@@ -85,6 +85,8 @@ const GLYPH_Z = 0.5, DETAIL_Z = 1.6, DETAIL_DENSITY = 2.2;
 // En dessous de ce zoom, des pastilles signalent ce qui attend (collecteur, œufs, potager mûr, gouttes) ;
 // les toucher ramène la vue dessus.
 const POI_Z = 0.85, POI_ZOOM = 1.4;
+// Une parcelle s'ouvre à cette fraction de sa taille, et l'atteint toute entière après ces kilomètres.
+const CELL_START = 0.4, CELL_GROW_KM = 2;
 // La caméra ne repart toute seule qu'après ce temps sans aucun geste (toucher, glisser, zoomer, bouton).
 const CAM_IDLE_MS = 20000;
 const Z_MAX = 3.2;
@@ -235,7 +237,8 @@ export class Garden {
 	 */
 	syncLayout() {
 		const place = this.place, n = cellsOpen(place);
-		place.world ??= makeWorld(Math.floor(Math.random() * 1e9), n > 1);
+		// Une partie déjà commencée garde son jardin tel quel (pas de côte au nord, parcelles entières).
+		place.world ??= makeWorld(Math.floor(Math.random() * 1e9), n > 1 || !!place.seeded);
 		place.layout ??= CELLS.slice(0, n).map(c => [...c]);
 		while (place.layout.length < n) place.layout.push([...CELLS[place.layout.length]]);
 		const open = place.layout, seen = new Set(open.map(p => p.join(','))), front = [];
@@ -341,6 +344,7 @@ export class Garden {
 	openCell(i, biome = 'prairie') {
 		const place = this.place;
 		(place.biomes ??= ['prairie'])[i] = biome;
+		(place.cellKm ??= {})[i] = place.km ?? 0;
 		place.cells = Math.max(cellsOpen(place), i + 1);
 		this.syncLayout();
 		if (this.heart(biome) === i) {
@@ -362,9 +366,23 @@ export class Garden {
 	// ─── Clairières : chaque parcelle est une forme ronde ou ovale, un peu bosselée ; elles se fondent entre elles.
 
 	/** Forme d'une parcelle : ovale tiré au hasard (mais toujours le même pour cette parcelle), bord ondulé. */
+	/**
+	 * Une parcelle commence petite (le terrain du début, pour qu'on s'y attache) et grandit à mesure qu'on marche :
+	 * 40 % de sa taille à l'ouverture, toute sa taille 2 km plus loin. Les parcelles d'avant ce réglage sont entières.
+	 */
+	cellScale(ci) {
+		const place = this.place, k0 = place.cellKm?.[ci] ?? (ci === 0 && !place.world?.legacy ? 0 : -1e9);
+		const t = Math.max(0, Math.min(1, ((place.km ?? 0) - k0) / CELL_GROW_KM));
+		return Math.round((CELL_START + (1 - CELL_START) * t) * 20) / 20;
+	}
+
+	/** La taille de chaque clairière ouverte, pour savoir quand redessiner leur pourtour. */
+	scaleSig() { return this.openCells().map(i => this.cellScale(i)).join(','); }
+
 	blob(ci) {
-		// La forme tient à la place sur la grille (les anciennes parcelles gardent exactement la leur).
-		const [gx, gy] = cellPos(ci), key = `${gx},${gy}`;
+		// La forme tient à la place sur la grille (les anciennes parcelles gardent exactement la leur) ; sa taille
+		// suit les kilomètres faits depuis son ouverture.
+		const [gx, gy] = cellPos(ci), sc = ci < cellsOpen(this.place) ? this.cellScale(ci) : 1, key = `${gx},${gy},${sc}`;
 		let b = this.blobs.get(key);
 		if (b) return b;
 		const old = CELLS.findIndex(([x, y]) => x === gx && y === gy);
@@ -378,6 +396,8 @@ export class Garden {
 		// Vers les parcelles voisines (haut, bas, côtés), le bord ne rentre jamais : les clairières se rejoignent toujours.
 		b.ry *= 1.02 / Math.min(1.02, this.blobRadius(b, Math.PI / 2), this.blobRadius(b, -Math.PI / 2));
 		b.rx *= 1.02 / Math.min(1.02, this.blobRadius(b, 0), this.blobRadius(b, Math.PI));
+		b.rx *= sc;
+		b.ry *= sc;
 		const per = Math.PI * (b.rx + b.ry);
 		const n = Math.max(48, Math.round(per / 12));
 		b.pts = Array.from({ length: n }, (_, k) => this.blobPoint(b, (k / n) * Math.PI * 2));
@@ -727,7 +747,7 @@ export class Garden {
 	 */
 	gardenMask() {
 		const open = this.openCells();
-		const key = open.join(',');
+		const key = `${open.join(',')}|${this.scaleSig()}`;
 		if (this.maskCache?.key === key) return this.maskCache;
 		const k = 1 / 8, pad = FOG_FAR + 200;
 		let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
@@ -3707,7 +3727,7 @@ export class Garden {
 
 	/** Le pourtour des clairières ouvertes, calculé une fois par forme du jardin : la brume de la lisière s'y pose. */
 	edges() {
-		const n = cellsOpen(this.place), key = `${n}`;
+		const n = cellsOpen(this.place), key = `${n}|${this.scaleSig()}`;
 		if (this.edgeCache?.key === key) return this.edgeCache;
 		const open = this.openCells();
 		const box = pts => {
