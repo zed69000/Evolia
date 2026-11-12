@@ -3,6 +3,11 @@
 Chaque version, la plus récente en haut. Le site (evolia.sebastienalzamora.workers.dev) est toujours à jour ;
 le Play Store (tests internes) reçoit les versions indiquées « Play ».
 
+## 0.7.67 — 12 novembre 2026
+La jauge d’activité (le cercle autour de l’icône) :
+- Pendant une sortie, elle devient la jauge de marche : elle se remplit avec le nectar que rapportent tes pas (environ tous les 100 m en marchant, plus vite en courant), verse dans la bourse (« +N ») et recommence. Son rythme montre ce que la sortie récolte.
+- Au repos, elle montre l’objectif du jour ; au-delà, les tours dorés repartent à chaque fois (un tour = l’objectif du jour), avec leur nombre (× 2, × 3…) et un éclat à chaque nouveau tour.
+
 ## 0.7.66 — 12 novembre 2026
 La jauge de récolte (nouvelles parties) :
 - L’hexagone doré de la bourse se remplit au rythme de la production du jardin ; plein, le nectar tombe dans la bourse (« +N », une goutte) et il recommence. Un plein vaut dix secondes de production à plein : pendant l’élan, il se remplit toutes les dix secondes ; au repos, en un peu plus de trois minutes. Son rythme dit tout de suite si le jardin récolte vite.

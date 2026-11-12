@@ -352,6 +352,27 @@ function gaugeTick() {
 }
 setInterval(gaugeTick, 200);
 
+/**
+ * La jauge de marche : pendant une sortie, le cercle de l'icône d'activité se remplit avec le nectar que rapportent
+ * les pas (environ tous les 100 m en marchant, plus vite en courant : l'effort rapporte plus) ; plein, il verse
+ * dans la bourse (« +N ») et recommence. Son rythme montre ce que la sortie récolte.
+ */
+let walkAcc = 0;
+const walkPacket = () => Math.max(1, 0.1 * (ECO2_WALK * nectarPerEffort() * 125 + KM_HOURS * prodPerHour(state)));
+const walkFill = () => Math.min(1, walkAcc / walkPacket());
+function walkGauge(gain) {
+	if (!session || !state.eco2 || state.intro || !(gain > 0)) return;
+	walkAcc += gain;
+	const packet = walkPacket();
+	if (walkAcc >= packet) {
+		const n = walkAcc;
+		walkAcc = 0;
+		gaugePop(n);
+		const a = $('#hud-act');
+		a.classList.remove('lap'); void a.offsetWidth; a.classList.add('lap');
+	}
+}
+
 /** Le nectar récolté qui tombe dans la bourse : « +N » qui monte et s'efface, et une goutte. */
 function gaugePop(n) {
 	const purse = $('#hud-steps'), el = document.createElement('span');
@@ -405,12 +426,30 @@ function renderHud() {
 	const pend = state.intro ? 0 : Math.floor(state.pending ?? 0), full = !state.intro && (hasCollector(state) ? jarOf(state) >= jarCap(state) : groundOf(state) >= 30);
 	$('#hud-steps').innerHTML = `<span class="nectar${boostLeft(state) ? ' boost' : ''}">${fmtInt(shownNectar())}</span>`
 		+ `<small class="${full ? 'full' : pend >= 1 ? 'wait' : ''}">${pend >= 1 ? `+${fmtInt(pend)} à récolter` : 'nectar'}</small>`;
-	// Le cercle : l'objectif du jour ; une fois atteint, un deuxième tour doré se remplit (jusqu'à deux fois
-	// l'objectif), pour que la jauge continue de bouger quand on marche encore.
-	const r = km / state.goalKm;
+	// Pendant une sortie, le cercle est la jauge de marche : il se remplit avec le nectar que rapportent les pas, verse
+	// et recommence (voir walkGauge). Au repos, c'est l'objectif du jour.
+	if (session && state.eco2 && !state.intro) {
+		$('#ring-fg').style.strokeDashoffset = String(113.1 * (1 - walkFill()));
+		$('#ring-fg2').style.strokeDashoffset = '113.1';
+		$('#act-laps').hidden = true;
+		return;
+	}
+	// Le cercle : l'objectif du jour ; une fois atteint, un tour doré se remplit, puis un autre, autant qu'on marche
+	// (chaque tour vaut l'objectif du jour). Le nombre de tours s'affiche (× 2, × 3…), et la jauge ne s'arrête jamais.
+	const r = km / state.goalKm, laps = Math.floor(r);
 	$('#ring-fg').style.strokeDashoffset = String(113.1 * (1 - Math.min(1, r)));
-	$('#ring-fg2').style.strokeDashoffset = String(113.1 * (1 - Math.max(0, Math.min(1, r - 1))));
+	$('#ring-fg2').style.strokeDashoffset = String(113.1 * (1 - (r >= 1 ? r - laps : 0)));
 	$('#hud-act').classList.toggle('goal-done', r >= 1);
+	const lapEl = $('#act-laps');
+	if (lapEl) {
+		lapEl.hidden = laps < 1;
+		if (lapEl.textContent !== `×${laps}` && laps >= 1) {
+			lapEl.textContent = `×${laps}`;
+			// Un tour de plus : le cercle brille un instant.
+			if (renderHud.laps != null && laps > renderHud.laps) { $('#hud-act').classList.remove('lap'); void lapEl.offsetWidth; $('#hud-act').classList.add('lap'); sound.chime?.(2); }
+		}
+		renderHud.laps = laps;
+	}
 }
 
 // ─── Messages ─────────────────────────────────────────────────
@@ -993,6 +1032,7 @@ function growMix(plant, effort) {
 
 /** `nectar` : ce que rapportent ces mètres (par défaut 1 pour 5 m ; une sortie le calcule d'après l'effort). */
 function addMeters(m, nectar = m / 5) {
+	const n0 = state.nectar ?? 0;
 	const before = state.totals.distance / 1000;
 	addDistance(state, m);
 	// Un nouvel aménagement devient possible (la cabane à 5 km…).
@@ -1009,6 +1049,7 @@ function addMeters(m, nectar = m / 5) {
 	addWaiting(state, nectar, false, state.place);
 	// Nouvelle économie : chaque km vaut aussi KM_HOURS heures de la production du jardin (60 % activité, 40 % idle pour un joueur moyen).
 	if (state.eco2 && !state.intro) state.nectar = (state.nectar ?? 0) + (m / 1000) * KM_HOURS * prodPerHour(state);
+	walkGauge((state.nectar ?? 0) - n0);
 	if (markActive(state)) {
 		const s = state.daily.streak;
 		toast(s > 1 ? `Jour actif : ${s} jours de suite !` : 'Jour actif : ta série commence', '#F08A3C', () => showDaily());
@@ -1281,6 +1322,7 @@ function onSample(s) {
 /** Une minute sans bouger : la balade se termine toute seule, avec un petit bilan. */
 function endSession() {
 	const w = session;
+	walkAcc = 0;
 	debugLog(`Balade finie : ${Math.round(w.distance)} m en ${dur(sessionSeconds(w))}`);
 	trace('balade', { état: 'fin', m: w.distance, s: sessionSeconds(w), pas: w.steps });
 	session = null;
