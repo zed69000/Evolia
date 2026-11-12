@@ -3,6 +3,12 @@
 Chaque version, la plus récente en haut. Le site (evolia.sebastienalzamora.workers.dev) est toujours à jour ;
 le Play Store (tests internes) reçoit les versions indiquées « Play ».
 
+## 0.7.59 — 12 novembre 2026
+Habitats limités par parcelle (nouvelles parties) :
+- Une parcelle accueille au plus 6 massifs mellifères, 3 ruches, 2 hôtels à insectes, 3 nichoirs, 1 mare et 2 haies. Pour en avoir plus, on les pose dans une autre parcelle, ou on en explore une nouvelle (avec des kilomètres). Aménager l’indique sur chaque habitat ; à la pose, la bulle dit quand une parcelle a déjà son compte.
+- Les améliorations (production × 2) s’ouvrent au premier exemplaire, puis en remplissant 1, 2, 3, 5 et 8 parcelles de cet habitat.
+- Joueur simulé : il explore une parcelle voisine dont le milieu est accessible (il restait bloqué sur la première de la liste) et pose ses habitats là où il reste de la place.
+
 ## 0.7.58 — 12 novembre 2026
 Joueur simulé (outils du développeur), plus proche d’un vrai joueur :
 - Chaque sortie a plusieurs allures (l’essentiel à son rythme, un bout plus vite, un bout plus lentement) : fleurs, arbustes et arbres poussent comme dans une vraie balade, dès les premiers jours.

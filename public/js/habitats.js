@@ -7,8 +7,9 @@
 //
 // Six habitats forment une échelle, à la façon de Cookie Clicker : les premiers se remboursent en deux ou trois heures
 // d'élan (le début va vite), les suivants de plus en plus lentement, et chacun s'ouvre avec les km parcourus.
-// Chaque exemplaire coûte 15 % de plus que le précédent ; posséder 1, 5, 10, 25, 50, 100 exemplaires débloque une
-// amélioration qui double leur production. Chaque espèce découverte ajoute 1 % à toute la production.
+// Chaque exemplaire coûte 15 % de plus que le précédent, et chaque parcelle en accueille un nombre limité (PER_PARCEL) ;
+// les améliorations, qui doublent la production, s'ouvrent en remplissant des parcelles. Chaque espèce découverte
+// ajoute 1 % à toute la production.
 // Réglé avec docs/rythme-achats.js (500 joueurs, ouverture par ouverture) : 62 % d'activité pour un marcheur régulier.
 
 import { ITEMS } from './deco.js';
@@ -22,7 +23,19 @@ export const LADDER = {
 	haie: { cost: 600000, prod: 9600, km: 150 },
 };
 export const LADDER_ORDER = Object.keys(LADDER);
-export const UPG_AT = [1, 5, 10, 25, 50, 100];
+/**
+ * Au plus tant d'exemplaires de chaque habitat par parcelle : cinquante nichoirs au même endroit ne servent à rien.
+ * Pour en avoir plus, on pose ailleurs ou on explore une nouvelle parcelle (des kilomètres : l'activité reste le moteur).
+ */
+export const PER_PARCEL = { massif: 6, ruche: 3, hotel: 2, nichoir: 3, mare: 1, haie: 2 };
+/** Les améliorations s'ouvrent au premier exemplaire, puis en remplissant 1, 2, 3, 5 et 8 parcelles de cet habitat. */
+const UPG_PARCELS = [0, 1, 2, 3, 5, 8];
+export const UPG_AT = UPG_PARCELS;
+const upgNeed = (kind, u) => Math.max(1, UPG_PARCELS[u] * PER_PARCEL[kind]);
+/** Les parcelles ouvertes, tous lieux confondus. */
+export const parcelsOf = state => Object.values(state.places ?? {}).reduce((a, p) => a + Math.max(1, p.cells ?? 1), 0);
+/** Combien d'exemplaires de cet habitat on peut avoir en tout, avec les parcelles ouvertes. */
+export const ladderCap = (state, kind) => PER_PARCEL[kind] * parcelsOf(state);
 const UPG_COST = [5, 20, 150, 3000, 100000, 3000000];
 /** La part de la production quand on ne bouge pas (hors élan). */
 export const REST = 0.05;
@@ -54,6 +67,7 @@ export function ladderLock(state, kind) {
 	const i = LADDER_ORDER.indexOf(kind), km = (state.totals?.distance ?? 0) / 1000;
 	if (i > 1 && !ownedOf(state, LADDER_ORDER[i - 1])) return `après avoir posé ${ITEMS[LADDER_ORDER[i - 1]].name.toLowerCase()}`;
 	if (km < LADDER[kind].km) return `dès ${LADDER[kind].km} km parcourus`;
+	if (ownedOf(state, kind) >= ladderCap(state, kind)) return `${PER_PARCEL[kind]} par parcelle au plus : explore une nouvelle parcelle`;
 	return null;
 }
 
@@ -61,7 +75,8 @@ export function ladderLock(state, kind) {
 export function nextUpgrade(state, kind) {
 	const u = upgOf(state, kind);
 	if (u >= UPG_AT.length) return null;
-	return { level: u + 1, cost: LADDER[kind].cost * UPG_COST[u], need: UPG_AT[u], ok: ownedOf(state, kind) >= UPG_AT[u] };
+	const need = upgNeed(kind, u);
+	return { level: u + 1, cost: LADDER[kind].cost * UPG_COST[u], need, ok: ownedOf(state, kind) >= need };
 }
 
 /** La production d'un habitat (un exemplaire, améliorations comprises), en nectar par heure d'élan. */

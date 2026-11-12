@@ -1385,6 +1385,8 @@ export class Garden {
 
 	canPlace(kind, x, y, except = null) {
 		if (kind === 'plant') return this.canPlacePlant(except, x, y);
+		// Une parcelle n'accueille qu'un nombre limité de chaque habitat (main.js le règle).
+		if (this.placeLimit && !this.placeLimit(kind, this.cellAt(x, y), except)) return false;
 		const r = itemBox(kind, except?.level).w * 0.35;
 		if (!this.inOpen(x, y, r * 0.6) || keepOut(this.at, x, y, r * 0.5)) return false;
 		if (!fitsPlace(kind, this.biomeAtWorld(x, y))) return false;

@@ -15,7 +15,7 @@ import { Soundscape } from './audio.js';
 import { ITEMS, ITEM_ORDER, itemHelp, itemCost, fitsPlace, CATS, MAX_LEVEL, LEVEL_NAME, LEVEL_KM, canLevel, levelCost, CABIN_STYLES } from './deco.js';
 import { VERSION } from './version.js';
 import { startIntro, INTRO_NECTAR, FLOWER, FLOWER_SEED } from './intro.js';
-import { LADDER, isLadder, ladderPrice, ladderLock, nextUpgrade, unitProd, prodPerHour, produce, KM_HOURS, KM_VALUE_H, UPG_AT, REST, plantCover, ownedOf } from './habitats.js';
+import { LADDER, isLadder, ladderPrice, ladderLock, nextUpgrade, unitProd, prodPerHour, produce, KM_HOURS, KM_VALUE_H, UPG_AT, REST, plantCover, ownedOf, PER_PARCEL } from './habitats.js';
 import { exportCode, importCode, backupAge } from './backup.js';
 import { DebugPanel, debugOn, setDebug, debugLog, ago, dur, trace, traceFlush } from './debug.js';
 import { canNotify, askNotify, scheduleReminders, clearReminders } from './notify.js';
@@ -1884,8 +1884,8 @@ function renderDeco() {
 			const levels = ladder ? (n ? `<small>${n} ici</small>` : '') : n && (canLevel(k) || k === 'collecteur') ? `<small>${mine.map(x => `niv. ${x.level ?? 1}`).join(' · ')}</small>` : n ? `<small>${n} ici</small>` : '';
 			// L'échelle des habitats : ce que chacun rapporte pendant l'élan, et son amélioration (production × 2).
 			const up2 = ladder && !later ? nextUpgrade(state, k) : null;
-			const prodLine = ladder && !later ? `<span class="deco-help">Chacun rapporte ${fmtNum(unitProd(state, k))} nectar par heure d’élan, environ ${fmtInt(unitProd(state, k) * KM_VALUE_H)} par km marché${n ? ` · ${n} posé${n > 1 ? 's' : ''}` : ''}</span>` : '';
-			const upgBtn = up2 ? (up2.ok ? `<button class="btn primary small" data-upg="${k}" ${nectar < up2.cost ? 'disabled' : ''}>Amélioration ${up2.level} : +${fmtInt(n * unitProd(state, k) * KM_VALUE_H)} par km · ${fmtInt(up2.cost)}</button>` : `<span class="deco-lock">amélioration ${up2.level} (× 2) dès ${up2.need} posés</span>`) : '';
+			const prodLine = ladder && !later ? `<span class="deco-help">Chacun rapporte ${fmtNum(unitProd(state, k))} nectar par heure d’élan, environ ${fmtInt(unitProd(state, k) * KM_VALUE_H)} par km marché · ${PER_PARCEL[k]} par parcelle au plus${n ? ` · ${n} posé${n > 1 ? 's' : ''}` : ''}</span>` : '';
+			const upgBtn = up2 ? (up2.ok ? `<button class="btn primary small" data-upg="${k}" ${nectar < up2.cost ? 'disabled' : ''}>Amélioration ${up2.level} : +${fmtInt(n * unitProd(state, k) * KM_VALUE_H)} par km · ${fmtInt(up2.cost)}</button>` : `<span class="deco-lock">amélioration ${up2.level} (× 2) dès ${up2.need} posés${up2.need > PER_PARCEL[k] ? ` (${Math.round(up2.need / PER_PARCEL[k])} parcelles pleines)` : ''}</span>`) : '';
 			return `<div class="deco-card${locked ? ' locked' : ''}"><div class="deco-art" data-art="${k}"></div>
 				<div class="deco-body"><h3>${it.name}</h3><p>${it.text}</p>${!ladder && itemHelp(k, state.eco2) ? `<span class="deco-help">${itemHelp(k, state.eco2)}</span>` : ''}
 				${prodLine}<div class="deco-row"><span class="nectar">${fmtInt(cost)}</span>${levels}${action}</div>${up ? `<div class="deco-row deco-up">${up}</div>` : ''}${upgBtn && n ? `<div class="deco-row deco-up">${upgBtn}</div>` : ''}</div></div>`;
@@ -1947,9 +1947,17 @@ function introLeash(g) {
 	if (d > INTRO_LEASH) { g.x = fx + dx / d * INTRO_LEASH; g.y = fy + dy / d * INTRO_LEASH; }
 }
 
+/** Combien d'exemplaires de cet habitat sont posés dans la parcelle `ci` (sans compter `except`). */
+const inCell = (kind, ci, except = null) => garden.items.filter(it => it.kind === kind && it !== except && garden.cellAt(it.x, it.y) === ci).length;
+/** Nouvelle économie : une parcelle accueille au plus PER_PARCEL exemplaires de chaque habitat de l'échelle. */
+garden.placeLimit = (kind, ci, except) => !state.eco2 || !PER_PARCEL[kind] || ci < 0 || inCell(kind, ci, except) < PER_PARCEL[kind];
+
 function renderPlacing() {
 	const ok = garden.canPlace(placing.kind, garden.ghost.x, garden.ghost.y, placing.item);
-	$('#placing-hint').textContent = ok ? 'Fais-le glisser avec le doigt, puis pose-le.' : 'Place prise : lâche-le, il trouvera une place libre à côté.';
+	const ci = garden.cellAt(garden.ghost.x, garden.ghost.y), full = !garden.placeLimit(placing.kind, ci, placing.item);
+	$('#placing-hint').textContent = ok ? 'Fais-le glisser avec le doigt, puis pose-le.'
+		: full ? `Cette parcelle a déjà ses ${PER_PARCEL[placing.kind]} ${ITEMS[placing.kind].name.replace(/^(Un|Une) /, '').toLowerCase()}${PER_PARCEL[placing.kind] > 1 ? 's' : ''} : pose-le dans une autre parcelle.`
+		: 'Place prise : lâche-le, il trouvera une place libre à côté.';
 	$('#btn-place').disabled = !ok;
 }
 
@@ -2329,7 +2337,7 @@ const simWant = k => SIM_WANT[k] ?? (ITEMS[k].cat === 'decoration' ? 2 : 2);
 
 /** Pose un objet sur une place libre d'une parcelle où il a sa place ; faux s'il n'y en a pas. */
 function simPlace(k) {
-	const cells = garden.openCells().filter(ci => fitsPlace(k, garden.biomeOf(ci)));
+	const cells = garden.openCells().filter(ci => fitsPlace(k, garden.biomeOf(ci)) && garden.placeLimit(k, ci));
 	for (let t = 0; t < 4 && cells.length; t++) {
 		const ci = cells[Math.floor(Math.random() * cells.length)], [cx, cy] = garden.cellCenter(ci);
 		const spot = garden.nearestPlace(k, cx + simRnd(-130, 130), cy + simRnd(-320, 320));
@@ -2358,8 +2366,9 @@ function simBuy() {
 		const gi = growable();
 		if (gi != null) o.push({ label: 'terrain', c: growPrice(), v: 1e9, go: () => { paid(growPrice(), true); garden.growCell(gi); } });
 		else {
-			const i = garden.lockedCells()[0], biome = i != null ? garden.worldBiomeAt(i) : null;
-			if (biome && placeOpen(state, PLACE_BY_ID[biome]) && kmFree() >= parcelKm())
+			// Comme un joueur : la première parcelle voisine dont le milieu est accessible.
+			const i = garden.lockedCells().find(j => placeOpen(state, PLACE_BY_ID[garden.worldBiomeAt(j)])), biome = i != null ? garden.worldBiomeAt(i) : null;
+			if (biome && kmFree() >= parcelKm())
 				o.push({ label: 'parcelle', c: parcelPrice(), v: 1e8, go: () => { here().kmSpent = (here().kmSpent ?? 0) + parcelKm(); paid(parcelPrice()); openParcel(garden.openAt(i, biome), biome); } });
 		}
 		for (const k of Object.keys(LADDER)) {
