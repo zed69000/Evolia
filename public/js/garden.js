@@ -1187,7 +1187,7 @@ export class Garden {
 		// Nouvelles parties : arbustes et arbres ne sont semés que par les oiseaux (nichoirs, mangeoires). Plus il y en a,
 		// plus ils sèment souvent, et plus de jeunes pousses à la fois.
 		const byBirds = this.state.eco2 && next.type !== 'fleur', birds = byBirds ? seedBirds(place) : 0;
-		const every = byBirds ? Math.max(2, next.every - Math.floor(birds / 2)) : next.every;
+		const every = byBirds ? Math.max(2, next.every - Math.floor(birds / 2) - Math.floor((this.sowBonus ?? 0) / 2)) : next.every;
 		if (place.succ[parent.type] < every) return;
 		if (byBirds && !birds) {
 			// Prêt à porter un arbuste ou un arbre, mais aucun oiseau pour le semer : on le dit au joueur (main.js).
@@ -1200,7 +1200,11 @@ export class Garden {
 		// Pas plus de deux jeunes pousses semées qui attendent de grandir, par étage (plus, avec beaucoup d'oiseaux).
 		if (place.plants.filter(q => q.sown && q.type === next.type && q.growth < 1).length >= 2 + Math.floor(birds / 4)) return;
 		const ci = cellOf(parent);
-		const pos = this.place_(pid, next.type, ci, parent);
+		// Les oiseaux sèment autour de leur nichoir ou de leur mangeoire (s'il y en a un dans cette parcelle) :
+		// c'est là, près d'eux, que viendront arbustes et arbres. Placer ses nichoirs, c'est choisir où pousse la forêt.
+		const nests = byBirds ? this.itemsIn(ci, ['nichoir', 'mangeoire']) : [];
+		const home = nests.length ? pick(nests) : null, [cx0, cy0] = cellOrigin(ci);
+		const pos = this.place_(pid, next.type, ci, home ? { x: home.x - cx0, y: home.y - cy0 + 30 } : parent);
 		const nest = byBirds && place.items.some(it => it.kind === 'nichoir');
 		const by = nest && Math.random() < 0.5 ? 'une mésange' : pick(next.by[this.biomeOf(ci)] ?? next.by.default);
 		const p = this.spawn(pid, next.type, next.start, pos, ci);
@@ -2601,6 +2605,40 @@ export class Garden {
 	// rentre dans l'abri qu'on lui a construit.
 
 	/** Objets posés dans une parcelle, parmi `kinds`. */
+	/**
+	 * Le voisinage d'un habitat de l'échelle placé en (x, y) : les plantes mûres à portée, partagées avec les autres
+	 * habitats qui en vivent aussi, et les massifs proches (pour une ruche ou un hôtel). `except` : l'objet déplacé.
+	 */
+	nearInfo(kind, x, y, except = null, use = this.nearUse) {
+		const U = use?.[kind];
+		if (!U) return null;
+		const R = this.nearR, items = this.items.filter(it => it !== except && use[it.kind]);
+		const counts = { herbe: 0, fleur: 0, buisson: 0, arbre: 0 };
+		let green = 0;
+		for (const p of this.place.plants) {
+			if (p.growth < 1 || !U[p.type]) continue;
+			const [ox, oy] = cellOrigin(cellOf(p)), px = ox + p.x, py = oy + p.y;
+			if (Math.hypot(px - x, py - y) > R) continue;
+			counts[p.type]++;
+			// La plante est partagée entre tous les habitats qui en vivent, à portée d'elle.
+			const others = items.filter(it => use[it.kind][p.type] && Math.hypot(it.x - px, it.y - py) <= R).length;
+			green += U[p.type] / (1 + 0.5 * others);
+		}
+		const massifs = kind === 'ruche' || kind === 'hotel' ? items.filter(it => it.kind === 'massif' && Math.hypot(it.x - x, it.y - y) <= R).length : 0;
+		return { near: Math.min(1, green / this.nearNeed), green, counts, massifs, syn: Math.min(this.synMax, massifs * this.synPer) };
+	}
+
+	/** Mesure le voisinage de tous les habitats de l'échelle posés ici (it.near, it.syn), pour la production. */
+	measureNear() {
+		if (!this.nearUse) return;
+		for (const it of this.items) {
+			if (!this.nearUse[it.kind]) continue;
+			const n = this.nearInfo(it.kind, it.x, it.y, it);
+			it.near = Math.round(n.near * 100) / 100;
+			it.syn = n.syn;
+		}
+	}
+
 	itemsIn(ci, kinds) {
 		return this.items.filter(it => kinds.includes(it.kind) && this.cellAt(it.x, it.y) === ci);
 	}
@@ -3895,6 +3933,16 @@ export class Garden {
 			ctx.setLineDash([]);
 			ctx.fillStyle = ok ? 'rgba(95,147,62,0.18)' : 'rgba(192,68,47,0.14)';
 			ctx.fill();
+			if (this.nearUse?.[kind]) {
+				// Sa portée : les plantes dans ce cercle le font produire.
+				ctx.setLineDash([3 / this.cam.z, 7 / this.cam.z]);
+				ctx.strokeStyle = 'rgba(244,194,62,0.85)';
+				ctx.lineWidth = 2 / this.cam.z;
+				ctx.beginPath();
+				ctx.ellipse(x, y, this.nearR, this.nearR, 0, 0, Math.PI * 2);
+				ctx.stroke();
+				ctx.setLineDash([]);
+			}
 		}
 
 		world();

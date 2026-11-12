@@ -13,6 +13,7 @@
 // Réglé avec docs/rythme-achats.js (500 joueurs, ouverture par ouverture) : 62 % d'activité pour un marcheur régulier.
 
 import { ITEMS } from './deco.js';
+import { GUILD_OF } from './idle.js';
 
 export const LADDER = {
 	massif: { cost: 15, prod: 6, km: 0 },
@@ -104,6 +105,45 @@ export const levelsOf = (state, kind) => allItems(state).filter(it => it.kind ==
 /** La production d'un habitat (un exemplaire, améliorations comprises), en nectar par heure d'élan. */
 export const unitProd = (state, kind) => LADDER[kind].prod * Math.pow(2, upgOf(state, kind));
 
+// ─── L'agencement : chaque habitat vit de ce qui pousse autour de lui ───
+/** La portée d'un habitat : les plantes et les massifs à moins de cette distance comptent pour lui. */
+export const NEAR_R = 200;
+/** Ce que vaut chaque plante pour chaque habitat (les butineurs veulent des fleurs, le nichoir des arbres…). */
+export const NEAR_USE = {
+	massif: { fleur: 1, buisson: 1.5, arbre: 1 },
+	ruche: { fleur: 1, buisson: 1.5, arbre: 1 },
+	hotel: { fleur: 1, buisson: 1.5, arbre: 1 },
+	nichoir: { fleur: 0.3, buisson: 2, arbre: 4 },
+	mare: { herbe: 0.3, fleur: 1, buisson: 1 },
+	haie: { fleur: 0.5, buisson: 2, arbre: 2 },
+};
+/** Ce qu'il faut autour d'un habitat pour qu'il produise à plein. */
+export const NEAR_NEED = 3;
+/** Une ruche ou un hôtel gagne 20 % par massif mellifère tout proche (60 % au plus) : les butineurs y mangent. */
+export const SYN_PER = 0.2, SYN_MAX = 0.6;
+const POLLINATED = new Set(['massif', 'ruche', 'hotel']);
+
+/** Combien d'espèces découvertes dans chaque famille (pollinisateurs, semeurs, vie du sol, prédateurs utiles). */
+export function guildCounts(state) {
+	const n = { pollinisateur: 0, semeur: 0, sol: 0, regulateur: 0 };
+	for (const id of Object.keys(state.species ?? {})) { const g = GUILD_OF[id]; if (g) n[g]++; }
+	return n;
+}
+/** Ce que rapportent les familles : +5 % par espèce, chacune sur ce qu'elle fait. */
+export const GUILD_BONUS = 0.05;
+export const guildEffect = state => {
+	const n = guildCounts(state);
+	return {
+		n,
+		pollen: 1 + GUILD_BONUS * n.pollinisateur, // production des ruches, massifs et hôtels
+		soil: 1 + GUILD_BONUS * n.sol, // les pas font pousser plus de plantes
+		guard: 1 + GUILD_BONUS * n.regulateur, // les plantes autour des habitats comptent plus (moins de ravageurs)
+		sow: n.semeur, // les oiseaux sèment plus souvent
+	};
+};
+/** Le voisinage d'un habitat posé (0 à 1), calculé par le jardin (it.near) ; 1 tant qu'il n'a pas été mesuré. */
+export const nearOf = (state, it) => Math.min(1, (it.near ?? 1) * guildEffect(state).guard);
+
 /** Ce que les plantes permettent : les habitats ne produisent pleinement qu'avec deux plantes chacun, au moins. */
 export function plantCover(state) {
 	let green = 0, homes = 0;
@@ -114,13 +154,23 @@ export function plantCover(state) {
 	return homes ? Math.min(1, green / (2 * homes)) : 1;
 }
 
+/** Ce que produit un habitat posé, en nectar par heure d'élan : son niveau, son voisinage, ses massifs voisins. */
+export function itemProd(state, it, ge = guildEffect(state)) {
+	if (!LADDER[it.kind]) return 0;
+	const bio = 1 + Object.keys(state.species ?? {}).length / 100;
+	const fam = POLLINATED.has(it.kind) ? ge.pollen : 1;
+	return unitProd(state, it.kind) * LEVEL_PROD[Math.min(5, it.level ?? 1)] * Math.min(1, (it.near ?? 1) * ge.guard) * (1 + (it.syn ?? 0)) * bio * fam;
+}
+
 /** La production du jardin, en nectar par heure d'élan, tous habitats confondus ; `byKind` détaille par habitat. */
 export function prodPerHour(state, byKind = null) {
-	const bio = 1 + Object.keys(state.species ?? {}).length / 100, cover = plantCover(state);
+	const ge = guildEffect(state);
 	let total = 0;
-	for (const k of LADDER_ORDER) {
-		const v = levelsOf(state, k) * unitProd(state, k) * bio * cover;
-		if (byKind) byKind[k] = v;
+	for (const k of LADDER_ORDER) if (byKind) byKind[k] = 0;
+	for (const it of allItems(state)) {
+		if (!LADDER[it.kind]) continue;
+		const v = itemProd(state, it, ge);
+		if (byKind) byKind[it.kind] += v;
 		total += v;
 	}
 	return total;

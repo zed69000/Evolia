@@ -15,7 +15,7 @@ import { Soundscape } from './audio.js';
 import { ITEMS, ITEM_ORDER, itemHelp, itemCost, fitsPlace, CATS, MAX_LEVEL, LEVEL_NAME, LEVEL_KM, canLevel, levelCost, CABIN_STYLES, seedBirds, birdHelp } from './deco.js';
 import { VERSION } from './version.js';
 import { startIntro, INTRO_NECTAR, FLOWER, FLOWER_SEED } from './intro.js';
-import { LADDER, isLadder, ladderPrice, ladderLock, nextUpgrade, unitProd, prodPerHour, produce, KM_HOURS, KM_VALUE_H, UPG_AT, REST, plantCover, ownedOf, PER_PARCEL, LEVEL_PROD, LEVEL_KM2, levelPrice, levelsOf } from './habitats.js';
+import { LADDER, isLadder, ladderPrice, ladderLock, nextUpgrade, unitProd, prodPerHour, produce, KM_HOURS, KM_VALUE_H, UPG_AT, REST, plantCover, ownedOf, PER_PARCEL, LEVEL_PROD, LEVEL_KM2, levelPrice, levelsOf, NEAR_USE, NEAR_R, NEAR_NEED, SYN_PER, SYN_MAX, guildEffect, nearOf, itemProd, GUILD_BONUS } from './habitats.js';
 import { exportCode, importCode, backupAge } from './backup.js';
 import { DebugPanel, debugOn, setDebug, debugLog, ago, dur, trace, traceFlush } from './debug.js';
 import { canNotify, askNotify, scheduleReminders, clearReminders } from './notify.js';
@@ -36,6 +36,14 @@ state.totals.steps ??= 0;
 state.placesOpen ??= { prairie: true };
 const garden = new Garden($('#garden'), state);
 garden.idleBonus = sp => visualExtra(state, state.place, sp);
+// L'agencement (nouvelle économie) : chaque habitat de l'échelle vit des plantes à sa portée.
+Object.assign(garden, { nearUse: NEAR_USE, nearR: NEAR_R, nearNeed: NEAR_NEED, synPer: SYN_PER, synMax: SYN_MAX });
+/** Remesure le voisinage des habitats d'ici, et ce que les semeurs découverts apportent aux oiseaux. */
+function updateNear() {
+	if (!state.eco2) return;
+	garden.measureNear();
+	garden.sowBonus = guildEffect(state).sow;
+}
 if (params.has('h')) garden.hourOverride = parseFloat(params.get('h'));
 if (params.has('date')) garden.dateOverride = params.get('date');
 const sky = new Sky(state, garden, () => renderHud());
@@ -299,6 +307,7 @@ setInterval(() => {
 // ruches devient du miel (un pot pour 60 nectar), le reste va dans la bourse.
 function runHabitats() {
 	if (!state.eco2 || state.intro) { state.prodAt = Date.now(); return; }
+	updateNear();
 	const got = produce(state);
 	const honey = got.honey * (state.honeyShare ?? 0.3) / 0.3;
 	state.honeyAcc = (state.honeyAcc ?? 0) + honey / 60;
@@ -658,7 +667,9 @@ function tapCritter(hit, card) {
 	noteTap(state, sp.id);
 	renderDaily();
 	if (quest === sp.id) return winQuest(sp);
-	card.innerHTML = `<b>${sp.name}</b>${sp.latin}<span class="more">Découvre son rôle ›</span>`;
+	const g = state.eco2 && guildOfSp(sp.id);
+	card.innerHTML = g ? `<b>${sp.name}</b><small class="item-tip">${GUILD_TEXT[g].name} : ${GUILD_TEXT[g].one}. Et +1 % à toute la production, comme chaque espèce.</small><span class="more">Sa fiche ›</span>`
+		: `<b>${sp.name}</b>${sp.latin}<span class="more">Découvre son rôle ›</span>`;
 	card.classList.add('link');
 	card.onclick = () => { card.hidden = true; species.open(sp.id); };
 	placeCard(card, hit, 4000);
@@ -754,6 +765,10 @@ const TIPS = [
 		title: 'Tes pas prennent de la valeur', get text() { return `Chaque km te rapporte 60 nectar, plus ${KM_HOURS} heures de la production de ton jardin (en ce moment, environ ${fmtInt(60 + KM_HOURS * prodPerHour(state))} nectar par km). Plus ton jardin grandit, plus tes pas valent.`; } },
 	{ id: 'upgrade', eco2: true, target: '#btn-deco', when: () => Object.keys(LADDER).some(k => { const u = nextUpgrade(state, k); return u?.ok && (state.nectar ?? 0) >= u.cost; }),
 		title: 'Une amélioration', text: 'Tu as assez d’habitats d’une même sorte pour les améliorer : leur production double. Ouvre Aménager › Habitats, le bouton « Amélioration (× 2) » est sur leur carte.' },
+	{ id: 'near', eco2: true, target: '#btn-deco', when: () => garden.items.some(it => isLadder(it.kind) && nearOf(state, it) < 0.5),
+		title: 'Chaque habitat vit de ce qui l’entoure', text: 'Un habitat ne produit à plein qu’avec assez de plantes à sa portée : des fleurs pour une ruche, un massif ou un hôtel, des arbres pour un nichoir. Touche un habitat pour voir son <b>voisinage</b> ; quand tu en poses un, le cercle doré montre sa portée. Rapproche-le des fleurs (appui long pour le déplacer), ou marche pour en faire pousser autour.' },
+	{ id: 'roles', eco2: true, target: '#btn-species', when: () => Object.keys(state.species).length >= 6,
+		title: 'Chaque espèce a un rôle', text: 'Les pollinisateurs font produire tes ruches, les oiseaux sèment arbustes et arbres, la vie du sol fait pousser plus de plantes, les prédateurs utiles protègent les plantes autour de tes habitats. Touche un animal pour voir ce qu’il t’apporte ; la page <b>Écosystème</b> fait le compte.' },
 	{ id: 'levels', eco2: true, target: '#btn-deco', when: () => garden.items.some(it => isLadder(it.kind) && (it.level ?? 1) === 1 && (() => { const nx = nextLevel(it); return nx?.ok && (state.nectar ?? 0) >= nx.cost; })()),
 		title: 'Tes habitats peuvent grandir', text: 'Chaque habitat posé a son niveau : garni, fleuri, foisonnant, remarquable. Il produit de plus en plus (× 1,5, × 2, × 3, × 4) et se voit dans ton jardin. Dans <b>Aménager</b>, touche « Faire grandir », ou touche l’habitat lui-même.' },
 	{ id: 'birds', eco2: true, target: '#btn-deco', when: () => (here().noBirds ?? 0) > 0 && !seedBirds(here()),
@@ -923,7 +938,9 @@ setInterval(() => {
 function growMix(plant, effort) {
 	// Pendant l'introduction, les pas ne font pousser que la première fleur (intro.js).
 	if (state.intro) return [];
-	return effortMix(plant).flatMap(([type, share]) => garden.addEffort(type, effort * share));
+	// Nouvelle économie : chaque espèce de la vie du sol (vers de terre, fourmis…) fait pousser 5 % de plantes en plus.
+	const soil = state.eco2 ? guildEffect(state).soil : 1;
+	return effortMix(plant).flatMap(([type, share]) => garden.addEffort(type, effort * share * soil));
 }
 
 /** `nectar` : ce que rapportent ces mètres (par défaut 1 pour 5 m ; une sortie le calcule d'après l'effort). */
@@ -1827,7 +1844,7 @@ function nextLevel(it) {
 	if (own) return lv >= own.max ? null : { level: lv + 1, cost: own.cost[lv + 1], km: own.km[lv + 1], ok: km >= own.km[lv + 1] };
 	if (!canLevel(it.kind) || lv >= MAX_LEVEL) return null;
 	// Nouvelle économie : chaque habitat de l'échelle grandit, de plus en plus cher, avec quelques kilomètres.
-	if (state.eco2 && isLadder(it.kind)) return { level: lv + 1, cost: levelPrice(it.kind, lv + 1, state), km: LEVEL_KM2[lv + 1], ok: km >= LEVEL_KM2[lv + 1], gain: unitProd(state, it.kind) * (LEVEL_PROD[lv + 1] - LEVEL_PROD[lv]) };
+	if (state.eco2 && isLadder(it.kind)) return { level: lv + 1, cost: levelPrice(it.kind, lv + 1, state), km: LEVEL_KM2[lv + 1], ok: km >= LEVEL_KM2[lv + 1], gain: unitProd(state, it.kind) * (LEVEL_PROD[lv + 1] - LEVEL_PROD[lv]) * nearOf(state, it) * (1 + (it.syn ?? 0)) };
 	// La ruche s'agrandit sans attendre de kilomètres : seulement de plus en plus cher.
 	if (it.kind === 'ruche' && state.eco2) return { level: lv + 1, cost: levelCost(it.kind, lv + 1) * 2, km: 0, ok: true };
 	return { level: lv + 1, cost: levelCost(it.kind, lv + 1), km: LEVEL_KM[lv + 1], ok: km >= LEVEL_KM[lv + 1] };
@@ -1961,7 +1978,9 @@ garden.placeLimit = (kind, ci, except) => !state.eco2 || !PER_PARCEL[kind] || ci
 function renderPlacing() {
 	const ok = garden.canPlace(placing.kind, garden.ghost.x, garden.ghost.y, placing.item);
 	const ci = garden.cellAt(garden.ghost.x, garden.ghost.y), full = !garden.placeLimit(placing.kind, ci, placing.item);
-	$('#placing-hint').textContent = ok ? 'Fais-le glisser avec le doigt, puis pose-le.'
+	const ni = state.eco2 && isLadder(placing.kind) ? garden.nearInfo(placing.kind, garden.ghost.x, garden.ghost.y, placing.item) : null;
+	$('#placing-hint').textContent = ok && ni ? `Ici : ${Math.round(nearOf(state, { near: ni.near }) * 100)} %${ni.syn ? `, +${Math.round(ni.syn * 100)} % grâce aux massifs` : ''} · ${nearWhat(placing.kind, ni.counts)} dans le cercle doré. Pose-le là où il en a le plus.`
+		: ok ? 'Fais-le glisser avec le doigt, puis pose-le.'
 		: full ? `Cette parcelle a déjà ses ${PER_PARCEL[placing.kind]} ${ITEMS[placing.kind].name.replace(/^(Un|Une) /, '').toLowerCase()}${PER_PARCEL[placing.kind] > 1 ? 's' : ''} : pose-le dans une autre parcelle.`
 		: 'Place prise : lâche-le, il trouvera une place libre à côté.';
 	$('#btn-place').disabled = !ok;
@@ -2042,6 +2061,7 @@ $('#btn-place').addEventListener('click', () => {
 	}
 	sound.chime(2);
 	endPlacing();
+	updateNear();
 	renderHud();
 	persist(true);
 });
@@ -2108,7 +2128,7 @@ function tapItem(hit, card) {
 	const info = it.kind === 'collecteur' ? `<small class="item-tip">Niveau ${lv} · garde ${COLLECTOR_CAP[lv]} nectar${up ? ` (niveau ${lv + 1} : ${COLLECTOR_CAP[lv + 1]})` : ''}. Réserve totale : ${fmtInt(nectarCapacity(state))}.</small>`
 		: it.kind === 'poulailler' ? coopTip(it, lv, nx)
 		: def.levels ? `<small class="item-tip">${def.levels.name[lv][0].toUpperCase() + def.levels.name[lv].slice(1)}, ${CABIN_STYLES[(it.style ?? 0) % CABIN_STYLES.length].name}. ${farmerName(true)} y vit.${nx ? nx.ok ? ` Agrandis-la en ${def.levels.name[nx.level]}.` : ` ${def.levels.name[nx.level][0].toUpperCase() + def.levels.name[nx.level].slice(1)} dès ${nx.km} km parcourus.` : ''}</small>`
-		: state.eco2 && isLadder(it.kind) ? `<small class="item-tip">Niveau ${lv} sur ${MAX_LEVEL}, ${LEVEL_NAME[lv]} : il produit ${fmtNum(unitProd(state, it.kind) * LEVEL_PROD[lv])} nectar par heure d’élan.${nx ? nx.ok ? ` Niveau ${nx.level} (${LEVEL_NAME[nx.level]}) : +${fmtInt(nx.gain * KM_VALUE_H)} par km marché.` : ` Niveau ${nx.level} dès ${nx.km} km parcourus.` : ' Il est au plus haut.'}</small>`
+		: state.eco2 && isLadder(it.kind) ? `<small class="item-tip">Niveau ${lv} sur ${MAX_LEVEL}, ${LEVEL_NAME[lv]} : il produit ${fmtInt(itemProd(state, it))} nectar par heure d’élan. ${nearLine(it)}${nx ? nx.ok ? ` Niveau ${nx.level} (${LEVEL_NAME[nx.level]}) : +${fmtInt(nx.gain * KM_VALUE_H)} par km marché.` : ` Niveau ${nx.level} dès ${nx.km} km parcourus.` : ' Il est au plus haut.'}</small>`
 		: it.kind === 'ruche' && state.eco2 ? `<small class="item-tip">Niveau ${lv} : ${HIVE_SEATS * lv} abeilles.${nx ? ` Au niveau ${nx.level} : ${HIVE_SEATS * nx.level}.` : ''}</small>`
 		: canLevel(it.kind) ? `<small class="item-tip">Niveau ${lv} sur ${MAX_LEVEL}, ${LEVEL_NAME[lv]} : il fait venir ${lv * def.power} ${def.power * lv > 1 ? 'membres' : 'membre'}.${nx ? nx.ok ? ` Au niveau ${nx.level}, un de plus${def.power > 1 ? ` (${def.power})` : ''}.` : ` Niveau ${nx.level} dès ${nx.km} km parcourus.` : ''}</small>` : '';
 	// Une bulle courte : la première phrase de la description (le reste est dans Aménager), l'astuce de l'appui long
@@ -2247,6 +2267,32 @@ $('#deco').addEventListener('click', e => {
 $('#track-alert').addEventListener('click', async () => { sky.locate(true); await enableTracking(true); renderStatus(); });
 $('#btn-deco').addEventListener('click', () => openDeco(state.intro ? 'habitat' : currentMission()?.id === 'collector' ? 'recolte' : undefined));
 
+// ─── L'agencement et les familles d'espèces : ce que le joueur voit ───
+const PLANT_WORD = { herbe: ['herbe', 'herbes'], fleur: ['fleur', 'fleurs'], buisson: ['arbuste', 'arbustes'], arbre: ['arbre', 'arbres'] };
+/** « 4 fleurs, 1 arbuste » : ce qui compte pour cet habitat, autour de lui. */
+function nearWhat(kind, counts) {
+	const parts = Object.keys(NEAR_USE[kind]).filter(t => NEAR_USE[kind][t] >= 1 || counts[t]).map(t => `${counts[t] ?? 0} ${PLANT_WORD[t][(counts[t] ?? 0) > 1 ? 1 : 0]}`);
+	return parts.join(', ');
+}
+/** Ce qu'un habitat veut autour de lui, en clair. */
+const NEAR_WANT = { massif: 'des fleurs et des arbustes', ruche: 'des fleurs et des arbustes, et des massifs', hotel: 'des fleurs et des arbustes, et des massifs', nichoir: 'des arbustes et des arbres', mare: 'des herbes, des fleurs et des arbustes', haie: 'des arbustes et des arbres' };
+/** La ligne « voisinage » de la fiche d'un habitat posé. */
+function nearLine(it) {
+	const ni = garden.nearInfo(it.kind, it.x, it.y, it);
+	if (!ni) return '';
+	const pct = Math.round(nearOf(state, { near: ni.near }) * 100);
+	return `Voisinage : ${pct} % (${nearWhat(it.kind, ni.counts)} à portée${ni.massifs ? `, ${ni.massifs} massif${ni.massifs > 1 ? 's' : ''} : +${Math.round(ni.syn * 100)} %` : ''}). ${pct < 100 ? `Il lui faut ${NEAR_WANT[it.kind]} autour : marche pour en faire pousser, ou déplace-le (appui long) là où il y en a. ` : ''}`;
+}
+
+/** Les quatre familles d'espèces, ce qu'elles font, et pour combien (nouvelle économie). */
+const GUILD_TEXT = {
+	pollinisateur: { name: 'Pollinisateur', plural: 'Pollinisateurs', what: n => `+${Math.round(GUILD_BONUS * 100 * n)} % aux ruches, massifs et hôtels`, one: 'butine tes fleurs : +5 % aux ruches, massifs et hôtels' },
+	semeur: { name: 'Semeur', plural: 'Semeurs', what: n => `les oiseaux sèment ${n >= 2 ? 'plus souvent ' : ''}arbustes et arbres`, one: 'sème arbustes et arbres près de son nid ; plus il y a de semeurs, plus souvent' },
+	sol: { name: 'Vie du sol', plural: 'Vie du sol', what: n => `+${Math.round(GUILD_BONUS * 100 * n)} % de plantes à chaque pas`, one: 'enrichit la terre : tes pas font pousser 5 % de plantes en plus' },
+	regulateur: { name: 'Prédateur utile', plural: 'Prédateurs utiles', what: n => `+${Math.round(GUILD_BONUS * 100 * n)} % au voisinage des habitats`, one: 'chasse les ravageurs : les plantes autour de tes habitats comptent 5 % de plus' },
+};
+const guildOfSp = id => Object.keys(GUILD_TEXT).find(g => (GUILDS[g]?.members ?? []).includes(id));
+
 /**
  * Un habitat qui attire une espèce (la mangeoire, le merle ; le nichoir, la mésange…) la fait venir dès sa pose : on
  * voit tout de suite ce que l'achat apporte, et sa fiche attend d'être lue.
@@ -2369,10 +2415,16 @@ const simWant = k => SIM_WANT[k] ?? (ITEMS[k].cat === 'decoration' ? 2 : 2);
 /** Pose un objet sur une place libre d'une parcelle où il a sa place ; faux s'il n'y en a pas. */
 function simPlace(k) {
 	const cells = garden.openCells().filter(ci => fitsPlace(k, garden.biomeOf(ci)) && garden.placeLimit(k, ci));
-	for (let t = 0; t < 4 && cells.length; t++) {
+	// Un habitat de l'échelle : le joueur essaie quelques endroits et garde celui où il produira le plus.
+	const tries = state.eco2 && isLadder(k) ? 8 : 1, cand = [];
+	for (let t = 0; t < tries * 2 && cells.length && cand.length < tries; t++) {
 		const ci = cells[Math.floor(Math.random() * cells.length)], [cx, cy] = garden.cellCenter(ci);
-		const spot = garden.nearestPlace(k, cx + simRnd(-130, 130), cy + simRnd(-320, 320));
-		if (!spot || garden.cellAt(spot[0], spot[1]) < 0) continue;
+		const sp2 = garden.nearestPlace(k, cx + simRnd(-130, 130), cy + simRnd(-320, 320));
+		if (sp2 && garden.cellAt(sp2[0], sp2[1]) >= 0) cand.push(sp2);
+	}
+	if (tries > 1) cand.sort((a, b) => { const na = garden.nearInfo(k, ...a), nb = garden.nearInfo(k, ...b); return (nb.near * (1 + nb.syn)) - (na.near * (1 + na.syn)); });
+	for (let t = 0; t < 1 && cand.length; t++) {
+		const spot = cand[0];
 		const it = garden.placeItem(k, spot[0], spot[1], ITEMS[k].turn && Math.random() < 0.5 ? 1 : 0);
 		it.paid = priceOf(k);
 		bringAttracted(k, true);
@@ -2473,7 +2525,9 @@ function simDay() {
 	const found = checkSpecies(state, SPECIES_PER_DAY[day - 1] ?? SPECIES_LATER);
 	for (const sp of found) { (state.speciesSeen ??= {})[sp.id] = true; state.nectar += READ_REWARD; }
 	for (const p of PLACES) if (!state.placesOpen[p.id] && placeOpen(state, p)) state.placesOpen[p.id] = Date.now();
+	updateNear();
 	const bought = simBuy();
+	updateNear();
 	checkUnlocks();
 	state.prodAt = Date.now();
 	state.boostUntil = Date.now();
@@ -2935,20 +2989,27 @@ function openEco2() {
 	const h = Math.floor(left / 3600000), m = Math.round((left % 3600000) / 60000);
 	const cover = plantCover(state), sp = Object.keys(state.species).length;
 	const plants = here().plants.filter(p => p.growth >= 1), count = t => plants.filter(p => p.type === t).length;
-	const rows = Object.keys(LADDER).filter(k => ownedOf(state, k)).map(k => `<tr><td>${ITEMS[k].name}</td><td class="num">${ownedOf(state, k)}</td><td class="num">${state.upg?.[k] ? `× ${2 ** state.upg[k]}` : '—'}</td><td class="num">${fmtNum(byKind[k])}</td></tr>`).join('');
+	updateNear();
+	const nearAvg = k => { const its = garden.items.filter(it => it.kind === k); return its.length ? Math.round(its.reduce((a, it) => a + nearOf(state, it), 0) / its.length * 100) : null; };
+	const rows = Object.keys(LADDER).filter(k => ownedOf(state, k)).map(k => `<tr><td>${ITEMS[k].name}</td><td class="num">${ownedOf(state, k)}</td><td class="num">${nearAvg(k) ?? '—'}${nearAvg(k) != null ? ' %' : ''}</td><td class="num">${state.upg?.[k] ? `× ${2 ** state.upg[k]}` : '—'}</td><td class="num">${byKind[k] >= 100 ? fmtInt(byKind[k]) : fmtNum(byKind[k])}</td></tr>`).join('');
+	const ge = guildEffect(state);
 	$('#eco').innerHTML = `
 		<div class="panel-head"><h2>Écosystème</h2><button class="close" data-close-eco aria-label="Fermer">×</button></div>
 		<div class="eco2-hero card">
-			<b>${fmtNum(perH)}</b><span>nectar par heure d’élan</span>
-			<p>${left > 0 ? `Élan : encore <b>${h ? `${h} h ` : ''}${m} min</b>. Tes habitats travaillent à plein.` : `Au repos : tes habitats ne produisent que ${Math.round(REST * 100)} % (${fmtNum(perH * REST)} nectar par heure). Une sortie relance l’élan : environ 7 minutes par minute de marche.`}</p>
+			<b>${perH >= 100 ? fmtInt(perH) : fmtNum(perH)}</b><span>nectar par heure d’élan</span>
+			<p>${left > 0 ? `Élan : encore <b>${h ? `${h} h ` : ''}${m} min</b>. Tes habitats travaillent à plein.` : `Au repos : tes habitats ne produisent que ${Math.round(REST * 100)} % (${fmtInt(perH * REST)} nectar par heure). Une sortie relance l’élan : environ 7 minutes par minute de marche.`}</p>
 		</div>
 		<p class="sp-intro">Chaque km te rapporte <b>${fmtInt(60 + KM_HOURS * perH)} nectar</b> : 60, plus ${KM_HOURS} heures de cette production.</p>
-		${rows ? `<h3 class="sp-section">Tes habitats</h3><div class="eco2-table"><table><thead><tr><th>Habitat</th><th>Posés</th><th>Amélioré</th><th>Nectar / h</th></tr></thead><tbody>${rows}</tbody></table></div>`
+		${rows ? `<h3 class="sp-section">Tes habitats</h3><div class="eco2-table"><table><thead><tr><th>Habitat</th><th>Posés</th><th>Voisinage</th><th>Amélioré</th><th>Nectar / h</th></tr></thead><tbody>${rows}</tbody></table></div>`
 			: '<p class="sp-intro">Pas encore d’habitat : ouvre Aménager › Habitats pour en poser un.</p>'}
 		<h3 class="sp-section">Ce qui les fait produire</h3>
 		<ul class="eco2-list">
-			<li><b>Plantes</b> : ${count('fleur')} fleurs, ${count('buisson')} arbustes, ${count('arbre')} arbres. ${cover < 1 ? `Il en faudrait plus : tes habitats ne tournent qu’à ${Math.round(cover * 100)} %. Marche pour en faire pousser.` : 'Assez pour tous tes habitats.'}</li>
+			<li><b>Agencement</b> : chaque habitat vit des plantes à sa portée (le cercle doré quand tu le poses), partagées avec ses voisins. Une ruche veut des fleurs et des massifs, un nichoir des arbres. Ici : ${count('fleur')} fleurs, ${count('buisson')} arbustes, ${count('arbre')} arbres.</li>
 			<li><b>Biodiversité</b> : ${sp} espèces découvertes, soit +${sp} % de production.</li>
+		</ul>
+		<h3 class="sp-section">Ce que font tes espèces</h3>
+		<ul class="eco2-list">
+			${Object.keys(GUILD_TEXT).map(g => `<li><b>${GUILD_TEXT[g].plural}</b> (${ge.n[g]}) : ${ge.n[g] ? GUILD_TEXT[g].what(ge.n[g]) : `aucun encore : ${GUILD_TEXT[g].one}`}.</li>`).join('')}
 			<li><b>Élan</b> : après une sortie, tout tourne à plein ; au repos, ${Math.round(REST * 100)} % seulement.</li>
 		</ul>`;
 	$('#eco').classList.add('open');

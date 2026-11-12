@@ -3,6 +3,15 @@
 Chaque version, la plus récente en haut. Le site (evolia.sebastienalzamora.workers.dev) est toujours à jour ;
 le Play Store (tests internes) reçoit les versions indiquées « Play ».
 
+## 0.7.64 — 12 novembre 2026
+L’agencement compte, et chaque espèce a un rôle (nouvelles parties) :
+- **Voisinage** : chaque habitat ne produit à plein qu’avec assez de plantes à sa portée (un rayon d’environ un demi-terrain) : des fleurs et des arbustes pour une ruche, un massif ou un hôtel, des arbustes et des arbres pour un nichoir, herbes, fleurs et arbustes pour une mare. Une plante est partagée entre les habitats qui l’entourent : mieux vaut les étaler que les entasser.
+- **Synergie** : une ruche ou un hôtel à insectes gagne 20 % par massif mellifère tout proche (60 % au plus).
+- **Les oiseaux sèment autour de leur nichoir ou de leur mangeoire** : c’est là que viennent arbustes et arbres.
+- **Les familles d’espèces** : chaque pollinisateur découvert ajoute 5 % aux ruches, massifs et hôtels ; chaque espèce de la vie du sol fait pousser 5 % de plantes en plus à chaque pas ; chaque prédateur utile fait compter 5 % de plus les plantes autour des habitats ; les semeurs font semer les oiseaux plus souvent. Chaque espèce ajoute toujours 1 % à toute la production.
+- **Ce que voit le joueur** : un cercle doré montre la portée de l’habitat pendant la pose, et la bulle dit ce que vaut l’endroit (« Ici : 80 %, +40 % grâce aux massifs · 4 fleurs, 1 arbuste ») ; la fiche d’un habitat donne son voisinage et ce qui lui manque ; toucher un animal dit sa famille et ce qu’il apporte ; la page Écosystème montre le voisinage de chaque habitat et ce que font les quatre familles ; deux bulles d’aide (« Chaque habitat vit de ce qui l’entoure », « Chaque espèce a un rôle »).
+- Joueur simulé : il pose ses habitats là où ils produiront le plus (voisinage moyen 64 à 82 %).
+
 ## 0.7.63 — 12 novembre 2026
 Corrigé :
 - Une mangeoire ou un nichoir restait sans oiseau : l’animal n’apparaissait que si son espèce était déjà découverte, et le merle voulait un arbuste pour se percher. Désormais, poser un habitat fait venir tout de suite l’espèce qu’il attire (merle pour la mangeoire, mésanges pour le nichoir, bourdon pour le massif, hérisson pour le tas de bois, lézard pour les pierres…) : « Nouvelle espèce grâce à une mangeoire : Merle noir », avec sa fiche à lire. Sans arbuste ni arbre, l’oiseau sautille au sol autour de sa mangeoire ou de son nichoir. Les jardins qui ont déjà ces habitats reçoivent leurs espèces au prochain lancement.
