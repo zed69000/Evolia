@@ -3,6 +3,9 @@
 Chaque version, la plus récente en haut. Le site (evolia.sebastienalzamora.workers.dev) est toujours à jour ;
 le Play Store (tests internes) reçoit les versions indiquées « Play ».
 
+## 0.7.84 — 12 novembre 2026
+- Au lancement, le flou derrière le logo arrive et repart en douceur, au rythme du logo (il surgissait d'un coup).
+
 ## 0.7.83 — 12 novembre 2026
 - **Défis du jour plus lisibles** : chaque défi a sa carte, avec sa progression et son gain à droite (« +40 nectar ») ; un défi réussi s'entoure d'orange avec son bouton « Prendre ». Le bonus d'élan a sa ligne à part ; le prochain objectif est séparé des défis.
 - **Photos des espèces repeintes** : un filtre « pinceau » (Kuwahara anisotrope) remplace le flou d'aquarelle ; touches nettes, bords précis.
