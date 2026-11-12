@@ -319,7 +319,49 @@ function runHabitats() {
 	}
 	renderHud();
 }
-setInterval(runHabitats, 60000);
+// Appli cachée, la jauge ne tourne pas : la production est alors comptée toutes les minutes (et au retour).
+setInterval(() => { if (document.hidden || !gaugeOn()) runHabitats(); }, 60000);
+
+/**
+ * La jauge de récolte : l'hexagone de la bourse se remplit au rythme de la production du jardin ; plein, le nectar
+ * tombe dans la bourse (« +N ») et il recommence. Un plein vaut dix secondes de production à plein : pendant l'élan,
+ * il se remplit toutes les dix secondes ; au repos (5 %), en un peu plus de trois minutes. Son rythme dit tout de
+ * suite si le jardin récolte vite.
+ */
+const GAUGE_FULL_S = 10;
+let gaugeAcc = 0, gaugeRate = 0, gaugeAt = 0, gaugeLast = performance.now();
+const gaugeOn = () => state.eco2 && !state.intro;
+function gaugeTick() {
+	const now = performance.now(), dt = Math.min(1, (now - gaugeLast) / 1000);
+	gaugeLast = now;
+	const purse = $('#hud-steps');
+	if (!purse || !gaugeOn() || document.hidden) return;
+	// La production à plein, remesurée toutes les cinq secondes (elle ne change qu'avec les achats et les plantes).
+	if (now - gaugeAt > 5000) { gaugeAt = now; gaugeRate = prodPerHour(state); }
+	if (gaugeRate <= 0) { purse.style.setProperty('--fill', '0%'); return; }
+	const packet = gaugeRate * GAUGE_FULL_S / 3600, rate = gaugeRate * (boostLeft(state) > 0 ? 1 : REST) / 3600;
+	gaugeAcc += rate * dt;
+	if (gaugeAcc >= packet) {
+		gaugeAcc = 0;
+		const before = state.nectar ?? 0;
+		runHabitats();
+		const got = (state.nectar ?? 0) - before;
+		if (got >= 1) gaugePop(got);
+	}
+	purse.style.setProperty('--fill', `${Math.round(Math.min(1, gaugeAcc / packet) * 100)}%`);
+}
+setInterval(gaugeTick, 200);
+
+/** Le nectar récolté qui tombe dans la bourse : « +N » qui monte et s'efface, et une goutte. */
+function gaugePop(n) {
+	const purse = $('#hud-steps'), el = document.createElement('span');
+	el.className = 'purse-pop';
+	el.textContent = `+${fmtInt(n)}`;
+	purse.append(el);
+	setTimeout(() => el.remove(), 1300);
+	purse.classList.remove('got'); void purse.offsetWidth; purse.classList.add('got');
+	sound.drip?.(Math.min(1, Math.log10(1 + n) / 6));
+}
 
 // Le compost : il se remplit en marchant (épluchures, feuilles mortes) ; plein, on l'épand sur le potager.
 const COMPOST_KM = 3;
@@ -769,6 +811,8 @@ const TIPS = [
 		title: 'Tes pas prennent de la valeur', get text() { return `Chaque km te rapporte 60 nectar, plus ${KM_HOURS} heures de la production de ton jardin (en ce moment, environ ${fmtInt(60 + KM_HOURS * prodPerHour(state))} nectar par km). Plus ton jardin grandit, plus tes pas valent.`; } },
 	{ id: 'upgrade', eco2: true, target: '#btn-deco', when: () => Object.keys(LADDER).some(k => { const u = nextUpgrade(state, k); return u?.ok && (state.nectar ?? 0) >= u.cost; }),
 		title: 'Une amélioration', text: 'Tu as assez d’habitats d’une même sorte pour les améliorer : leur production double. Ouvre Aménager › Habitats, le bouton « Amélioration (× 2) » est sur leur carte.' },
+	{ id: 'gauge', eco2: true, target: '#hud-steps', when: () => prodPerHour(state) > 0,
+		title: 'Ta récolte, en direct', text: 'L’hexagone doré de ta bourse se remplit au rythme de ta récolte : plein, le nectar tombe dans ta bourse et il recommence. Pendant l’élan, après une sortie, il se remplit toutes les dix secondes ; au repos, vingt fois moins vite. Bouge, et regarde-le s’emballer.' },
 	{ id: 'near', eco2: true, target: '#btn-deco', when: () => garden.items.some(it => isLadder(it.kind) && nearOf(state, it) < 0.5),
 		title: 'Chaque habitat vit de ce qui l’entoure', text: 'Un habitat ne produit à plein qu’avec assez de plantes à sa portée : des fleurs pour une ruche, un massif ou un hôtel, des arbres pour un nichoir. Touche un habitat pour voir son <b>voisinage</b> ; quand tu en poses un, le cercle doré montre sa portée. Rapproche-le des fleurs (appui long pour le déplacer), ou marche pour en faire pousser autour.' },
 	{ id: 'roles', eco2: true, target: '#btn-species', when: () => Object.keys(state.species).length >= 6,

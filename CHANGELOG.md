@@ -3,6 +3,11 @@
 Chaque version, la plus récente en haut. Le site (evolia.sebastienalzamora.workers.dev) est toujours à jour ;
 le Play Store (tests internes) reçoit les versions indiquées « Play ».
 
+## 0.7.66 — 12 novembre 2026
+La jauge de récolte (nouvelles parties) :
+- L’hexagone doré de la bourse se remplit au rythme de la production du jardin ; plein, le nectar tombe dans la bourse (« +N », une goutte) et il recommence. Un plein vaut dix secondes de production à plein : pendant l’élan, il se remplit toutes les dix secondes ; au repos, en un peu plus de trois minutes. Son rythme dit tout de suite si le jardin récolte vite.
+- Une bulle d’aide « Ta récolte, en direct » l’explique.
+
 ## 0.7.65 — 12 novembre 2026
 Corrigé : on ne voyait pas bien qu’on était en activité.
 - Le cercle autour de l’icône d’activité s’arrêtait, plein, une fois l’objectif du jour atteint : un deuxième tour doré se remplit maintenant jusqu’à deux fois l’objectif.
