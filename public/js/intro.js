@@ -269,17 +269,19 @@ export function startIntro(c) {
 			await wait(110);
 		}
 		const el = document.createElement('div');
-		el.className = 'intro-logo';
+		el.className = 'intro-logo off';
 		el.innerHTML = `<img src="assets/logo-detoure.png" srcset="assets/logo-detoure.png 1x, assets/logo-detoure@2x.webp 2x" alt="Evolia"><p>${TAGLINE}</p>`;
 		app.append(el);
 		void el.offsetWidth;
 		el.classList.add('in');
+		el.classList.remove('off');
 		// L'ouverture musicale : la musique de l'introduction s'efface un instant pour la laisser sonner.
 		c.sound.setMood?.('hush');
 		c.sound.fanfare?.();
 		await wait(4200);
 		c.sound.setMood?.('joy');
 		el.classList.remove('in');
+		el.classList.add('off');
 		await wait(1500);
 		el.remove();
 	}

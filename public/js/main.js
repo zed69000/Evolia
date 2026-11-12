@@ -3519,7 +3519,8 @@ if (state.intro) {
 	$('#app').append(logo);
 	setTimeout(() => { splash.classList.add('out'); logo.classList.add('in'); sound.fanfare?.(); }, 300);
 	setTimeout(() => splash.remove(), 1600);
-	setTimeout(() => logo.classList.remove('in'), 3400);
+	// Le jardin est déjà flou sous le papier ; à la sortie, le flou s'en va avec le logo.
+	setTimeout(() => { logo.classList.remove('in'); logo.classList.add('off'); }, 3400);
 	setTimeout(() => { logo.remove(); $('#app').classList.remove('booting'); }, 4900);
 }
 
