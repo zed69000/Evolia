@@ -3,6 +3,10 @@
 Chaque version, la plus récente en haut. Le site (evolia.sebastienalzamora.workers.dev) est toujours à jour ;
 le Play Store (tests internes) reçoit les versions indiquées « Play ».
 
+## 0.7.82 — 12 novembre 2026
+- **Réserve de quiz** : trois quiz par jour se débloquent à 8 h, 13 h et 18 h ; ceux qu’on n’a pas faits restent en réserve jusqu’à minuit (on peut tous les faire le soir), puis la réserve repart de zéro. Le bouton dit combien attendent (« Quiz × 2 ») et un message prévient à chaque nouveau quiz ; « Plus tard » le garde en réserve.
+- **Questions plus variées** : « Quel est son rôle dans ton jardin ? » (pollinisateur, semeur, vie du sol, prédateur utile) et « Quand le vois-tu le plus ? » (le jour, la nuit, au crépuscule), en plus de « Quelle espèce ? », « À quoi sert… ? » et « Comment aider… ? ». « Où vit… ? » ne sert plus que pour les espèces d’un autre milieu que la prairie.
+
 ## 0.7.81 — 12 novembre 2026
 - Quiz moins généreux : une bonne réponse vaut 10 nectar, plus 3 par espèce, plus 8 minutes de production (au lieu de 15) ; la série monte de 0,25 par bonne réponse jusqu’à × 2 (au lieu de × 4) ; le sans-faute ajoute une demi-réponse. Trois quiz par jour au plus. Un quiz réussi vaut une demi-heure à trois quarts d’heure de production.
 

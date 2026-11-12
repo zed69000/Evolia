@@ -15,7 +15,7 @@ import { Soundscape } from './audio.js';
 import { ITEMS, ITEM_ORDER, itemHelp, itemCost, fitsPlace, CATS, MAX_LEVEL, LEVEL_NAME, LEVEL_KM, canLevel, levelCost, CABIN_STYLES, seedBirds, birdHelp } from './deco.js';
 import { VERSION } from './version.js';
 import { startIntro, INTRO_NECTAR, FLOWER, FLOWER_SEED } from './intro.js';
-import { makeQuiz, quizReady, streakMult, QUIZ_GAP, QUIZ_PER_DAY, noteAnswer, QUIZ_MIN_PLANTS, QUIZ_MIN_ANIMALS, quizEnough } from './quiz.js';
+import { makeQuiz, quizReady, streakMult, noteAnswer, QUIZ_MIN_PLANTS, QUIZ_MIN_ANIMALS, quizBank } from './quiz.js';
 import { LADDER, isLadder, ladderPrice, ladderLock, nextUpgrade, unitProd, prodPerHour, produce, KM_HOURS, KM_VALUE_H, UPG_AT, REST, plantCover, ownedOf, PER_PARCEL, LEVEL_PROD, LEVEL_KM2, levelPrice, levelsOf, MOMENTS, NEAR_USE, NEAR_R, NEAR_NEED, SYN_PER, SYN_MAX, guildEffect, nearOf, itemProd, GUILD_BONUS } from './habitats.js';
 import { exportCode, importCode, backupAge } from './backup.js';
 import { DebugPanel, debugOn, setDebug, debugLog, ago, dur, trace, traceFlush } from './debug.js';
@@ -155,16 +155,6 @@ function nothingToDo() {
  */
 const quizBase = () => Math.max(15, Math.round((10 + 3 * Object.keys(state.species).length + prodPerHour(state) * 8 / 60) / 5) * 5);
 
-/** La ligne du quiz dans les défis du jour : quand il arrive, ou un bouton pour jouer. */
-function quizLine() {
-	if (!state.eco2 || state.intro) return '';
-	const qz = state.quiz ?? {}, today = qz.day === dayKey() ? qz.n ?? 0 : 0, wait = (qz.at ?? 0) + QUIZ_GAP - Date.now();
-	const what = !quizEnough(state) ? `Il arrive quand tu connais ${QUIZ_MIN_PLANTS} plantes et ${QUIZ_MIN_ANIMALS} animaux depuis au moins un jour.`
-		: today >= QUIZ_PER_DAY ? 'Fini pour aujourd’hui : reviens demain.'
-		: wait > 0 ? `Le prochain dans ${Math.ceil(wait / 3600000)} h.` : null;
-	return `<div class="quiz-line"><span class="ch-ico" aria-hidden="true">❓</span><div><b>Quiz des fiches</b><small>${what ?? `Trois questions sur tes espèces · ${fmtInt(quizBase())} nectar par bonne réponse`}</small></div>${what ? '' : '<button class="btn primary small" id="btn-quiz">Jouer</button>'}</div>`;
-}
-
 /** Proposer le quiz (une fenêtre qui explique, puis trois questions). `force` : outils du développeur. */
 function offerQuiz(force = false) {
 	const qs = makeQuiz(state);
@@ -174,10 +164,10 @@ function offerQuiz(force = false) {
 		<p>Trois questions sur les espèces que tu connais. Bonne réponse : <b>${fmtInt(base)} nectar</b>, plus encore si tu enchaînes (jusqu’à × 2). Tu peux feuilleter ton livre des espèces.</p>
 		${streak ? `<p class="item-tip">Ta série en cours : ${streak} bonne${streak > 1 ? 's' : ''} réponse${streak > 1 ? 's' : ''} (× ${fmtNum(streakMult(streak))}).</p>` : ''}
 		<button class="btn primary" id="quiz-go">Jouer</button>
-		<button class="btn ghost wide" id="quiz-later">Plus tard</button>`);
+		<button class="btn ghost wide" id="quiz-later">Plus tard (il t’attend jusqu’à minuit)</button>`);
 	$('#quiz-go').onclick = () => runQuiz(qs, 0, { right: 0, gain: 0 });
 	// « Plus tard » : on le reproposera dans une demi-heure.
-	$('#quiz-later').onclick = () => { (state.quiz ??= {}).at = Date.now() - QUIZ_GAP + 30 * 60000; persist(); closeModal(); };
+	$('#quiz-later').onclick = () => { closeModal(); toast('Il reste dans ta réserve jusqu’à minuit : bouton « ? Quiz »', '#5F933E'); };
 }
 
 /** Une question du quiz ; puis la suivante, puis le bilan. */
@@ -248,14 +238,16 @@ function endQuiz(qs, score) {
 function renderQuizChip() {
 	const chip = $('#quiz-chip');
 	if (!chip) return;
-	const ready = !!state.eco2 && !state.intro && quizReady(state, dayKey());
-	chip.hidden = !ready;
-	chip.classList.toggle('tip-glow', ready);
-	const key = `${dayKey()}:${state.quiz?.n ?? 0}`;
-	if (ready && state.quizNoted !== key && $('#modal').hidden && !document.querySelector('.panel.open')) {
+	const bank = !!state.eco2 && !state.intro ? quizBank(state, dayKey()) : 0;
+	chip.hidden = !bank;
+	chip.classList.toggle('tip-glow', bank > 0);
+	chip.querySelector('span').textContent = bank > 1 ? `Quiz × ${bank}` : 'Quiz';
+	// Un message à chaque nouveau quiz débloqué (8 h, 13 h, 18 h).
+	const key = `${dayKey()}:${bank + (state.quiz?.n ?? 0)}`;
+	if (bank && state.quizNoted !== key && $('#modal').hidden && !document.querySelector('.panel.open')) {
 		state.quizNoted = key;
 		persist();
-		toast(`Un quiz des fiches t’attend : ${fmtInt(quizBase())} nectar par bonne réponse`, '#F08A3C', () => offerQuiz(true));
+		toast(`${bank > 1 ? `${bank} quiz des fiches t’attendent` : 'Un quiz des fiches t’attend'}, jusqu’à minuit : ${fmtInt(quizBase())} nectar par bonne réponse`, '#F08A3C', () => offerQuiz(true));
 	}
 }
 $('#quiz-chip')?.addEventListener('click', () => offerQuiz(true));

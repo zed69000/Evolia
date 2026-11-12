@@ -3,9 +3,18 @@
 // bonnes réponses s'allonge (et la base suit le gain d'une fiche, qui grandit avec les espèces et la production).
 
 import { SPECIES, SPECIES_BY_ID, PLACE_BY_ID } from './species.js';
+import { GUILD_OF } from './idle.js';
 
-/** Combien de questions par quiz, au plus de quiz par jour, et l'attente entre deux (en ms). */
-export const QUIZ_LEN = 3, QUIZ_PER_DAY = 3, QUIZ_GAP = 3 * 3600000;
+const ROLE_NAME = { pollinisateur: 'Pollinisateur', semeur: 'Semeur', sol: 'Vie du sol', regulateur: 'Prédateur utile' };
+const WHEN_NAME = { day: 'Le jour', night: 'La nuit', dusk: 'Au crépuscule' };
+
+/**
+ * Trois questions par quiz, trois quiz par jour, qui se débloquent à 8 h, 13 h et 18 h. Ceux qu'on n'a pas faits
+ * restent en réserve jusqu'à minuit (on peut tous les faire le soir) ; le lendemain, la réserve repart de zéro.
+ */
+export const QUIZ_LEN = 3, QUIZ_HOURS = [8, 13, 18], QUIZ_PER_DAY = QUIZ_HOURS.length;
+/** Gardé pour l'ancien bouton « Plus tard » (il ne repousse plus rien). */
+export const QUIZ_GAP = 0;
 /** Il faut au moins tant de plantes et tant d'animaux dont la fiche est lue depuis la veille. */
 export const QUIZ_MIN_PLANTS = 4, QUIZ_MIN_ANIMALS = 4;
 /** Une espèce ne revient pas avant tant d'autres questions. */
@@ -61,7 +70,9 @@ function choices(right, others) {
 /** Une question sur l'espèce `sp` (fiche lue), ou null si elle ne s'y prête pas. */
 function questionFor(sp, state) {
 	const same = SPECIES.filter(o => o.id !== sp.id && o.kind === sp.kind);
-	const kinds = shuffle(['fact', 'role', 'help', 'place']);
+	// « Où vit » seulement pour une espèce d'un autre milieu que la prairie (sinon la réponse est toujours la même), et
+	// en dernier recours.
+	const kinds = [...shuffle(['fact', 'role', 'help', 'family', 'when']), 'place'];
 	for (const k of kinds) {
 		if (k === 'fact' && sp.fact) {
 			const txt = masked(sp, first(sp.fact));
@@ -78,7 +89,15 @@ function questionFor(sp, state) {
 			const c = choices(first(sp.help), same.map(o => first(o.help)));
 			if (c) return { sp: sp.id, kind: k, q: `Comment aider : ${sp.name} ?`, choices: c, right: first(sp.help) };
 		}
-		if (k === 'place' && PLACE_BY_ID[sp.place]) {
+		if (k === 'family' && GUILD_OF[sp.id]) {
+			const right = ROLE_NAME[GUILD_OF[sp.id]], c = choices(right, Object.values(ROLE_NAME));
+			if (c) return { sp: sp.id, kind: k, q: `Quel est son rôle dans ton jardin : ${sp.name} ?`, choices: c, right };
+		}
+		if (k === 'when' && WHEN_NAME[sp.critter?.when]) {
+			const right = WHEN_NAME[sp.critter.when], c = choices(right, Object.values(WHEN_NAME));
+			if (c) return { sp: sp.id, kind: k, q: `Quand le vois-tu le plus : ${sp.name} ?`, choices: c, right };
+		}
+		if (k === 'place' && PLACE_BY_ID[sp.place] && sp.place !== 'prairie') {
 			const c = choices(PLACE_BY_ID[sp.place].name, Object.values(PLACE_BY_ID).map(p => p.name));
 			if (c) return { sp: sp.id, kind: k, q: `Où vit : ${sp.name} ?`, choices: c, right: PLACE_BY_ID[sp.place].name };
 		}
@@ -109,11 +128,19 @@ export function makeQuiz(state) {
 }
 
 /** Le quiz peut-il venir maintenant (attente, nombre par jour, fiches lues) ? */
-export function quizReady(state, day) {
+/** Les quiz débloqués aujourd'hui à cette heure (0 à 3). */
+export const quizUnlocked = (now = new Date()) => QUIZ_HOURS.filter(h => now.getHours() >= h).length;
+/** Combien de quiz attendent en réserve (débloqués aujourd'hui, pas encore faits). */
+export function quizBank(state, day) {
 	const qz = state.quiz ??= {};
 	if (qz.day !== day) { qz.day = day; qz.n = 0; }
-	if ((qz.n ?? 0) >= QUIZ_PER_DAY || Date.now() - (qz.at ?? 0) < QUIZ_GAP) return false;
-	return quizEnough(state);
+	if (!quizEnough(state)) return 0;
+	return Math.max(0, quizUnlocked() - (qz.n ?? 0));
+}
+/** L'heure du prochain quiz aujourd'hui, ou null. */
+export const nextQuizHour = (now = new Date()) => QUIZ_HOURS.find(h => now.getHours() < h) ?? null;
+export function quizReady(state, day) {
+	return quizBank(state, day) > 0;
 }
 
 export { pick };
