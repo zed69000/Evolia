@@ -1122,7 +1122,7 @@ const TIPS = [
 	{ id: 'birds', eco2: true, target: '#btn-deco', when: () => (here().noBirds ?? 0) > 0 && !seedBirds(here()),
 		title: 'Il manque des oiseaux', text: 'Les oiseaux sèment arbustes et arbres. Pose une mangeoire ou un nichoir.' },
 	{ id: 'plants', eco2: true, target: '#btn-deco', when: () => { const n = Object.keys(LADDER).reduce((a, k) => a + ownedCount(k), 0); return n >= 4 && here().plants.filter(p => p.growth >= 1 && p.type !== 'herbe').length < n * 2; },
-		title: 'Il faut des plantes', text: 'Tes habitats manquent de plantes. Marche pour en faire pousser : vite pour des arbustes, en courant pour des arbres.' },
+		title: 'Il faut des plantes', text: 'Tes habitats manquent de plantes. Tes pas font pousser des fleurs ; les abeilles et les papillons en sèment d’autres, les oiseaux sèment arbustes et arbres.' },
 	{ id: 'daily', target: '#daily', when: () => totalKm() >= 1,
 		title: 'Les défis du jour', text: 'Un cadeau et des défis chaque jour. Reviens souvent : le cadeau grossit.' },
 ];

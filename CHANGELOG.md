@@ -3,6 +3,9 @@
 Chaque version, la plus récente en haut. Le site (evolia.sebastienalzamora.workers.dev) est toujours à jour ;
 le Play Store (tests internes) reçoit les versions indiquées « Play ».
 
+## 0.7.76 — 12 novembre 2026
+- Bulle « Il faut des plantes » corrigée : tes pas font pousser des fleurs ; les abeilles et les papillons en sèment d’autres, les oiseaux sèment arbustes et arbres (elle disait « marche vite pour des arbustes, cours pour des arbres »).
+
 ## 0.7.75 — 12 novembre 2026
 - **La ruche grandit pour de vrai** : une hausse de plus à chaque niveau (3 au départ, 7 au niveau remarquable), en plus des fleurs autour.
 - **Trois vues pour tourner un objet** : de face, de 3/4 droite, de 3/4 gauche. Les haies, murets et pas japonais gardent tous les angles pour se raccorder.
