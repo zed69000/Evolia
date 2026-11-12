@@ -270,7 +270,7 @@ export function startIntro(c) {
 		}
 		const el = document.createElement('div');
 		el.className = 'intro-logo';
-		el.innerHTML = `<img src="assets/logo-detoure.png" alt="Evolia"><p>${TAGLINE}</p>`;
+		el.innerHTML = `<img src="assets/logo-detoure.png" srcset="assets/logo-detoure.png 1x, assets/logo-detoure@2x.webp 2x" alt="Evolia"><p>${TAGLINE}</p>`;
 		app.append(el);
 		void el.offsetWidth;
 		el.classList.add('in');

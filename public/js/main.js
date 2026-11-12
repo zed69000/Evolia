@@ -1715,7 +1715,7 @@ function renderDaily() {
 	$('#next-goal').hidden = !goal;
 	if (goal) $('#next-goal-text').textContent = goal;
 	const done = state.daily.challenges.filter(c => state.daily.claimed[c.id]).length;
-	$('#daily-count').textContent = `${done} / 3`;
+	$('#daily-count').textContent = `${done} / ${state.daily.challenges.length}`;
 	$('#daily-dot').hidden = !(giftReady(state) || toClaim(state).length);
 }
 
@@ -1737,8 +1737,8 @@ function showDaily(gift = false) {
 	const goal = nextGoal(state);
 	showModal(`<div class="modal-body"><h2>${gift ? 'Bonjour !' : "Aujourd'hui"}</h2>
 		${weekHtml(state)}${top}
-		<h3 class="ch-title">Défis du jour</h3>${challengesHtml(state)}
-		${goal ? `<p class="next-line">${goal}</p>` : ''}${note}</div>
+		<h3 class="ch-title">Défis du jour <span>${d.challenges.filter(c => d.claimed[c.id]).length} / ${d.challenges.length} · nectar à gagner</span></h3>${challengesHtml(state)}
+		${goal ? `<p class="next-line">🧭 ${goal}</p>` : ''}${note}</div>
 		<div class="modal-foot">${ready ? '<button class="btn primary" id="btn-gift">Ouvrir le cadeau</button>' : '<button class="btn primary" data-close>Voir mon jardin</button>'}</div>`);
 	$('#btn-gift')?.addEventListener('click', () => {
 		const got = claimGift(state);
@@ -3513,7 +3513,9 @@ if (state.intro) {
 	$('#app').classList.add('booting');
 	const logo = document.createElement('div');
 	logo.className = 'intro-logo';
-	logo.innerHTML = '<img src="assets/logo-detoure.png" alt="Evolia"><p>À chacun de tes pas, la nature s’éveille.</p>';
+	// Les téléphones qui peinent à flouter ont un voile clair à la place (voir .intro-logo::before).
+	$('#app').classList.toggle('no-blur', !canBlur || !!state.eco30);
+	logo.innerHTML = '<img src="assets/logo-detoure.png" srcset="assets/logo-detoure.png 1x, assets/logo-detoure@2x.webp 2x" alt="Evolia"><p>À chacun de tes pas, la nature s’éveille.</p>';
 	$('#app').append(logo);
 	setTimeout(() => { splash.classList.add('out'); logo.classList.add('in'); sound.fanfare?.(); }, 300);
 	setTimeout(() => splash.remove(), 1600);

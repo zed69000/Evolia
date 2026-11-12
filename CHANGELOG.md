@@ -3,6 +3,12 @@
 Chaque version, la plus récente en haut. Le site (evolia.sebastienalzamora.workers.dev) est toujours à jour ;
 le Play Store (tests internes) reçoit les versions indiquées « Play ».
 
+## 0.7.83 — 12 novembre 2026
+- **Défis du jour plus lisibles** : chaque défi a sa carte, avec sa progression et son gain à droite (« +40 nectar ») ; un défi réussi s'entoure d'orange avec son bouton « Prendre ». Le bonus d'élan a sa ligne à part ; le prochain objectif est séparé des défis.
+- **Photos des espèces repeintes** : un filtre « pinceau » (Kuwahara anisotrope) remplace le flou d'aquarelle ; touches nettes, bords précis.
+- **Nouveau logo**, plus net (version haute définition pour les écrans fins), sans liseré blanc. Le logo et sa phrase se lisent mieux sur le jardin : le fond se floute derrière eux, ou se voile de blanc sur les téléphones qui ne savent pas flouter.
+- Les fleurs se semaient parfois les unes sur les autres : elles gardent maintenant leur place.
+
 ## 0.7.82 — 12 novembre 2026
 - **Réserve de quiz** : trois quiz par jour se débloquent à 8 h, 13 h et 18 h ; ceux qu’on n’a pas faits restent en réserve jusqu’à minuit (on peut tous les faire le soir), puis la réserve repart de zéro. Le bouton dit combien attendent (« Quiz × 2 ») et un message prévient à chaque nouveau quiz ; « Plus tard » le garde en réserve.
 - **Questions plus variées** : « Quel est son rôle dans ton jardin ? » (pollinisateur, semeur, vie du sol, prédateur utile) et « Quand le vois-tu le plus ? » (le jour, la nuit, au crépuscule), en plus de « Quelle espèce ? », « À quoi sert… ? » et « Comment aider… ? ». « Où vit… ? » ne sert plus que pour les espèces d’un autre milieu que la prairie.
