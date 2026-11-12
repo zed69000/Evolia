@@ -239,8 +239,16 @@ export class Garden {
 	 * (et pour la prochaine parcelle, encore dans la brume), la campagne sauvage du milieu ouvert le plus proche.
 	 */
 	tileAt(gx, gy) {
-		const n = cellsOpen(this.place), sig = `${(this.place.biomes ?? []).slice(0, n).join(',')}|${this.layoutSig}`;
-		if (this.tileMemo?.sig !== sig) this.tileMemo = { sig, map: new Map() };
+		// Appelée des centaines de milliers de fois en préparant le sol : on ne refait la signature (une chaîne) que si
+		// le terrain a changé (parcelles ouvertes, leurs milieux, la disposition).
+		const n = cellsOpen(this.place), bs = this.place.biomes ?? [], m = this.tileMemo;
+		let same = m && m.n === n && m.layout === this.layoutSig && m.bs.length === Math.min(n, bs.length);
+		if (same) for (let i = 0; i < m.bs.length; i++) if (m.bs[i] !== bs[i]) { same = false; break; }
+		if (!same) {
+			const sig = `${bs.slice(0, n).join(',')}|${this.layoutSig}`;
+			if (m?.sig === sig) Object.assign(m, { n, layout: this.layoutSig, bs: bs.slice(0, n) });
+			else this.tileMemo = { sig, map: new Map(), n, layout: this.layoutSig, bs: bs.slice(0, n) };
+		}
 		const k = `${gx},${gy}`;
 		let t = this.tileMemo.map.get(k);
 		if (t) return t;
@@ -658,8 +666,19 @@ export class Garden {
 	 * De loin (`lo`), une version légère, six fois plus petite en mémoire. Une case pas encore peinte
 	 * attend son tour (une par image) : on montre en attendant sa version légère, ou la couleur du sol.
 	 */
+	/** La clé d'une case en cache (sa signature de terrain), gardée tant que le terrain ne change pas. */
+	tileKey(gx, gy) {
+		// Gardée tant que le terrain ne change pas (même signature) : la signature d'une case lit ses 9 voisines.
+		this.tileAt(gx, gy);
+		if (this.keyMemo?.sig !== this.tileMemo.sig) this.keyMemo = { sig: this.tileMemo.sig, keys: new Map() };
+		const k = `${gx},${gy}`, keys = this.keyMemo.keys;
+		let key = keys.get(k);
+		if (!key) keys.set(k, key = `${tileSig(this.at, gx, gy)}:${gx},${gy}`);
+		return key;
+	}
+
 	tileFor(gx, gy, lo = false) {
-		const key = `${tileSig(this.at, gx, gy)}:${gx},${gy}`;
+		const key = this.tileKey(gx, gy);
 		const hi = this.bgs.get(key), light = this.bgs.get(`${key}:lo`);
 		const want = lo ? light : hi;
 		if (want) { want.used = this.t; return want.canvas; }
@@ -672,15 +691,19 @@ export class Garden {
 	}
 
 	queueTile(gx, gy, lo) {
-		const key = `${tileSig(this.at, gx, gy)}:${gx},${gy}${lo ? ':lo' : ''}`;
-		if (this.tileJobs.has(key)) return;
+		const key = `${this.tileKey(gx, gy)}${lo ? ':lo' : ''}`;
+		const queued = this.tileJobs.get(key);
+		if (queued) { queued.want = this.t; return; }
 		const D = this.density * (lo ? 0.4 : 1);
 		const c = document.createElement('canvas');
 		c.width = Math.ceil(PARCEL_W * D);
 		c.height = Math.ceil(PARCEL_H * D);
 		const g = c.getContext('2d');
 		g.scale(D, D);
-		this.tileJobs.set(key, { key, c, g, steps: tileSteps(this.at, gx, gy, col => this.groundColor(col), this.season), i: 0, lo, at: this.t });
+		// Les étapes de peinture se préparent au premier tour de travail (environ 20 ms par case) : vu de loin, une
+		// soixantaine de cases demandées d'un coup figeaient l'écran plus d'une seconde.
+		const season = this.season;
+		this.tileJobs.set(key, { key, c, g, steps: null, make: () => tileSteps(this.at, gx, gy, col => this.groundColor(col), season), i: 0, lo, at: this.t, want: this.t });
 	}
 
 	/** Avance la peinture des cases en attente, sans dépasser `ms` millisecondes par image. */
@@ -690,6 +713,9 @@ export class Garden {
 		// Les versions légères d'abord, puis les plus anciennes demandes.
 		const jobs = [...this.tileJobs.values()].sort((a, b) => (b.lo - a.lo) || (a.at - b.at));
 		for (const job of jobs) {
+			// Une case qu'on ne regarde plus (on a zoomé ou glissé ailleurs) n'est plus peinte : elle le sera si on y revient.
+			if (job.want < this.t - 0.5) { this.tileJobs.delete(job.key); continue; }
+			if (!job.steps) { job.steps = job.make(); if (performance.now() > end) return; }
 			while (job.i < job.steps.length) {
 				job.steps[job.i++](job.g);
 				if (performance.now() > end) return;
@@ -699,12 +725,14 @@ export class Garden {
 		}
 	}
 
-	/** Garde en mémoire au plus HI_TILES cases détaillées et 30 légères, les plus récemment vues. */
+	/** Garde en mémoire au plus HI_TILES cases détaillées et 30 légères (ou plus : toujours toutes celles à l'écran,
+	 * sinon un grand jardin vu de loin repeignait sans fin les cases qu'il venait de jeter). */
 	trimTiles() {
-		if (this.bgs.size < 30) return;
+		const seen = this.tilesSeen ?? 0;
+		if (this.bgs.size < Math.max(30, seen + 8)) return;
 		const hi = [], lo = [];
 		for (const [k, t] of this.bgs) (k.endsWith(':lo') ? lo : hi).push([k, t.used]);
-		for (const [list, max] of [[hi, HI_TILES], [lo, 30]]) {
+		for (const [list, max] of [[hi, Math.max(HI_TILES, seen + 2)], [lo, Math.max(30, seen + 8)]]) {
 			if (list.length <= max) continue;
 			list.sort((a, b) => b[1] - a[1]);
 			for (const [k] of list.slice(max)) this.bgs.delete(k);
@@ -1882,7 +1910,11 @@ export class Garden {
 	 * jardinier les ramassera), potagers mûrs, gouttes de nectar à cueillir (par parcelle). Coordonnées du monde.
 	 */
 	poiList() {
-		return [...(this.state.mapFilter?.harvest === false ? [] : this.poiHarvest()), ...(this.mapExtras?.() ?? [])];
+		// Recalculée quatre fois par seconde : vue de loin, la liste parcourt tout le jardin.
+		if (this.poiMemo && this.t - this.poiMemo.t < 0.25 && this.t >= this.poiMemo.t) return this.poiMemo.list;
+		const list = [...(this.state.mapFilter?.harvest === false ? [] : this.poiHarvest()), ...(this.mapExtras?.() ?? [])];
+		this.poiMemo = { t: this.t, list };
+		return list;
 	}
 
 	/** Le filtre « Récoltes » : ce qui attend d'être ramassé. */
@@ -3705,6 +3737,7 @@ export class Garden {
 		// Toutes les cases à l'écran dans la même version : de loin, ou s'il y en a plus que la mémoire n'en garde
 		// en détail (9), toutes légères. Une case nette à côté d'une floue dessinait un trait droit dans le paysage.
 		const lo = this.cam.z < 0.6 || (gx1 - gx0 + 1) * (gy1 - gy0 + 1) > HI_TILES;
+		this.tilesSeen = (gx1 - gx0 + 1) * (gy1 - gy0 + 1);
 		world();
 		// Chaque tuile déborde d'un pixel d'écran sur la suivante : sans ça, un fin trait clair apparaît aux raccords.
 		const seam = 1.5 / this.scale;

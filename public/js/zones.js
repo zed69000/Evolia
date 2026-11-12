@@ -491,7 +491,10 @@ function mixed(at, gx, gy, x, y) {
 }
 
 /** Ombrage des pentes (lumière venue d'en haut à gauche), en une petite image lissée posée sur la case. */
-function reliefSteps(at, gx, gy) {
+function reliefSteps(at0, gx, gy) {
+	// La grille lit des milliers de fois la case et ses quatre voisines : on les lit une fois pour toutes.
+	const near = [];
+	const at = (x, y) => { const k = (x - gx + 1) + 3 * (y - gy + 1); return near[k] ??= at0(x, y); };
 	// La grille déborde d'un pas tout autour : le lissage ne voit jamais le bord de la case (pas de couture).
 	const biome = at(gx, gy).biome, W = PARCEL_W, H = PARCEL_H, ox = gx * W, oy = gy * H;
 	const R = RELIEF[biome], step = 12, nx = Math.ceil(W / step) + 3, ny = Math.ceil(H / step) + 3, gx0 = ox - step, gy0 = oy - step;
@@ -783,9 +786,13 @@ const featureCache = new Map();
 export const riversIn = (at, gx, gy) => featuresOf(at(gx, gy), gx, gy).filter(f => f.kind === 'river');
 
 function featuresOf(tile, gx, gy) {
+	// Rangées sur la case elle-même : keepOut en lit 9 par point, des milliers de fois en peignant le sol, et la clé
+	// (une chaîne) coûtait plus cher que tout le reste.
+	if (tile.feat && tile.featX === gx && tile.featY === gy) return tile.feat;
 	const key = `${tileKey(tile)}:${gx},${gy}`;
 	let f = featureCache.get(key);
 	if (!f) featureCache.set(key, (f = tileFeatures(tile, gx, gy)));
+	if (Object.isExtensible(tile)) Object.defineProperties(tile, { feat: { value: f, writable: true, configurable: true }, featX: { value: gx, writable: true, configurable: true }, featY: { value: gy, writable: true, configurable: true } });
 	return f;
 }
 

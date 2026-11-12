@@ -3,6 +3,9 @@
 Chaque version, la plus récente en haut. Le site (evolia.sebastienalzamora.workers.dev) est toujours à jour ;
 le Play Store (tests internes) reçoit les versions indiquées « Play ».
 
+## 0.7.88 — 13 novembre 2026
+- **Plus fluide dans les grands jardins** : le sol ne se repeint plus sans fin (le jeu jetait des morceaux de sol encore à l'écran, puis les repeignait), ne peint plus ce qu'on ne regarde plus, et se prépare petit à petit au lieu de tout d'un coup. Mesuré sur un jardin de 930 plantes et 235 habitats : de 20 à 26 ms à 3 ms par image en vue normale ; la première image vue de loin passe de 3 s à 0,6 s.
+
 ## 0.7.87 — 13 novembre 2026
 - **Un jardin plein ne s'entasse plus** : quand une parcelle n'a plus de place, une nouvelle plante va dans une autre parcelle qui en a ; s'il n'y en a nulle part, la plus ancienne fleur fane et refleurit sur place, et les oiseaux ne sèment plus de force. Testé sur 90 jours avec quatre profils : chez un grand sportif, 6 plantes qui se chevauchent au lieu de 4 564, et 10 arbres au plus par parcelle au lieu de 64 ; les découvertes d'espèces ne changent pas.
 - Plus rien ne pousse sous un habitat ou juste derrière (une ruche ou un nichoir cachaient les fleurs dans leur dos).
