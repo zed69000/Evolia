@@ -2385,14 +2385,15 @@ function simBuy() {
 				o.push({ label: 'parcelle', c: parcelPrice(), v: 1e8, go: () => { here().kmSpent = (here().kmSpent ?? 0) + parcelKm(); paid(parcelPrice()); openParcel(garden.openAt(i, biome), biome); } });
 		}
 		for (const k of Object.keys(LADDER)) {
+			// L'amélioration reste possible même quand on ne peut plus poser d'exemplaire (parcelles pleines).
+			const u = nextUpgrade(state, k);
+			if (u?.ok) o.push({ label: `amélioration (${simName(k)})`, c: u.cost, v: ownedOf(state, k) * unitProd(state, k) / u.cost, go: () => { state.nectar -= u.cost; (state.upg ??= {})[k] = u.level; } });
 			if (ladderLock(state, k) || full.has(k)) continue;
 			const c = ladderPrice(state, k);
 			o.push({ label: simName(k), c, v: unitProd(state, k) / c, go: () => {
 				if (!simPlace(k)) { full.add(k); return false; }
 				state.nectar -= c;
 			} });
-			const u = nextUpgrade(state, k);
-			if (u?.ok) o.push({ label: `amélioration (${simName(k)})`, c: u.cost, v: ownedOf(state, k) * unitProd(state, k) / u.cost, go: () => { state.nectar -= u.cost; (state.upg ??= {})[k] = u.level; } });
 		}
 		o.sort((a, b) => b.v - a.v || a.c - b.c);
 		const x = o.find(z => z.c <= nectar);

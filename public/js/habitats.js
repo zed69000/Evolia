@@ -28,15 +28,20 @@ export const LADDER_ORDER = Object.keys(LADDER);
  * Pour en avoir plus, on pose ailleurs ou on explore une nouvelle parcelle (des kilomètres : l'activité reste le moteur).
  */
 export const PER_PARCEL = { massif: 6, ruche: 3, hotel: 2, nichoir: 3, mare: 1, haie: 2 };
-/** Les améliorations s'ouvrent au premier exemplaire, puis en remplissant 1, 2, 3, 5 et 8 parcelles de cet habitat. */
-const UPG_PARCELS = [0, 1, 2, 3, 5, 8];
+/**
+ * Neuf améliorations par habitat. Elles s'ouvrent au premier exemplaire, puis en remplissant 1 à 4 parcelles de cet
+ * habitat ; c'est surtout leur prix qui freine, comme dans Cookie Clicker.
+ */
+const UPG_PARCELS = [0, 1, 1, 2, 2, 3, 3, 4, 4];
 export const UPG_AT = UPG_PARCELS;
 const upgNeed = (kind, u) => Math.max(1, UPG_PARCELS[u] * PER_PARCEL[kind]);
 /** Les parcelles ouvertes, tous lieux confondus. */
 export const parcelsOf = state => Object.values(state.places ?? {}).reduce((a, p) => a + Math.max(1, p.cells ?? 1), 0);
 /** Combien d'exemplaires de cet habitat on peut avoir en tout, avec les parcelles ouvertes. */
 export const ladderCap = (state, kind) => PER_PARCEL[kind] * parcelsOf(state);
-const UPG_COST = [5, 20, 150, 3000, 100000, 3000000];
+// Comme Cookie Clicker : 10, 50, 500, 50 000, 5 millions puis 500 millions de fois le prix de base. Les premières
+// arrivent vite, les dernières absorbent le nectar de la fin de partie.
+const UPG_COST = [10, 50, 500, 50000, 5e6, 5e8, 5e10, 5e12, 5e14];
 /** La part de la production quand on ne bouge pas (hors élan). */
 export const REST = 0.05;
 /** Chaque km rapporte aussi ces heures de production du jardin. */

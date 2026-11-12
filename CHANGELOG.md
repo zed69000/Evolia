@@ -3,6 +3,12 @@
 Chaque version, la plus récente en haut. Le site (evolia.sebastienalzamora.workers.dev) est toujours à jour ;
 le Play Store (tests internes) reçoit les versions indiquées « Play ».
 
+## 0.7.61 — 12 novembre 2026
+Améliorations façon Cookie Clicker (nouvelles parties) :
+- Neuf améliorations par habitat, au lieu de six, qui coûtent 10, 50, 500, 50 000, 5 millions, 500 millions, 50 milliards, 5 billions puis 500 billions de fois le prix de base. Elles s’ouvrent au premier exemplaire puis en remplissant 1 à 4 parcelles de l’habitat : c’est surtout leur prix qui freine, et le nectar de la fin de partie a toujours un but.
+- Les grands nombres s’écrivent en mots : « 3,2 millions », « 1,05 milliard ».
+- Joueur simulé : il achète aussi les améliorations d’un habitat dont les parcelles sont pleines (il ne les voyait plus).
+
 ## 0.7.60 — 12 novembre 2026
 Les oiseaux sèment arbustes et arbres (nouvelles parties) :
 - Un nichoir loge un couple de mésanges (2 oiseaux), une mangeoire nourrit un oiseau. Ce sont eux qui sèment les arbustes près des fleurs, puis les arbres près des arbustes ; plus il y a d’oiseaux, plus ils sèment souvent. Sans oiseaux, la succession s’arrête aux fleurs (marcher vite et courir font toujours pousser arbustes et arbres directement).
