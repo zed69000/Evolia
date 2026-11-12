@@ -1665,7 +1665,7 @@ export function speciesOf(p) {
 }
 
 /** Une plante est découverte quand un spécimen a fini de pousser ; un milieu quand son décor apparaît. */
-function unlocked(s, sp) {
+export function unlocked(s, sp) {
 	if (sp.kind === 'animal') return sp.unlock(s);
 	if (sp.kind === 'milieu') return has(s, sp.place, sp.decor);
 	return nMature(s, sp.place, sp.type, sp.id) >= 1;

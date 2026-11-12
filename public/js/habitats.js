@@ -131,14 +131,27 @@ export function guildCounts(state) {
 }
 /** Ce que rapportent les familles : +5 % par espèce, chacune sur ce qu'elle fait. */
 export const GUILD_BONUS = 0.05;
+/**
+ * Le moment (state.moment, réglé par le jardin d'après le vrai ciel) : chaque temps a son bonus, il n'y a pas de
+ * mauvais temps. Soleil : les butineurs (+25 % aux ruches, massifs, hôtels). Pluie : les plantes poussent plus vite
+ * (+50 % à chaque pas). Nuit : les prédateurs utiles chassent (+25 % au voisinage). Hiver : les oiseaux sèment plus
+ * souvent.
+ */
+export const MOMENTS = {
+	soleil: { name: 'Soleil', icon: '☀', what: 'les butineurs s’activent : ruches, massifs et hôtels +25 %' },
+	pluie: { name: 'Pluie', icon: '☂', what: 'la terre boit : tes pas font pousser 50 % de plantes en plus' },
+	nuit: { name: 'Nuit', icon: '☾', what: 'les prédateurs utiles chassent : voisinage des habitats +25 %' },
+	hiver: { name: 'Hiver', icon: '❄', what: 'les oiseaux de la mangeoire sèment plus souvent arbustes et arbres' },
+	jour: { name: 'Jour', icon: '◌', what: 'un temps calme, sans bonus' },
+};
 export const guildEffect = state => {
-	const n = guildCounts(state);
+	const n = guildCounts(state), m = state.moment ?? 'jour';
 	return {
 		n,
-		pollen: 1 + GUILD_BONUS * n.pollinisateur, // production des ruches, massifs et hôtels
-		soil: 1 + GUILD_BONUS * n.sol, // les pas font pousser plus de plantes
-		guard: 1 + GUILD_BONUS * n.regulateur, // les plantes autour des habitats comptent plus (moins de ravageurs)
-		sow: n.semeur, // les oiseaux sèment plus souvent
+		pollen: (1 + GUILD_BONUS * n.pollinisateur) * (m === 'soleil' ? 1.25 : 1), // production des ruches, massifs et hôtels
+		soil: (1 + GUILD_BONUS * n.sol) * (m === 'pluie' ? 1.5 : 1), // les pas font pousser plus de plantes
+		guard: (1 + GUILD_BONUS * n.regulateur) * (m === 'nuit' ? 1.25 : 1), // les plantes autour des habitats comptent plus
+		sow: n.semeur + (m === 'hiver' ? 4 : 0), // les oiseaux sèment plus souvent
 	};
 };
 /** Le voisinage d'un habitat posé (0 à 1), calculé par le jardin (it.near) ; 1 tant qu'il n'a pas été mesuré. */

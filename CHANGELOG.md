@@ -3,6 +3,15 @@
 Chaque version, la plus récente en haut. Le site (evolia.sebastienalzamora.workers.dev) est toujours à jour ;
 le Play Store (tests internes) reçoit les versions indiquées « Play ».
 
+## 0.7.68 — 12 novembre 2026
+La nuit, la pluie et l’hiver ne vident plus le jardin (nouvelles parties) :
+- **Chaque moment a sa vie** : quand peu d’animaux sont de sortie, des visiteurs du moment viennent (papillons de nuit, chauves-souris, escargots…), des espèces de ce temps-là pas encore découvertes. Les toucher les fait découvrir : « Découverte de nuit : Noctuelle des moissons · +25 nectar ».
+- **Chaque temps a son bonus**, un badge dans le bandeau le montre (toucher pour le détail) : soleil, ruches, massifs et hôtels +25 % ; pluie, les pas font pousser 50 % de plantes en plus ; nuit, voisinage des habitats +25 % ; hiver, les oiseaux sèment plus souvent.
+- **Les habitats servent d’abri** : sous la pluie, on voit les abeilles aux entrées des ruches et des hôtels.
+- **Le jardin travaille à toute heure** : sous la pluie, des plantes qui poussent (éclats verts) et des vers qui remontent ; la nuit, des plantes protégées (éclats vert d’eau) ; l’hiver, des graines qui tombent des mangeoires.
+- **Options › Ciel du jardin** : réel, toujours de jour, ou toujours beau (sans bonus du temps).
+Corrigé : une vue invalide (appli lancée en arrière-plan) se recentre sur le jardin au lieu de rester perdue.
+
 ## 0.7.67 — 12 novembre 2026
 La jauge d’activité (le cercle autour de l’icône) :
 - Pendant une sortie, elle devient la jauge de marche : elle se remplit avec le nectar que rapportent tes pas (environ tous les 100 m en marchant, plus vite en courant), verse dans la bourse (« +N ») et recommence. Son rythme montre ce que la sortie récolte.

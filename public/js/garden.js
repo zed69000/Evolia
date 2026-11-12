@@ -8,7 +8,7 @@ import { rng, wash, rgba, mix, paperTexture, lerp, blurred } from './watercolor.
 import { PLANT_TYPES, DECOR, DECOR_PAINTERS, paintPlant, paintTurf, newVariant, lookOf } from './plants.js';
 import { drawCritter, CRITTER_SIZE, FLIGHT } from './critters.js';
 import { GAIT, strideOf, HEN_LOOKS, drawFromSheet, loadSheets, SHEETS, sheetIdOf } from './beasts.js';
-import { SPECIES, PLACE_BY_ID, speciesOf } from './species.js';
+import { SPECIES, PLACE_BY_ID, speciesOf, unlocked } from './species.js';
 import { PARCEL_W, PARCEL_H, CELLS, CELL_KM, GROUND, zoneOf, zoneName, tileSteps, tileSig, keepOut, cellIndexAt, riversIn } from './zones.js';
 import { biomeOf, heartOf, rankOf, biomesIn } from './state.js';
 import { makeWorld, worldBiome } from './world.js';
@@ -2023,6 +2023,16 @@ export class Garden {
 
 	night() { return this.light().night; }
 
+	/** Le moment : pluie, nuit, hiver, soleil ou jour calme (le réglage « Ciel du jardin » peut le fixer). */
+	moment() {
+		if (this.momentLock) return this.momentLock;
+		if (this.precip() > 0 && this.weather.kind !== 'snow') return 'pluie';
+		if (this.night() > 0.5) return 'nuit';
+		if ((this.season?.winter ?? 0) > 0.5 || this.weather.kind === 'snow') return 'hiver';
+		if (this.weather.kind === 'clear') return 'soleil';
+		return 'jour';
+	}
+
 	precip() {
 		const k = this.weather.kind;
 		return k === 'rain' ? 1 : k === 'storm' ? 1.5 : k === 'drizzle' ? 0.45 : k === 'snow' ? 1 : 0;
@@ -2261,7 +2271,44 @@ export class Garden {
 		requestAnimationFrame(this.frame);
 	};
 
+	/**
+	 * Le jardin travaille à toute heure : la nuit, une plante protégée par un prédateur (éclat vert d'eau) ; sous la
+	 * pluie, une plante qui pousse (éclat vert) et un ver qui remonte (terre) ; l'hiver, des graines qui tombent de la
+	 * mangeoire. Le jour, ce sont les abeilles qui le montrent.
+	 */
+	busyTick(dt) {
+		if (this.glyph || this.state.intro || !this.state.eco2) return;
+		this.busyT = (this.busyT ?? 1) - dt;
+		if (this.busyT > 0) return;
+		this.busyT = 1.2 + Math.random() * 1.6;
+		const m = this.moment(), v = this.view();
+		const inView = (x, y) => x > v.x0 && x < v.x0 + v.w && y > v.y0 && y < v.y0 + v.h;
+		const plants = this.place.plants.filter(p => { const [ox, oy] = cellOrigin(cellOf(p)); return inView(ox + p.x, oy + p.y); });
+		const at = p => { const [ox, oy] = cellOrigin(cellOf(p)); return [ox + p.x, oy + p.y]; };
+		if (m === 'pluie' && plants.length) {
+			const p = pick(plants), [x, y] = at(p);
+			this.burst(x, y - 14, 5, '#8BCB5E');
+			if (Math.random() < 0.5) { const q = pick(plants), [qx, qy] = at(q); this.burst(qx + 14, qy + 4, 4, '#7A5A3A'); }
+		} else if (m === 'nuit' && plants.length) {
+			const p = pick(plants), [x, y] = at(p);
+			this.burst(x, y - 18, 5, '#9FE6D0');
+		} else if (m === 'hiver') {
+			const feeders = this.items.filter(it => it.kind === 'mangeoire' && inView(it.x, it.y));
+			if (feeders.length) { const f = pick(feeders); this.burst(f.x, f.y - 40, 6, '#A0784A'); }
+			else if (plants.length) { const p = pick(plants), [x, y] = at(p); this.burst(x, y - 10, 4, '#FFFFFF'); }
+		}
+	}
+
 	update(dt, now) {
+		// Une vue invalide (page lancée à 0 pixel, en arrière-plan) se recentre sur le jardin au lieu de rester perdue.
+		if (!Number.isFinite(this.cam.cx) || !Number.isFinite(this.cam.cy) || !Number.isFinite(this.cam.z) || !(this.base > 0)) {
+			if (!(this.base > 0)) this.resize();
+			const [cx, cy] = this.cellCenter(0);
+			Object.assign(this.cam, { cx, cy, z: Number.isFinite(this.cam.z) && this.cam.z > 0 ? this.cam.z : 1 });
+			this.vel = { x: 0, y: 0 };
+			this.camTarget = null;
+		}
+		this.busyTick(dt);
 		// Un objet tenu près du bord fait glisser la vue doucement, pour l'emmener plus loin.
 		if (this.ghost && this.ghostFinger) {
 			const [fx, fy] = this.ghostFinger, w = this.canvas.clientWidth, h = this.canvas.clientHeight, m = 56;
@@ -2388,7 +2435,7 @@ export class Garden {
 		// Comme dans la nature, on ne voit jamais tout le monde à la fois : chaque guilde (butineurs, papillons,
 		// criquets, oiseaux, chauves-souris, grands mammifères…) a une place limitée à l'écran, et ses espèces se
 		// relaient par fenêtres de quelques minutes. Les saisons, le vent et le froid règlent qui sort.
-		const se = this.season ?? {}, winter = (se.winter ?? 0) > 0.5, lateAutumn = (se.autumn ?? 0) > 0.7;
+		const se = this.season ?? {}, winter = (se.winter ?? 0) > 0.5 || this.weather.kind === 'snow', lateAutumn = (se.autumn ?? 0) > 0.7;
 		const windy = (this.weather.wind ?? 10) > 32, cold = (this.weather.temp ?? 15) < 8;
 		const want = new Map();
 		for (const sp of SPECIES) {
@@ -2421,6 +2468,29 @@ export class Garden {
 			list.sort((a, b) => idHash(a.id, slot) - idHash(b.id, slot));
 			for (const sp of list) { const n = Math.min(want.get(sp), room); want.set(sp, n); room -= n; }
 		}
+		// Jamais vide : si peu d'animaux sont de sortie (nuit, pluie, hiver, début de partie), des visiteurs du moment
+		// viennent : des espèces de ce temps-là, pas encore découvertes. Les toucher les fait découvrir.
+		if (!this.state.intro && visible.length) {
+			let shown = 0;
+			for (const v of want.values()) shown += v;
+			const MIN = 4;
+			if (shown < MIN) {
+				const cands = SPECIES.filter(sp => sp.kind === 'animal' && present.has(sp.place) && sp.critter?.behavior && !this.state.species[sp.id]
+					&& sp.critter.when !== 'always' && ok(sp.critter.when) && !((wet || windy || cold) && FLYERS.has(sp.critter.kind)) && !(winter && SLEEPS.has(guildOf(sp.critter))) && unlocked(this.state, sp));
+				this.visitors = (this.visitors ?? []).filter(id => cands.some(c => c.id === id));
+				for (const c of cands.sort(() => Math.random() - 0.5)) { if (this.visitors.length >= 3) break; if (!this.visitors.includes(c.id)) this.visitors.push(c.id); }
+				for (const id of this.visitors) { const sp = SPECIES.find(x => x.id === id); want.set(sp, Math.max(want.get(sp) ?? 0, 1)); shown++; }
+				// Toujours rien : les espèces déjà découvertes qui peuvent sortir maintenant viennent plus nombreuses.
+				if (shown < MIN) for (const [sp, v] of want) if (this.state.species[sp.id] && ok(sp.critter.when) && shown < MIN) { want.set(sp, v + 1); shown++; }
+				if (shown < MIN) for (const sp of SPECIES) {
+					if (shown >= MIN) break;
+					if (sp.kind !== 'animal' || !present.has(sp.place) || !sp.critter?.behavior || !this.state.species[sp.id] || !ok(sp.critter.when) || want.get(sp)) continue;
+					if ((wet || windy || cold) && FLYERS.has(sp.critter.kind)) continue;
+					if (winter && SLEEPS.has(guildOf(sp.critter))) continue;
+					want.set(sp, 1); shown++;
+				}
+			} else this.visitors = [];
+		}
 		for (const sp of SPECIES) {
 			if (sp.kind !== 'animal' || !present.has(sp.place) || !sp.critter.behavior) continue;
 			const n = want.get(sp) ?? 0;
@@ -2448,7 +2518,13 @@ export class Garden {
 	populateAmbient(visible, night, dusk, wet) {
 		this.ambient = [];
 		// Pas de moucherons pendant l'introduction : la scène reste nette.
-		if (wet || this.glyph || this.state.intro) return;
+		if (this.glyph || this.state.intro) return;
+		if (wet) {
+			// Sous la pluie, les butineurs s'abritent : on les voit aux entrées de l'hôtel et de la ruche.
+			for (const it of this.items) if ((it.kind === 'hotel' || it.kind === 'ruche') && visible.includes(this.cellAt(it.x, it.y)))
+				this.ambient.push({ x: it.x, y: it.y - (it.kind === 'ruche' ? 22 : 48), kind: 'peek', n: 3 + Math.floor(Math.random() * 3), r: 6, ph: Math.random() * 100 });
+			return;
+		}
 		for (const ci of visible) {
 			const P = this.pdata[ci], w = this.water(ci), spots = [];
 			if (w) for (let k = 0; k < 2; k++) spots.push({ x: w.x + (Math.random() - 0.5) * w.rx, y: w.y + (Math.random() - 0.5) * w.ry * 0.5, water: true });
@@ -2494,6 +2570,13 @@ export class Garden {
 				const a = s.ph + i * 2.4;
 				const x = s.x + Math.sin(t * (1.1 + (i % 5) * 0.33) + a) * s.r + Math.sin(t * 0.21 + a) * 7;
 				const y = s.y - 36 + Math.cos(t * (1.6 + (i % 3) * 0.45) + a * 1.3) * s.r * 0.55 + Math.sin(t * 0.6 + i) * 5;
+				if (s.kind === 'peek') {
+					// Une abeille à l'abri : elle remue à peine, au seuil de son abri.
+					const px = s.x + Math.sin(a * 3.1) * 9 + Math.sin(t * 2 + a) * 1.2, py = s.y + Math.cos(a * 2.3) * 4;
+					ctx.fillStyle = '#E8B23A'; ctx.beginPath(); ctx.ellipse(px, py, 2.2, 1.6, 0, 0, Math.PI * 2); ctx.fill();
+					ctx.fillStyle = 'rgba(40,30,20,0.8)'; ctx.fillRect(px - 0.4, py - 1.6, 0.8, 3.2);
+					continue;
+				}
 				if (s.kind === 'gnat') {
 					ctx.fillStyle = 'rgba(46,40,30,0.55)';
 					ctx.fillRect(x - 0.65, y - 0.65, 1.3, 1.3);

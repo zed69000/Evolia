@@ -1030,3 +1030,11 @@ body:has(.panel.open) #debug { display: none; }
 .act-laps { position: absolute; right: -6px; bottom: -4px; min-width: 18px; padding: 1px 4px; border-radius: 9px; background: #F4C23E; color: #5A3A08; font: 800 10px Nunito, sans-serif; text-align: center; box-shadow: 0 1px 2px rgba(0,0,0,.15); }
 .hud-act.lap .ring { animation: act-lap .9s ease-out; }
 @keyframes act-lap { 0% { filter: drop-shadow(0 0 0 rgba(244,194,62,0)); } 40% { filter: drop-shadow(0 0 8px rgba(244,194,62,1)); transform: scale(1.12); } 100% { filter: none; transform: scale(1); } }
+
+/* Le moment (soleil, pluie, nuit, hiver) : un petit badge dans le bandeau, son bonus au toucher. */
+.sky-chip { align-self: center; width: 28px; height: 28px; border-radius: 50%; border: none; cursor: pointer; font: 700 15px/28px Nunito, sans-serif; text-align: center; padding: 0; background: rgba(95,147,62,.14); color: var(--foret); }
+.sky-chip[data-m="soleil"] { background: rgba(244,194,62,.3); color: #8A5A10; }
+.sky-chip[data-m="pluie"] { background: rgba(80,140,200,.2); color: #2E5F8A; }
+.sky-chip[data-m="nuit"] { background: rgba(60,70,120,.25); color: #3A3F78; }
+.sky-chip[data-m="hiver"] { background: rgba(170,200,230,.35); color: #4A6A8A; }
+.opt-help { font-size: 12.5px; color: var(--doux); margin: 6px 0 12px; }

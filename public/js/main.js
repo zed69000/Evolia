@@ -15,7 +15,7 @@ import { Soundscape } from './audio.js';
 import { ITEMS, ITEM_ORDER, itemHelp, itemCost, fitsPlace, CATS, MAX_LEVEL, LEVEL_NAME, LEVEL_KM, canLevel, levelCost, CABIN_STYLES, seedBirds, birdHelp } from './deco.js';
 import { VERSION } from './version.js';
 import { startIntro, INTRO_NECTAR, FLOWER, FLOWER_SEED } from './intro.js';
-import { LADDER, isLadder, ladderPrice, ladderLock, nextUpgrade, unitProd, prodPerHour, produce, KM_HOURS, KM_VALUE_H, UPG_AT, REST, plantCover, ownedOf, PER_PARCEL, LEVEL_PROD, LEVEL_KM2, levelPrice, levelsOf, NEAR_USE, NEAR_R, NEAR_NEED, SYN_PER, SYN_MAX, guildEffect, nearOf, itemProd, GUILD_BONUS } from './habitats.js';
+import { LADDER, isLadder, ladderPrice, ladderLock, nextUpgrade, unitProd, prodPerHour, produce, KM_HOURS, KM_VALUE_H, UPG_AT, REST, plantCover, ownedOf, PER_PARCEL, LEVEL_PROD, LEVEL_KM2, levelPrice, levelsOf, MOMENTS, NEAR_USE, NEAR_R, NEAR_NEED, SYN_PER, SYN_MAX, guildEffect, nearOf, itemProd, GUILD_BONUS } from './habitats.js';
 import { exportCode, importCode, backupAge } from './backup.js';
 import { DebugPanel, debugOn, setDebug, debugLog, ago, dur, trace, traceFlush } from './debug.js';
 import { canNotify, askNotify, scheduleReminders, clearReminders } from './notify.js';
@@ -41,6 +41,7 @@ Object.assign(garden, { nearUse: NEAR_USE, nearR: NEAR_R, nearNeed: NEAR_NEED, s
 /** Remesure le voisinage des habitats d'ici, et ce que les semeurs découverts apportent aux oiseaux. */
 function updateNear() {
 	if (!state.eco2) return;
+	updateMoment();
 	garden.measureNear();
 	garden.sowBonus = guildEffect(state).sow;
 }
@@ -752,6 +753,16 @@ function tapCritter(hit, card) {
 	noteTap(state, sp.id);
 	renderDaily();
 	if (quest === sp.id) return winQuest(sp);
+	// Un visiteur du moment (de nuit, sous la pluie, l'hiver…) : le toucher le fait découvrir, une récompense d'être là.
+	if (!state.species[sp.id]) {
+		state.species[sp.id] = Date.now();
+		state.nectar = (state.nectar ?? 0) + 25;
+		updateSpeciesDot(); renderHud(); persist(true);
+		sound.chime(3);
+		garden.burst(hit.critter.x, hit.critter.y - 10, 14, '#F4C23E');
+		toast(`Découverte ${MOMENT_OF[garden.moment()] ?? 'rare'} : ${sp.name} · +25 nectar`, '#F08A3C', () => species.open(sp.id));
+		return;
+	}
 	const g = state.eco2 && guildOfSp(sp.id);
 	card.innerHTML = g ? `<b>${sp.name}</b><small class="item-tip">${GUILD_TEXT[g].name} : ${GUILD_TEXT[g].one}. Et +1 % à toute la production, comme chaque espèce.</small><span class="more">Sa fiche ›</span>`
 		: `<b>${sp.name}</b>${sp.latin}<span class="more">Découvre son rôle ›</span>`;
@@ -2364,6 +2375,33 @@ $('#deco').addEventListener('click', e => {
 $('#track-alert').addEventListener('click', async () => { sky.locate(true); await enableTracking(true); renderStatus(); });
 $('#btn-deco').addEventListener('click', () => openDeco(state.intro ? 'habitat' : currentMission()?.id === 'collector' ? 'recolte' : undefined));
 
+// ─── Le moment (soleil, pluie, nuit, hiver) : un bonus chacun, un badge dans le bandeau ───
+/** Le réglage « Ciel du jardin » : réel, toujours de jour, ou toujours beau (sans bonus du temps). */
+function applySkyMode() {
+	if (state.intro) return;
+	const m = state.skyMode ?? 'real';
+	garden.hourOverride = m === 'real' ? (params.has('h') ? parseFloat(params.get('h')) : null) : 13;
+	if (m === 'beau') { sky.override = 'clear'; sky.apply(false); }
+	else if (sky.override === 'clear' && m === 'real' && !params.has('weather')) { sky.override = null; sky.apply(false); }
+	garden.nextPopulate = 0;
+	updateMoment();
+}
+const MOMENT_OF = { nuit: 'de nuit', pluie: 'sous la pluie', hiver: 'd’hiver', soleil: 'au soleil', jour: 'rare' };
+/** Le moment du jardin, pour l'économie (state.moment) et le badge. Un ciel fixé (Options) n'a pas de bonus. */
+function updateMoment() {
+	const m = state.skyMode && state.skyMode !== 'real' ? 'jour' : garden.moment();
+	state.moment = m;
+	const chip = $('#sky-chip');
+	if (!chip) return;
+	chip.hidden = !state.eco2 || !!state.intro;
+	const M = MOMENTS[m];
+	chip.dataset.m = m;
+	chip.textContent = M.icon;
+	chip.title = `${M.name} : ${M.what}`;
+}
+$('#sky-chip')?.addEventListener('click', e => { e.stopPropagation(); const M = MOMENTS[state.moment ?? 'jour']; toast(`${M.name} : ${M.what}`, '#5F933E'); });
+setInterval(updateMoment, 15000);
+
 // ─── L'agencement et les familles d'espèces : ce que le joueur voit ───
 const PLANT_WORD = { herbe: ['herbe', 'herbes'], fleur: ['fleur', 'fleurs'], buisson: ['arbuste', 'arbustes'], arbre: ['arbre', 'arbres'] };
 /** « 4 fleurs, 1 arbuste » : ce qui compte pour cet habitat, autour de lui. */
@@ -2899,6 +2937,9 @@ function renderOptions() {
 		${optGroup('tech', 'Technique', 'Affichage, batterie')}
 		<h3>Effet miniature</h3>
 		<label class="switch"><input type="checkbox" id="opt-fx" ${fxOn() ? 'checked' : ''}><i></i><span>Haut et bas de l'écran un peu flous, bords adoucis : le jardin comme une maquette</span></label>
+		<h3>Ciel du jardin</h3>
+		<div class="seg" id="opt-sky">${[['real', 'Réel'], ['jour', 'Toujours de jour'], ['beau', 'Toujours beau']].map(([k, l]) => `<button data-sky="${k}" class="${(state.skyMode ?? 'real') === k ? 'on' : ''}">${l}</button>`).join('')}</div>
+		<p class="opt-help">Réel : la vraie heure, la vraie météo et la saison, avec leurs animaux et le bonus de chaque temps (soleil, pluie, nuit, hiver). Fixé : un jardin toujours lumineux, sans bonus du temps.</p>
 		<h3>Économie d'énergie</h3>
 		<label class="switch"><input type="checkbox" id="opt-eco" ${state.eco30 ? 'checked' : ''}><i></i><span>30 images par seconde : le téléphone chauffe moins, la batterie dure plus</span></label>
 		</details>
@@ -2986,6 +3027,8 @@ $('#options').addEventListener('click', async e => {
 	}
 	if (id === 'opt-restore') showRestore();
 	if (id === 'dev-hour-real') { garden.hourOverride = null; renderOptions(); }
+	const skyBtn = e.target.closest('[data-sky]');
+	if (skyBtn) { state.skyMode = skyBtn.dataset.sky; applySkyMode(); persist(true); renderOptions(); return; }
 	if (id === 'dev-sim') {
 		if (tracking.sim) { tracking.sim.stop(); tracking.sim = null; }
 		else {
@@ -3241,6 +3284,7 @@ if (Tuning.preview) {
 	// Une partie de test du joueur simulé commence juste après l'introduction.
 	if (state.intro) simSkipIntro();
 	renderSimBar();
+	if (!state.intro) applySkyMode();
 	if (state.intro) {
 		// Le temps de l'introduction, il fait beau, quel que soit le vrai ciel.
 		const realSky = sky.override;
