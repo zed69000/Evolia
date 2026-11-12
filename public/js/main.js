@@ -15,7 +15,7 @@ import { Soundscape } from './audio.js';
 import { ITEMS, ITEM_ORDER, itemHelp, itemCost, fitsPlace, CATS, MAX_LEVEL, LEVEL_NAME, LEVEL_KM, canLevel, levelCost, CABIN_STYLES, seedBirds, birdHelp } from './deco.js';
 import { VERSION } from './version.js';
 import { startIntro, INTRO_NECTAR, FLOWER, FLOWER_SEED } from './intro.js';
-import { makeQuiz, quizReady, streakMult, QUIZ_GAP, noteAnswer, QUIZ_MIN_PLANTS, QUIZ_MIN_ANIMALS } from './quiz.js';
+import { makeQuiz, quizReady, streakMult, QUIZ_GAP, QUIZ_PER_DAY, noteAnswer, QUIZ_MIN_PLANTS, QUIZ_MIN_ANIMALS, quizEnough } from './quiz.js';
 import { LADDER, isLadder, ladderPrice, ladderLock, nextUpgrade, unitProd, prodPerHour, produce, KM_HOURS, KM_VALUE_H, UPG_AT, REST, plantCover, ownedOf, PER_PARCEL, LEVEL_PROD, LEVEL_KM2, levelPrice, levelsOf, MOMENTS, NEAR_USE, NEAR_R, NEAR_NEED, SYN_PER, SYN_MAX, guildEffect, nearOf, itemProd, GUILD_BONUS } from './habitats.js';
 import { exportCode, importCode, backupAge } from './backup.js';
 import { DebugPanel, debugOn, setDebug, debugLog, ago, dur, trace, traceFlush } from './debug.js';
@@ -154,6 +154,16 @@ function nothingToDo() {
  * n'y a plus rien à faire, sans jamais valoir une sortie.
  */
 const quizBase = () => Math.max(15, Math.round((10 + 3 * Object.keys(state.species).length + prodPerHour(state) * 0.25) / 5) * 5);
+
+/** La ligne du quiz dans les défis du jour : quand il arrive, ou un bouton pour jouer. */
+function quizLine() {
+	if (!state.eco2 || state.intro) return '';
+	const qz = state.quiz ?? {}, today = qz.day === dayKey() ? qz.n ?? 0 : 0, wait = (qz.at ?? 0) + QUIZ_GAP - Date.now();
+	const what = !quizEnough(state) ? `Il arrive quand tu connais ${QUIZ_MIN_PLANTS} plantes et ${QUIZ_MIN_ANIMALS} animaux depuis au moins un jour.`
+		: today >= QUIZ_PER_DAY ? 'Fini pour aujourd’hui : reviens demain.'
+		: wait > 0 ? `Le prochain dans ${Math.ceil(wait / 3600000)} h.` : null;
+	return `<div class="quiz-line"><span class="ch-ico" aria-hidden="true">❓</span><div><b>Quiz des fiches</b><small>${what ?? `Trois questions sur tes espèces · ${fmtInt(quizBase())} nectar par bonne réponse`}</small></div>${what ? '' : '<button class="btn primary small" id="btn-quiz">Jouer</button>'}</div>`;
+}
 
 /** Proposer le quiz (une fenêtre qui explique, puis trois questions). `force` : outils du développeur. */
 function offerQuiz(force = false) {
@@ -1713,9 +1723,10 @@ function showDaily(gift = false) {
 	const goal = nextGoal(state);
 	showModal(`<div class="modal-body"><h2>${gift ? 'Bonjour !' : "Aujourd'hui"}</h2>
 		${weekHtml(state)}${top}
-		<h3 class="ch-title">Défis du jour</h3>${challengesHtml(state)}
+		<h3 class="ch-title">Défis du jour</h3>${challengesHtml(state)}${quizLine()}
 		${goal ? `<p class="next-line">${goal}</p>` : ''}${note}</div>
 		<div class="modal-foot">${ready ? '<button class="btn primary" id="btn-gift">Ouvrir le cadeau</button>' : '<button class="btn primary" data-close>Voir mon jardin</button>'}</div>`);
+	$('#btn-quiz')?.addEventListener('click', () => offerQuiz(true));
 	$('#btn-gift')?.addEventListener('click', () => {
 		const got = claimGift(state);
 		sound.chime(3);
@@ -2915,6 +2926,8 @@ function simDay() {
 	for (const p of PLACES) if (!state.placesOpen[p.id] && placeOpen(state, p)) state.placesOpen[p.id] = Date.now();
 	updateNear();
 	const bought = simBuy();
+	// Les espèces venues avec les habitats posés : le joueur lit aussi leur fiche.
+	for (const id of Object.keys(state.species)) if (!state.speciesSeen?.[id] && SPECIES_BY_ID[id]) { (state.speciesSeen ??= {})[id] = true; state.nectar += rr; }
 	updateNear();
 	checkUnlocks();
 	let quizN = 0;

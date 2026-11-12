@@ -3,6 +3,11 @@
 Chaque version, la plus récente en haut. Le site (evolia.sebastienalzamora.workers.dev) est toujours à jour ;
 le Play Store (tests internes) reçoit les versions indiquées « Play ».
 
+## 0.7.74 — 12 novembre 2026
+- **Page Espèces** : dans chaque section, les espèces découvertes d’abord, puis deux rangées d’espèces à découvrir au plus ; la dernière case dit combien il en reste (« … 42 à découvrir »). Au début du jeu aussi.
+- **Quiz des fiches** visible dans les défis du jour : il dit quand il arrive (« quand tu connais 4 plantes et 4 animaux depuis au moins un jour », « le prochain dans 2 h »…), ou propose « Jouer ».
+- Joueur simulé : il lit aussi les fiches des espèces venues avec les habitats.
+
 ## 0.7.73 — 12 novembre 2026
 Corrigé : de loin, les cadres blancs des parcelles se chevauchaient et cachaient la carte. Les étiquettes suivent maintenant la taille de la parcelle à l’écran : de très loin, juste le nom, en petit ; seules les parcelles voisines du jardin disent « Terre inconnue » ; une étiquette qui en recouvrirait une autre n’est pas dessinée ; un prix trop long est raccourci.
 

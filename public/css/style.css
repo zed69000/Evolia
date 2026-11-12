@@ -1078,3 +1078,12 @@ body:has(.panel.open) #debug { display: none; }
 @keyframes reveal-out { to { opacity: 0; transform: translateY(-20px) scale(.96); } }
 @keyframes reveal-pop { 0% { transform: scale(.3) rotate(-6deg); opacity: 0; } 100% { transform: scale(1) rotate(0); opacity: 1; } }
 @keyframes reveal-spin { to { transform: rotate(360deg); } }
+
+/* La case « … N à découvrir » d'une section d'espèces */
+.sp-more { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; opacity: .75; cursor: default; }
+.sp-more b { font-size: 26px; line-height: 1; color: var(--foret); }
+
+/* Le quiz des fiches dans les défis du jour */
+.quiz-line { display: flex; align-items: center; gap: 10px; padding: 10px 12px; margin-top: 8px; border-radius: 14px; background: rgba(95,147,62,.10); }
+.quiz-line > div { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.quiz-line small { color: var(--doux); font-size: 12.5px; }

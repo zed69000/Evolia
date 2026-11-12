@@ -129,17 +129,31 @@ export class Encyclopedia {
 		const st = this.state;
 		const known = SPECIES.filter(s => st.species[s.id]);
 		const ICON = { plantes: '🌿', insectes: '🐝', animaux: '🐦' };
+		// Les espèces du milieu de départ : celles venues au jardin, puis deux rangées à découvrir.
+		const home = SPECIES.filter(s => s.place === 'prairie' && s.kind !== 'milieu');
 		const sections = GROUPS.map(([g, title]) => {
-			const items = known.filter(s => groupOf(s) === g);
-			if (!items.length) return '';
-			return `<h3 class="sp-section"><span class="sp-ico">${ICON[g]}</span> ${g === 'insectes' ? 'Insectes' : title} <small>${items.length}</small></h3><div class="sp-grid">${items.map(s => this.cardHtml(s)).join('')}</div>`;
+			const items = home.filter(s => groupOf(s) === g), got = items.filter(s => st.species[s.id]).length;
+			if (!got) return '';
+			return `<h3 class="sp-section"><span class="sp-ico">${ICON[g]}</span> ${g === 'insectes' ? 'Insectes' : title} <small>${got} / ${items.length}</small></h3>${this.sectionGrid(items, s => this.cardHtml(s))}`;
 		}).join('');
 		this.panel.innerHTML = `
 			<div class="panel-head"><h2>Espèces</h2><button class="close" data-close-species aria-label="Fermer">×</button></div>
 			<p class="sp-intro">Les espèces venues dans ton jardin. Touche-en une pour lire sa fiche.</p>
 			${sections}`;
-		this.paintThumbs(known);
+		this.paintThumbs(home);
 		this.panel.scrollTop = 0;
+	}
+
+	/**
+	 * Une section : d'abord les espèces découvertes, puis deux rangées d'espèces à découvrir au plus ; la dernière case
+	 * dit combien il en reste. On ne dévoile jamais toute la liste d'un coup.
+	 */
+	sectionGrid(items, card) {
+		const st = this.state, known = items.filter(s => st.species[s.id]), locked = items.filter(s => !st.species[s.id]);
+		const ROWS = 2, COLS = 3, room = ROWS * COLS;
+		const shown = locked.length > room ? locked.slice(0, room - 1) : locked;
+		const more = locked.length - shown.length;
+		return `<div class="sp-grid">${known.map(card).join('')}${shown.map(card).join('')}${more ? `<div class="sp-card sp-more"><b>…</b><span class="sp-name">${more} à découvrir</span></div>` : ''}</div>`;
 	}
 
 	cardHtml(s) {
@@ -173,7 +187,7 @@ export class Encyclopedia {
 			const items = list.filter(s => groupOf(s) === g);
 			if (!items.length) return '';
 			const got = items.filter(s => st.species[s.id]).length;
-			return `${this.group === 'tout' ? `<h3 class="sp-section">${title} <small>${got} / ${items.length}</small></h3>` : ''}<div class="sp-grid">${items.map(card).join('')}</div>`;
+			return `${this.group === 'tout' ? `<h3 class="sp-section">${title} <small>${got} / ${items.length}</small></h3>` : ''}${this.sectionGrid(items, card)}`;
 		}).join('');
 		const count = g => (g === 'tout' ? list.length : list.filter(s => groupOf(s) === g).length);
 		this.panel.innerHTML = `
