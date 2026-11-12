@@ -25,7 +25,7 @@ export const ITEMS = {
 		levels: { max: 3, cost: [0, 0, 600, 2000], km: [0, 0, 10, 30], name: ['', 'petite cabane', 'cabane à auvent', 'chalet'] },
 		boxes: [null, null, { w: 220, h: 235, ax: 110, ay: 180 }, { w: 340, h: 255, ax: 125, ay: 195 }] },
 	abri: { cat: 'habitat', name: 'Un abri à hérisson', cost: 70, km: 6, turn: true, team: 'regulateur', power: 1, attracts: 'herisson', text: 'Une petite maison sous les feuilles, où il passe l’hiver.', box: { w: 90, h: 70, ax: 45, ay: 50 } },
-	ruche: { cat: 'habitat', name: 'Une ruche', cost: 100, km: 0, team: 'pollinisateur', power: 2, attracts: 'abeille', text: 'Une ruche en bois et sa colonie d’abeilles : 3 au départ, plus en l’améliorant. Elles pollinisent tes fleurs et font du miel, à troquer contre du nectar. Les fleurs les attirent.', box: { w: 84, h: 104, ax: 40, ay: 94 } },
+	ruche: { cat: 'habitat', name: 'Une ruche', cost: 100, km: 0, team: 'pollinisateur', power: 2, attracts: 'abeille', text: 'Une ruche en bois et sa colonie d’abeilles : 3 au départ, plus en l’améliorant. Elles pollinisent tes fleurs et font du miel, à troquer contre du nectar. Les fleurs les attirent.', box: { w: 84, h: 104, ax: 40, ay: 94 }, boxes: { 1: { w: 84, h: 104, ax: 40, ay: 94 }, 2: { w: 84, h: 120, ax: 40, ay: 110 }, 3: { w: 84, h: 136, ax: 40, ay: 126 }, 4: { w: 84, h: 152, ax: 40, ay: 142 }, 5: { w: 84, h: 168, ax: 40, ay: 158 } } },
 	bain: { cat: 'habitat', name: 'Un bain d’oiseaux', cost: 100, km: 8, team: 'semeur', power: 1, attracts: 'merle', text: 'De l’eau fraîche : les oiseaux reviennent, et sèment autour.', box: { w: 80, h: 90, ax: 40, ay: 80 } },
 	potager: { cat: 'recolte', name: 'Un carré de potager', cost: 90, km: 5, needs: 'cabane', team: 'semeur', power: 2, attracts: ['lapin', 'lievre'], text: 'Salades, choux et tomates, cultivés par ton fermier ou ta fermière, poussent quand tu marches. Pose les carrés côte à côte pour agrandir le potager.', box: { w: 150, h: 100, ax: 75, ay: 64 } },
 	sandarium: { cat: 'habitat', name: 'Un sandarium', cost: 70, km: 4, team: 'pollinisateur', power: 1, attracts: 'abeille', text: 'Un carré de sable au soleil : les abeilles sauvages qui nichent au sol y creusent leurs terriers.', box: { w: 130, h: 70, ax: 65, ay: 42 } },
@@ -611,7 +611,9 @@ function paintPoulailler(g, rot, lv = 1) {
  * Une ruche en bois, vue de trois quarts : trois hausses empilées avec leurs poignées, la fente d'entrée en bas,
  * un petit toit à deux pans et quatre pieds (d'après le dessin de référence de Seb).
  */
-function paintRuche(g) {
+/** La ruche : trois hausses au départ, une de plus à chaque niveau (sept au niveau remarquable). */
+function paintRuche(g, rot = 0, lv = 1) {
+	const H = 2 + Math.max(1, Math.min(5, lv)), up = (H - 3) * 16;
 	const d = rng(48);
 	shade(g, d, 34, 9);
 	const ink = rgba('#4A2E1A', 0.75);
@@ -635,9 +637,9 @@ function paintRuche(g) {
 	// Le plateau, puis les trois hausses, de bas en haut.
 	poly([[L - 2, -16], [R + 2, -16], [R + 2, -20], [L - 2, -20]], rgba('#9A6A3E', 0.97));
 	poly([[R + 2, -16], [R + S + 2, -16 + K], [R + S + 2, -20 + K], [R + 2, -20]], rgba('#7A5230', 0.97));
-	for (let k = 0; k < 3; k++) {
+	for (let k = 0; k < H; k++) {
 		const y1 = -20 - k * 16, y0 = y1 - 16;
-		const tone_ = ['#C99A5E', '#C3925A', '#CDA066'][k];
+		const tone_ = ['#C99A5E', '#C3925A', '#CDA066'][k % 3];
 		poly([[L, y1], [R, y1], [R, y0], [L, y0]], rgba(tone_, 0.97));
 		poly([[R, y1], [R + S, y1 + K], [R + S, y0 + K], [R, y0]], rgba('#A0733F', 0.97));
 		// Le fil du bois.
@@ -654,7 +656,7 @@ function paintRuche(g) {
 		g.fill();
 	}
 	// Le toit à deux pans : le pignon devant, le pan de côté qui fuit vers l'arrière.
-	const top = -68, ridge = -86;
+	const top = -68 - up, ridge = -86 - up;
 	poly([[L - 5, top], [(L + R) / 2, ridge], [(L + R) / 2 + S, ridge + K], [R + S + 5, top + K], [R + 5, top]], rgba('#8E5E36', 0.97));
 	poly([[L - 5, top], [(L + R) / 2, ridge], [R + 5, top]], rgba('#B8854E', 0.97));
 	wash(g, (L + R) / 2, top - 6, 10, 4, '#FFF4DC', d, { layers: 2, alpha: 0.08, edge: 0 });

@@ -3,6 +3,10 @@
 Chaque version, la plus récente en haut. Le site (evolia.sebastienalzamora.workers.dev) est toujours à jour ;
 le Play Store (tests internes) reçoit les versions indiquées « Play ».
 
+## 0.7.75 — 12 novembre 2026
+- **La ruche grandit pour de vrai** : une hausse de plus à chaque niveau (3 au départ, 7 au niveau remarquable), en plus des fleurs autour.
+- **Trois vues pour tourner un objet** : de face, de 3/4 droite, de 3/4 gauche. Les haies, murets et pas japonais gardent tous les angles pour se raccorder.
+
 ## 0.7.74 — 12 novembre 2026
 - **Page Espèces** : dans chaque section, les espèces découvertes d’abord, puis deux rangées d’espèces à découvrir au plus ; la dernière case dit combien il en reste (« … 42 à découvrir »). Au début du jeu aussi.
 - **Quiz des fiches** visible dans les défis du jour : il dit quand il arrive (« quand tu connais 4 plantes et 4 animaux depuis au moins un jour », « le prochain dans 2 h »…), ou propose « Jouer ».
