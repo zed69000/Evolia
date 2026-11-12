@@ -15,6 +15,7 @@ import { Soundscape } from './audio.js';
 import { ITEMS, ITEM_ORDER, itemHelp, itemCost, fitsPlace, CATS, MAX_LEVEL, LEVEL_NAME, LEVEL_KM, canLevel, levelCost, CABIN_STYLES, seedBirds, birdHelp } from './deco.js';
 import { VERSION } from './version.js';
 import { startIntro, INTRO_NECTAR, FLOWER, FLOWER_SEED } from './intro.js';
+import { makeQuiz, quizReady, streakMult, QUIZ_GAP } from './quiz.js';
 import { LADDER, isLadder, ladderPrice, ladderLock, nextUpgrade, unitProd, prodPerHour, produce, KM_HOURS, KM_VALUE_H, UPG_AT, REST, plantCover, ownedOf, PER_PARCEL, LEVEL_PROD, LEVEL_KM2, levelPrice, levelsOf, MOMENTS, NEAR_USE, NEAR_R, NEAR_NEED, SYN_PER, SYN_MAX, guildEffect, nearOf, itemProd, GUILD_BONUS } from './habitats.js';
 import { exportCode, importCode, backupAge } from './backup.js';
 import { DebugPanel, debugOn, setDebug, debugLog, ago, dur, trace, traceFlush } from './debug.js';
@@ -129,6 +130,103 @@ function countPurse(from, delay = 0, dur = 1400) {
 	};
 	requestAnimationFrame(step);
 }
+
+// ─── Le quiz des fiches (quiz.js) ───
+/**
+ * Plus rien à faire ? Rien d'achetable (habitat, amélioration, niveau, terrain, parcelle), aucune fiche à lire, pas
+ * de sortie en cours : c'est le moment du quiz.
+ */
+function nothingToDo() {
+	if (!state.eco2 || state.intro || session || unreadSpecies(state).length) return false;
+	const nectar = state.nectar ?? 0, prices = [];
+	for (const k of Object.keys(LADDER)) {
+		if (!ladderLock(state, k)) prices.push(ladderPrice(state, k));
+		const u = nextUpgrade(state, k); if (u?.ok) prices.push(u.cost);
+	}
+	for (const it of garden.items) { const nx = isLadder(it.kind) && nextLevel(it); if (nx?.ok) prices.push(nx.cost); }
+	if (growable() != null) prices.push(growPrice());
+	return !prices.some(p => p <= nectar);
+}
+
+/**
+ * Ce que rapporte une bonne réponse, avant la série : 10 nectar, plus 3 par espèce découverte, plus un quart d'heure
+ * de la production du jardin. Un quiz réussi vaut donc près d'une heure de production : un vrai coup de pouce quand il
+ * n'y a plus rien à faire, sans jamais valoir une sortie.
+ */
+const quizBase = () => Math.max(15, Math.round((10 + 3 * Object.keys(state.species).length + prodPerHour(state) * 0.25) / 5) * 5);
+
+/** Proposer le quiz (une fenêtre qui explique, puis trois questions). `force` : outils du développeur. */
+function offerQuiz(force = false) {
+	const qs = makeQuiz(state);
+	if (!qs) { if (force) toast('Lis au moins cinq fiches d’espèces pour avoir un quiz', '#9A7448'); return; }
+	const base = quizBase(), streak = state.quizStreak ?? 0;
+	showModal(`<h2>Le quiz des fiches</h2>
+		<p>Trois questions sur les espèces dont tu as lu la fiche. Chaque bonne réponse rapporte <b>${fmtInt(base)} nectar</b>, et ta <b>série</b> de bonnes réponses le multiplie : × 1,5, × 2… jusqu’à × 4. Une erreur la remet à zéro.</p>
+		${streak ? `<p class="item-tip">Ta série en cours : ${streak} bonne${streak > 1 ? 's' : ''} réponse${streak > 1 ? 's' : ''} (× ${fmtNum(streakMult(streak))}).</p>` : ''}
+		<button class="btn primary" id="quiz-go">Jouer</button>
+		<button class="btn ghost wide" id="quiz-later">Plus tard</button>`);
+	$('#quiz-go').onclick = () => runQuiz(qs, 0, { right: 0, gain: 0 });
+	// « Plus tard » : on le reproposera dans une demi-heure.
+	$('#quiz-later').onclick = () => { (state.quiz ??= {}).at = Date.now() - QUIZ_GAP + 30 * 60000; persist(); closeModal(); };
+}
+
+/** Une question du quiz ; puis la suivante, puis le bilan. */
+function runQuiz(qs, i, score) {
+	const q = qs[i];
+	showModal(`<h2>Question ${i + 1} sur ${qs.length}</h2>
+		<p class="quiz-q">${q.q}</p>
+		<div class="quiz-choices">${q.choices.map((c, k) => `<button class="btn ghost wide quiz-c" data-k="${k}">${c}</button>`).join('')}</div>
+		<p class="quiz-res" hidden></p>
+		<button class="btn primary" id="quiz-next" hidden>${i + 1 < qs.length ? 'Question suivante' : 'Voir le bilan'}</button>`);
+	const box = $('#modal');
+	box.querySelectorAll('.quiz-c').forEach(b => b.onclick = () => {
+		if (box.querySelector('.quiz-c.right, .quiz-c.wrong')) return;
+		const ok = q.choices[Number(b.dataset.k)] === q.right, res = box.querySelector('.quiz-res');
+		box.querySelectorAll('.quiz-c').forEach(x => { if (q.choices[Number(x.dataset.k)] === q.right) x.classList.add('right'); });
+		if (ok) {
+			const m = streakMult(state.quizStreak ?? 0), gain = Math.round(quizBase() * m);
+			state.quizStreak = (state.quizStreak ?? 0) + 1;
+			state.nectar = (state.nectar ?? 0) + gain;
+			score.right++; score.gain += gain;
+			const r = b.getBoundingClientRect();
+			rewardFly(gain, { x: r.left + r.width / 2, y: r.top + r.height / 2 });
+			sound.chime(2);
+			res.innerHTML = `Bonne réponse ! <b>+${fmtInt(gain)} nectar</b>${m > 1 ? ` (série × ${fmtNum(m)})` : ''}`;
+		} else {
+			b.classList.add('wrong');
+			state.quizStreak = 0;
+			res.innerHTML = `Ce n’était pas ça : la bonne réponse est en vert. <a href="#" data-quiz-sp="${q.sp}">Relire la fiche</a> · ta série repart de zéro.`;
+		}
+		res.hidden = false;
+		box.querySelector('#quiz-next').hidden = false;
+		renderHud(); persist(true);
+	});
+	box.querySelector('#quiz-next').onclick = () => (i + 1 < qs.length ? runQuiz(qs, i + 1, score) : endQuiz(qs, score));
+	box.querySelector('.quiz-res').onclick = e => { const a = e.target.closest('[data-quiz-sp]'); if (a) { e.preventDefault(); closeModal(); species.open(a.dataset.quizSp); } };
+}
+
+/** Le bilan du quiz : le score, le gain, et un bonus pour un sans-faute. */
+function endQuiz(qs, score) {
+	const qz = (state.quiz ??= {});
+	qz.n = (qz.n ?? 0) + 1;
+	qz.at = Date.now();
+	let bonus = 0;
+	if (score.right === qs.length) { bonus = quizBase(); state.nectar = (state.nectar ?? 0) + bonus; score.gain += bonus; }
+	persist(true); renderHud();
+	showModal(`<h2>${score.right === qs.length ? 'Sans-faute !' : score.right ? 'Bien joué' : 'La prochaine fois'}</h2>
+		<p>${score.right} bonne${score.right > 1 ? 's' : ''} réponse${score.right > 1 ? 's' : ''} sur ${qs.length} · <b>+${fmtInt(score.gain)} nectar</b>${bonus ? ` (dont ${fmtInt(bonus)} pour le sans-faute)` : ''}.</p>
+		<p class="item-tip">Série en cours : ${state.quizStreak ?? 0}. Elle continue au prochain quiz : lis bien tes fiches !</p>
+		<button class="btn primary" data-close>Voir mon jardin</button>`);
+	if (bonus) rewardFly(bonus);
+	sound.chime(3);
+}
+
+// De temps en temps : quand il n'y a plus rien à faire, le quiz se propose (trois par jour au plus, trois heures
+// d'écart au moins).
+setInterval(() => {
+	if (!$('#modal').hidden || document.querySelector('.panel.open') || placing || document.hidden) return;
+	if (quizReady(state, dayKey()) && nothingToDo()) whenFree(() => $('#modal').hidden && offerQuiz());
+}, 60000);
 
 /**
  * Lire une fiche rapporte de plus en plus : 10 nectar, plus 3 par espèce déjà découverte, plus six minutes de la
@@ -618,7 +716,7 @@ function announceSpecies(quiet = false) {
 		// Trop de fiches en attente : on le dit (tous les quarts d'heure au plus), et le message ouvre la première.
 		state.readNudgeAt = Date.now();
 		const first = unreadSpecies(state)[0];
-		toast('De nouvelles espèces attendent : lis d’abord tes fiches marquées Nouveau (+10 nectar)', '#F08A3C', () => species.open(first));
+		toast(`De nouvelles espèces attendent : lis d’abord tes fiches marquées Nouveau (+${fmtInt(readReward())} nectar chacune)`, '#F08A3C', () => species.open(first));
 	}
 	const opened = PLACES.filter(p => !state.placesOpen[p.id] && placeOpen(state, p));
 	for (const p of opened) state.placesOpen[p.id] = Date.now();
@@ -872,7 +970,8 @@ const MISSIONS = [
 const MISSION_REWARD = 30;
 
 function currentMission() {
-	if (state.onboarded || state.intro) return null;
+	// Les nouvelles parties n'ont plus ces premières missions (gouttes, collecteur) : l'introduction les remplace.
+	if (state.onboarded || state.intro || state.eco2) return null;
 	return MISSIONS.find(m => !(state.missions ??= {})[m.id]) ?? null;
 }
 
@@ -2765,10 +2864,18 @@ function simDay() {
 	const bought = simBuy();
 	updateNear();
 	checkUnlocks();
+	let quizN = 0;
+	if (bought.length < 3 && Object.keys(state.speciesSeen ?? {}).length >= 5) {
+		for (let q = 0; q < 3; q++) {
+			if (Math.random() < 0.7) { const g = Math.round(quizBase() * streakMult(state.quizStreak ?? 0)); state.quizStreak = (state.quizStreak ?? 0) + 1; state.nectar += g; quizN += g; }
+			else state.quizStreak = 0;
+		}
+	}
 	state.prodAt = Date.now();
 	state.boostUntil = Date.now();
 	const row = { day, km: Math.round(km * 10) / 10, walk: Math.round(walkN), prod: Math.round(prodN), read: found.length * rr, bought, species: found.map(s => s.name), total: Object.keys(state.species).length, perH: Math.round(prodPerHour(state)) };
-	row.gain = row.walk + row.prod + row.read;
+	row.quiz = quizN;
+	row.gain = row.walk + row.prod + row.read + quizN;
 	state.sim.log.push(row);
 	if (state.sim.log.length > 120) state.sim.log.shift();
 	return row;
@@ -2790,7 +2897,7 @@ function simAdvance(n) {
 	showModal(`<div class="modal-body"><h2>Fin du jour ${last.day}</h2>
 		<p>${P.name} · ${n > 1 ? `${n} jours simulés, ${fmt(sum('km'))} km` : last.km ? `${fmt(last.km)} km aujourd’hui` : 'pas de sortie aujourd’hui'}.</p>
 		<ul class="sim-sum">
-			<li><b>Nectar gagné</b> : ${fmtInt(sum('gain'))} (marche ${fmtInt(sum('walk'))}, habitats ${fmtInt(sum('prod'))}, fiches ${fmtInt(sum('read'))})</li>
+			<li><b>Nectar gagné</b> : ${fmtInt(sum('gain'))} (marche ${fmtInt(sum('walk'))}, habitats ${fmtInt(sum('prod'))}, fiches ${fmtInt(sum('read'))}, quiz ${fmtInt(rows.reduce((a, r) => a + (r.quiz ?? 0), 0))})</li>
 			<li><b>Achats</b> : ${buys.length ? Object.entries(count).map(([k, v]) => `${k}${v > 1 ? ` × ${v}` : ''}`).join(', ') : 'aucun'}</li>
 			<li><b>Espèces</b> : ${rows.reduce((a, r) => a + r.species.length, 0)} nouvelles, ${last.total} en tout${n === 1 && last.species.length ? ` (${last.species.join(', ')})` : ''}</li>
 			<li><b>Production</b> : ${fmtInt(last.perH)} nectar par heure d’élan · bourse : ${fmtInt(state.nectar)}</li>
@@ -3066,6 +3173,7 @@ function renderOptions() {
 			<button id="dev-km10">+10 km (ouvrir des milieux)</button>
 			<button id="dev-nectar">+500 nectar</button>
 			<button id="dev-day">Nouveau jour (cadeau et défis)</button>
+			<button id="dev-quiz">Lancer un quiz des fiches</button>
 			<button id="dev-reset" class="danger">Effacer le jardin</button>
 </div>` : ''}
 		</details>`;
@@ -3128,6 +3236,7 @@ $('#options').addEventListener('click', async e => {
 	}
 	if (id === 'opt-restore') showRestore();
 	if (id === 'dev-hour-real') { garden.hourOverride = null; renderOptions(); }
+	if (id === 'dev-quiz') { closeOptions(); return offerQuiz(true); }
 	const skyBtn = e.target.closest('[data-sky]');
 	if (skyBtn) { state.skyMode = skyBtn.dataset.sky; applySkyMode(); persist(true); renderOptions(); return; }
 	if (id === 'dev-sim') {

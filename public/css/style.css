@@ -1050,3 +1050,11 @@ body:has(.panel.open) #debug { display: none; }
 
 /* La volée de récompense passe au-dessus de tout (fenêtres comprises). */
 .reward-coin { z-index: 2000; }
+
+/* Le quiz des fiches */
+.quiz-q { font-weight: 700; font-size: 15px; line-height: 1.45; }
+.quiz-choices { display: flex; flex-direction: column; gap: 8px; margin: 10px 0; }
+.quiz-c { text-align: left; white-space: normal; line-height: 1.35; height: auto; padding: 10px 12px; }
+.quiz-c.right { border-color: #5F933E; background: rgba(95,147,62,.16); color: #2F5A1E; }
+.quiz-c.wrong { border-color: #C0442F; background: rgba(192,68,47,.12); color: #8A2A1A; }
+.quiz-res { font-size: 14px; }

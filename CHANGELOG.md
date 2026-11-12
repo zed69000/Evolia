@@ -3,6 +3,16 @@
 Chaque version, la plus récente en haut. Le site (evolia.sebastienalzamora.workers.dev) est toujours à jour ;
 le Play Store (tests internes) reçoit les versions indiquées « Play ».
 
+## 0.7.71 — 12 novembre 2026
+Le quiz des fiches (nouvelles parties) :
+- Quand il n’y a plus rien à acheter ni de fiche à lire, un quiz de trois questions se propose (trois par jour au plus, trois heures d’écart) : « Quelle espèce ? » (un fait de sa fiche, nom caché), « À quoi sert… ? », « Comment aider… ? », « Où vit… ? », sur les espèces dont on a lu la fiche.
+- Chaque bonne réponse rapporte 10 nectar, plus 3 par espèce découverte, plus un quart d’heure de production, multiplié par la série de bonnes réponses (× 1,5, × 2… jusqu’à × 4, elle continue d’un quiz à l’autre) ; un sans-faute ajoute un bonus. Le nectar s’envole vers la bourse. Une erreur montre la bonne réponse et propose de relire la fiche.
+- Équilibre (joueur simulé) : un quiz vaut environ 9 % des gains de la journée, jusqu’à un quart avec trois ; il vient surtout quand on est à court d’achats.
+- Outils du développeur : « Lancer un quiz des fiches ».
+Corrigé :
+- Les premières missions de l’ancienne économie (gouttes, collecteur) tournaient encore, invisibles, dans les nouvelles parties.
+- Le message « lis d’abord tes fiches » annonce le vrai gain d’une fiche.
+
 ## 0.7.70 — 12 novembre 2026
 Les récompenses se voient, et grandissent (nouvelles parties) :
 - **Lire une fiche rapporte de plus en plus** : 10 nectar, plus 3 par espèce découverte, plus six minutes de la production du jardin (par exemple 330 nectar avec 29 espèces au jour 7). La liste l’annonce (« Nouveau · +330 »). Un visiteur du moment découvert rapporte le double.
