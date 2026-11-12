@@ -1105,8 +1105,9 @@ export class Garden {
 			...(place.items ?? []).map(it => ({ x: it.x - cellOrigin(ci)[0], y: it.y - cellOrigin(ci)[1] - itemBox(it.kind, it.level).ay * 0.3, rad: itemBox(it.kind, it.level).w * 0.5 })),
 		];
 		const same = here.filter(p => p.type === type);
+		const feet = (place.items ?? []).map(it => this.footprint(it));
 		const y0 = this.minY(pid, type, ci), H = PARCEL_H;
-		let best = { x: PARCEL_W / 2, y: H / 2 }, bestScore = -Infinity;
+		let best = { x: PARCEL_W / 2, y: H / 2, gap: -Infinity }, bestScore = -Infinity;
 		for (let i = 0; i < 90; i++) {
 			let x, y, near = false;
 			// L'herbe s'étend en pelouse depuis ses touffes ; les fleurs se sèment en massifs, près des leurs.
@@ -1130,11 +1131,13 @@ export class Garden {
 			const wx = cellOrigin(ci)[0] + x, wy = cellOrigin(ci)[1] + y;
 			if (!this.inBlob(this.blob(ci), wx, wy, type === 'arbre' ? 50 : 26)) continue;
 			if (keepOut(this.at, wx, wy, type === 'arbre' ? 30 : 8)) continue;
+			// Jamais sous un objet ni juste derrière lui (une ruche, un nichoir cachent ce qui pousse dans leur dos).
+			if (feet.some(f => wx > f.x0 - sp * 0.5 && wx < f.x1 + sp * 0.5 && wy > f.y0 - sp * 0.3 && wy < f.y1 + sp * 0.4)) continue;
 			let gap = Infinity;
 			for (const o of obstacles) gap = Math.min(gap, Math.hypot(o.x - x, (o.y - y) * 1.25) - o.rad - sp);
 			// Les petites plantes se regroupent en touffes ; les arbres cherchent de l'espace.
 			const score = (gap >= 0 ? 1000 : gap) + (near ? 30 : 0) + (type === 'arbre' || type === 'buisson' ? Math.min(gap, 40) : 0) + Math.random() * 20;
-			if (score > bestScore) { bestScore = score; best = { x, y }; }
+			if (score > bestScore) { bestScore = score; best = { x, y, gap }; }
 		}
 		return best;
 	}
@@ -1166,9 +1169,17 @@ export class Garden {
 		let p = place.plants.find(q => q.type === type && q.growth < 1);
 		while (amount > 1e-6) {
 			if (!p) {
-				const ci = this.cellFor(pid, type);
-				p = this.spawn(pid, type, 0, this.place_(pid, type, ci), ci);
-				events.push({ kind: 'seed', plant: p, pid });
+				const spot = this.roomFor(pid, type);
+				if (spot) {
+					p = this.spawn(pid, type, 0, spot.pos, spot.ci);
+					events.push({ kind: 'seed', plant: p, pid });
+				} else if (type === 'fleur') {
+					// Plus de place libre : la plus ancienne fleur fane et refleurit sur place, sans se serrer contre les autres.
+					p = place.plants.filter(q => q.type === 'fleur' && !q.intro && q.growth >= 1).sort((a, b) => (a.born ?? 0) - (b.born ?? 0))[0];
+					if (!p) break;
+					p.growth = 0.35; p.born = Date.now();
+					this.meta?.delete?.(p.id);
+				} else break;
 			}
 			const used = Math.min((1 - p.growth) * cost, amount);
 			p.growth = Math.min(1, p.growth + used / cost);
@@ -1211,14 +1222,20 @@ export class Garden {
 		// c'est là, près d'eux, que viendront arbustes et arbres. Placer ses nichoirs, c'est choisir où pousse la forêt.
 		const nests = byBirds ? this.itemsIn(ci, ['nichoir', 'mangeoire']) : [];
 		const home = nests.length ? pick(nests) : null, [cx0, cy0] = cellOrigin(ci);
-		const pos = this.place_(pid, next.type, ci, home ? { x: home.x - cx0, y: home.y - cy0 + 30 } : parent);
+		let pos = this.place_(pid, next.type, ci, home ? { x: home.x - cx0, y: home.y - cy0 + 30 } : parent), cs = ci;
+		// Plus de place près du nid : les oiseaux portent la graine plus loin, là où il y a de la place ; nulle part, elle ne lève pas.
+		if (pos.gap < -PLANT_TYPES[next.type].spacing * 0.2) {
+			const spot = this.roomFor(pid, next.type);
+			if (!spot) return;
+			pos = spot.pos; cs = spot.ci;
+		}
 		const nest = byBirds && place.items.some(it => it.kind === 'nichoir');
 		const by = nest && Math.random() < 0.5 ? 'une mésange' : pick(next.by[this.biomeOf(ci)] ?? next.by.default);
-		const p = this.spawn(pid, next.type, next.start, pos, ci);
+		const p = this.spawn(pid, next.type, next.start, pos, cs);
 		p.sown = by;
 		events.push({ kind: 'sown', plant: p, pid, by });
 		{
-			const [ox, oy] = cellOrigin(ci);
+			const [ox, oy] = cellOrigin(cs);
 			this.burst(ox + p.x, oy + p.y - 6, 8);
 		}
 	}
@@ -1227,6 +1244,30 @@ export class Garden {
 	 * Parcelle où planter la prochaine graine d'un type : celle qui en manque le plus, pour que toutes se remplissent
 	 * en gardant leurs proportions ; un coin accueille plus volontiers son type favori, la parcelle regardée passe un peu devant.
 	 */
+	/** Une place libre pour une nouvelle plante : d'abord la parcelle qui en manque le plus, sinon une autre qui a de
+	 * la place. null si toutes sont pleines (l'herbe, elle, trouve toujours sa place : une pelouse peut être dense). */
+	roomFor(pid, type) {
+		// Jardin plein : on ne refait la recherche (coûteuse avec des centaines de plantes) qu'une fois sur 12.
+		this.full ??= {};
+		const key = pid + type;
+		if (this.full[key] > 0) { this.full[key]--; return null; }
+		const found = this.roomFor_(pid, type);
+		if (!found) this.full[key] = 12;
+		return found;
+	}
+	roomFor_(pid, type) {
+		const first = this.cellFor(pid, type), sp = PLANT_TYPES[type].spacing, ok = pos => type === 'herbe' || pos.gap >= -sp * 0.2;
+		let pos = this.place_(pid, type, first);
+		if (ok(pos)) return { pos, ci: first };
+		const n = cellsOpen(this.state.places[pid]);
+		for (let k = 1; k < n; k++) {
+			const ci = (first + k) % n;
+			pos = this.place_(pid, type, ci);
+			if (ok(pos)) return { pos, ci };
+		}
+		return null;
+	}
+
 	cellFor(pid, type) {
 		const place = this.state.places[pid];
 		const n = cellsOpen(place);

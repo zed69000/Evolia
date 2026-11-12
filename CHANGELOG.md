@@ -3,6 +3,11 @@
 Chaque version, la plus récente en haut. Le site (evolia.sebastienalzamora.workers.dev) est toujours à jour ;
 le Play Store (tests internes) reçoit les versions indiquées « Play ».
 
+## 0.7.87 — 13 novembre 2026
+- **Un jardin plein ne s'entasse plus** : quand une parcelle n'a plus de place, une nouvelle plante va dans une autre parcelle qui en a ; s'il n'y en a nulle part, la plus ancienne fleur fane et refleurit sur place, et les oiseaux ne sèment plus de force. Testé sur 90 jours avec quatre profils : chez un grand sportif, 6 plantes qui se chevauchent au lieu de 4 564, et 10 arbres au plus par parcelle au lieu de 64 ; les découvertes d'espèces ne changent pas.
+- Plus rien ne pousse sous un habitat ou juste derrière (une ruche ou un nichoir cachaient les fleurs dans leur dos).
+- Quand il n'y a plus de place près du nichoir, les oiseaux sèment plus loin, là où il y en a.
+
 ## 0.7.86 — 12 novembre 2026
 - Les grandes fleurs (coquelicot, bleuet…) poussent toujours en touffe, mais leurs tiges s'écartent et penchent vers l'extérieur : les têtes ne se recouvrent plus. Un peu plus d'espace entre deux fleurs.
 
