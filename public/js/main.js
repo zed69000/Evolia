@@ -2769,14 +2769,16 @@ function renderSimBar() {
 		bar.addEventListener('input', e => { if (e.target.id === 'sim-days') $('#sim-days-v').textContent = `jour ${e.target.value}`; });
 		bar.addEventListener('change', e => { if (e.target.id === 'sim-days') { const to = Number(e.target.value); if (to > state.sim.day) simAdvance(to - state.sim.day); } });
 		bar.addEventListener('click', e => {
+			if (e.target.closest('#sim-fold')) { bar.classList.toggle('open'); return renderSimBar(); }
 			if (e.target.closest('#sim-next')) simAdvance(1);
 			if (e.target.closest('#sim-redo') && confirm('Recommencer ce scénario au jour 0 ?')) startSimGame(state.sim.profile, true);
 		});
 	}
-	const d = state.sim.day;
-	bar.innerHTML = `<div class="sim-top"><b>${SIM_PROFILES[state.sim.profile].name}</b><span>fin du jour ${d}</span><span id="sim-days-v">jour ${d}</span></div>
-		<input type="range" id="sim-days" min="${d}" max="${Math.max(30, d + 30)}" step="1" value="${d}">
-		<div class="sim-btns"><button id="sim-next">Jour suivant</button><button id="sim-redo">Recommencer</button></div>`;
+	const d = state.sim.day, open = bar.classList.contains('open');
+	// Une pastille discrète (profil, jour, +1 jour) ; dépliée, la glissière des jours et « Recommencer ».
+	bar.innerHTML = `<div class="sim-top"><button id="sim-fold" aria-label="${open ? 'Replier' : 'Déplier'}">${open ? '▾' : '▸'}</button><b>${SIM_PROFILES[state.sim.profile].name.split(' ').slice(-1)[0]}</b><span id="sim-days-v">jour ${d}</span><button id="sim-next">+1 jour</button></div>
+		${open ? `<input type="range" id="sim-days" min="${d}" max="${Math.max(30, d + 30)}" step="1" value="${d}">
+		<div class="sim-btns"><button id="sim-redo">Recommencer</button></div>` : ''}`;
 }
 
 /** Au chargement d'une partie de test neuve : on saute l'introduction, comme si on venait de la finir. */

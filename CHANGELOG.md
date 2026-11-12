@@ -3,6 +3,9 @@
 Chaque version, la plus récente en haut. Le site (evolia.sebastienalzamora.workers.dev) est toujours à jour ;
 le Play Store (tests internes) reçoit les versions indiquées « Play ».
 
+## 0.7.78 — 12 novembre 2026
+- Joueur simulé (outils du développeur) : sa barre devient une petite pastille en bas à gauche (profil, jour, « +1 jour ») ; la flèche la déplie (glissière des jours, « Recommencer »). Elle ne recouvre plus le haut de l’écran et se cache quand une page est ouverte.
+
 ## 0.7.77 — 12 novembre 2026
 - Trois vues pour tous les objets qui se tournent, haies, murets et pas japonais compris : de face, de 3/4 droite, de 3/4 gauche.
 
