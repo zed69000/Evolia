@@ -2323,10 +2323,38 @@ function simSkipIntro() {
 }
 
 /** Les achats d'un joueur : le terrain d'abord, puis une parcelle si possible, puis ce qui rapporte le plus pour son prix. */
+// Combien d'exemplaires un joueur pose de chaque aménagement hors échelle (il aime voir son jardin varié).
+const SIM_WANT = { potager: 3, cabane: 1, poulailler: 1, compost: 1, pas: 6, haie: 4, muret: 3 };
+const simWant = k => SIM_WANT[k] ?? (ITEMS[k].cat === 'decoration' ? 2 : 2);
+
+/** Pose un objet sur une place libre d'une parcelle où il a sa place ; faux s'il n'y en a pas. */
+function simPlace(k) {
+	const cells = garden.openCells().filter(ci => fitsPlace(k, garden.biomeOf(ci)));
+	for (let t = 0; t < 4 && cells.length; t++) {
+		const ci = cells[Math.floor(Math.random() * cells.length)], [cx, cy] = garden.cellCenter(ci);
+		const spot = garden.nearestPlace(k, cx + simRnd(-130, 130), cy + simRnd(-320, 320));
+		if (!spot || garden.cellAt(spot[0], spot[1]) < 0) continue;
+		const it = garden.placeItem(k, spot[0], spot[1], ITEMS[k].turn && Math.random() < 0.5 ? 1 : 0);
+		it.paid = priceOf(k);
+		if (k === 'cabane' && !state.gardener) { state.gardener = Math.random() < 0.5 ? 'fermier' : 'fermiere'; state.pet = ['chien', 'chat', null][Math.floor(Math.random() * 3)]; }
+		return true;
+	}
+	return false;
+}
+
 function simBuy() {
 	const bought = [], full = new Set();
 	for (let g = 0; g < 300; g++) {
-		const nectar = state.nectar ?? 0, o = [];
+		const nectar = state.nectar ?? 0, o = [], km = state.totals.distance / 1000;
+		// Les aménagements hors échelle : dès qu'ils coûtent moins d'un quart de la bourse.
+		for (const k of ITEM_ORDER) {
+			const it = ITEMS[k];
+			if (isLadder(k) || k === 'collecteur' || full.has(k) || ownedCount(k) >= simWant(k)) continue;
+			if (km < it.km || needsFirst(k) || natureLock(k)) continue;
+			const c = priceOf(k);
+			if (c > nectar * 0.25) continue;
+			o.push({ label: simName(k), c, v: 1e7 - c, go: () => { if (!simPlace(k)) { full.add(k); return false; } state.nectar -= c; } });
+		}
 		const gi = growable();
 		if (gi != null) o.push({ label: 'terrain', c: growPrice(), v: 1e9, go: () => { paid(growPrice(), true); garden.growCell(gi); } });
 		else {
@@ -2338,11 +2366,8 @@ function simBuy() {
 			if (ladderLock(state, k) || full.has(k)) continue;
 			const c = ladderPrice(state, k);
 			o.push({ label: simName(k), c, v: unitProd(state, k) / c, go: () => {
-				const cells = garden.openCells(), ci = cells[Math.floor(Math.random() * cells.length)], [cx, cy] = garden.cellCenter(ci);
-				const spot = garden.nearestPlace(k, cx + simRnd(-120, 120), cy + simRnd(-300, 300));
-				if (!spot) { full.add(k); return false; }
+				if (!simPlace(k)) { full.add(k); return false; }
 				state.nectar -= c;
-				garden.placeItem(k, spot[0], spot[1]);
 			} });
 			const u = nextUpgrade(state, k);
 			if (u?.ok) o.push({ label: `amélioration (${simName(k)})`, c: u.cost, v: ownedOf(state, k) * unitProd(state, k) / u.cost, go: () => { state.nectar -= u.cost; (state.upg ??= {})[k] = u.level; } });
@@ -2369,8 +2394,16 @@ function simDay() {
 	else if (P.other) { km = simRnd(...P.other); kmh = 4.8; }
 	let walkN = 0, prodN;
 	if (km > 0) {
-		const m = km * 1000, act = activityFor(kmh), effort = effortFor(m, kmh, act), minutes = km / kmh * 60;
+		// Une sortie a plusieurs allures : l'essentiel à son rythme, un bout plus vite, un bout plus lentement.
+		const parts = [[0.65, kmh], [0.2, kmh + simRnd(1, 2.5)], [0.15, Math.max(3, kmh - simRnd(0.5, 1.5))]];
 		const before = state.nectar ?? 0;
+		let effort = 0, minutes = 0;
+		for (const [share, v] of parts) {
+			const mm = km * 1000 * share, act = activityFor(v), e = effortFor(mm, v, act);
+			effort += e; minutes += mm / 1000 / v * 60;
+			for (let i = 0; i < 4; i++) growMix(act.plant, e / 4);
+		}
+		const m = km * 1000;
 		addDistance(state, m);
 		here().km += km;
 		state.totals.steps += Math.round(m / STEP_LENGTH_M);
@@ -2378,7 +2411,6 @@ function simDay() {
 		addDayEffort(state, effort);
 		addWaiting(state, effort * nectarPerEffort(), false, state.place);
 		state.nectar += km * KM_HOURS * prodPerHour(state);
-		for (let i = 0; i < 8; i++) growMix(act.plant, effort / 8);
 		addEffortXp(effort);
 		if (km >= (state.goalKm ?? 2.5)) state.nectar += goalReward();
 		walkN = state.nectar - before;
@@ -3019,7 +3051,8 @@ if (Tuning.preview) {
 			},
 			onDone: () => { sky.override = realSky; sky.apply(); renderDaily(); renderStatus(); setTimeout(offerHarvest, 600); },
 		});
-	} else if (firstRun) {
+	} else if (firstRun && !state.sim) {
+		// L'ancien tutoriel, pour une partie sans introduction (jamais pour une partie du joueur simulé).
 		setTimeout(() => coach(0), 1600);
 	} else {
 		runIdle(true);

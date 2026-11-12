@@ -1,2 +1,2 @@
-export const VERSION = '0.7.57';
+export const VERSION = '0.7.58';
 window.GAME_VERSION = VERSION; // read by the studio kit

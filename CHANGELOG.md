@@ -3,6 +3,12 @@
 Chaque version, la plus récente en haut. Le site (evolia.sebastienalzamora.workers.dev) est toujours à jour ;
 le Play Store (tests internes) reçoit les versions indiquées « Play ».
 
+## 0.7.58 — 12 novembre 2026
+Joueur simulé (outils du développeur), plus proche d’un vrai joueur :
+- Chaque sortie a plusieurs allures (l’essentiel à son rythme, un bout plus vite, un bout plus lentement) : fleurs, arbustes et arbres poussent comme dans une vraie balade, dès les premiers jours.
+- Il pose aussi tous les autres aménagements quand ils s’ouvrent : tas de bois et de pierres, mangeoire, sandarium, abri, bain d’oiseaux, muret, cabane (fermier ou fermière, compagnon), potager, poulailler, compost, bancs, lanternes, arche, pas japonais…, chacun dans les parcelles où il a sa place.
+- L’ancien tutoriel ne s’ouvre plus sur une partie de test.
+
 ## 0.7.57 — 12 novembre 2026
 Corrigé, dans l’introduction :
 - Pincer le jardin à deux doigts effaçait l’interface pour de bon : le bouton Espèces disparaissait et on restait bloqué sur « Touche Espèces ». Le verrou du tutoriel ne bloque plus le relâcher du doigt ; c’est le jardin qui ignore les touchers et les gestes pendant l’introduction, et l’interface revient toujours.
