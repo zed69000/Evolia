@@ -1000,3 +1000,12 @@ body:has(.panel.open) #debug { display: none; }
 .sim-log { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 8px; }
 .sim-log th, .sim-log td { padding: 4px 6px; text-align: right; border-bottom: 1px solid rgba(0,0,0,.08); }
 .sim-log th:first-child, .sim-log td:first-child { text-align: left; }
+
+/* Mode test : la glissière des jours du joueur simulé, dans le jeu */
+#sim-bar { position: absolute; left: 12px; right: 12px; top: calc(env(safe-area-inset-top, 0px) + 64px); z-index: 30; padding: 10px 14px; font: 600 13px Nunito, sans-serif; }
+#sim-bar .sim-top { display: flex; gap: 10px; align-items: baseline; }
+#sim-bar .sim-top span:last-child { margin-left: auto; color: var(--foret); font-weight: 800; }
+#sim-bar input { width: 100%; margin: 8px 0 4px; }
+#sim-bar .sim-btns { display: flex; gap: 8px; }
+#sim-bar button { font: 700 13px Nunito, sans-serif; padding: 6px 12px; border-radius: 10px; border: 1.5px solid var(--foret); color: var(--foret); background: none; }
+#app.placing #sim-bar, #app.booting #sim-bar { display: none; }

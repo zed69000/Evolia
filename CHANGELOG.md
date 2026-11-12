@@ -3,6 +3,11 @@
 Chaque version, la plus récente en haut. Le site (evolia.sebastienalzamora.workers.dev) est toujours à jour ;
 le Play Store (tests internes) reçoit les versions indiquées « Play ».
 
+## 0.7.56 — 12 novembre 2026
+Outils du développeur, plus simples :
+- Options › Outils du développeur › Mode test : une glissière « Joueur simulé » (Désactivé, Sédentaire, Marcheur occasionnel, Marcheur régulier, Marcheur rapide, Coureur, Grand sportif). On la lâche sur un sportif : sa partie de test s’ouvre (reprise si elle existe déjà). Sur « Désactivé » : retour à la vraie partie.
+- Dans le jeu, une glissière des jours : on la tire jusqu’au jour voulu, on lâche, et la simulation avance ; boutons « Jour suivant » et « Recommencer ».
+
 ## 0.7.55 — 12 novembre 2026
 Outils du développeur (Options › Outils du développeur › Mode test) :
 - Joueur simulé : trois scénarios (Peu actif, Marcheur régulier, Sportif). Chacun ouvre une partie à part, juste après l’introduction ; la vraie partie reste intacte dans Mes parties.

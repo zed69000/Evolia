@@ -2236,19 +2236,64 @@ $('#btn-deco').addEventListener('click', () => openDeco(state.intro ? 'habitat' 
 // lues), l'objectif du jour, et des achats faits comme un joueur : terrain, parcelles, habitats posés dans le jardin,
 // améliorations. On voit ainsi le jardin tel qu'il serait à la fin du jour 1, 2, 3… Dans une partie à part.
 const SIM_PROFILES = {
-	calme: { name: 'Peu actif', text: '1,5 km de marche tranquille, 6 jours sur 10', km: [0.8, 2.2], kmh: 4.5, p: 0.6 },
-	marcheur: { name: 'Marcheur régulier', text: '3,5 km de marche, presque tous les jours', km: [2.5, 4.5], kmh: 5, p: 0.85 },
-	sportif: { name: 'Sportif', text: '8 km de course, 8 jours sur 10, un peu de marche les autres', km: [5, 11], kmh: 10, p: 0.8, other: [0.5, 1.5] },
+	sedentaire: { name: 'Sédentaire', text: 'moins d’1 km, un jour sur deux', km: [0.2, 1], kmh: 3.8, p: 0.45 },
+	occasionnel: { name: 'Marcheur occasionnel', text: '1 à 2,5 km, 6 jours sur 10', km: [1, 2.5], kmh: 4.5, p: 0.6 },
+	regulier: { name: 'Marcheur régulier', text: '2,5 à 4,5 km, presque tous les jours', km: [2.5, 4.5], kmh: 5, p: 0.85 },
+	rapide: { name: 'Marcheur rapide', text: '3 à 6 km à 6 km/h, presque tous les jours', km: [3, 6], kmh: 6, p: 0.85 },
+	coureur: { name: 'Coureur', text: '5 à 10 km de course, 6 jours sur 10', km: [5, 10], kmh: 10, p: 0.6, other: [0.5, 1.5] },
+	grand: { name: 'Grand sportif', text: '10 à 20 km de course, presque tous les jours', km: [10, 20], kmh: 10, p: 0.9, other: [1, 3] },
 };
+const SIM_ORDER = ['off', ...Object.keys(SIM_PROFILES)];
+// Les parties de test de la 0.7.55 avaient trois profils : ils prennent leur équivalent.
+if (state.sim && !SIM_PROFILES[state.sim.profile]) state.sim.profile = { calme: 'occasionnel', marcheur: 'regulier', sportif: 'coureur' }[state.sim.profile] ?? 'regulier';
 const simRnd = (a, b) => a + Math.random() * (b - a);
 const simName = k => ITEMS[k].name.replace(/^(Un|Une|Des) /, '').toLowerCase();
 
 /** Commence une partie de test pour un profil : elle démarre juste après l'introduction (coquelicot, abeille, ruche). */
-function startSimGame(id) {
+function startSimGame(id, fresh = false) {
 	save(state);
-	const slot = createSlot(`Test · ${SIM_PROFILES[id].name}`);
-	try { localStorage.setItem(`evolia.simNew.${slot}`, id); } catch (e) { /* stockage plein */ }
+	const name = `Test · ${SIM_PROFILES[id].name}`, list = slots().list;
+	// On retient la vraie partie, pour y revenir en choisissant « Désactivé ».
+	if (!state.sim) try { localStorage.setItem('evolia.simReturn', slots().active); } catch (e) { /* idem */ }
+	let slot = !fresh && list.find(x => x.name === name)?.id;
+	if (fresh) for (const x of list.filter(x => x.name === name && x.id !== slots().active)) deleteSlot(x.id);
+	if (!slot) {
+		slot = createSlot(name);
+		try { localStorage.setItem(`evolia.simNew.${slot}`, id); } catch (e) { /* stockage plein */ }
+	}
+	if (fresh && state.sim?.profile === id) { const old = slots().active; useSlot(slot); deleteSlot(old); clearTimeout(saveTimer); resetting = true; return location.reload(); }
 	switchSlot(slot);
+}
+
+/** « Désactivé » : retour à la vraie partie. */
+function stopSim() {
+	let back = null;
+	try { back = localStorage.getItem('evolia.simReturn'); } catch (e) { /* idem */ }
+	const list = slots().list;
+	const real = list.find(x => x.id === back) ?? list.find(x => !x.name.startsWith('Test · '));
+	if (real) switchSlot(real.id);
+}
+
+/** La glissière des jours, dans le jeu : on la tire jusqu'au jour voulu, on lâche, la simulation avance. */
+function renderSimBar() {
+	let bar = $('#sim-bar');
+	if (!DEV || !state.sim || state.intro) { bar?.remove(); return; }
+	if (!bar) {
+		bar = document.createElement('div');
+		bar.id = 'sim-bar';
+		bar.className = 'card';
+		$('#app').append(bar);
+		bar.addEventListener('input', e => { if (e.target.id === 'sim-days') $('#sim-days-v').textContent = `jour ${e.target.value}`; });
+		bar.addEventListener('change', e => { if (e.target.id === 'sim-days') { const to = Number(e.target.value); if (to > state.sim.day) simAdvance(to - state.sim.day); } });
+		bar.addEventListener('click', e => {
+			if (e.target.closest('#sim-next')) simAdvance(1);
+			if (e.target.closest('#sim-redo') && confirm('Recommencer ce scénario au jour 0 ?')) startSimGame(state.sim.profile, true);
+		});
+	}
+	const d = state.sim.day;
+	bar.innerHTML = `<div class="sim-top"><b>${SIM_PROFILES[state.sim.profile].name}</b><span>fin du jour ${d}</span><span id="sim-days-v">jour ${d}</span></div>
+		<input type="range" id="sim-days" min="${d}" max="${Math.max(30, d + 30)}" step="1" value="${d}">
+		<div class="sim-btns"><button id="sim-next">Jour suivant</button><button id="sim-redo">Recommencer</button></div>`;
 }
 
 /** Au chargement d'une partie de test neuve : on saute l'introduction, comme si on venait de la finir. */
@@ -2361,9 +2406,10 @@ function simDay() {
 function simAdvance(n) {
 	if (!state.sim) return;
 	closeOptions();
+	closeModal();
 	const rows = [];
 	for (let i = 0; i < n; i++) rows.push(simDay());
-	renderHud(); renderDaily(); renderStatus(); updateSpeciesDot();
+	renderHud(); renderDaily(); renderStatus(); updateSpeciesDot(); renderSimBar();
 	persist(true);
 	const last = rows[rows.length - 1], P = SIM_PROFILES[state.sim.profile];
 	const sum = k => rows.reduce((a, r) => a + r[k], 0);
@@ -2628,7 +2674,10 @@ function renderOptions() {
 		<label class="switch"><input type="checkbox" id="opt-debug" ${debugOn() ? 'checked' : ''}><i></i><span>Afficher en jeu ce que voit le suivi (GPS, pas, balade, relecture) et le journal des événements</span></label>
 		<h3>Mode test</h3>
 		<label class="switch"><input type="checkbox" id="opt-dev" ${DEV ? 'checked' : ''}><i></i><span>Outils de test et raccourcis (pour essayer le jeu sans marcher)</span></label>
-		${DEV ? `<div class="dev">Heure du jardin <b id="dev-h">${garden.hourOverride ?? 'réelle'}</b>
+		${DEV ? `<div class="dev"><div class="dev-label">Joueur simulé <b id="sim-prof-v">${state.sim ? SIM_PROFILES[state.sim.profile].name : 'désactivé'}</b></div>
+			<input type="range" id="sim-prof" min="0" max="${SIM_ORDER.length - 1}" step="1" value="${SIM_ORDER.indexOf(state.sim?.profile ?? 'off')}">
+			<p class="dev-note" id="sim-prof-t">${state.sim ? `${SIM_PROFILES[state.sim.profile].text}. Une glissière dans le jeu fait avancer les jours.` : 'Choisis un sportif : une partie de test s’ouvre (ta partie reste intacte), avec une glissière pour avancer les jours.'}</p>
+			Heure du jardin <b id="dev-h">${garden.hourOverride ?? 'réelle'}</b>
 			<input type="range" id="dev-hour" min="0" max="24" step="0.25" value="${garden.hourOverride ?? new Date().getHours()}">
 			<button id="dev-hour-real">Revenir à l'heure réelle</button>
 			<div class="dev-label">Météo</div>
@@ -2643,13 +2692,7 @@ function renderOptions() {
 			<button id="dev-nectar">+500 nectar</button>
 			<button id="dev-day">Nouveau jour (cadeau et défis)</button>
 			<button id="dev-reset" class="danger">Effacer le jardin</button>
-			<div class="dev-label">Joueur simulé : le jardin à la fin de chaque jour</div>
-			${state.sim ? `<p class="dev-note"><b>${SIM_PROFILES[state.sim.profile].name}</b> · fin du jour ${state.sim.day}</p>
-				<div class="dev-label">Aller à la fin du jour <b id="sim-to-v">${state.sim.day + 1}</b></div>
-				<input type="range" id="sim-to" min="${state.sim.day + 1}" max="${state.sim.day + 60}" step="1" value="${state.sim.day + 1}">
-				<button id="sim-go">Avancer jusqu’à ce jour</button>
-				<div class="seg"><button id="sim-1">Jour suivant</button><button id="sim-7">+ 7 jours</button><button id="sim-30">+ 30 jours</button></div>` : '<p class="dev-note">Chaque scénario ouvre une nouvelle partie à part, juste après l’introduction. Ta partie reste intacte dans Mes parties.</p>'}
-			${Object.entries(SIM_PROFILES).map(([k, p]) => `<button data-sim-new="${k}">Nouveau scénario : ${p.name}<br><small>${p.text}</small></button>`).join('')}</div>` : ''}
+</div>` : ''}
 		</details>`;
 }
 
@@ -2709,12 +2752,6 @@ $('#options').addEventListener('click', async e => {
 	}
 	if (id === 'opt-restore') showRestore();
 	if (id === 'dev-hour-real') { garden.hourOverride = null; renderOptions(); }
-	const simNew = e.target.closest('[data-sim-new]');
-	if (simNew) return startSimGame(simNew.dataset.simNew);
-	if (id === 'sim-1') return simAdvance(1);
-	if (id === 'sim-7') return simAdvance(7);
-	if (id === 'sim-30') return simAdvance(30);
-	if (id === 'sim-go') return simAdvance(Math.max(1, Number($('#sim-to').value) - state.sim.day));
 	if (id === 'dev-sim') {
 		if (tracking.sim) { tracking.sim.stop(); tracking.sim = null; }
 		else {
@@ -2778,10 +2815,22 @@ $('#options').addEventListener('change', e => {
 	if (DEV) window.evolia = { garden, state, sky, sound };
 	renderOptions();
 });
+// La glissière du joueur simulé agit quand on la lâche : on change de partie.
+$('#options').addEventListener('change', e => {
+	if (e.target.id !== 'sim-prof') return;
+	const k = SIM_ORDER[Number(e.target.value)];
+	if (k === 'off') { if (state.sim) stopSim(); }
+	else if (state.sim?.profile !== k) startSimGame(k);
+});
 $('#options').addEventListener('input', e => {
 	if (e.target.id === 'opt-volume') sound.setVolume(parseFloat(e.target.value));
 	if (e.target.id === 'opt-music-vol') sound.setMusicVolume(parseFloat(e.target.value));
-	if (e.target.id === 'sim-to') { $('#sim-to-v').textContent = e.target.value; return; }
+	if (e.target.id === 'sim-prof') {
+		const k = SIM_ORDER[Number(e.target.value)];
+		$('#sim-prof-v').textContent = k === 'off' ? 'désactivé' : SIM_PROFILES[k].name;
+		$('#sim-prof-t').textContent = k === 'off' ? 'Lâche ici pour revenir à ta partie.' : `${SIM_PROFILES[k].text}. Lâche pour ouvrir sa partie de test.`;
+		return;
+	}
 	if (e.target.id === 'dev-hour') {
 		garden.hourOverride = parseFloat(e.target.value);
 		$('#dev-h').textContent = `${e.target.value} h`;
@@ -2948,6 +2997,7 @@ if (Tuning.preview) {
 	resumeTracking();
 	// Une partie de test du joueur simulé commence juste après l'introduction.
 	if (state.intro) simSkipIntro();
+	renderSimBar();
 	if (state.intro) {
 		// Le temps de l'introduction, il fait beau, quel que soit le vrai ciel.
 		const realSky = sky.override;
