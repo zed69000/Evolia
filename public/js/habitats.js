@@ -84,6 +84,23 @@ export function nextUpgrade(state, kind) {
 	return { level: u + 1, cost: LADDER[kind].cost * UPG_COST[u], need, ok: ownedOf(state, kind) >= need };
 }
 
+/**
+ * Chaque habitat posé a son niveau (1 à 5 : simple, garni, fleuri, foisonnant, remarquable), qui multiplie sa propre
+ * production : de petits achats réguliers entre deux grosses améliorations, et ils se voient dans le jardin.
+ */
+export const LEVEL_PROD = [0, 1, 1.5, 2, 3, 4];
+const LEVEL_PRICE = [0, 0, 3, 8, 20, 50];
+export const LEVEL_KM2 = [0, 0, 2, 6, 15, 30];
+/** Les niveaux déjà gagnés par les habitats d'une sorte (un habitat niveau 3 en compte 2). */
+const levelsBought = (state, kind) => allItems(state).filter(it => it.kind === kind).reduce((a, it) => a + Math.max(0, (it.level ?? 1) - 1), 0);
+/**
+ * Le prix pour passer un habitat posé au niveau `level` : × 3, 8, 20, 50 son prix de base, et 15 % de plus pour chaque
+ * niveau déjà gagné par cette sorte d'habitat (comme les exemplaires) : les niveaux s'étalent sur toute la partie.
+ */
+export const levelPrice = (kind, level, state = null) => Math.round((LADDER[kind].cost * LEVEL_PRICE[level] * Math.pow(1.15, state ? levelsBought(state, kind) : 0)) / 5) * 5;
+/** Les exemplaires d'un habitat, niveaux compris (un habitat niveau 3 compte pour 2). */
+export const levelsOf = (state, kind) => allItems(state).filter(it => it.kind === kind).reduce((a, it) => a + LEVEL_PROD[Math.min(5, it.level ?? 1)], 0);
+
 /** La production d'un habitat (un exemplaire, améliorations comprises), en nectar par heure d'élan. */
 export const unitProd = (state, kind) => LADDER[kind].prod * Math.pow(2, upgOf(state, kind));
 
@@ -102,7 +119,7 @@ export function prodPerHour(state, byKind = null) {
 	const bio = 1 + Object.keys(state.species ?? {}).length / 100, cover = plantCover(state);
 	let total = 0;
 	for (const k of LADDER_ORDER) {
-		const v = ownedOf(state, k) * unitProd(state, k) * bio * cover;
+		const v = levelsOf(state, k) * unitProd(state, k) * bio * cover;
 		if (byKind) byKind[k] = v;
 		total += v;
 	}

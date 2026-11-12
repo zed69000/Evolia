@@ -3,6 +3,12 @@
 Chaque version, la plus récente en haut. Le site (evolia.sebastienalzamora.workers.dev) est toujours à jour ;
 le Play Store (tests internes) reçoit les versions indiquées « Play ».
 
+## 0.7.62 — 12 novembre 2026
+Chaque habitat grandit (nouvelles parties) :
+- Chaque massif, ruche, hôtel, nichoir, mare ou haie posé a son niveau, de 1 à 5 (simple, garni, fleuri, foisonnant, remarquable), qui multiplie sa production (× 1,5, × 2, × 3, × 4) et se voit dans le jardin. Prix : 3, 8, 20 puis 50 fois le prix de base, 15 % de plus à chaque niveau déjà gagné par cette sorte d’habitat ; dès 2, 6, 15 puis 30 km.
+- Dans Aménager, « Faire grandir (niveau 3) : +422 par km » ; en touchant l’habitat, sa fiche dit son niveau, ce qu’il produit et ce que rapporterait le suivant. Une bulle d’aide « Tes habitats peuvent grandir » l’apprend au joueur.
+- Joueur simulé (marcheur régulier) : plus aucune journée sans achat jusqu’au jour 60, deux sur trente ensuite ; le nectar ne s’entasse plus.
+
 ## 0.7.61 — 12 novembre 2026
 Améliorations façon Cookie Clicker (nouvelles parties) :
 - Neuf améliorations par habitat, au lieu de six, qui coûtent 10, 50, 500, 50 000, 5 millions, 500 millions, 50 milliards, 5 billions puis 500 billions de fois le prix de base. Elles s’ouvrent au premier exemplaire puis en remplissant 1 à 4 parcelles de l’habitat : c’est surtout leur prix qui freine, et le nectar de la fin de partie a toujours un but.

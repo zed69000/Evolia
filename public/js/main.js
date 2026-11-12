@@ -15,7 +15,7 @@ import { Soundscape } from './audio.js';
 import { ITEMS, ITEM_ORDER, itemHelp, itemCost, fitsPlace, CATS, MAX_LEVEL, LEVEL_NAME, LEVEL_KM, canLevel, levelCost, CABIN_STYLES, seedBirds, birdHelp } from './deco.js';
 import { VERSION } from './version.js';
 import { startIntro, INTRO_NECTAR, FLOWER, FLOWER_SEED } from './intro.js';
-import { LADDER, isLadder, ladderPrice, ladderLock, nextUpgrade, unitProd, prodPerHour, produce, KM_HOURS, KM_VALUE_H, UPG_AT, REST, plantCover, ownedOf, PER_PARCEL } from './habitats.js';
+import { LADDER, isLadder, ladderPrice, ladderLock, nextUpgrade, unitProd, prodPerHour, produce, KM_HOURS, KM_VALUE_H, UPG_AT, REST, plantCover, ownedOf, PER_PARCEL, LEVEL_PROD, LEVEL_KM2, levelPrice, levelsOf } from './habitats.js';
 import { exportCode, importCode, backupAge } from './backup.js';
 import { DebugPanel, debugOn, setDebug, debugLog, ago, dur, trace, traceFlush } from './debug.js';
 import { canNotify, askNotify, scheduleReminders, clearReminders } from './notify.js';
@@ -754,6 +754,8 @@ const TIPS = [
 		title: 'Tes pas prennent de la valeur', get text() { return `Chaque km te rapporte 60 nectar, plus ${KM_HOURS} heures de la production de ton jardin (en ce moment, environ ${fmtInt(60 + KM_HOURS * prodPerHour(state))} nectar par km). Plus ton jardin grandit, plus tes pas valent.`; } },
 	{ id: 'upgrade', eco2: true, target: '#btn-deco', when: () => Object.keys(LADDER).some(k => { const u = nextUpgrade(state, k); return u?.ok && (state.nectar ?? 0) >= u.cost; }),
 		title: 'Une amélioration', text: 'Tu as assez d’habitats d’une même sorte pour les améliorer : leur production double. Ouvre Aménager › Habitats, le bouton « Amélioration (× 2) » est sur leur carte.' },
+	{ id: 'levels', eco2: true, target: '#btn-deco', when: () => garden.items.some(it => isLadder(it.kind) && (it.level ?? 1) === 1 && (() => { const nx = nextLevel(it); return nx?.ok && (state.nectar ?? 0) >= nx.cost; })()),
+		title: 'Tes habitats peuvent grandir', text: 'Chaque habitat posé a son niveau : garni, fleuri, foisonnant, remarquable. Il produit de plus en plus (× 1,5, × 2, × 3, × 4) et se voit dans ton jardin. Dans <b>Aménager</b>, touche « Faire grandir », ou touche l’habitat lui-même.' },
 	{ id: 'birds', eco2: true, target: '#btn-deco', when: () => (here().noBirds ?? 0) > 0 && !seedBirds(here()),
 		title: 'Il manque des oiseaux', text: 'Tes fleurs pourraient donner des arbustes, puis des arbres, mais ce sont les oiseaux qui sèment leurs baies et leurs graines. Pose une <b>mangeoire</b> (un oiseau) ou un <b>nichoir</b> (un couple de mésanges) : choisis bien, c’est ce qui fera venir arbustes, arbres et les animaux qui vont avec.' },
 	{ id: 'plants', eco2: true, target: '#btn-deco', when: () => { const n = Object.keys(LADDER).reduce((a, k) => a + ownedCount(k), 0); return n >= 4 && here().plants.filter(p => p.growth >= 1 && p.type !== 'herbe').length < n * 2; },
@@ -1824,7 +1826,8 @@ function nextLevel(it) {
 	// La cabane a ses propres niveaux (petite cabane, cabane à auvent, chalet).
 	if (own) return lv >= own.max ? null : { level: lv + 1, cost: own.cost[lv + 1], km: own.km[lv + 1], ok: km >= own.km[lv + 1] };
 	if (!canLevel(it.kind) || lv >= MAX_LEVEL) return null;
-	if (state.eco2 && isLadder(it.kind)) return null;
+	// Nouvelle économie : chaque habitat de l'échelle grandit, de plus en plus cher, avec quelques kilomètres.
+	if (state.eco2 && isLadder(it.kind)) return { level: lv + 1, cost: levelPrice(it.kind, lv + 1, state), km: LEVEL_KM2[lv + 1], ok: km >= LEVEL_KM2[lv + 1], gain: unitProd(state, it.kind) * (LEVEL_PROD[lv + 1] - LEVEL_PROD[lv]) };
 	// La ruche s'agrandit sans attendre de kilomètres : seulement de plus en plus cher.
 	if (it.kind === 'ruche' && state.eco2) return { level: lv + 1, cost: levelCost(it.kind, lv + 1) * 2, km: 0, ok: true };
 	return { level: lv + 1, cost: levelCost(it.kind, lv + 1), km: LEVEL_KM[lv + 1], ok: km >= LEVEL_KM[lv + 1] };
@@ -1877,7 +1880,7 @@ function renderDeco() {
 			const mine = here_.filter(x => x.kind === k), n = mine.length;
 			// L'habitat le moins avancé d'ici, qu'on peut améliorer depuis la liste.
 			const low = mine.filter(x => nextLevel(x)).sort((a, b) => (a.level ?? 1) - (b.level ?? 1))[0], nx = low && nextLevel(low);
-			const up = nx ? nx.ok ? `<button class="btn primary small" data-level="${k}" ${nectar < nx.cost ? 'disabled' : ''}>Améliorer · ${fmtInt(nx.cost)}</button>` : `<span class="deco-lock">niveau ${nx.level} dès ${nx.km} km</span>` : '';
+			const up = nx ? nx.ok ? `<button class="btn primary small" data-level="${k}" ${nectar < nx.cost ? 'disabled' : ''}>${nx.gain ? `Faire grandir (niveau ${nx.level}) : +${fmtInt(nx.gain * KM_VALUE_H)} par km` : 'Améliorer'} · ${fmtInt(nx.cost)}</button>` : `<span class="deco-lock">niveau ${nx.level} dès ${nx.km} km</span>` : '';
 			const action = later ? '<span class="deco-lock">plus tard</span>'
 				: lad ? `<span class="deco-lock">${lad}</span>`
 				: !ladder && km < it.km ? `<span class="deco-lock">dès ${it.km} km parcourus</span>`
@@ -1888,7 +1891,7 @@ function renderDeco() {
 			// L'échelle des habitats : ce que chacun rapporte pendant l'élan, et son amélioration (production × 2).
 			const up2 = ladder && !later ? nextUpgrade(state, k) : null;
 			const prodLine = ladder && !later ? `<span class="deco-help">Chacun rapporte ${fmtNum(unitProd(state, k))} nectar par heure d’élan, environ ${fmtInt(unitProd(state, k) * KM_VALUE_H)} par km marché · ${PER_PARCEL[k]} par parcelle au plus${n ? ` · ${n} posé${n > 1 ? 's' : ''}` : ''}</span>` : '';
-			const upgBtn = up2 ? (up2.ok ? `<button class="btn primary small" data-upg="${k}" ${nectar < up2.cost ? 'disabled' : ''}>Amélioration ${up2.level} : +${fmtInt(n * unitProd(state, k) * KM_VALUE_H)} par km · ${fmtInt(up2.cost)}</button>` : `<span class="deco-lock">amélioration ${up2.level} (× 2) dès ${up2.need} posés${up2.need > PER_PARCEL[k] ? ` (${Math.round(up2.need / PER_PARCEL[k])} parcelles pleines)` : ''}</span>`) : '';
+			const upgBtn = up2 ? (up2.ok ? `<button class="btn primary small" data-upg="${k}" ${nectar < up2.cost ? 'disabled' : ''}>Amélioration ${up2.level} : +${fmtInt(levelsOf(state, k) * unitProd(state, k) * KM_VALUE_H)} par km · ${fmtInt(up2.cost)}</button>` : `<span class="deco-lock">amélioration ${up2.level} (× 2) dès ${up2.need} posés${up2.need > PER_PARCEL[k] ? ` (${Math.round(up2.need / PER_PARCEL[k])} parcelles pleines)` : ''}</span>`) : '';
 			return `<div class="deco-card${locked ? ' locked' : ''}"><div class="deco-art" data-art="${k}"></div>
 				<div class="deco-body"><h3>${it.name}</h3><p>${it.text}</p>${!ladder && itemHelp(k, state.eco2) ? `<span class="deco-help">${itemHelp(k, state.eco2)}</span>` : ''}
 				${ladder && birdHelp(k) ? `<span class="deco-help">${birdHelp(k)}</span>` : ''}${prodLine}<div class="deco-row"><span class="nectar">${fmtInt(cost)}</span>${levels}${action}</div>${up ? `<div class="deco-row deco-up">${up}</div>` : ''}${upgBtn && n ? `<div class="deco-row deco-up">${upgBtn}</div>` : ''}</div></div>`;
@@ -2104,6 +2107,7 @@ function tapItem(hit, card) {
 	const info = it.kind === 'collecteur' ? `<small class="item-tip">Niveau ${lv} · garde ${COLLECTOR_CAP[lv]} nectar${up ? ` (niveau ${lv + 1} : ${COLLECTOR_CAP[lv + 1]})` : ''}. Réserve totale : ${fmtInt(nectarCapacity(state))}.</small>`
 		: it.kind === 'poulailler' ? coopTip(it, lv, nx)
 		: def.levels ? `<small class="item-tip">${def.levels.name[lv][0].toUpperCase() + def.levels.name[lv].slice(1)}, ${CABIN_STYLES[(it.style ?? 0) % CABIN_STYLES.length].name}. ${farmerName(true)} y vit.${nx ? nx.ok ? ` Agrandis-la en ${def.levels.name[nx.level]}.` : ` ${def.levels.name[nx.level][0].toUpperCase() + def.levels.name[nx.level].slice(1)} dès ${nx.km} km parcourus.` : ''}</small>`
+		: state.eco2 && isLadder(it.kind) ? `<small class="item-tip">Niveau ${lv} sur ${MAX_LEVEL}, ${LEVEL_NAME[lv]} : il produit ${fmtNum(unitProd(state, it.kind) * LEVEL_PROD[lv])} nectar par heure d’élan.${nx ? nx.ok ? ` Niveau ${nx.level} (${LEVEL_NAME[nx.level]}) : +${fmtInt(nx.gain * KM_VALUE_H)} par km marché.` : ` Niveau ${nx.level} dès ${nx.km} km parcourus.` : ' Il est au plus haut.'}</small>`
 		: it.kind === 'ruche' && state.eco2 ? `<small class="item-tip">Niveau ${lv} : ${HIVE_SEATS * lv} abeilles.${nx ? ` Au niveau ${nx.level} : ${HIVE_SEATS * nx.level}.` : ''}</small>`
 		: canLevel(it.kind) ? `<small class="item-tip">Niveau ${lv} sur ${MAX_LEVEL}, ${LEVEL_NAME[lv]} : il fait venir ${lv * def.power} ${def.power * lv > 1 ? 'membres' : 'membre'}.${nx ? nx.ok ? ` Au niveau ${nx.level}, un de plus${def.power > 1 ? ` (${def.power})` : ''}.` : ` Niveau ${nx.level} dès ${nx.km} km parcourus.` : ''}</small>` : '';
 	// Une bulle courte : la première phrase de la description (le reste est dans Aménager), l'astuce de l'appui long
@@ -2118,7 +2122,7 @@ function tapItem(hit, card) {
 		: it.kind === 'compost' ? `<small class="item-tip">${fill >= 1 ? 'Plein : épands-le sur le potager, ses prochaines récoltes donneront plus.' : `Rempli à ${Math.round(fill * 100)} % (il se remplit quand tu marches).`}</small>${fill >= 1 ? '<div class="item-actions"><button class="btn primary" data-spread>Épandre sur le potager</button></div>' : ''}`
 		: '';
 	card.innerHTML = `<b>${def.name}</b>${short}${info}${tip}
-		${it.kind === 'poulailler' ? coopButtons(it) : ''}${farm}<div class="item-actions">${up ? `<button class="btn primary" data-upgrade ${(state.nectar ?? 0) < up ? 'disabled' : ''}>${def.levels ? 'Agrandir' : 'Améliorer'} (${fmtInt(up)})</button>` : ''}${it.kind === 'cabane' ? '<button class="btn ghost" data-style>Couleur</button><button class="btn ghost" data-farmer-swap>' + (state.gardener === 'fermiere' ? 'Un fermier' : 'Une fermière') + '</button><button class="btn ghost" data-pet-swap>' + (state.pet === 'chien' ? 'Un chat' : state.pet === 'chat' ? 'Sans animal' : 'Un chien') + '</button>' : ''}${it.kind === 'banc' ? '<button class="btn primary" data-sit>S’asseoir</button>' : ''}${def.turn ? '<button class="btn ghost" data-turn>Tourner</button>' : ''}<button class="btn ghost" data-move>Déplacer</button><button class="btn ghost" data-store>Ranger (+${fmtInt((it.paid ?? def.cost) + (it.spent ?? 0))})</button></div>`;
+		${it.kind === 'poulailler' ? coopButtons(it) : ''}${farm}<div class="item-actions">${up ? `<button class="btn primary" data-upgrade ${(state.nectar ?? 0) < up ? 'disabled' : ''}>${def.levels ? 'Agrandir' : state.eco2 && isLadder(it.kind) ? 'Faire grandir' : 'Améliorer'} (${fmtInt(up)})</button>` : ''}${it.kind === 'cabane' ? '<button class="btn ghost" data-style>Couleur</button><button class="btn ghost" data-farmer-swap>' + (state.gardener === 'fermiere' ? 'Un fermier' : 'Une fermière') + '</button><button class="btn ghost" data-pet-swap>' + (state.pet === 'chien' ? 'Un chat' : state.pet === 'chat' ? 'Sans animal' : 'Un chien') + '</button>' : ''}${it.kind === 'banc' ? '<button class="btn primary" data-sit>S’asseoir</button>' : ''}${def.turn ? '<button class="btn ghost" data-turn>Tourner</button>' : ''}<button class="btn ghost" data-move>Déplacer</button><button class="btn ghost" data-store>Ranger (+${fmtInt((it.paid ?? def.cost) + (it.spent ?? 0))})</button></div>`;
 	card.classList.remove('link');
 	card.classList.add('actions');
 	card.onclick = e => {
@@ -2230,7 +2234,7 @@ $('#deco').addEventListener('click', e => {
 		state.nectar -= up.cost;
 		(state.upg ??= {})[kind] = up.level;
 		sound.chime(3);
-		toast(`${ITEMS[kind].name} : production × 2 (+${fmtInt(ownedOf(state, kind) * unitProd(state, kind) / 2 * KM_VALUE_H)} nectar par km marché)`, '#5F933E');
+		toast(`${ITEMS[kind].name} : production × 2 (+${fmtInt(levelsOf(state, kind) * unitProd(state, kind) / 2 * KM_VALUE_H)} nectar par km marché)`, '#5F933E');
 		persist(true);
 		renderHud();
 		return renderDeco();
@@ -2384,10 +2388,16 @@ function simBuy() {
 			if (biome && kmFree() >= parcelKm())
 				o.push({ label: 'parcelle', c: parcelPrice(), v: 1e8, go: () => { here().kmSpent = (here().kmSpent ?? 0) + parcelKm(); paid(parcelPrice()); openParcel(garden.openAt(i, biome), biome); } });
 		}
+		// Faire grandir l'habitat le moins avancé de chaque sorte.
+		for (const k of Object.keys(LADDER)) {
+			const it = garden.items.filter(x => x.kind === k && nextLevel(x)?.ok).sort((a, b) => (a.level ?? 1) - (b.level ?? 1))[0];
+			const nx = it && nextLevel(it);
+			if (nx) o.push({ label: `niveau ${nx.level} (${simName(k)})`, c: nx.cost, v: nx.gain / nx.cost, go: () => { state.nectar -= nx.cost; it.level = nx.level; it.spent = (it.spent ?? 0) + nx.cost; } });
+		}
 		for (const k of Object.keys(LADDER)) {
 			// L'amélioration reste possible même quand on ne peut plus poser d'exemplaire (parcelles pleines).
 			const u = nextUpgrade(state, k);
-			if (u?.ok) o.push({ label: `amélioration (${simName(k)})`, c: u.cost, v: ownedOf(state, k) * unitProd(state, k) / u.cost, go: () => { state.nectar -= u.cost; (state.upg ??= {})[k] = u.level; } });
+			if (u?.ok) o.push({ label: `amélioration (${simName(k)})`, c: u.cost, v: levelsOf(state, k) * unitProd(state, k) / u.cost, go: () => { state.nectar -= u.cost; (state.upg ??= {})[k] = u.level; } });
 			if (ladderLock(state, k) || full.has(k)) continue;
 			const c = ladderPrice(state, k);
 			o.push({ label: simName(k), c, v: unitProd(state, k) / c, go: () => {
