@@ -3,23 +3,23 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Courgette&family=Nunito:wght@400;600;700;800&display=swap">
 <style>
-/* Mise en page : une colonne de réglages (l'activité du joueur) à gauche, les graphes à droite ; une seule colonne sur téléphone. */
+/* Mise en page : une colonne de réglages (le joueur) à gauche, les résultats à droite ; une seule colonne sur téléphone. */
 :root {
   --bg: #f6f1e3; --surface: #fffaf0; --ink: #233127; --ink-2: #4f5d4f; --ink-3: #7c8578; --rule: #e3dccb;
   --accent: #1f6b47; --accent-soft: #e4efe2;
-  --s-act: #2a78d6; --s-idle: #eb6834; --s-rest: #1baf7a; --s-gold: #eda100; --s-total: #52514e;
+  --s-act: #2a78d6; --s-idle: #eb6834; --s-rest: #1baf7a; --s-read: #eda100; --s-total: #52514e;
   --warn: #b0590b; --warn-soft: #fbead6; --good: #1f7a3c; --good-soft: #e3f2e5;
   --f-display: "Courgette", Georgia, serif; --f-body: "Nunito", system-ui, sans-serif;
 }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
   --bg: #171b17; --surface: #20261f; --ink: #eef0e8; --ink-2: #c4cabb; --ink-3: #8f988a; --rule: #333b31;
   --accent: #7fc79a; --accent-soft: #24352a;
-  --s-act: #3987e5; --s-idle: #d95926; --s-rest: #199e70; --s-gold: #c98500; --s-total: #c3c2b7;
+  --s-act: #3987e5; --s-idle: #d95926; --s-rest: #199e70; --s-read: #c98500; --s-total: #c3c2b7;
   --warn: #f0a35a; --warn-soft: #3a2a19; --good: #7fd197; --good-soft: #1f3324; color-scheme: dark; } }
 :root[data-theme="dark"] {
   --bg: #171b17; --surface: #20261f; --ink: #eef0e8; --ink-2: #c4cabb; --ink-3: #8f988a; --rule: #333b31;
   --accent: #7fc79a; --accent-soft: #24352a;
-  --s-act: #3987e5; --s-idle: #d95926; --s-rest: #199e70; --s-gold: #c98500; --s-total: #c3c2b7;
+  --s-act: #3987e5; --s-idle: #d95926; --s-rest: #199e70; --s-read: #c98500; --s-total: #c3c2b7;
   --warn: #f0a35a; --warn-soft: #3a2a19; --good: #7fd197; --good-soft: #1f3324; color-scheme: dark; }
 * { box-sizing: border-box; }
 body { background: var(--bg); color: var(--ink); font: 15px/1.5 var(--f-body); padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 20px 40px; }
@@ -68,7 +68,6 @@ table { border-collapse: collapse; width: 100%; font-size: 14px; }
 th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--rule); white-space: nowrap; }
 th { font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--ink-3); position: sticky; top: 0; background: var(--surface); }
 td.num { font-variant-numeric: tabular-nums; text-align: right; }
-td .chip { display: inline-block; font-size: 12px; font-weight: 700; padding: 1px 8px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); }
 .notes { color: var(--ink-2); font-size: 13.5px; display: grid; gap: 6px; }
 .notes p { margin: 0; max-width: 88ch; }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
@@ -77,27 +76,22 @@ td .chip { display: inline-block; font-size: 12px; font-weight: 700; padding: 1p
 <div class="wrap">
   <header>
     <h1>Équilibre d'Evolia</h1>
-    <p>Un modèle de jeu incrémental où l'activité physique est le moteur : elle rapporte du nectar, elle met les habitats des animaux au travail (l'élan après une sortie), et ses kilomètres ouvrent de nouveaux habitats et de nouvelles parcelles. Au repos, presque rien ne se passe. Déplace les curseurs pour essayer un autre réglage.</p>
+    <p>Le modèle de l'économie actuelle du jeu (version 0.7.72). L'activité physique est le moteur : elle rapporte du nectar, met les habitats au travail (l'élan) et ouvre les grands habitats et les parcelles. Choisis un joueur, déplace les curseurs, et regarde ce que donnent ses 90 premiers jours.</p>
   </header>
 
   <div class="grid">
     <aside class="panel controls" aria-label="Réglages">
       <h2>Le joueur</h2>
-      <div class="presets" role="group" aria-label="Profils">
-        <button data-km="0.8" aria-pressed="false">Sédentaire · 0,8 km</button>
-        <button data-km="2.5" aria-pressed="true">Moyen · 2,5 km</button>
-        <button data-km="6" aria-pressed="false">Sportif · 6 km</button>
-      </div>
-      <div class="ctl"><label for="km">Kilomètres par jour <output id="km-o"></output></label><input id="km" type="range" min="0" max="12" step="0.1" value="2.5"><small>Marche ou course, en moyenne.</small></div>
-      <div class="ctl"><label for="goal">Objectif du jour atteint <output id="goal-o"></output></label><input id="goal" type="range" min="0" max="100" step="5" value="50"></div>
+      <div class="presets" role="group" aria-label="Profils" id="presets"></div>
+      <div class="ctl"><label for="km">Kilomètres par jour <output id="km-o"></output></label><input id="km" type="range" min="0.2" max="20" step="0.1" value="3.5"><small>En moyenne, les jours de sortie.</small></div>
+      <div class="ctl"><label for="days-out">Jours de sortie <output id="days-out-o"></output></label><input id="days-out" type="range" min="0.3" max="1" step="0.05" value="0.85"></div>
+      <div class="ctl"><label for="kmh">Allure <output id="kmh-o"></output></label><input id="kmh" type="range" min="3.5" max="12" step="0.5" value="5"><small>Plus vite : plus d'arbustes et d'arbres, et une sortie plus courte (donc moins d'élan).</small></div>
+      <div class="ctl"><label for="near">Voisinage moyen des habitats <output id="near-o"></output></label><input id="near" type="range" min="0.3" max="1" step="0.05" value="0.75"><small>La part de production qu'un habitat tire de ses plantes. Un joueur qui place bien : 65 à 80 %.</small></div>
+      <div class="ctl"><label for="quiz">Bonnes réponses au quiz <output id="quiz-o"></output></label><input id="quiz" type="range" min="0" max="1" step="0.05" value="0.7"></div>
       <h2>Les réglages du jeu</h2>
-      <div class="ctl"><label for="npk">Nectar par km de marche <output id="npk-o"></output></label><input id="npk" type="range" min="10" max="250" step="5" value="60"></div>
-      <div class="ctl"><label for="kmShare">Chaque km vaut aussi <output id="kmShare-o"></output></label><input id="kmShare" type="range" min="0" max="8" step="0.25" value="4"><small>…heures de production du jardin. Le pas prend de la valeur à mesure que le jardin grandit.</small></div>
-      <div class="ctl"><label for="growth">Hausse de prix par habitat posé <output id="growth-o"></output></label><input id="growth" type="range" min="1.05" max="1.4" step="0.01" value="1.15"><small>Chaque exemplaire d'un même habitat coûte un peu plus que le précédent.</small></div>
-      <div class="ctl"><label for="elan">Heures d'élan après une sortie <output id="elan-o"></output></label><input id="elan" type="range" min="1" max="10" step="0.5" value="4"><small>Pour 2,5 km ; plus longues si l'on marche plus (jusqu'au double).</small></div>
-      <div class="ctl"><label for="rest">Rythme au repos <output id="rest-o"></output></label><input id="rest" type="range" min="0" max="0.5" step="0.01" value="0.05"><small>La part de la production quand on ne bouge pas.</small></div>
-      <div class="ctl"><label for="bio">Bonus par espèce découverte <output id="bio-o"></output></label><input id="bio" type="range" min="0" max="3" step="0.25" value="1"></div>
-      <div class="ctl"><label for="days">Durée simulée <output id="days-o"></output></label><input id="days" type="range" min="14" max="120" step="1" value="60"></div>
+      <div class="ctl"><label for="kmh-h">Chaque km vaut aussi <output id="kmh-h-o"></output></label><input id="kmh-h" type="range" min="0" max="8" step="0.5" value="3"><small>…heures de production du jardin.</small></div>
+      <div class="ctl"><label for="rest">Rythme au repos <output id="rest-o"></output></label><input id="rest" type="range" min="0" max="0.3" step="0.01" value="0.05"></div>
+      <div class="ctl"><label for="days">Durée simulée <output id="days-o"></output></label><input id="days" type="range" min="14" max="120" step="1" value="90"></div>
     </aside>
 
     <main class="main">
@@ -106,229 +100,223 @@ td .chip { display: inline-block; font-size: 12px; font-weight: 700; padding: 1p
 
       <section class="card" aria-labelledby="c1">
         <h2 id="c1">D'où vient le nectar, jour après jour</h2>
-        <p class="sub">Part de chaque source dans le nectar du jour. La marche, l'élan et le papillon doré dépendent tous de l'activité physique ; seule la production au repos est de l'idle pur.</p>
-        <div class="legend"><span><i style="background:var(--s-act)"></i>Marche, objectif et ferme</span><span><i style="background:var(--s-idle)"></i>Habitats pendant l'élan</span><span><i style="background:var(--s-gold)"></i>Papillon doré</span><span><i style="background:var(--s-rest)"></i>Habitats au repos</span></div>
+        <p class="sub">Part de chaque source dans le nectar du jour. La marche et l'élan viennent de l'activité ; le repos, c'est l'idle pur ; les fiches et le quiz récompensent la lecture.</p>
+        <div class="legend"><span><i style="background:var(--s-act)"></i>Marche, valeur du km, objectif</span><span><i style="background:var(--s-idle)"></i>Habitats pendant l'élan</span><span><i style="background:var(--s-rest)"></i>Habitats au repos</span><span><i style="background:var(--s-read)"></i>Fiches et quiz</span></div>
         <div class="chart" id="ch1"></div>
       </section>
 
       <section class="card" aria-labelledby="c2">
-        <h2 id="c2">Nectar gagné par jour</h2>
-        <p class="sub">Échelle logarithmique : chaque ligne de la grille vaut dix fois la précédente. La production des habitats grandit comme dans tout jeu incrémental ; la marche reste plate, mais c'est elle qui déclenche l'élan.</p>
-        <div class="legend"><span><i class="line" style="background:var(--s-total)"></i>Total du jour</span><span><i class="line" style="background:var(--s-act)"></i>Marche, objectif et ferme</span></div>
+        <h2 id="c2">Achats par jour</h2>
+        <p class="sub">Habitats posés, améliorations, niveaux, terrain et parcelles. Une journée sans achat est une journée où le joueur n'a rien à faire, sauf le quiz.</p>
+        <div class="legend"><span><i style="background:var(--s-act)"></i>Achats</span><span><i style="background:var(--s-read)"></i>Jour avec quiz</span></div>
         <div class="chart" id="ch2"></div>
       </section>
 
       <section class="card" aria-labelledby="c3">
         <h2 id="c3">Les grandes étapes</h2>
-        <p class="sub">Nouveaux habitats, améliorations et parcelles, dans l'ordre où le joueur peut se les offrir.</p>
+        <p class="sub">Ce que le joueur s'offre la première fois, dans l'ordre.</p>
         <div class="tl"><table><thead><tr><th>Étape</th><th>Jour</th><th>Prix</th></tr></thead><tbody id="tl"></tbody></table></div>
       </section>
 
       <section class="card notes" aria-labelledby="c4">
         <h2 id="c4">Les règles du modèle</h2>
-        <p><b>Les habitats des animaux</b>, de la moins chère à la plus chère : massif mellifère (50 nectar, 0,6 nectar par heure d'élan), ruche (300, 3), hôtel à insectes (1 200, 14), nichoir (6 000, 60), mare (30 000, 280), haie vive (150 000, 1 300). Chacun n'apparaît qu'une fois le précédent posé, et à partir d'un certain nombre de kilomètres parcourus (1, 4, 8, 15, 25 km).</p>
-        <p><b>Améliorations</b> : posséder 1, 5, 25 puis 50 exemplaires d'un habitat débloque une amélioration qui double sa production (5, 25, 250 puis 2 500 fois son prix de base : jamais plus cher que l'habitat suivant).</p>
-        <p><b>Les pas font pousser les plantes</b> : environ 1,5 fleur, 0,3 arbuste et 0,06 arbre par km, dans la limite de la surface du terrain. <b>D'où viennent les espèces</b> (au plus 6, 4, 3 puis 2 par jour) : beaucoup avec les plantes (une pour deux fleurs, deux par arbuste, quatre par arbre, jusqu'à 140), d'autres avec les habitats (8 par sorte d'habitat : hérisson, lézard, mésange…), avec les milieux explorés (10 par nouvelle parcelle : grenouilles, libellules…), et les prédateurs avec leurs proies (une espèce de plus pour huit). Chaque espèce découverte augmente toute la production. Les habitats ne produisent pleinement que s'il y a assez de plantes autour (deux par habitat). <b>Papillon doré</b> : un par jour de sortie ; le toucher donne 7 fois la production pendant une minute, plus 20 nectar.</p>
-        <p><b>Le pas grandit avec le jardin</b> : en plus de son nectar fixe, chaque km rapporte quelques heures de la production du jardin (4 h par défaut : environ 60 % d'activité et 40 % d'idle pour un joueur moyen). Sans cela, la marche deviendrait vite négligeable face à la production des habitats, qui grandit sans cesse.</p>
-        <p><b>La ferme</b> suit les kilomètres. La cabane du fermier (600 nectar) arrive quand la nature est installée (10 espèces et 5 km). Ensuite : des carrés de potager (270 nectar, +15 % par carré ; 4 légumes tous les 2,5 km par carré, 15 nectar le légume ; ils attirent lapins, lièvres et piérides), le poulailler (480 nectar pour 3 poules, puis des places en plus ; 1,5 œuf par km et par poule ; le renard rôde), le bac à compost (180 nectar : le potager donne moitié plus ; vers de terre). Le fermier cueille aussi les arbres fruitiers que la marche a fait pousser.</p>
-        <p><b>Terrain</b> : 4 crans par parcelle (60 nectar, +35 % à chaque cran). <b>Parcelles</b> : 600 nectar, puis × 2,3, et des kilomètres d'exploration (1,5 km, puis × 1,5). Le joueur achète toujours le terrain dès qu'il peut, puis ce qui rapporte le plus pour son prix. Le modèle ne compte ni la ferme, ni les fruits, ni les défis du jour.</p>
+        <p><b>Habitats</b> (prix de base, nectar par heure d'élan, kilomètres pour l'ouvrir) : massif mellifère (15, 6), ruche (100, 32), hôtel à insectes (600, 120, 2 km), nichoir (5 000, 480, 12 km), mare (50 000, 2 000, 50 km), haie (600 000, 9 600, 150 km). Chaque exemplaire coûte 15 % de plus. Une parcelle en accueille au plus 6 massifs, 3 ruches, 2 hôtels, 3 nichoirs, 1 mare et 2 haies.</p>
+        <p><b>Améliorations</b> (production × 2) : neuf par habitat, à 10, 50, 500, 50 000, 5 millions, 500 millions, 50 milliards, 5 billions et 500 billions de fois le prix de base ; elles s'ouvrent au premier exemplaire puis en remplissant 1 à 4 parcelles de cet habitat. <b>Niveaux</b> de chaque habitat posé : production × 1,5, × 2, × 3, × 4, pour 3, 8, 20, 50 fois le prix de base (+15 % par niveau déjà gagné par cette sorte), dès 2, 6, 15, 30 km.</p>
+        <p><b>Production</b> : niveau × améliorations × voisinage (les plantes autour) × (1 + 1 % par espèce) × (1 + 5 % par pollinisateur pour les ruches, massifs et hôtels). Elle tourne à plein pendant l'élan (7 minutes par minute de marche, 8 h au plus), à 5 % au repos.</p>
+        <p><b>Marche</b> : environ 60 nectar par km, plus 3 heures de la production du jardin par km, plus l'objectif du jour (60 nectar par km d'objectif). <b>Terrain</b> : 4 crans par parcelle (60 nectar, +35 %). <b>Parcelles</b> : 600 nectar puis × 2,3, et des kilomètres d'exploration (1,5 km puis × 1,5).</p>
+        <p><b>Espèces</b> : 6, 4, 3 puis 2 par jour (le modèle suppose qu'il y en a toujours une à découvrir). <b>Fiche lue</b> : 10 nectar + 3 par espèce + 6 minutes de production. <b>Quiz</b> (les jours où le joueur achète moins de 3 choses, à partir de 8 espèces) : trois questions, 10 + 3 par espèce + 15 minutes de production par bonne réponse, multipliées par la série (× 1,5, × 2… jusqu'à × 4).</p>
+        <p>Le joueur achète toujours le terrain et les parcelles dès qu'il peut, puis ce qui rapporte le plus pour son prix. Non compté : la ferme, les défis du jour, le cadeau, les bonus du temps (soleil, pluie, nuit, hiver) et les albums de saison, qui ajoutent un peu de nectar.</p>
       </section>
     </main>
   </div>
 </div>
 
 <script>
-const $ = s => document.querySelector(s);
-const fmt = n => Math.round(n).toLocaleString('fr-FR');
-const LADDER = [
-  ['Massif mellifère', 50, 0.6, 0], ['Ruche', 300, 3, 1], ['Hôtel à insectes', 1200, 14, 4],
-  ['Nichoir', 6000, 60, 8], ['Mare', 30000, 280, 15], ['Haie vive', 150000, 1300, 25],
+// ─── Les règles du jeu (Evolia 0.7.72, habitats.js et main.js) ───
+const LADDER = { massif: [15, 6, 0], ruche: [100, 32, 0], hotel: [600, 120, 2], nichoir: [5000, 480, 12], mare: [50000, 2000, 50], haie: [600000, 9600, 150] };
+const NAME = { massif: 'Massif mellifère', ruche: 'Ruche', hotel: 'Hôtel à insectes', nichoir: 'Nichoir', mare: 'Mare', haie: 'Haie' };
+const ORDER = Object.keys(LADDER);
+const CAP = { massif: 6, ruche: 3, hotel: 2, nichoir: 3, mare: 1, haie: 2 };
+const UPG_PARCELS = [0, 1, 1, 2, 2, 3, 3, 4, 4], UPG_COST = [10, 50, 500, 5e4, 5e6, 5e8, 5e10, 5e12, 5e14];
+const LEVEL_PROD = [0, 1, 1.5, 2, 3, 4], LEVEL_PRICE = [0, 0, 3, 8, 20, 50], LEVEL_KM = [0, 0, 2, 6, 15, 30];
+const POLL = new Set(['massif', 'ruche', 'hotel']);
+const PROFILES = [
+  ['Sédentaire', 0.6, 0.45, 3.8], ['Occasionnel', 1.7, 0.6, 4.5], ['Régulier', 3.5, 0.85, 5],
+  ['Rapide', 4.5, 0.85, 6], ['Coureur', 7.5, 0.6, 10], ['Grand sportif', 15, 0.9, 10],
 ];
-const UPG_AT = [1, 5, 25, 50], UPG_COST = [5, 25, 250, 2500];
 
-function simulate(p) {
-  let nectar = 0, km = 0, kmSpent = 0, grows = 0, cells = 1, crans = 0, species = 2;
-  let flowers = 1, bushes = 0, trees = 0;
-  const farm = { cabane: false, potager: 0, poules: 0, compost: false };
-  const own = LADDER.map(() => 0), mult = LADDER.map(() => 1), upg = LADDER.map(() => 0);
-  const log = [], days = [];
-  for (let d = 1; d <= p.days; d++) {
-    km += p.km;
-    // Les pas font pousser les plantes (fleurs, arbustes, arbres), dans la limite de la surface du terrain.
-    const area = cells - 1 + crans / 4 + 0.4;
-    flowers = Math.min(40 * area, flowers + 1.5 * p.km);
-    bushes = Math.min(6 * area, bushes + 0.3 * p.km);
-    trees = Math.min(2 * area, trees + 0.06 * p.km);
-    // D'où viennent les espèces (au plus 6, 4, 3 puis 2 par jour) : les plantes (pollinisateurs, herbivores…),
-    // les habitats (hérisson, lézard, mésange…), les milieux explorés (marais, forêt…) et la chaîne
-    // alimentaire (les prédateurs suivent leurs proies).
-    const byPlants = Math.min(140, Math.floor(flowers / 2) + Math.floor(bushes * 2) + Math.floor(trees * 4));
-    const byHomes = own.filter(n => n > 0).length * 8
-      + (farm.potager ? 4 : 0) + (farm.poules ? 2 : 0) + (farm.compost ? 3 : 0) + (farm.cabane ? 2 : 0);
-    const byPlaces = (cells - 1) * 10;
-    const prey = 2 + byPlants + byHomes + byPlaces;
-    const open = Math.min(319, prey + Math.floor(prey / 8));
-    const found = Math.max(0, Math.min([6, 4, 3][d - 1] ?? 2, open - species));
-    species += found;
-    const bio = 1 + p.bio * species / 100;
-    // Les habitats ne produisent bien que s'il y a assez de plantes autour d'eux.
-    const homes = own.reduce((a, n) => a + n, 0), green = flowers + 3 * bushes + 8 * trees;
-    const eff = Math.min(1, green / Math.max(1, 2 * homes));
-    const perH = LADDER.reduce((a, b, i) => a + own[i] * b[2] * mult[i], 0) * bio * eff;
-    const active = p.km >= 0.3;
-    const elanH = active ? p.elan * Math.min(2, p.km / 2.5 + 0.5) : 0;
-    // Chaque km vaut aussi une part de la production du jardin : le pas prend de la valeur à mesure que le jardin
-    // grandit, et la marche reste le premier levier à tous les stades.
-    const walk = p.km * (p.npk + p.kmShare * perH) + (Math.floor(d * p.goal / 100) > Math.floor((d - 1) * p.goal / 100) ? 150 : 0);
-    const elan = perH * elanH, rest = perH * (24 - elanH) * p.rest;
-    const gold = active ? perH * 7 / 60 + 20 : 0;
-    const fiche = found * 10;
-    // La ferme suit les kilomètres : 4 légumes tous les 2,5 km par carré (×1,5 avec le compost), 1,5 œuf par km et
-    // par poule, à 15 nectar ; le fermier cueille les fruitiers (un arbre sur trois), 2 kg par jour de sortie à 20 nectar.
-    const veg = farm.potager * p.km / 2.5 * 4 * (farm.compost ? 1.5 : 1) * 15;
-    const eggs = farm.poules * p.km * 1.5 * 15;
-    const fruit = farm.cabane && active ? Math.floor(trees / 3) * 2 * 20 : 0;
-    const ferme = veg + eggs + fruit;
-    nectar += walk + elan + rest + gold + fiche + ferme;
-    for (let g = 0; g < 500; g++) {
+// Un tirage stable : les mêmes jours de sortie à chaque réglage, pour comparer.
+function rng(seed) { let h = seed >>> 0; return () => ((h = Math.imul(h ^ (h >>> 15), 2246822507) + 0x9e3779b9 >>> 0) % 100000) / 100000; }
+
+function simulate(P) {
+  const r = rng(20261112);
+  const S = { nectar: 100, km: 0, kmSpent: 0, parcels: 1, crans: 0, grows: 0, species: 2, items: { massif: [], ruche: [1], hotel: [], nichoir: [], mare: [], haie: [] }, upg: {}, levelsBought: {}, streak: 0 };
+  const days = [], steps = [];
+  const mark = (label, d, price) => { if (!steps.some(s => s.label === label)) steps.push({ label, d, price }); };
+  const owned = k => S.items[k].length;
+  const unit = k => LADDER[k][1] * 2 ** (S.upg[k] ?? 0);
+  const guild = () => ({ poll: Math.floor(S.species * 0.12) });
+  const itemProd = (k, lv) => unit(k) * LEVEL_PROD[lv] * P.near * (k === 'ruche' || k === 'hotel' ? 1.3 : 1) * (1 + S.species / 100) * (POLL.has(k) ? 1 + 0.05 * guild().poll : 1);
+  const prodH = () => ORDER.reduce((a, k) => a + S.items[k].reduce((b, lv) => b + itemProd(k, lv), 0), 0);
+  const readReward = () => Math.max(10, Math.round((10 + 3 * S.species + prodH() * 0.1) / 5) * 5);
+  const quizBase = () => Math.max(15, Math.round((10 + 3 * S.species + prodH() * 0.25) / 5) * 5);
+  for (let d = 1; d <= P.days; d++) {
+    const out = d === 1 || r() < P.out, km = out ? P.km * (0.75 + r() * 0.5) : 0;
+    const row = { d, act: 0, elan: 0, rest: 0, read: 0, buys: 0, quiz: false };
+    // La sortie : nectar de la marche, valeur du km, objectif, élan.
+    let elanH = 0;
+    if (km > 0) {
+      row.act = km * 60 + km * P.kmHours * prodH() + (km >= 2.5 ? 150 : 0);
+      S.km += km;
+      elanH = Math.min(8, km / P.kmh * 60 * 7 / 60);
+    }
+    const ph = prodH();
+    row.elan = ph * elanH; row.rest = ph * (24 - elanH) * P.rest;
+    // Les espèces du jour et leurs fiches.
+    const found = [6, 4, 3][d - 1] ?? 2;
+    S.species += found;
+    row.read = found * readReward();
+    S.nectar += row.act + row.elan + row.rest + row.read;
+    // Les achats : le terrain et les parcelles d'abord, puis ce qui rapporte le plus pour son prix.
+    for (let g = 0; g < 400; g++) {
       const o = [];
-      const gp = Math.round(60 * Math.pow(1.35, grows) / 10) * 10;
-      if (crans < 4) o.push({ l: `Terrain : parcelle ${cells}, cran ${crans + 1}/4`, c: gp, v: 1e9, go: () => { crans++; grows++; } });
-      else {
-        const pk = Math.round(1.5 * Math.pow(1.5, cells - 1) * 10) / 10;
-        if (km - kmSpent >= pk) o.push({ l: `Nouvelle parcelle n° ${cells + 1}`, c: Math.round(600 * Math.pow(2.3, cells - 1) / 10) * 10, v: 1e9, big: true, go: () => { cells++; crans = 0; kmSpent += pk; } });
-      }
-      // La ferme : la cabane (nature installée : 8 espèces de plus qu'au départ, 5 km), puis potager, poulailler, compost.
-      const daily = elanH + (24 - elanH) * p.rest;
-      if (!farm.cabane && km >= 5 && species >= 10) o.push({ l: 'Cabane du fermier', c: 600, v: 1, big: true, go: () => { farm.cabane = true; } });
-      if (farm.cabane) {
-        const pc = Math.round(270 * Math.pow(1.15, farm.potager));
-        o.push({ l: `Carré de potager n° ${farm.potager + 1}`, c: pc, v: (p.km / 2.5 * 4 * 15) / pc / Math.max(1, daily), big: farm.potager === 0, go: () => { farm.potager++; } });
-        if (km >= 7 && farm.poules < 8) {
-          const pp = farm.poules ? [0, 0, 0, 1200, 1200, 3600, 3600, 6000][farm.poules] : 480;
-          o.push({ l: farm.poules ? `Poulailler : ${farm.poules + 1} poules` : 'Poulailler (3 poules)', c: pp, v: (p.km * 1.5 * 15 * (farm.poules ? 1 : 3)) / pp / Math.max(1, daily), big: !farm.poules || farm.poules === 5 || farm.poules === 7, go: () => { farm.poules = farm.poules ? farm.poules + 1 : 3; } });
+      if (S.crans < 4) o.push({ c: Math.round(60 * 1.35 ** S.grows / 10) * 10, v: 1e12, go: () => { S.crans++; S.grows++; }, label: 'Terrain agrandi' });
+      else { const pk = 1.5 * 1.5 ** (S.parcels - 1); if (S.km - S.kmSpent >= pk) o.push({ c: Math.round(600 * 2.3 ** (S.parcels - 1) / 10) * 10, v: 1e11, go: () => { S.parcels++; S.crans = 0; S.kmSpent += pk; }, label: `Parcelle ${S.parcels + 1}` }); }
+      ORDER.forEach((k, i) => {
+        const n = owned(k);
+        if (S.km >= LADDER[k][2] && (i < 2 || owned(ORDER[i - 1])) && n < CAP[k] * S.parcels) {
+          const c = (k === 'ruche' && !n) ? 100 : Math.round(LADDER[k][0] * 1.15 ** n / 5) * 5;
+          o.push({ c, v: itemProd(k, 1) / c, go: () => S.items[k].push(1), label: NAME[k] });
         }
-        if (!farm.compost && farm.potager && km >= 3) o.push({ l: 'Bac à compost (potager × 1,5)', c: 180, v: (farm.potager * p.km / 2.5 * 4 * 15 * 0.5) / 180 / Math.max(1, daily), big: true, go: () => { farm.compost = true; } });
-      }
-      LADDER.forEach(([n, c0, prod, kmNeed], i) => {
-        if (km < kmNeed || (i > 0 && own[i - 1] < 1)) return;
-        const c = Math.round(c0 * Math.pow(p.growth, own[i]));
-        o.push({ l: `${n} n° ${own[i] + 1}`, c, v: prod * mult[i] / c, big: own[i] === 0, go: () => own[i]++ });
-        const u = upg[i];
-        if (u < 4 && own[i] >= UPG_AT[u]) o.push({ l: `${n} : amélioration ${u + 1} (production × 2)`, c: c0 * UPG_COST[u], v: own[i] * prod * mult[i] / (c0 * UPG_COST[u]), big: true, go: () => { upg[i]++; mult[i] *= 2; } });
+        const u = S.upg[k] ?? 0;
+        if (n && u < 9 && n >= Math.max(1, UPG_PARCELS[u] * CAP[k])) {
+          const c = LADDER[k][0] * UPG_COST[u], cur = S.items[k].reduce((b, lv) => b + itemProd(k, lv), 0);
+          o.push({ c, v: cur / c, go: () => { S.upg[k] = u + 1; }, label: `${NAME[k]} : amélioration ${u + 1}` });
+        }
+        // Faire grandir l'exemplaire le moins avancé.
+        const li = S.items[k].indexOf(Math.min(...S.items[k]));
+        const lv = S.items[k][li];
+        if (n && lv < 5 && S.km >= LEVEL_KM[lv + 1]) {
+          const c = Math.round(LADDER[k][0] * LEVEL_PRICE[lv + 1] * 1.15 ** (S.levelsBought[k] ?? 0) / 5) * 5;
+          o.push({ c, v: (itemProd(k, lv + 1) - itemProd(k, lv)) / c, go: () => { S.items[k][li] = lv + 1; S.levelsBought[k] = (S.levelsBought[k] ?? 0) + 1; }, label: `${NAME[k]} : niveau ${lv + 1}` });
+        }
       });
       o.sort((a, b) => b.v - a.v || a.c - b.c);
-      const x = o.find(z => z.c <= nectar);
+      const x = o.find(z => z.c <= S.nectar);
       if (!x) break;
-      nectar -= x.c; x.go(); if (x.big) log.push({ day: d, label: x.l, price: x.c });
+      S.nectar -= x.c; x.go(); row.buys++; mark(x.label, d, x.c);
     }
-    days.push({ d, walk: walk + ferme, ferme, elan, rest, gold, fiche, total: walk + elan + rest + gold + fiche + ferme, cells, species, eff, plants: Math.round(flowers + bushes + trees) });
+    // Le quiz, quand il n'y a presque rien à faire.
+    if (row.buys < 3 && S.species >= 8) {
+      row.quiz = true;
+      let q = 0;
+      for (let k = 0; k < 3; k++) {
+        if (r() < P.quizOk) { q += quizBase() * Math.min(4, 1 + 0.5 * S.streak); S.streak++; } else S.streak = 0;
+      }
+      row.read += q; S.nectar += q;
+    }
+    row.prodH = prodH();
+    row.total = row.act + row.elan + row.rest + row.read;
+    days.push(row);
   }
-  return { days, log, own, cells };
+  return { days, steps };
 }
 
-function hover(el, fn, W, leave) {
-  const svg = el.querySelector('svg'), tip = el.querySelector('.tip');
-  const move = e => {
-    const r = svg.getBoundingClientRect(), px = (e.clientX - r.left) * W / r.width, o = fn(px);
-    if (!o) return;
-    tip.innerHTML = o.html; tip.hidden = false;
-    const k = r.width / W;
-    tip.style.left = `${Math.max(100, Math.min(r.width - 100, o.x * k))}px`;
-    tip.style.top = `${Math.max(70, o.y * k)}px`;
-  };
-  svg.addEventListener('pointermove', move);
-  svg.addEventListener('pointerdown', move);
-  svg.addEventListener('pointerleave', () => { tip.hidden = true; leave?.(); });
+// ─── Mise en forme ───
+const $ = id => document.getElementById(id);
+const BIG = [[1e18, 'trillion'], [1e15, 'billiard'], [1e12, 'billion'], [1e9, 'milliard'], [1e6, 'million']];
+function fmt(n) {
+  const v = Math.round(n), b = BIG.find(([k]) => Math.abs(v) >= k);
+  if (!b) return v.toLocaleString('fr-FR');
+  const x = v / b[0];
+  return `${x.toLocaleString('fr-FR', { maximumFractionDigits: x < 10 ? 2 : x < 100 ? 1 : 0 })} ${b[1]}${x >= 2 ? 's' : ''}`;
+}
+const pct = x => `${Math.round(x * 100)} %`;
+const css = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+
+const ctl = { km: v => `${(+v).toLocaleString('fr-FR')} km`, 'days-out': v => pct(+v), kmh: v => `${(+v).toLocaleString('fr-FR')} km/h`, near: v => pct(+v), quiz: v => pct(+v), 'kmh-h': v => `${(+v).toLocaleString('fr-FR')} h`, rest: v => pct(+v), days: v => `${v} jours` };
+function params() {
+  return { km: +$('km').value, out: +$('days-out').value, kmh: +$('kmh').value, near: +$('near').value, quizOk: +$('quiz').value, kmHours: +$('kmh-h').value, rest: +$('rest').value, days: +$('days').value };
 }
 
-function chartShare(el, days) {
-  const W = 760, H = 220, L = 44, R = 10, T = 10, B = 26;
-  const bw = (W - L - R) / days.length, y = v => T + (H - T - B) * (1 - v);
-  let s = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Part de chaque source dans le nectar du jour">`;
-  for (const v of [0, 0.25, 0.5, 0.75, 1]) s += `<line x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}" stroke="var(--rule)"/><text x="${L - 6}" y="${y(v) + 4}" text-anchor="end">${v * 100} %</text>`;
-  days.forEach((x, i) => {
-    const x0 = L + i * bw + 0.5, w = Math.max(1, bw - 1.5), tot = x.total - x.fiche;
-    let base = 0;
-    for (const [v, c] of [[x.walk, 'var(--s-act)'], [x.elan, 'var(--s-idle)'], [x.gold, 'var(--s-gold)'], [x.rest, 'var(--s-rest)']]) {
-      const k = v / tot;
-      if (k <= 0) continue;
-      s += `<rect x="${x0}" y="${y(base + k)}" width="${w}" height="${Math.max(0, y(base) - y(base + k) - 1)}" fill="${c}"/>`;
-      base += k;
+function stackChart(el, days) {
+  const W = 760, H = 230, L = 34, R = 8, T = 8, B = 24, n = days.length, bw = (W - L - R) / n;
+  const keys = [['act', '--s-act'], ['elan', '--s-idle'], ['rest', '--s-rest'], ['read', '--s-read']];
+  let s = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Part de chaque source de nectar, par jour">`;
+  for (const y of [0, 0.25, 0.5, 0.75, 1]) { const yy = T + (H - T - B) * (1 - y); s += `<line x1="${L}" x2="${W - R}" y1="${yy}" y2="${yy}" stroke="${css('--rule')}" stroke-width="1"/><text x="${L - 6}" y="${yy + 4}" text-anchor="end">${y * 100} %</text>`; }
+  days.forEach((d, i) => {
+    let y0 = 0;
+    for (const [k, c] of keys) {
+      const f = d.total ? d[k] / d.total : 0, h = (H - T - B) * f;
+      if (h > 0) s += `<rect x="${L + i * bw + 0.5}" y="${T + (H - T - B) * (1 - y0) - h}" width="${Math.max(1, bw - 1)}" height="${h}" fill="${css(c)}"/>`;
+      y0 += f;
     }
-    if (i % Math.ceil(days.length / 10) === 0 || i === days.length - 1) s += `<text x="${x0 + w / 2}" y="${H - 8}" text-anchor="middle">J${x.d}</text>`;
   });
-  s += `</svg><div class="tip" hidden></div>`;
-  el.innerHTML = s;
-  hover(el, px => {
-    const i = Math.max(0, Math.min(days.length - 1, Math.floor((px - L) / bw))), x = days[i], tot = x.total - x.fiche;
-    const pc = v => Math.round(100 * v / tot);
-    return { x: L + i * bw + bw / 2, y: T, html: `Jour ${x.d}<br>Marche <b>${pc(x.walk)} %</b> · élan <b>${pc(x.elan)} %</b><br>Papillon doré <b>${pc(x.gold)} %</b> · repos <b>${pc(x.rest)} %</b>` };
-  }, W);
+  for (const t of [1, 7, 14, 30, 60, 90, 120].filter(t => t <= n)) s += `<text x="${L + (t - 0.5) * bw}" y="${H - 6}" text-anchor="middle">j${t}</text>`;
+  el.innerHTML = s + '</svg>';
+  hover(el, days, (d, x) => `Jour ${d.d} · ${fmt(d.total)} nectar<br>Marche ${pct(d.act / d.total)} · élan ${pct(d.elan / d.total)} · repos ${pct(d.rest / d.total)} · lecture ${pct(d.read / d.total)}`, L, bw);
 }
 
-function chartLog(el, days) {
-  const W = 760, H = 240, L = 60, R = 10, T = 10, B = 26;
-  const max = Math.max(...days.map(x => x.total)), top = Math.pow(10, Math.ceil(Math.log10(max))), bot = 10;
-  const ly = v => T + (H - T - B) * (1 - (Math.log10(Math.max(bot, v)) - 1) / (Math.log10(top) - 1));
-  const xs = i => L + (W - L - R) * (i / (days.length - 1 || 1));
-  let s = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Nectar gagné par jour, échelle logarithmique">`;
-  for (let v = bot; v <= top; v *= 10) s += `<line x1="${L}" x2="${W - R}" y1="${ly(v)}" y2="${ly(v)}" stroke="var(--rule)"/><text x="${L - 6}" y="${ly(v) + 4}" text-anchor="end">${fmt(v)}</text>`;
-  days.forEach((x, i) => { if (i % Math.ceil(days.length / 10) === 0 || i === days.length - 1) s += `<text x="${xs(i)}" y="${H - 8}" text-anchor="middle">J${x.d}</text>`; });
-  const path = f => days.map((x, i) => `${i ? 'L' : 'M'}${xs(i).toFixed(1)},${ly(f(x)).toFixed(1)}`).join('');
-  s += `<path d="${path(x => x.total)}" fill="none" stroke="var(--s-total)" stroke-width="2"/><path d="${path(x => x.walk)}" fill="none" stroke="var(--s-act)" stroke-width="2"/>`;
-  const l = days[days.length - 1];
-  s += `<circle cx="${xs(days.length - 1)}" cy="${ly(l.total)}" r="4" fill="var(--s-total)" stroke="var(--surface)" stroke-width="2"/>`;
-  s += `<line class="cross" x1="0" x2="0" y1="${T}" y2="${H - B}" stroke="var(--ink-3)" stroke-dasharray="3 3" opacity="0"/></svg><div class="tip" hidden></div>`;
-  el.innerHTML = s;
-  hover(el, px => {
-    const i = Math.max(0, Math.min(days.length - 1, Math.round((px - L) / (W - L - R) * (days.length - 1)))), x = days[i];
-    const c = el.querySelector('.cross');
-    c.setAttribute('x1', xs(i)); c.setAttribute('x2', xs(i)); c.setAttribute('opacity', 1);
-    return { x: xs(i), y: ly(x.total), html: `Jour ${x.d}<br>Total <b>${fmt(x.total)}</b> nectar<br>dont marche et objectif <b>${fmt(x.walk)}</b><br>${x.plants} plantes · ${x.species} espèces` };
-  }, W, () => el.querySelector('.cross')?.setAttribute('opacity', 0));
+function buysChart(el, days) {
+  const W = 760, H = 170, L = 34, R = 8, T = 8, B = 24, n = days.length, bw = (W - L - R) / n;
+  const max = Math.max(5, ...days.map(d => d.buys)), top = Math.ceil(max / 5) * 5;
+  let s = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Achats par jour">`;
+  for (const y of [0, top / 2, top]) { const yy = T + (H - T - B) * (1 - y / top); s += `<line x1="${L}" x2="${W - R}" y1="${yy}" y2="${yy}" stroke="${css('--rule')}" stroke-width="1"/><text x="${L - 6}" y="${yy + 4}" text-anchor="end">${y}</text>`; }
+  days.forEach((d, i) => {
+    const h = (H - T - B) * d.buys / top;
+    s += `<rect x="${L + i * bw + 0.5}" y="${T + (H - T - B) - h}" width="${Math.max(1, bw - 1)}" height="${h}" rx="1.5" fill="${css('--s-act')}"/>`;
+    if (d.quiz) s += `<circle cx="${L + (i + 0.5) * bw}" cy="${H - B - 4}" r="2.5" fill="${css('--s-read')}"/>`;
+  });
+  for (const t of [1, 7, 14, 30, 60, 90, 120].filter(t => t <= n)) s += `<text x="${L + (t - 0.5) * bw}" y="${H - 6}" text-anchor="middle">j${t}</text>`;
+  el.innerHTML = s + '</svg>';
+  hover(el, days, d => `Jour ${d.d} · ${d.buys} achat${d.buys > 1 ? 's' : ''}${d.quiz ? ' · quiz' : ''}<br>Production : ${fmt(d.prodH)} nectar par heure d'élan`, L, bw);
+}
+
+function hover(el, days, text, L, bw) {
+  const svg = el.querySelector('svg'), tip = document.createElement('div');
+  tip.className = 'tip'; tip.hidden = true; el.append(tip);
+  const at = e => {
+    const r = svg.getBoundingClientRect(), x = (e.clientX - r.left) * 760 / r.width, i = Math.floor((x - L) / bw);
+    if (i < 0 || i >= days.length) { tip.hidden = true; return; }
+    tip.innerHTML = text(days[i]); tip.hidden = false;
+    tip.style.left = `${e.clientX - el.getBoundingClientRect().left}px`; tip.style.top = `${e.clientY - el.getBoundingClientRect().top}px`;
+  };
+  svg.addEventListener('pointermove', at); svg.addEventListener('pointerleave', () => { tip.hidden = true; });
 }
 
 function render() {
-  const p = { kmShare: +$('#kmShare').value, km: +$('#km').value, goal: +$('#goal').value, npk: +$('#npk').value, growth: +$('#growth').value, elan: +$('#elan').value, rest: +$('#rest').value, bio: +$('#bio').value, days: +$('#days').value };
-  $('#km-o').textContent = `${p.km.toLocaleString('fr-FR')} km`;
-  $('#goal-o').textContent = `${p.goal} % des jours`;
-  $('#npk-o').textContent = p.npk;
-  $('#kmShare-o').textContent = `${p.kmShare.toLocaleString('fr-FR')} h`;
-  $('#growth-o').textContent = `+${Math.round((p.growth - 1) * 100)} %`;
-  $('#elan-o').textContent = `${p.elan.toLocaleString('fr-FR')} h`;
-  $('#rest-o').textContent = `${Math.round(p.rest * 100)} %`;
-  $('#bio-o').textContent = `+${p.bio.toLocaleString('fr-FR')} %`;
-  $('#days-o').textContent = `${p.days} jours`;
-  for (const b of document.querySelectorAll('.presets button')) b.setAttribute('aria-pressed', String(+b.dataset.km === p.km));
-  const { days, log, cells } = simulate(p);
-  const sum = k => days.reduce((a, x) => a + x[k], 0), all = sum('total');
-  // Activité : ce que rapportent directement les pas (marche, valeur du km, objectif, ferme, papillon doré).
-  // Idle : la production des habitats (pendant l'élan et au repos). Cible : 60 % / 40 % pour un joueur moyen.
-  const act = (sum('walk') + sum('gold') + sum('fiche')) / all, idle = (sum('elan') + sum('rest')) / all;
-  const first = n => log.find(b => b.label === `${n} n° 1`)?.day;
-  const reached = LADDER.filter(([n]) => first(n)).length;
-  $('#kpis').innerHTML = [
-    [`${Math.round(act * 100)} %`, 'activité : marche, valeur du km, objectif, ferme, papillon doré'],
-    [`${Math.round(idle * 100)} %`, 'idle : production des habitats (élan et repos)'],
-    [`${reached} / ${LADDER.length}`, `sortes d'habitats posées au jour ${p.days}`],
-    [`${cells}`, `parcelles au jour ${p.days}`],
-    [`${days[days.length - 1].species}`, `espèces découvertes (${days[days.length - 1].plants} plantes)`],
-  ].map(([v, l]) => `<div class="kpi"><b>${v}</b><span>${l}</span></div>`).join('');
-  const issues = [];
-  if (p.km >= 1.5 && act < 0.55) issues.push(`<b>L'idle prend le dessus.</b> L'activité ne fait que ${Math.round(act * 100)} % des gains (cible : 60 %).`);
-  if (p.km >= 1.5 && act > 0.75) issues.push(`<b>L'idle ne pèse presque rien.</b> ${Math.round(idle * 100)} % seulement : les habitats ne valent pas leur prix (cible : 40 %).`);
-  if ((first('Hôtel à insectes') ?? 99) <= 7) issues.push(`<b>Trop rapide.</b> L'hôtel à insectes arrive dès le jour ${first('Hôtel à insectes')}.`);
-  if (p.km >= 2 && p.days >= 45 && !first('Hôtel à insectes')) issues.push(`<b>Trop lent.</b> Même en marchant ${p.km.toLocaleString('fr-FR')} km par jour, le troisième habitat n'est pas posé en ${p.days} jours.`);
-  $('#verdict').innerHTML = issues.length
-    ? `<div class="verdict warn"><span class="pill">À revoir</span><p>${issues.join('<br>')}</p></div>`
-    : `<div class="verdict good"><span class="pill">Équilibré</span><p>L'activité fait ${Math.round(act * 100)} % des gains et l'idle ${Math.round(idle * 100)} % (cible : 60 / 40). Les habitats arrivent un à un sur des semaines (${reached} sortes en ${p.days} jours), et le terrain s'étend à ${cells} parcelles.</p></div>`;
-  chartShare($('#ch1'), days);
-  chartLog($('#ch2'), days);
-  $('#tl').innerHTML = log.map(b => `<tr><td>${b.label}</td><td class="num"><span class="chip">J${b.day}</span></td><td class="num">${fmt(b.price)}</td></tr>`).join('');
+  for (const [id, f] of Object.entries(ctl)) $(`${id}-o`).textContent = f($(id).value);
+  const P = params(), { days, steps } = simulate(P);
+  const sum = k => days.reduce((a, d) => a + d[k], 0), tot = sum('total');
+  const act = sum('act') / tot, hab = (sum('elan') + sum('rest')) / tot, read = sum('read') / tot;
+  const at = d => days[Math.min(days.length, d) - 1];
+  const empty = days.filter(d => d.d > 14 && !d.buys).length, quizDays = days.filter(d => d.quiz).length;
+  $('kpis').innerHTML = [
+    [pct(act), 'du nectar vient de la marche (cible : 60 %)'],
+    [pct(hab), 'des habitats (élan et repos)'],
+    [pct(read), 'des fiches et du quiz'],
+    [fmt(at(7).prodH), 'nectar par heure d’élan au jour 7'],
+    [fmt(at(30).prodH), 'au jour 30'],
+    [`${(days.slice(0, 14).reduce((a, d) => a + d.buys, 0) / Math.min(14, days.length)).toLocaleString('fr-FR', { maximumFractionDigits: 1 })}`, 'achats par jour, deux premières semaines'],
+    [`${empty}`, `journées sans achat après le jour 14 (quiz : ${quizDays} jours)`],
+  ].map(([b, s]) => `<div class="kpi"><b>${b}</b><span>${s}</span></div>`).join('');
+  const ok = act >= 0.5 && act <= 0.72 && empty <= days.length * 0.15;
+  $('verdict').innerHTML = `<div class="verdict ${ok ? 'good' : 'warn'}"><span class="pill">${ok ? 'Équilibré' : 'À regarder'}</span><p>${act < 0.5 ? 'La marche pèse moins de la moitié : pour ce joueur, les habitats et la lecture font l’essentiel.' : act > 0.72 ? 'La marche fait presque tout : les habitats comptent peu pour ce joueur.' : 'La marche reste le moteur, les habitats suivent (cible : 60 / 40).'} ${empty > days.length * 0.15 ? `${empty} jours sans rien à acheter : la fin de partie manque de contenu pour ce joueur.` : 'Il y a presque toujours quelque chose à acheter.'}</p></div>`;
+  stackChart($('ch1'), days);
+  buysChart($('ch2'), days);
+  $('tl').innerHTML = steps.filter(s => !/Terrain/.test(s.label)).map(s => `<tr><td>${s.label}</td><td class="num">${s.d}</td><td class="num">${fmt(s.price)}</td></tr>`).join('');
 }
 
-for (const id of ['km', 'goal', 'npk', 'kmShare', 'growth', 'elan', 'rest', 'bio', 'days']) $('#' + id).addEventListener('input', render);
-for (const b of document.querySelectorAll('.presets button')) b.addEventListener('click', () => { $('#km').value = b.dataset.km; render(); });
+// Les profils de joueur.
+$('presets').innerHTML = PROFILES.map(([n, km, out, kmh], i) => `<button data-i="${i}" aria-pressed="${i === 2}">${n} · ${km.toLocaleString('fr-FR')} km</button>`).join('');
+$('presets').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  const [, km, out, kmh] = PROFILES[+b.dataset.i];
+  $('km').value = km; $('days-out').value = out; $('kmh').value = kmh;
+  for (const x of $('presets').children) x.setAttribute('aria-pressed', String(x === b));
+  render();
+});
+for (const id of Object.keys(ctl)) $(id).addEventListener('input', () => { if (['km', 'days-out', 'kmh'].includes(id)) for (const x of $('presets').children) x.setAttribute('aria-pressed', 'false'); render(); });
+matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', render);
 render();
 </script>
