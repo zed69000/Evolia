@@ -4098,22 +4098,49 @@ export class Garden {
 		const km = place.km ?? 0;
 		ctx.textAlign = 'center';
 		const cells = all ? [...this.openCells(), ...this.lockedCells()] : this.lockedCells();
+		// Vue d'ensemble : seules les parcelles voisines du jardin disent « Terre inconnue » ; les étiquettes qui se
+		// chevaucheraient ne sont pas dessinées (les parcelles ouvertes passent d'abord).
+		const openPos = this.openCells().map(c => cellPos(c));
+		const frontier = i => { const [gx, gy] = cellPos(i); return openPos.some(([x, y]) => Math.abs(x - gx) + Math.abs(y - gy) === 1); };
+		const taken = [];
+		const free = (x0, y0, x1, y1) => !taken.some(r => x0 < r[2] && x1 > r[0] && y0 < r[3] && y1 > r[1]);
 		for (const i of cells) {
 			const [ox, oy] = cellOrigin(i);
 			const isOpen = i < cellsOpen(place);
 			const info = isOpen ? null : this.lockedInfo?.(i);
 			// Une parcelle qu'on ne peut pas encore explorer ne dit rien : on ne dévoile pas la suite.
 			if (!isOpen && !info) continue;
+			if (all && !isOpen && !frontier(i)) continue;
 			const title = isOpen ? cellName(place, i) : info.title;
 			// Vu de loin, une parcelle fermée ne dit que l'essentiel (le prix, ou ce qu'il manque).
 			const grow = isOpen && this.cellScale(i) < 1 ? this.growInfo?.(i) : null;
-			const sub = isOpen ? grow ?? `${place.plants.filter(p => cellOf(p) === i && p.growth >= 1).length} plantes` : all ? info.hint : info.sub;
+			let sub = isOpen ? grow ?? `${place.plants.filter(p => cellOf(p) === i && p.growth >= 1).length} plantes` : all ? info.hint : info.sub;
 			// Centre de la parcelle à l'écran ; une parcelle fermée garde son étiquette visible tant qu'on en voit un bout.
 			const cw = this.canvas.width, ch = this.canvas.height;
 			const sx0 = ox * S + tx, sx1 = (ox + PARCEL_W) * S + tx, sy0 = oy * S + ty, sy1 = (oy + PARCEL_H) * S + ty;
+			// De loin, l'étiquette suit la taille de la parcelle à l'écran ; trop petite, juste son nom, sans cadre.
+			const cellW = sx1 - sx0, tiny = all && cellW < 110 * dpr;
+			if (all && cellW < 46 * dpr) continue;
+			if (tiny) {
+				// De très loin, les terres inconnues ne disent rien : la carte reste lisible.
+				if (!isOpen) continue;
+				const fs = Math.max(9, Math.min(13, cellW / dpr / 8)) * dpr;
+				ctx.font = `${Math.round(fs)}px Courgette, cursive`;
+				const label = cellName(place, i);
+				let tw2 = ctx.measureText(label).width, txt = label;
+				while (tw2 > cellW - 6 * dpr && txt.length > 4) { txt = `${txt.slice(0, -2)}…`; tw2 = ctx.measureText(txt).width; }
+				const cx = (sx0 + sx1) / 2, cy = (sy0 + sy1) / 2;
+				if (!free(cx - tw2 / 2 - 4 * dpr, cy - fs, cx + tw2 / 2 + 4 * dpr, cy + 4 * dpr)) continue;
+				taken.push([cx - tw2 / 2 - 4 * dpr, cy - fs, cx + tw2 / 2 + 4 * dpr, cy + 4 * dpr]);
+				ctx.lineWidth = 3 * dpr; ctx.strokeStyle = 'rgba(253,247,231,0.85)'; ctx.lineJoin = 'round';
+				ctx.strokeText(txt, cx, cy);
+				ctx.fillStyle = isOpen ? '#1F6B47' : '#8A846E';
+				ctx.fillText(txt, cx, cy);
+				continue;
+			}
 			ctx.font = `${Math.round((all ? 15 : 20) * dpr)}px Courgette, cursive`;
 			// Un nom trop long pour la parcelle passe sur deux lignes.
-			const room = (all ? Math.max(sx1 - sx0 - 12 * dpr, isOpen ? 210 * dpr : 0) : cw - 40 * dpr);
+			const room = (all ? sx1 - sx0 - 12 * dpr : cw - 40 * dpr);
 			let lines = [title];
 			if (ctx.measureText(title).width > room - 16 * dpr && title.includes(' ')) {
 				const words = title.split(' ');
@@ -4130,6 +4157,13 @@ export class Garden {
 			const sw = ctx.measureText(sub).width;
 			ctx.font = `${Math.round((all ? 15 : 20) * dpr)}px Courgette, cursive`;
 			const w = Math.min(room, Math.max(tw, sw, (all ? 70 : 130) * dpr) + (all ? 16 : 32) * dpr);
+			// Une ligne trop longue pour l'étiquette : on garde l'essentiel (le prix, sans les km), puis on coupe.
+			if (all && sw > w - 10 * dpr) {
+				ctx.font = `${Math.round(12 * dpr)}px Nunito, sans-serif`;
+				sub = sub.split(' · ')[0];
+				while (ctx.measureText(sub).width > w - 10 * dpr && sub.length > 4) sub = `${sub.slice(0, -2)}…`;
+				ctx.font = `${Math.round(15 * dpr)}px Courgette, cursive`;
+			}
 			let x = (sx0 + sx1) / 2, y = (sy0 + sy1) / 2;
 			if (!all) {
 				const seenW = Math.min(sx1, cw) - Math.max(sx0, 0), seenH = Math.min(sy1, ch) - Math.max(sy0, 0);
@@ -4142,6 +4176,9 @@ export class Garden {
 				x = Math.max(Math.max(sx0, 0) + w / 2 + 8 * dpr, Math.min(Math.min(sx1, cw) - w / 2 - 8 * dpr, x));
 				y = Math.max(Math.max(sy0, 0) + 140 * dpr, Math.min(Math.min(sy1, ch) - 260 * dpr, y));
 			}
+			const r0 = [x - w / 2, y - 34 * dpr - extra / 2, x + w / 2, y + 28 * dpr + extra / 2];
+			if (all && !free(...r0)) continue;
+			taken.push(r0);
 			ctx.fillStyle = isOpen ? 'rgba(253,247,231,0.92)' : 'rgba(243,237,217,0.95)';
 			ctx.beginPath();
 			ctx.roundRect(x - w / 2, y - 34 * dpr - extra / 2, w, 62 * dpr + extra, 16 * dpr);

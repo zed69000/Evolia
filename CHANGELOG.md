@@ -3,6 +3,9 @@
 Chaque version, la plus récente en haut. Le site (evolia.sebastienalzamora.workers.dev) est toujours à jour ;
 le Play Store (tests internes) reçoit les versions indiquées « Play ».
 
+## 0.7.73 — 12 novembre 2026
+Corrigé : de loin, les cadres blancs des parcelles se chevauchaient et cachaient la carte. Les étiquettes suivent maintenant la taille de la parcelle à l’écran : de très loin, juste le nom, en petit ; seules les parcelles voisines du jardin disent « Terre inconnue » ; une étiquette qui en recouvrirait une autre n’est pas dessinée ; un prix trop long est raccourci.
+
 ## 0.7.72 — 12 novembre 2026
 - **Révélations** : une nouvelle parcelle ou une nouvelle espèce s’annonce en grand au milieu de l’écran (titre sur des rayons de lumière, photo de l’espèce, étincelles dans le jardin, petite fanfare). Une à la fois ; elles attendent qu’aucune page ne soit ouverte. Toucher ouvre la fiche.
 - **Quiz** : seulement sur les espèces découvertes avant aujourd’hui, à partir de 4 plantes et 4 animaux ; une espèce ne revient pas avant 8 autres questions, et plus tôt si on s’est trompé ; les réponses sont gardées ; « Feuilleter le livre des espèces » pendant une question.
