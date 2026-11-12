@@ -77,8 +77,38 @@ export function claimGift(state) {
 	return g;
 }
 
+// ─── Les défis du moment : la vraie météo devient une occasion de bouger ───
+// Quand un moment se présente dans la journée (soleil, pluie, nuit, hiver), un défi de plus apparaît pour lui, une
+// fois par jour : marcher sous la pluie, profiter du soleil, découvrir un visiteur de la nuit, braver le froid.
+const MOMENT_CH = {
+	pluie: { id: 'm-pluie', kind: 'mkm', moment: 'pluie', n: 1, reward: 80, boost: 45, label: 'Marche 1 km sous la pluie', icon: '☂' },
+	soleil: { id: 'm-soleil', kind: 'mkm', moment: 'soleil', n: 1.5, reward: 50, boost: 30, label: 'Profite du soleil : marche 1,5 km', icon: '☀' },
+	nuit: { id: 'm-nuit', kind: 'visitor', moment: 'nuit', n: 1, reward: 60, label: 'Découvre un visiteur de la nuit (touche-le)', icon: '☾' },
+	hiver: { id: 'm-hiver', kind: 'mkm', moment: 'hiver', n: 1, reward: 80, boost: 45, label: 'Brave le froid : marche 1 km', icon: '❄' },
+};
+/** Ajoute le défi du moment, une fois par jour ; vrai s'il vient d'apparaître. */
+export function addMomentChallenge(state, moment) {
+	const d = state.daily, c = MOMENT_CH[moment];
+	if (!d?.challenges || !c || d.challenges.some(x => x.id === c.id)) return false;
+	d.challenges.push({ ...c });
+	return true;
+}
+/** Des mètres faits pendant un moment (pour les défis du moment). */
+export function noteMomentMeters(state, moment, m) {
+	const d = state.daily;
+	if (!d) return;
+	(d.momentM ??= {})[moment] = (d.momentM[moment] ?? 0) + m;
+}
+/** Un visiteur du moment découvert. */
+export function noteVisitor(state, moment) {
+	const d = state.daily;
+	if (d) (d.visitors ??= {})[moment] = (d.visitors[moment] ?? 0) + 1;
+}
+
 export function progress(state, c) {
 	const d = state.daily;
+	if (c.kind === 'mkm') return (d.momentM?.[c.moment] ?? 0) / 1000;
+	if (c.kind === 'visitor') return d.visitors?.[c.moment] ?? 0;
 	if (c.kind === 'move') return todayMeters(state) / 1000;
 	if (c.id === 'quest') return d.quests ?? 0;
 	if (c.id === 'taps') return (d.taps ?? []).length;
@@ -106,20 +136,21 @@ export function noteQuest(state) {
 }
 
 const LABEL = {
+	'm-pluie': c => c.label, 'm-soleil': c => c.label, 'm-nuit': c => c.label, 'm-hiver': c => c.label,
 	move: c => `Bouge ${fmt(c.n, c.n % 1 ? 1 : 0)} km aujourd'hui`,
 	quest: c => `Gagne ${c.n} fois au jeu « Trouve… »`,
 	taps: c => `Touche ${c.n} animaux différents`,
 	bloom: c => `Fais pousser ${c.n} plantes jusqu'au bout`,
 };
-const ICON = { move: '👟', observe: '🔍', bloom: '🌼' };
+const ICON = { move: '👟', observe: '🔍', bloom: '🌼', mkm: '🌦', visitor: '✨' };
 
 export function challengesHtml(state) {
 	return `<ul class="challenges">${state.daily.challenges.map(c => {
 		const p = progress(state, c), done = p >= c.n, got = state.daily.claimed[c.id];
-		const shown = c.kind === 'move' ? `${fmt(Math.min(p, c.n))} / ${fmt(c.n, c.n % 1 ? 1 : 0)} km` : `${Math.min(p, c.n)} / ${c.n}`;
+		const shown = c.kind === 'move' || c.kind === 'mkm' ? `${fmt(Math.min(p, c.n))} / ${fmt(c.n, c.n % 1 ? 1 : 0)} km` : `${Math.min(p, c.n)} / ${c.n}`;
 		const prize = `+${c.reward} nectar${c.boost ? ` · élan ×${fmtNum(boostMult())} pendant ${c.boost} min` : ''}`;
 		return `<li class="ch${done ? ' done' : ''}${got ? ' got' : ''}">
-			<span class="ch-ico" aria-hidden="true">${ICON[c.kind]}</span>
+			<span class="ch-ico" aria-hidden="true">${c.icon ?? ICON[c.kind]}</span>
 			<div class="ch-body"><b>${LABEL[c.id](c)}</b>
 				<div class="bar"><i style="width:${Math.min(100, (p / c.n) * 100)}%"></i></div>
 				<small>${shown} · ${prize}</small></div>
@@ -194,6 +225,42 @@ const DECOR_TEASE = {
 	mushrooms: 'des champignons', litiere: 'un tapis de feuilles', souche: 'une vieille souche', eboulis: 'un éboulis', neve: 'un névé',
 	laisse: 'la laisse de mer', ganivelles: 'des ganivelles',
 };
+
+// ─── Les albums de saison : chaque saison son album, à compléter avant qu'elle finisse ───
+const SEASON_NAME = { printemps: 'Printemps', ete: 'Été', automne: 'Automne', hiver: 'Hiver' };
+/** La saison d'une date (hémisphère nord, saisons météorologiques) et sa clé : « automne-2026 », « hiver-2026 »… */
+export function seasonOf(t = Date.now()) {
+	const d = new Date(t), m = d.getMonth();
+	const s = m >= 2 && m <= 4 ? 'printemps' : m >= 5 && m <= 7 ? 'ete' : m >= 8 && m <= 10 ? 'automne' : 'hiver';
+	// L'hiver commence en décembre : décembre 2026, janvier et février 2027 font « hiver 2026-2027 ».
+	const y = s === 'hiver' && m <= 1 ? d.getFullYear() - 1 : d.getFullYear();
+	return { key: `${s}-${y}`, season: s, name: s === 'hiver' ? `${SEASON_NAME[s]} ${y}-${y + 1}` : `${SEASON_NAME[s]} ${y}` };
+}
+/** Le but d'un album de saison, et ses récompenses. */
+export const SEASON_GOALS = [{ n: 10, reward: 300 }, { n: 25, reward: 1000 }, { n: 50, reward: 4000 }];
+/** Les découvertes d'une saison (d'après la date de chaque découverte). */
+export function seasonFinds(state, key) {
+	return Object.entries(state.species).filter(([id, t]) => typeof t === 'number' && SPECIES_BY_ID[id] && seasonOf(t).key === key).map(([id]) => id);
+}
+/** Les paliers de l'album de la saison atteints et pas encore payés ; les marque payés. */
+export function seasonRewards(state) {
+	const s = seasonOf(), n = seasonFinds(state, s.key).length, paid = (state.seasonPaid ??= {});
+	const out = [];
+	for (const g of SEASON_GOALS) if (n >= g.n && !paid[`${s.key}:${g.n}`]) { paid[`${s.key}:${g.n}`] = Date.now(); out.push({ ...g, season: s }); }
+	return out;
+}
+/** L'album de la saison en cours, puis les saisons passées. */
+export function seasonHtml(state) {
+	const cur = seasonOf(), found = seasonFinds(state, cur.key), next = SEASON_GOALS.find(g => found.length < g.n);
+	const keys = [...new Set(Object.values(state.species).filter(t => typeof t === 'number').map(t => seasonOf(t).key))].filter(k => k !== cur.key).sort().reverse();
+	const nameOf = k => { const [s, y] = k.split('-'); return s === 'hiver' ? `${SEASON_NAME[s]} ${y}-${+y + 1}` : `${SEASON_NAME[s]} ${y}`; };
+	return `<div class="season card">
+		<b>${cur.name}</b><span>${found.length} découverte${found.length > 1 ? 's' : ''} cette saison</span>
+		${next ? `<div class="bar"><i style="width:${Math.min(100, found.length / next.n * 100)}%"></i></div><small>Prochain palier : ${next.n} découvertes, +${next.reward} nectar. La saison finit avec son album : chaque saison a ses fleurs, ses bêtes et ses moments.</small>` : '<small>Album complet pour cette saison : bravo !</small>'}
+		${found.length ? `<p class="season-list">${found.map(id => `<span data-open-sp="${id}">${SPECIES_BY_ID[id].name}</span>`).join(' · ')}</p>` : ''}
+	</div>
+	${keys.length ? `<ul class="rows">${keys.map(k => `<li><span>${nameOf(k)}</span><b>${seasonFinds(state, k).length}</b></li>`).join('')}</ul>` : ''}`;
+}
 
 /** Album : tout ce qui s'est ouvert, du plus récent au plus ancien, groupé par jour. */
 export function albumHtml(state, limit = 40) {

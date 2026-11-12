@@ -19,7 +19,7 @@ import { LADDER, isLadder, ladderPrice, ladderLock, nextUpgrade, unitProd, prodP
 import { exportCode, importCode, backupAge } from './backup.js';
 import { DebugPanel, debugOn, setDebug, debugLog, ago, dur, trace, traceFlush } from './debug.js';
 import { canNotify, askNotify, scheduleReminders, clearReminders } from './notify.js';
-import { rollDay, markActive, giftReady, giftFor, claimGift, claim, toClaim, noteTap, noteQuest, challengesHtml, weekHtml, nextGoal, albumHtml, collection, herbarium, newlyComplete, HERBARIUM_REWARD } from './daily.js';
+import { rollDay, markActive, giftReady, giftFor, claimGift, claim, toClaim, noteTap, noteQuest, challengesHtml, weekHtml, nextGoal, albumHtml, collection, herbarium, newlyComplete, HERBARIUM_REWARD, addMomentChallenge, noteMomentMeters, noteVisitor, seasonHtml, seasonRewards } from './daily.js';
 import { fmtFixed as fmt, fmtInt, fmtNum } from './format.js';
 
 const params = new URLSearchParams(location.search);
@@ -562,6 +562,18 @@ function announceSpecies(quiet = false) {
 }
 
 /** Un herbier complet : toutes les espèces d'un lieu trouvées. Une fête, et une récompense, une fois par lieu. */
+/** Un palier de l'album de la saison atteint : une récompense, et on le dit. */
+function checkSeason() {
+	if (!state.eco2 || state.intro) return;
+	for (const r of seasonRewards(state)) {
+		state.nectar = (state.nectar ?? 0) + r.reward;
+		sound.chime(3);
+		toast(`Album ${r.season.name} : ${r.n} découvertes · +${fmtInt(r.reward)} nectar`, '#F08A3C', () => openJournal());
+		renderHud(); persist(true);
+	}
+}
+setInterval(checkSeason, 20000);
+
 function celebrateHerbarium() {
 	for (const p of newlyComplete(state)) {
 		state.complete[p.id] = Date.now();
@@ -757,6 +769,8 @@ function tapCritter(hit, card) {
 	if (!state.species[sp.id]) {
 		state.species[sp.id] = Date.now();
 		state.nectar = (state.nectar ?? 0) + 25;
+		noteVisitor(state, garden.moment());
+		renderDaily();
 		updateSpeciesDot(); renderHud(); persist(true);
 		sound.chime(3);
 		garden.burst(hit.critter.x, hit.critter.y - 10, 14, '#F4C23E');
@@ -1061,6 +1075,7 @@ function addMeters(m, nectar = m / 5) {
 	// Nouvelle économie : chaque km vaut aussi KM_HOURS heures de la production du jardin (60 % activité, 40 % idle pour un joueur moyen).
 	if (state.eco2 && !state.intro) state.nectar = (state.nectar ?? 0) + (m / 1000) * KM_HOURS * prodPerHour(state);
 	walkGauge((state.nectar ?? 0) - n0);
+	if (session && state.moment && state.moment !== 'jour') noteMomentMeters(state, state.moment, m);
 	if (markActive(state)) {
 		const s = state.daily.streak;
 		toast(s > 1 ? `Jour actif : ${s} jours de suite !` : 'Jour actif : ta série commence', '#F08A3C', () => showDaily());
@@ -1775,6 +1790,8 @@ function renderJournal() {
 		<ul class="rows">
 			${Object.entries(DECOR).filter(([, d]) => d.place === b && !d.always).map(([k, d]) => `<li><span>${d.name}</span><b>${pl.unlocked[k] ? '✓' : `dans ${fmt(Math.max(0.1, d.km - biomeKm(pl, b)), 1)} km`}</b></li>`).join('')}
 		</ul>`).join('')}
+		<h3>L’album de la saison</h3>
+		${seasonHtml(state)}
 		<h3>Ton album</h3>
 		<div id="album">${albumHtml(state)}</div>
 		<h3>Dernières balades</h3>
@@ -2391,6 +2408,11 @@ const MOMENT_OF = { nuit: 'de nuit', pluie: 'sous la pluie', hiver: 'd’hiver',
 function updateMoment() {
 	const m = state.skyMode && state.skyMode !== 'real' ? 'jour' : garden.moment();
 	state.moment = m;
+	// Un moment se présente : son défi du jour apparaît (une fois par jour), et on le dit.
+	if (state.eco2 && !state.intro && m !== 'jour' && addMomentChallenge(state, m)) {
+		renderDaily(); persist();
+		toast(`Nouveau défi ${MOMENT_OF[m]} : ${{ pluie: 'marche 1 km sous la pluie', soleil: 'marche 1,5 km au soleil', nuit: 'découvre un visiteur de la nuit', hiver: 'marche 1 km dans le froid' }[m]}`, '#F08A3C', () => showDaily());
+	}
 	const chip = $('#sky-chip');
 	if (!chip) return;
 	chip.hidden = !state.eco2 || !!state.intro;

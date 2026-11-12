@@ -2490,6 +2490,15 @@ export class Garden {
 					want.set(sp, 1); shown++;
 				}
 			} else this.visitors = [];
+			// Une parcelle d'un milieu où rien n'est encore découvert (un marais tout neuf) : deux habitants du milieu
+			// viennent quand même la visiter, à découvrir en les touchant.
+			for (const biome of new Set(visible.map(ci => this.biomeOf(ci)))) {
+				if ([...want.entries()].some(([sp, v]) => v > 0 && sp.place === biome)) continue;
+				const locals = SPECIES.filter(sp => sp.kind === 'animal' && sp.place === biome && sp.critter?.behavior && !this.state.species[sp.id] && ok(sp.critter.when)
+					&& !((wet || windy || cold) && FLYERS.has(sp.critter.kind)) && !(winter && SLEEPS.has(guildOf(sp.critter))));
+				this.visitors ??= [];
+				for (const c of locals.sort((a, b) => idHash(a.id, 7) - idHash(b.id, 7)).slice(0, 2)) { if (!this.visitors.includes(c.id)) this.visitors.push(c.id); want.set(c, 1); }
+			}
 		}
 		for (const sp of SPECIES) {
 			if (sp.kind !== 'animal' || !present.has(sp.place) || !sp.critter.behavior) continue;

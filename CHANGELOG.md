@@ -3,6 +3,11 @@
 Chaque version, la plus récente en haut. Le site (evolia.sebastienalzamora.workers.dev) est toujours à jour ;
 le Play Store (tests internes) reçoit les versions indiquées « Play ».
 
+## 0.7.69 — 12 novembre 2026
+- **Défis du moment** : quand un moment se présente dans la journée, son défi s’ajoute aux défis du jour, une fois : « Marche 1 km sous la pluie » (+80 nectar, élan), « Profite du soleil : marche 1,5 km » (+50), « Découvre un visiteur de la nuit » (+60), « Brave le froid : marche 1 km » (+80, élan). Un message l’annonce.
+- **Albums de saison** : dans le carnet, l’album de la saison en cours (Automne 2026…) rassemble ses découvertes, avec trois paliers (10, 25, 50 découvertes : +300, +1 000, +4 000 nectar) ; les saisons passées gardent leur compte.
+- **Une parcelle d’un nouveau milieu n’est jamais vide** : si rien n’y est encore découvert, deux de ses habitants viennent la visiter, à découvrir en les touchant.
+
 ## 0.7.68 — 12 novembre 2026
 La nuit, la pluie et l’hiver ne vident plus le jardin (nouvelles parties) :
 - **Chaque moment a sa vie** : quand peu d’animaux sont de sortie, des visiteurs du moment viennent (papillons de nuit, chauves-souris, escargots…), des espèces de ce temps-là pas encore découvertes. Les toucher les fait découvrir : « Découverte de nuit : Noctuelle des moissons · +25 nectar ».

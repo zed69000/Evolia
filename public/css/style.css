@@ -1038,3 +1038,12 @@ body:has(.panel.open) #debug { display: none; }
 .sky-chip[data-m="nuit"] { background: rgba(60,70,120,.25); color: #3A3F78; }
 .sky-chip[data-m="hiver"] { background: rgba(170,200,230,.35); color: #4A6A8A; }
 .opt-help { font-size: 12.5px; color: var(--doux); margin: 6px 0 12px; }
+
+/* L'album de la saison, dans le carnet */
+.season { padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
+.season > b { font-size: 17px; color: var(--foret); }
+.season > span { font-size: 13px; color: var(--doux); }
+.season small { font-size: 12px; color: var(--doux); }
+.season .bar i { background: var(--soleil); }
+.season-list { font-size: 13px; line-height: 1.6; margin: 4px 0 0; }
+.season-list span { cursor: pointer; text-decoration: underline dotted; }
