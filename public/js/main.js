@@ -363,8 +363,12 @@ function renderHud() {
 	const pend = state.intro ? 0 : Math.floor(state.pending ?? 0), full = !state.intro && (hasCollector(state) ? jarOf(state) >= jarCap(state) : groundOf(state) >= 30);
 	$('#hud-steps').innerHTML = `<span class="nectar${boostLeft(state) ? ' boost' : ''}">${fmtInt(shownNectar())}</span>`
 		+ `<small class="${full ? 'full' : pend >= 1 ? 'wait' : ''}">${pend >= 1 ? `+${fmtInt(pend)} à récolter` : 'nectar'}</small>`;
-	const k = Math.min(1, km / state.goalKm);
-	$('#ring-fg').style.strokeDashoffset = String(113.1 * (1 - k));
+	// Le cercle : l'objectif du jour ; une fois atteint, un deuxième tour doré se remplit (jusqu'à deux fois
+	// l'objectif), pour que la jauge continue de bouger quand on marche encore.
+	const r = km / state.goalKm;
+	$('#ring-fg').style.strokeDashoffset = String(113.1 * (1 - Math.min(1, r)));
+	$('#ring-fg2').style.strokeDashoffset = String(113.1 * (1 - Math.max(0, Math.min(1, r - 1))));
+	$('#hud-act').classList.toggle('goal-done', r >= 1);
 }
 
 // ─── Messages ─────────────────────────────────────────────────
@@ -1275,6 +1279,13 @@ const ACT_ICONS = {
 function renderAct() {
 	const a = session?.act, kind = !session ? 'rest' : a?.bike ? 'bike' : a && a.mult >= 2 ? 'run' : 'walk';
 	const el = $('#hud-act');
+	// Pendant une sortie : le cercle pulse, et une petite étiquette donne la sortie en direct (km, temps).
+	const live = $('#act-live');
+	if (live) {
+		live.hidden = !session || !!state.intro;
+		if (session) live.textContent = `${fmt(session.distance / 1000)} km · ${fmtTime(sessionSeconds(session))}`;
+	}
+	el?.classList.toggle('moving', !!session);
 	if (!el || el.dataset.act === kind) return;
 	el.dataset.act = kind;
 	el.setAttribute('aria-label', kind === 'rest' ? 'Au repos' : a?.name ?? 'En mouvement');

@@ -1009,3 +1009,10 @@ body:has(.panel.open) #debug { display: none; }
 #sim-bar .sim-btns { display: flex; gap: 8px; }
 #sim-bar button { font: 700 13px Nunito, sans-serif; padding: 6px 12px; border-radius: 10px; border: 1.5px solid var(--foret); color: var(--foret); background: none; }
 #app.placing #sim-bar, #app.booting #sim-bar { display: none; }
+
+/* La jauge d'activité : un deuxième tour doré après l'objectif, un cercle qui pulse pendant une sortie, et la sortie en
+   direct sous la bourse. */
+.ring-fg2 { stroke: #F4C23E; }
+.hud-act.moving .ring { animation: act-pulse 1.4s ease-in-out infinite; }
+@keyframes act-pulse { 0%, 100% { transform: scale(1); filter: none; } 50% { transform: scale(1.08); filter: drop-shadow(0 0 4px rgba(240,138,60,.7)); } }
+.act-live { align-self: center; font: 800 12px Nunito, sans-serif; color: var(--foret); background: rgba(95,147,62,.14); border-radius: 10px; padding: 4px 8px; white-space: nowrap; }

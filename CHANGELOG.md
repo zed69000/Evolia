@@ -3,6 +3,11 @@
 Chaque version, la plus récente en haut. Le site (evolia.sebastienalzamora.workers.dev) est toujours à jour ;
 le Play Store (tests internes) reçoit les versions indiquées « Play ».
 
+## 0.7.65 — 12 novembre 2026
+Corrigé : on ne voyait pas bien qu’on était en activité.
+- Le cercle autour de l’icône d’activité s’arrêtait, plein, une fois l’objectif du jour atteint : un deuxième tour doré se remplit maintenant jusqu’à deux fois l’objectif.
+- Pendant une sortie, le cercle pulse doucement et une étiquette à côté de la bourse donne la sortie en direct (« 1,24 km · 14:32 ») ; le panneau qui le faisait avait disparu avec le bandeau compact.
+
 ## 0.7.64 — 12 novembre 2026
 L’agencement compte, et chaque espèce a un rôle (nouvelles parties) :
 - **Voisinage** : chaque habitat ne produit à plein qu’avec assez de plantes à sa portée (un rayon d’environ un demi-terrain) : des fleurs et des arbustes pour une ruche, un massif ou un hôtel, des arbustes et des arbres pour un nichoir, herbes, fleurs et arbustes pour une mare. Une plante est partagée entre les habitats qui l’entourent : mieux vaut les étaler que les entasser.
