@@ -1,31 +1,33 @@
 // L'économie des habitats (nouvelles parties, state.eco2), façon jeu incrémental, réglée avec docs/equilibre-evolia.html.
 //
 // L'activité physique est le moteur, de trois façons :
-//  - chaque km rapporte du nectar, plus deux heures de la production du jardin (le pas grandit avec le jardin) ;
+//  - chaque km rapporte du nectar, plus trois heures de la production du jardin (le pas grandit avec le jardin) ;
 //  - les habitats ne travaillent à plein que pendant l'élan qui suit une sortie (5 % au repos) ;
 //  - les pas font pousser les plantes, et les habitats ne produisent bien que s'il y a assez de plantes autour.
 //
-// Six habitats forment une échelle : chacun coûte environ cinq fois le précédent et produit environ cinq fois plus.
-// Chaque exemplaire coûte 15 % de plus que le précédent ; posséder 1, 5, 25, 50 exemplaires débloque une amélioration
-// qui double leur production. Chaque espèce découverte ajoute 1 % à toute la production.
+// Six habitats forment une échelle, à la façon de Cookie Clicker : les premiers se remboursent en une dizaine d'heures
+// d'élan (le début va vite), les suivants de plus en plus lentement, et chacun s'ouvre avec les km parcourus.
+// Chaque exemplaire coûte 15 % de plus que le précédent ; posséder 1, 5, 10, 25, 50, 100 exemplaires débloque une
+// amélioration qui double leur production. Chaque espèce découverte ajoute 1 % à toute la production.
+// Réglé avec docs/rythme-achats.js (500 joueurs, ouverture par ouverture) : 62 % d'activité pour un marcheur régulier.
 
 import { ITEMS } from './deco.js';
 
 export const LADDER = {
-	massif: { cost: 50, prod: 0.6, km: 0 },
-	ruche: { cost: 300, prod: 3, km: 1 },
-	hotel: { cost: 1200, prod: 14, km: 4 },
-	nichoir: { cost: 6000, prod: 60, km: 8 },
-	mare: { cost: 30000, prod: 280, km: 15 },
-	haie: { cost: 150000, prod: 1300, km: 25 },
+	massif: { cost: 15, prod: 1.5, km: 0 },
+	ruche: { cost: 100, prod: 8, km: 0 },
+	hotel: { cost: 600, prod: 30, km: 2 },
+	nichoir: { cost: 5000, prod: 120, km: 12 },
+	mare: { cost: 50000, prod: 500, km: 50 },
+	haie: { cost: 600000, prod: 2400, km: 150 },
 };
 export const LADDER_ORDER = Object.keys(LADDER);
-export const UPG_AT = [1, 5, 25, 50];
-const UPG_COST = [5, 25, 250, 2500];
+export const UPG_AT = [1, 5, 10, 25, 50, 100];
+const UPG_COST = [5, 20, 150, 3000, 100000, 3000000];
 /** La part de la production quand on ne bouge pas (hors élan). */
 export const REST = 0.05;
 /** Chaque km rapporte aussi ces heures de production du jardin. */
-export const KM_HOURS = 4;
+export const KM_HOURS = 3;
 /** La première ruche reste à 100 nectar : la fiche de l'abeille la paie, dans l'introduction. */
 const FIRST_HIVE = 100;
 /** Au plus tant d'heures de production rattrapées appli fermée. */

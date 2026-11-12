@@ -1044,9 +1044,11 @@ const UNIT = {
 };
 
 /** Ce qu'un objet apporte à l'écosystème, en quelques mots (ou '' pour un objet de décor). */
-export function itemHelp(kind) {
+export function itemHelp(kind, eco2 = false) {
 	const it = ITEMS[kind];
 	if (!it.team) return '';
+	// Nouvelle économie : pas d'équipes ni de plafond ; un habitat hors échelle fait venir des espèces (+1 % chacune).
+	if (eco2) return it.cat === 'habitat' ? 'De nouvelles espèces viennent y vivre (+1 % de production chacune)' : '';
 	const team = `+${it.power} ${UNIT[it.team][it.power > 1 ? 1 : 0]}`;
 	// Un habitat relève aussi le plafond de l'écosystème, de 3 % par niveau (voir idle.js).
 	return it.cat === 'habitat' ? `${team} · +${3 * it.power} % de production` : team;

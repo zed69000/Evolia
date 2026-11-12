@@ -750,7 +750,7 @@ const TIPS = [
 	{ id: 'elan', eco2: true, target: '#hud-act', when: () => (state.walks?.length ?? 0) >= 1 && boostLeft(state) > 0 && prodPerHour(state) > 0,
 		title: 'L’élan', text: 'Après une sortie, tes habitats travaillent à plein : environ 7 minutes par minute de marche, jusqu’à 8 heures. Au repos, ils ne font presque rien. C’est en bougeant que ton jardin tourne.' },
 	{ id: 'kmvalue', eco2: true, target: '#hud-steps', when: () => prodPerHour(state) >= 3,
-		title: 'Tes pas prennent de la valeur', get text() { return `Chaque km te rapporte 60 nectar, plus quatre heures de la production de ton jardin (en ce moment, environ ${fmtInt(60 + 4 * prodPerHour(state))} nectar par km). Plus ton jardin grandit, plus tes pas valent.`; } },
+		title: 'Tes pas prennent de la valeur', get text() { return `Chaque km te rapporte 60 nectar, plus ${KM_HOURS} heures de la production de ton jardin (en ce moment, environ ${fmtInt(60 + KM_HOURS * prodPerHour(state))} nectar par km). Plus ton jardin grandit, plus tes pas valent.`; } },
 	{ id: 'upgrade', eco2: true, target: '#btn-deco', when: () => Object.keys(LADDER).some(k => { const u = nextUpgrade(state, k); return u?.ok && (state.nectar ?? 0) >= u.cost; }),
 		title: 'Une amélioration', text: 'Tu as assez d’habitats d’une même sorte pour les améliorer : leur production double. Ouvre Aménager › Habitats, le bouton « Amélioration (× 2) » est sur leur carte.' },
 	{ id: 'plants', eco2: true, target: '#btn-deco', when: () => { const n = Object.keys(LADDER).reduce((a, k) => a + ownedCount(k), 0); return n >= 4 && here().plants.filter(p => p.growth >= 1 && p.type !== 'herbe').length < n * 2; },
@@ -937,7 +937,7 @@ function addMeters(m, nectar = m / 5) {
 	// Le nectar de la marche se dépose comme celui des butineurs : en gouttes sur les fleurs, ou dans le collecteur.
 	// Il n'est pas limité par la réserve : ce qu'on a gagné en marchant ne se perd jamais.
 	addWaiting(state, nectar, false, state.place);
-	// Nouvelle économie : chaque km vaut aussi quatre heures de la production du jardin (60 % activité, 40 % idle pour un joueur moyen).
+	// Nouvelle économie : chaque km vaut aussi KM_HOURS heures de la production du jardin (60 % activité, 40 % idle pour un joueur moyen).
 	if (state.eco2 && !state.intro) state.nectar = (state.nectar ?? 0) + (m / 1000) * KM_HOURS * prodPerHour(state);
 	if (markActive(state)) {
 		const s = state.daily.streak;
@@ -1879,9 +1879,9 @@ function renderDeco() {
 			// L'échelle des habitats : ce que chacun rapporte pendant l'élan, et son amélioration (production × 2).
 			const up2 = ladder && !later ? nextUpgrade(state, k) : null;
 			const prodLine = ladder && !later ? `<span class="deco-help">Chacun rapporte ${fmtNum(unitProd(state, k))} nectar par heure d’élan${n ? ` · ${n} posé${n > 1 ? 's' : ''}` : ''}</span>` : '';
-			const upgBtn = up2 ? (up2.ok ? `<button class="btn primary small" data-upg="${k}" ${nectar < up2.cost ? 'disabled' : ''}>Amélioration ${up2.level} (× 2) · ${fmtInt(up2.cost)}</button>` : `<span class="deco-lock">amélioration ${up2.level} (× 2) dès ${up2.need} posés</span>`) : '';
+			const upgBtn = up2 ? (up2.ok ? `<button class="btn primary small" data-upg="${k}" ${nectar < up2.cost ? 'disabled' : ''}>Amélioration ${up2.level} : +${fmtNum(n * unitProd(state, k))} par heure · ${fmtInt(up2.cost)}</button>` : `<span class="deco-lock">amélioration ${up2.level} (× 2) dès ${up2.need} posés</span>`) : '';
 			return `<div class="deco-card${locked ? ' locked' : ''}"><div class="deco-art" data-art="${k}"></div>
-				<div class="deco-body"><h3>${it.name}</h3><p>${it.text}</p>${itemHelp(k) ? `<span class="deco-help">${itemHelp(k)}</span>` : ''}
+				<div class="deco-body"><h3>${it.name}</h3><p>${it.text}</p>${!ladder && itemHelp(k, state.eco2) ? `<span class="deco-help">${itemHelp(k, state.eco2)}</span>` : ''}
 				${prodLine}<div class="deco-row"><span class="nectar">${fmtInt(cost)}</span>${levels}${action}</div>${up ? `<div class="deco-row deco-up">${up}</div>` : ''}${upgBtn && n ? `<div class="deco-row deco-up">${upgBtn}</div>` : ''}</div></div>`;
 		}).join('')}</div>`;
 	for (const el of $('#deco').querySelectorAll('[data-art]')) {
@@ -1995,7 +1995,7 @@ $('#btn-place').addEventListener('click', () => {
 		const placed = garden.placeItem(kind, x, y, rot);
 		placed.paid = cost;
 		if (kind === 'collecteur') fillFromDew(placed);
-		const help = itemHelp(kind);
+		const help = state.eco2 && isLadder(kind) ? `+${fmtNum(unitProd(state, kind))} nectar par heure d’élan` : itemHelp(kind, state.eco2);
 		toast(`${ITEMS[kind].name} : installé${/^Une /.test(ITEMS[kind].name) ? 'e' : /^Des /.test(ITEMS[kind].name) ? 's' : ''}${help ? ` · ${help}` : ''}`, '#9A7448');
 		if (kind === 'cabane' && garden.items.filter(x => x.kind === 'cabane').length === 1) {
 			setTimeout(() => chooseFarmer(() => choosePet(() => toast(`${farmerName(true)} s’installe : construis-lui un potager`, '#5F933E', () => openDeco('recolte')))), 1400);
@@ -2198,7 +2198,7 @@ $('#deco').addEventListener('click', e => {
 		state.nectar -= up.cost;
 		(state.upg ??= {})[kind] = up.level;
 		sound.chime(3);
-		toast(`${ITEMS[kind].name} : production × 2`, '#5F933E');
+		toast(`${ITEMS[kind].name} : production × 2 (+${fmtNum(ownedOf(state, kind) * unitProd(state, kind) / 2)} par heure d’élan)`, '#5F933E');
 		persist(true);
 		renderHud();
 		return renderDeco();
