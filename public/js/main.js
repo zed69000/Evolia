@@ -15,7 +15,7 @@ import { Soundscape } from './audio.js';
 import { ITEMS, ITEM_ORDER, itemHelp, itemCost, fitsPlace, CATS, MAX_LEVEL, LEVEL_NAME, LEVEL_KM, canLevel, levelCost, CABIN_STYLES, seedBirds, birdHelp } from './deco.js';
 import { VERSION } from './version.js';
 import { startIntro, INTRO_NECTAR, FLOWER, FLOWER_SEED } from './intro.js';
-import { makeQuiz, quizReady, streakMult, QUIZ_GAP } from './quiz.js';
+import { makeQuiz, quizReady, streakMult, QUIZ_GAP, noteAnswer, QUIZ_MIN_PLANTS, QUIZ_MIN_ANIMALS } from './quiz.js';
 import { LADDER, isLadder, ladderPrice, ladderLock, nextUpgrade, unitProd, prodPerHour, produce, KM_HOURS, KM_VALUE_H, UPG_AT, REST, plantCover, ownedOf, PER_PARCEL, LEVEL_PROD, LEVEL_KM2, levelPrice, levelsOf, MOMENTS, NEAR_USE, NEAR_R, NEAR_NEED, SYN_PER, SYN_MAX, guildEffect, nearOf, itemProd, GUILD_BONUS } from './habitats.js';
 import { exportCode, importCode, backupAge } from './backup.js';
 import { DebugPanel, debugOn, setDebug, debugLog, ago, dur, trace, traceFlush } from './debug.js';
@@ -158,10 +158,10 @@ const quizBase = () => Math.max(15, Math.round((10 + 3 * Object.keys(state.speci
 /** Proposer le quiz (une fenêtre qui explique, puis trois questions). `force` : outils du développeur. */
 function offerQuiz(force = false) {
 	const qs = makeQuiz(state);
-	if (!qs) { if (force) toast('Lis au moins cinq fiches d’espèces pour avoir un quiz', '#9A7448'); return; }
+	if (!qs) { if (force) toast(`Le quiz porte sur les fiches lues avant aujourd’hui : il en faut ${QUIZ_MIN_PLANTS} de plantes et ${QUIZ_MIN_ANIMALS} d’animaux`, '#9A7448'); return; }
 	const base = quizBase(), streak = state.quizStreak ?? 0;
 	showModal(`<h2>Le quiz des fiches</h2>
-		<p>Trois questions sur les espèces dont tu as lu la fiche. Chaque bonne réponse rapporte <b>${fmtInt(base)} nectar</b>, et ta <b>série</b> de bonnes réponses le multiplie : × 1,5, × 2… jusqu’à × 4. Une erreur la remet à zéro.</p>
+		<p>Trois questions sur les espèces que tu connais. Bonne réponse : <b>${fmtInt(base)} nectar</b>, plus encore si tu enchaînes (jusqu’à × 4). Tu peux feuilleter ton livre des espèces.</p>
 		${streak ? `<p class="item-tip">Ta série en cours : ${streak} bonne${streak > 1 ? 's' : ''} réponse${streak > 1 ? 's' : ''} (× ${fmtNum(streakMult(streak))}).</p>` : ''}
 		<button class="btn primary" id="quiz-go">Jouer</button>
 		<button class="btn ghost wide" id="quiz-later">Plus tard</button>`);
@@ -177,11 +177,13 @@ function runQuiz(qs, i, score) {
 		<p class="quiz-q">${q.q}</p>
 		<div class="quiz-choices">${q.choices.map((c, k) => `<button class="btn ghost wide quiz-c" data-k="${k}">${c}</button>`).join('')}</div>
 		<p class="quiz-res" hidden></p>
+		<button class="btn ghost wide" id="quiz-book">Feuilleter le livre des espèces</button>
 		<button class="btn primary" id="quiz-next" hidden>${i + 1 < qs.length ? 'Question suivante' : 'Voir le bilan'}</button>`);
 	const box = $('#modal');
 	box.querySelectorAll('.quiz-c').forEach(b => b.onclick = () => {
 		if (box.querySelector('.quiz-c.right, .quiz-c.wrong')) return;
 		const ok = q.choices[Number(b.dataset.k)] === q.right, res = box.querySelector('.quiz-res');
+		noteAnswer(state, q.sp, ok);
 		box.querySelectorAll('.quiz-c').forEach(x => { if (q.choices[Number(x.dataset.k)] === q.right) x.classList.add('right'); });
 		if (ok) {
 			const m = streakMult(state.quizStreak ?? 0), gain = Math.round(quizBase() * m);
@@ -191,16 +193,23 @@ function runQuiz(qs, i, score) {
 			const r = b.getBoundingClientRect();
 			rewardFly(gain, { x: r.left + r.width / 2, y: r.top + r.height / 2 });
 			sound.chime(2);
-			res.innerHTML = `Bonne réponse ! <b>+${fmtInt(gain)} nectar</b>${m > 1 ? ` (série × ${fmtNum(m)})` : ''}`;
+			res.innerHTML = `Bravo ! <b>+${fmtInt(gain)} nectar</b>${m > 1 ? ` · série × ${fmtNum(m)}` : ''}`;
 		} else {
 			b.classList.add('wrong');
 			state.quizStreak = 0;
-			res.innerHTML = `Ce n’était pas ça : la bonne réponse est en vert. <a href="#" data-quiz-sp="${q.sp}">Relire la fiche</a> · ta série repart de zéro.`;
+			res.innerHTML = `Raté : la bonne réponse est en vert. <a href="#" data-quiz-sp="${q.sp}">Relire la fiche</a>`;
 		}
 		res.hidden = false;
 		box.querySelector('#quiz-next').hidden = false;
 		renderHud(); persist(true);
 	});
+	// Feuilleter le livre : la question attend, et revient à la fermeture du livre.
+	box.querySelector('#quiz-book').onclick = () => {
+		box.hidden = true;
+		species.open();
+		const back = () => ($('#species').classList.contains('open') ? setTimeout(back, 300) : (box.hidden = false));
+		setTimeout(back, 400);
+	};
 	box.querySelector('#quiz-next').onclick = () => (i + 1 < qs.length ? runQuiz(qs, i + 1, score) : endQuiz(qs, score));
 	box.querySelector('.quiz-res').onclick = e => { const a = e.target.closest('[data-quiz-sp]'); if (a) { e.preventDefault(); closeModal(); species.open(a.dataset.quizSp); } };
 }
@@ -215,7 +224,7 @@ function endQuiz(qs, score) {
 	persist(true); renderHud();
 	showModal(`<h2>${score.right === qs.length ? 'Sans-faute !' : score.right ? 'Bien joué' : 'La prochaine fois'}</h2>
 		<p>${score.right} bonne${score.right > 1 ? 's' : ''} réponse${score.right > 1 ? 's' : ''} sur ${qs.length} · <b>+${fmtInt(score.gain)} nectar</b>${bonus ? ` (dont ${fmtInt(bonus)} pour le sans-faute)` : ''}.</p>
-		<p class="item-tip">Série en cours : ${state.quizStreak ?? 0}. Elle continue au prochain quiz : lis bien tes fiches !</p>
+		${state.quizStreak ? `<p class="item-tip">Série : ${state.quizStreak}. Elle continue au prochain quiz.</p>` : ''}
 		<button class="btn primary" data-close>Voir mon jardin</button>`);
 	if (bonus) rewardFly(bonus);
 	sound.chime(3);
@@ -725,7 +734,7 @@ function announceSpecies(quiet = false) {
 	updateSpeciesDot();
 	if (quiet) return;
 	if (found.length || opened.length) sound.chime(opened.length ? 3 : 2);
-	for (const sp of found) toast(`${sp.kind === 'milieu' ? 'Nouveau milieu' : 'Nouvelle espèce'} : ${sp.name}`, '#F08A3C', () => species.open(sp.id));
+	for (const sp of found) revealSpecies(sp);
 	for (const p of opened) toast(`Nouveau milieu : ${p.name.toLowerCase()} ! Ses parcelles autour de ton jardin peuvent s’acheter`, p.color, () => garden.toggleOverview());
 	celebrateHerbarium();
 }
@@ -743,6 +752,47 @@ function checkSeason() {
 	}
 }
 setInterval(checkSeason, 20000);
+
+// ─── Les révélations : une nouvelle parcelle, une nouvelle espèce (l'effet « waouh ») ───
+/**
+ * Un grand titre surgit au milieu de l'écran sur des rayons de lumière (la photo de l'espèce en médaillon), une gerbe
+ * d'étincelles part de l'endroit découvert, une petite fanfare sonne. Une révélation à la fois ; elles attendent
+ * qu'aucune page ne soit ouverte, pour qu'on ne les manque jamais. Toucher la révélation ouvre la fiche.
+ */
+const revealQueue = [];
+let revealing = false;
+function reveal(r) {
+	revealQueue.push(r);
+	if (!revealing) nextReveal();
+}
+function nextReveal() {
+	const r = revealQueue.shift();
+	if (!r) { revealing = false; return; }
+	revealing = true;
+	const show = () => {
+		if (document.querySelector('.panel.open') || !$('#modal').hidden || placing || state.intro || $('#app').classList.contains('booting')) return setTimeout(show, 600);
+		const el = document.createElement('div');
+		el.className = `reveal${r.big ? ' reveal-big' : ''}`;
+		el.style.setProperty('--rc', r.color ?? '#F4C23E');
+		el.innerHTML = `<div class="reveal-rays"></div><div class="reveal-card">${r.img ? `<img src="${r.img}" alt="" onerror="this.remove()">` : ''}<small>${r.sub}</small><b>${r.title}</b>${r.open ? '<span>Touche pour voir sa fiche</span>' : ''}</div>`;
+		$('#app').append(el);
+		if (r.open) el.onclick = () => { el.remove(); r.open(); };
+		// Dans le jardin : une gerbe d'étincelles, en plusieurs vagues.
+		if (r.at) for (let k = 0; k < 4; k++) setTimeout(() => { garden.burst(r.at[0], r.at[1] - 20, r.big ? 40 : 18, k % 2 ? '#FFFFFF' : r.color ?? '#F4C23E'); }, k * 220);
+		if (r.big) sound.fanfare?.(); else sound.chime(3);
+		navigator.vibrate?.(r.big ? [30, 60, 30] : 20);
+		setTimeout(() => el.classList.add('out'), r.big ? 3200 : 2600);
+		setTimeout(() => { el.remove(); nextReveal(); }, r.big ? 3700 : 3100);
+	};
+	show();
+}
+/** Une nouvelle espèce : sa photo, son nom, ce qu'elle est ; et des étincelles là où elle vit. */
+function revealSpecies(sp, why = '') {
+	const kind = sp.kind === 'milieu' ? 'Nouveau milieu' : sp.kind === 'animal' ? 'Nouvel animal' : { arbre: 'Nouvel arbre', buisson: 'Nouvel arbuste', fleur: 'Nouvelle fleur', herbe: 'Nouvelle herbe' }[sp.type] ?? 'Nouvelle espèce';
+	const p = here().plants.find(x => speciesOf(x) === sp.id && x.growth >= 1), b = garden.insects.find(x => x.sp === sp.id && !x.gone);
+	const at = p ? (([ox, oy]) => [ox + p.x, oy + p.y])(garden.cellOriginOf(p)) : b ? [b.x, b.y] : null;
+	reveal({ title: sp.name, sub: why ? `${kind} · ${why}` : kind, color: PLACE_BY_ID[sp.place]?.color ?? '#F08A3C', img: sp.kind === 'milieu' ? null : `species/${sp.id}.webp`, at, open: () => species.open(sp.id) });
+}
 
 function celebrateHerbarium() {
 	for (const p of newlyComplete(state)) {
@@ -947,11 +997,11 @@ function tapCritter(hit, card) {
 		updateSpeciesDot(); renderHud(); persist(true);
 		sound.chime(3);
 		garden.burst(hit.critter.x, hit.critter.y - 10, 14, '#F4C23E');
-		toast(`Découverte ${MOMENT_OF[garden.moment()] ?? 'rare'} : ${sp.name} · +${fmtInt(vr)} nectar`, '#F08A3C', () => species.open(sp.id));
+		revealSpecies(sp, `découverte ${MOMENT_OF[garden.moment()] ?? 'rare'} · +${fmtInt(vr)} nectar`);
 		return;
 	}
 	const g = state.eco2 && guildOfSp(sp.id);
-	card.innerHTML = g ? `<b>${sp.name}</b><small class="item-tip">${GUILD_TEXT[g].name} : ${GUILD_TEXT[g].one}. Et +1 % à toute la production, comme chaque espèce.</small><span class="more">Sa fiche ›</span>`
+	card.innerHTML = g ? `<b>${sp.name}</b><small class="item-tip">${GUILD_TEXT[g].name} · ${GUILD_TEXT[g].one}</small><span class="more">Sa fiche ›</span>`
 		: `<b>${sp.name}</b>${sp.latin}<span class="more">Découvre son rôle ›</span>`;
 	card.classList.add('link');
 	card.onclick = () => { card.hidden = true; species.open(sp.id); };
@@ -1028,7 +1078,7 @@ const TIPS = [
 	{ id: 'eco', old: true, target: '#btn-eco', when: () => !!state.tips?.purse && SPECIES.some(sp => sp.kind === 'animal' && state.species[sp.id]),
 		title: 'Ton écosystème', get text() { return `Les animaux découverts travaillent pour toi, même appli fermée : ils font pousser le jardin et récoltent du nectar. Quand tu bouges, ils travaillent ${fmtNum(boostMult())} fois plus.`; } },
 	{ id: 'species', target: '#btn-species', when: () => (!!state.tips?.purse || state.eco2) && Object.keys(state.species).length >= 1,
-		title: 'Les espèces', text: 'Chaque plante et chaque animal découvert a sa fiche : son rôle dans la nature, et comment l’aider chez toi.' },
+		title: 'Les espèces', text: 'Chaque espèce a sa fiche. La lire te rapporte du nectar.' },
 	{ id: 'habitats', old: true, target: '#btn-deco', when: () => ownedAny('habitat') || ((state.nectar ?? 0) >= 40 && hasCollector(state)),
 		title: 'Des abris pour la faune', text: 'Dans Aménager › Habitats : chaque abri renforce une équipe d’animaux, et chaque niveau d’abri relève de 3 % ce que ton écosystème peut produire. Améliore-les plutôt que d’en poser partout.' },
 	{ id: 'level', old: true, target: '#btn-deco', when: () => ownedAny('habitat') && totalKm() >= LEVEL_KM[2],
@@ -1038,32 +1088,32 @@ const TIPS = [
 	{ id: 'potager', target: '#btn-deco', when: () => owned('cabane') && !owned('potager'),
 		title: 'Le potager', text: 'Pose des carrés de potager près de la cabane, côte à côte : les légumes poussent quand tu marches, et chaque récolte rapporte du nectar.' },
 	{ id: 'journal', target: '#btn-journal', when: () => (state.walks?.length ?? 0) >= 1,
-		title: 'Ton carnet', text: 'Tes sorties, tes kilomètres de la semaine et ce qu’ils ont fait pousser.' },
+		title: 'Ton carnet', text: 'Tes sorties, ta semaine, et l’album de la saison.' },
 	{ id: 'biomes', target: '#hud-act', when: () => cellsOpen(here()) >= 2,
-		title: 'Ton monde', text: 'Il est fait de milieux : une mare au marais, de vieux arbres en forêt, la montagne… Chaque parcelle explorée te fait découvrir le sien, avec ses espèces. Touche l’icône d’activité, puis « Voir tout mon monde ».' },
+		title: 'Ton monde', text: 'Chaque nouvelle parcelle a son milieu et ses espèces. Touche l’icône d’activité pour voir ton monde.' },
 	// ─── La nouvelle économie (nouvelles parties) : ce qu'il faut savoir, au moment où ça sert ───
 	{ id: 'habitats2', eco2: true, target: '#btn-deco', when: () => (state.nectar ?? 0) >= 50 && !owned('massif'),
-		title: 'Des habitats pour la faune', text: 'Dans Aménager › Habitats : chaque habitat accueille des animaux et te rapporte du nectar. Chaque exemplaire coûte un peu plus que le précédent ; d’autres habitats s’ouvrent ensuite (hôtel à insectes, nichoir, mare, haie).' },
+		title: 'Les habitats', text: 'Ils accueillent des animaux et te rapportent du nectar. Ouvre Aménager.' },
 	{ id: 'elan', eco2: true, target: '#hud-act', when: () => (state.walks?.length ?? 0) >= 1 && boostLeft(state) > 0 && prodPerHour(state) > 0,
-		title: 'L’élan', text: 'Après une sortie, tes habitats travaillent à plein : environ 7 minutes par minute de marche, jusqu’à 8 heures. Au repos, ils ne font presque rien. C’est en bougeant que ton jardin tourne.' },
+		title: 'L’élan', text: 'Après une sortie, tes habitats produisent à plein. Au repos, presque rien.' },
 	{ id: 'kmvalue', eco2: true, target: '#hud-steps', when: () => prodPerHour(state) >= 3,
-		title: 'Tes pas prennent de la valeur', get text() { return `Chaque km te rapporte 60 nectar, plus ${KM_HOURS} heures de la production de ton jardin (en ce moment, environ ${fmtInt(60 + KM_HOURS * prodPerHour(state))} nectar par km). Plus ton jardin grandit, plus tes pas valent.`; } },
+		title: 'Tes pas valent de plus en plus', get text() { return `Un km te rapporte maintenant environ ${fmtInt(60 + KM_HOURS * prodPerHour(state))} nectar.`; } },
 	{ id: 'upgrade', eco2: true, target: '#btn-deco', when: () => Object.keys(LADDER).some(k => { const u = nextUpgrade(state, k); return u?.ok && (state.nectar ?? 0) >= u.cost; }),
-		title: 'Une amélioration', text: 'Tu as assez d’habitats d’une même sorte pour les améliorer : leur production double. Ouvre Aménager › Habitats, le bouton « Amélioration (× 2) » est sur leur carte.' },
+		title: 'Une amélioration', text: 'Tu peux doubler la production d’un habitat. Ouvre Aménager.' },
 	{ id: 'gauge', eco2: true, target: '#hud-steps', when: () => prodPerHour(state) > 0,
-		title: 'Ta récolte, en direct', text: 'L’hexagone doré de ta bourse se remplit au rythme de ta récolte : plein, le nectar tombe dans ta bourse et il recommence. Pendant l’élan, après une sortie, il se remplit toutes les dix secondes ; au repos, vingt fois moins vite. Bouge, et regarde-le s’emballer.' },
+		title: 'Ta récolte', text: 'L’hexagone se remplit, puis verse dans ta bourse. Après une sortie, il va vingt fois plus vite.' },
 	{ id: 'near', eco2: true, target: '#btn-deco', when: () => garden.items.some(it => isLadder(it.kind) && nearOf(state, it) < 0.5),
-		title: 'Chaque habitat vit de ce qui l’entoure', text: 'Un habitat ne produit à plein qu’avec assez de plantes à sa portée : des fleurs pour une ruche, un massif ou un hôtel, des arbres pour un nichoir. Touche un habitat pour voir son <b>voisinage</b> ; quand tu en poses un, le cercle doré montre sa portée. Rapproche-le des fleurs (appui long pour le déplacer), ou marche pour en faire pousser autour.' },
+		title: 'Des plantes autour', text: 'Un habitat produit selon les plantes près de lui. Pose-le là où il y en a, le cercle doré montre sa portée.' },
 	{ id: 'roles', eco2: true, target: '#btn-species', when: () => Object.keys(state.species).length >= 6,
-		title: 'Chaque espèce a un rôle', text: 'Les pollinisateurs font produire tes ruches, les oiseaux sèment arbustes et arbres, la vie du sol fait pousser plus de plantes, les prédateurs utiles protègent les plantes autour de tes habitats. Touche un animal pour voir ce qu’il t’apporte ; la page <b>Écosystème</b> fait le compte.' },
+		title: 'Chaque espèce aide', text: 'Touche un animal pour voir ce qu’il t’apporte.' },
 	{ id: 'levels', eco2: true, target: '#btn-deco', when: () => garden.items.some(it => isLadder(it.kind) && (it.level ?? 1) === 1 && (() => { const nx = nextLevel(it); return nx?.ok && (state.nectar ?? 0) >= nx.cost; })()),
-		title: 'Tes habitats peuvent grandir', text: 'Chaque habitat posé a son niveau : garni, fleuri, foisonnant, remarquable. Il produit de plus en plus (× 1,5, × 2, × 3, × 4) et se voit dans ton jardin. Dans <b>Aménager</b>, touche « Faire grandir », ou touche l’habitat lui-même.' },
+		title: 'Fais grandir tes habitats', text: 'Un habitat qui grandit produit plus. Touche-le, ou ouvre Aménager.' },
 	{ id: 'birds', eco2: true, target: '#btn-deco', when: () => (here().noBirds ?? 0) > 0 && !seedBirds(here()),
-		title: 'Il manque des oiseaux', text: 'Tes fleurs pourraient donner des arbustes, puis des arbres, mais ce sont les oiseaux qui sèment leurs baies et leurs graines. Pose une <b>mangeoire</b> (un oiseau) ou un <b>nichoir</b> (un couple de mésanges) : choisis bien, c’est ce qui fera venir arbustes, arbres et les animaux qui vont avec.' },
+		title: 'Il manque des oiseaux', text: 'Les oiseaux sèment arbustes et arbres. Pose une mangeoire ou un nichoir.' },
 	{ id: 'plants', eco2: true, target: '#btn-deco', when: () => { const n = Object.keys(LADDER).reduce((a, k) => a + ownedCount(k), 0); return n >= 4 && here().plants.filter(p => p.growth >= 1 && p.type !== 'herbe').length < n * 2; },
-		title: 'Il faut des plantes', text: 'Tes habitats ne produisent bien que s’il y a assez de fleurs, d’arbustes et d’arbres autour d’eux (deux plantes par habitat). Marche pour en faire pousser : en marchant vite, des arbustes ; en courant, des arbres.' },
+		title: 'Il faut des plantes', text: 'Tes habitats manquent de plantes. Marche pour en faire pousser : vite pour des arbustes, en courant pour des arbres.' },
 	{ id: 'daily', target: '#daily', when: () => totalKm() >= 1,
-		title: 'Les défis du jour', text: 'Chaque jour, un cadeau et trois petits défis. Bouger quelques jours de suite fait grossir le cadeau.' },
+		title: 'Les défis du jour', text: 'Un cadeau et des défis chaque jour. Reviens souvent : le cadeau grossit.' },
 ];
 
 let tipShown = null, lastTipEnd = 0;
@@ -1380,10 +1430,11 @@ function openParcel(n, biome) {
 	delete pl.pendingCell;
 	(pl.cellDates ??= {})[n] = Date.now();
 	garden.flyToCell(n);
-	sound.chime(3);
-	toast(`La clôture recule : ${cellName(pl, n).toLowerCase()} !`, PLACE_BY_ID[biome].color);
 	persist(true);
 	checkUnlocks();
+	// L'effet « waouh » : la parcelle se dévoile.
+	const [cx, cy] = garden.cellCenter(n);
+	setTimeout(() => reveal({ title: cellName(pl, n), sub: `Nouvelle parcelle · ${PLACE_BY_ID[biome].name}`, color: PLACE_BY_ID[biome].color, at: [cx, cy], big: true }), 900);
 }
 
 // ─── Suivi automatique : pas de bouton, l'appli voit seule quand on bouge ─
@@ -2281,7 +2332,7 @@ function renderPlacing() {
 	const ok = garden.canPlace(placing.kind, garden.ghost.x, garden.ghost.y, placing.item);
 	const ci = garden.cellAt(garden.ghost.x, garden.ghost.y), full = !garden.placeLimit(placing.kind, ci, placing.item);
 	const ni = state.eco2 && isLadder(placing.kind) ? garden.nearInfo(placing.kind, garden.ghost.x, garden.ghost.y, placing.item) : null;
-	$('#placing-hint').textContent = ok && ni ? `Ici : ${Math.round(nearOf(state, { near: ni.near }) * 100)} %${ni.syn ? `, +${Math.round(ni.syn * 100)} % grâce aux massifs` : ''} · ${nearWhat(placing.kind, ni.counts)} dans le cercle doré. Pose-le là où il en a le plus.`
+	$('#placing-hint').textContent = ok && ni ? `Ici : ${Math.round(nearOf(state, { near: ni.near }) * 100)} %${ni.syn ? ` +${Math.round(ni.syn * 100)} %` : ''} · ${nearWhat(placing.kind, ni.counts)}. Cherche le coin le plus fleuri.`
 		: ok ? 'Fais-le glisser avec le doigt, puis pose-le.'
 		: full ? `Cette parcelle a déjà ses ${PER_PARCEL[placing.kind]} ${ITEMS[placing.kind].name.replace(/^(Un|Une) /, '').toLowerCase()}${PER_PARCEL[placing.kind] > 1 ? 's' : ''} : pose-le dans une autre parcelle.`
 		: 'Place prise : lâche-le, il trouvera une place libre à côté.';
@@ -2588,7 +2639,7 @@ function updateMoment() {
 	// Un moment se présente : son défi du jour apparaît (une fois par jour), et on le dit.
 	if (state.eco2 && !state.intro && m !== 'jour' && addMomentChallenge(state, m)) {
 		renderDaily(); persist();
-		toast(`Nouveau défi ${MOMENT_OF[m]} : ${{ pluie: 'marche 1 km sous la pluie', soleil: 'marche 1,5 km au soleil', nuit: 'découvre un visiteur de la nuit', hiver: 'marche 1 km dans le froid' }[m]}`, '#F08A3C', () => showDaily());
+		toast(`Défi ${MOMENT_OF[m]} : ${{ pluie: 'marche 1 km', soleil: 'marche 1,5 km', nuit: 'trouve un animal de nuit', hiver: 'marche 1 km' }[m]}`, '#F08A3C', () => showDaily());
 	}
 	const chip = $('#sky-chip');
 	if (!chip) return;
@@ -2615,15 +2666,15 @@ function nearLine(it) {
 	const ni = garden.nearInfo(it.kind, it.x, it.y, it);
 	if (!ni) return '';
 	const pct = Math.round(nearOf(state, { near: ni.near }) * 100);
-	return `Voisinage : ${pct} % (${nearWhat(it.kind, ni.counts)} à portée${ni.massifs ? `, ${ni.massifs} massif${ni.massifs > 1 ? 's' : ''} : +${Math.round(ni.syn * 100)} %` : ''}). ${pct < 100 ? `Il lui faut ${NEAR_WANT[it.kind]} autour : marche pour en faire pousser, ou déplace-le (appui long) là où il y en a. ` : ''}`;
+	return `Voisinage : ${pct} % (${nearWhat(it.kind, ni.counts)})${ni.massifs ? `, massifs +${Math.round(ni.syn * 100)} %` : ''}. ${pct < 100 ? `Il lui faut ${NEAR_WANT[it.kind]} autour. ` : ''}`;
 }
 
 /** Les quatre familles d'espèces, ce qu'elles font, et pour combien (nouvelle économie). */
 const GUILD_TEXT = {
-	pollinisateur: { name: 'Pollinisateur', plural: 'Pollinisateurs', what: n => `+${Math.round(GUILD_BONUS * 100 * n)} % aux ruches, massifs et hôtels`, one: 'butine tes fleurs : +5 % aux ruches, massifs et hôtels' },
-	semeur: { name: 'Semeur', plural: 'Semeurs', what: n => `les oiseaux sèment ${n >= 2 ? 'plus souvent ' : ''}arbustes et arbres`, one: 'sème arbustes et arbres près de son nid ; plus il y a de semeurs, plus souvent' },
-	sol: { name: 'Vie du sol', plural: 'Vie du sol', what: n => `+${Math.round(GUILD_BONUS * 100 * n)} % de plantes à chaque pas`, one: 'enrichit la terre : tes pas font pousser 5 % de plantes en plus' },
-	regulateur: { name: 'Prédateur utile', plural: 'Prédateurs utiles', what: n => `+${Math.round(GUILD_BONUS * 100 * n)} % au voisinage des habitats`, one: 'chasse les ravageurs : les plantes autour de tes habitats comptent 5 % de plus' },
+	pollinisateur: { name: 'Pollinisateur', plural: 'Pollinisateurs', what: n => `+${Math.round(GUILD_BONUS * 100 * n)} % aux ruches, massifs et hôtels`, one: 'ruches, massifs et hôtels +5 %' },
+	semeur: { name: 'Semeur', plural: 'Semeurs', what: n => `les oiseaux sèment ${n >= 2 ? 'plus souvent ' : ''}arbustes et arbres`, one: 'sème arbustes et arbres' },
+	sol: { name: 'Vie du sol', plural: 'Vie du sol', what: n => `+${Math.round(GUILD_BONUS * 100 * n)} % de plantes à chaque pas`, one: '+5 % de plantes à chaque pas' },
+	regulateur: { name: 'Prédateur utile', plural: 'Prédateurs utiles', what: n => `+${Math.round(GUILD_BONUS * 100 * n)} % au voisinage des habitats`, one: 'protège tes plantes : voisinage +5 %' },
 };
 const guildOfSp = id => Object.keys(GUILD_TEXT).find(g => (GUILDS[g]?.members ?? []).includes(id));
 
@@ -2637,7 +2688,7 @@ function bringAttracted(kind, quiet = false) {
 		if (!sp || state.species[id]) continue;
 		state.species[id] = Date.now();
 		updateSpeciesDot();
-		if (!quiet) setTimeout(() => toast(`Nouvelle espèce grâce à ${ITEMS[kind].name.toLowerCase()} : ${sp.name}`, '#F08A3C', () => species.open(id)), 1600);
+		if (!quiet) setTimeout(() => revealSpecies(sp, `Venu grâce à ${ITEMS[kind].name.toLowerCase()}`), 1200);
 	}
 	garden.nextPopulate = 0;
 }
@@ -2646,7 +2697,7 @@ function bringAttracted(kind, quiet = false) {
 function noBirdsNote(type) {
 	if (state.sim || state.noBirdsDay === dayKey()) return;
 	state.noBirdsDay = dayKey();
-	toast(`${type === 'arbre' ? 'Un arbre' : 'Un arbuste'} aurait pu naître, mais aucun oiseau ne sème dans ton jardin : pose une mangeoire ou un nichoir`, '#E3A33A', () => openDeco('habitat'));
+	toast(`Sans oiseaux, pas de nouvel ${type === 'arbre' ? 'arbre' : 'arbuste'} : pose une mangeoire ou un nichoir`, '#E3A33A', () => openDeco('habitat'));
 }
 
 // ─── Mode test : un joueur simulé, jour après jour ────────────
@@ -2823,8 +2874,10 @@ function simDay() {
 	const P = SIM_PROFILES[state.sim?.profile];
 	if (!P) return null;
 	const day = ++state.sim.day;
-	// La journée qui commence : le jardin a un jour de plus (le quota d'espèces en dépend).
+	// La journée qui commence : le jardin a un jour de plus (le quota d'espèces en dépend), et les découvertes
+	// d'avant vieillissent d'un jour (le quiz ne parle que des espèces découvertes avant aujourd'hui).
 	state.createdAt = (state.createdAt ?? Date.now()) - 86400000;
+	for (const id of Object.keys(state.species)) if (typeof state.species[id] === 'number') state.species[id] -= 86400000;
 	let km = 0, kmh = P.kmh;
 	if (day === 1 || Math.random() < P.p) km = simRnd(...P.km);
 	else if (P.other) { km = simRnd(...P.other); kmh = 4.8; }
@@ -2865,7 +2918,7 @@ function simDay() {
 	updateNear();
 	checkUnlocks();
 	let quizN = 0;
-	if (bought.length < 3 && Object.keys(state.speciesSeen ?? {}).length >= 5) {
+	if (bought.length < 3 && Object.keys(state.speciesSeen ?? {}).length >= 8) {
 		for (let q = 0; q < 3; q++) {
 			if (Math.random() < 0.7) { const g = Math.round(quizBase() * streakMult(state.quizStreak ?? 0)); state.quizStreak = (state.quizStreak ?? 0) + 1; state.nectar += g; quizN += g; }
 			else state.quizStreak = 0;
@@ -3147,7 +3200,7 @@ function renderOptions() {
 		<label class="switch"><input type="checkbox" id="opt-fx" ${fxOn() ? 'checked' : ''}><i></i><span>Haut et bas de l'écran un peu flous, bords adoucis : le jardin comme une maquette</span></label>
 		<h3>Ciel du jardin</h3>
 		<div class="seg" id="opt-sky">${[['real', 'Réel'], ['jour', 'Toujours de jour'], ['beau', 'Toujours beau']].map(([k, l]) => `<button data-sky="${k}" class="${(state.skyMode ?? 'real') === k ? 'on' : ''}">${l}</button>`).join('')}</div>
-		<p class="opt-help">Réel : la vraie heure, la vraie météo et la saison, avec leurs animaux et le bonus de chaque temps (soleil, pluie, nuit, hiver). Fixé : un jardin toujours lumineux, sans bonus du temps.</p>
+		<p class="opt-help">Réel : la vraie heure et la vraie météo, avec leurs animaux et leurs bonus. Fixé : toujours lumineux, sans bonus.</p>
 		<h3>Économie d'énergie</h3>
 		<label class="switch"><input type="checkbox" id="opt-eco" ${state.eco30 ? 'checked' : ''}><i></i><span>30 images par seconde : le téléphone chauffe moins, la batterie dure plus</span></label>
 		</details>
@@ -3349,13 +3402,13 @@ function openEco2() {
 			<b>${perH >= 100 ? fmtInt(perH) : fmtNum(perH)}</b><span>nectar par heure d’élan</span>
 			<p>${left > 0 ? `Élan : encore <b>${h ? `${h} h ` : ''}${m} min</b>. Tes habitats travaillent à plein.` : `Au repos : tes habitats ne produisent que ${Math.round(REST * 100)} % (${fmtInt(perH * REST)} nectar par heure). Une sortie relance l’élan : environ 7 minutes par minute de marche.`}</p>
 		</div>
-		<p class="sp-intro">Chaque km te rapporte <b>${fmtInt(60 + KM_HOURS * perH)} nectar</b> : 60, plus ${KM_HOURS} heures de cette production.</p>
+		<p class="sp-intro">Un km te rapporte <b>${fmtInt(60 + KM_HOURS * perH)} nectar</b>.</p>
 		${rows ? `<h3 class="sp-section">Tes habitats</h3><div class="eco2-table"><table><thead><tr><th>Habitat</th><th>Posés</th><th>Voisinage</th><th>Amélioré</th><th>Nectar / h</th></tr></thead><tbody>${rows}</tbody></table></div>`
 			: '<p class="sp-intro">Pas encore d’habitat : ouvre Aménager › Habitats pour en poser un.</p>'}
 		<h3 class="sp-section">Ce qui les fait produire</h3>
 		<ul class="eco2-list">
-			<li><b>Agencement</b> : chaque habitat vit des plantes à sa portée (le cercle doré quand tu le poses), partagées avec ses voisins. Une ruche veut des fleurs et des massifs, un nichoir des arbres. Ici : ${count('fleur')} fleurs, ${count('buisson')} arbustes, ${count('arbre')} arbres.</li>
-			<li><b>Biodiversité</b> : ${sp} espèces découvertes, soit +${sp} % de production.</li>
+			<li><b>Plantes</b> : ${count('fleur')} fleurs, ${count('buisson')} arbustes, ${count('arbre')} arbres. Chaque habitat produit selon celles qui l’entourent.</li>
+			<li><b>Espèces</b> : ${sp}, soit +${sp} % de production.</li>
 		</ul>
 		<h3 class="sp-section">Ce que font tes espèces</h3>
 		<ul class="eco2-list">

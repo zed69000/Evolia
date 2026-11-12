@@ -6,8 +6,33 @@ import { SPECIES, SPECIES_BY_ID, PLACE_BY_ID } from './species.js';
 
 /** Combien de questions par quiz, au plus de quiz par jour, et l'attente entre deux (en ms). */
 export const QUIZ_LEN = 3, QUIZ_PER_DAY = 3, QUIZ_GAP = 3 * 3600000;
-/** Il faut avoir lu au moins tant de fiches. */
-export const QUIZ_MIN_READ = 5;
+/** Il faut au moins tant de plantes et tant d'animaux dont la fiche est lue depuis la veille. */
+export const QUIZ_MIN_PLANTS = 4, QUIZ_MIN_ANIMALS = 4;
+/** Une espèce ne revient pas avant tant d'autres questions. */
+const SPACING = 8;
+const dayOf = t => { const d = new Date(t); return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`; };
+
+/** Les espèces dont on peut parler : fiche lue, découvertes avant aujourd'hui (on a eu le temps de lire). */
+export function quizPool(state) {
+	const today = dayOf(Date.now());
+	return Object.keys(state.speciesSeen ?? {}).filter(id => {
+		const sp = SPECIES_BY_ID[id], t = state.species[id];
+		return state.speciesSeen[id] && sp && sp.kind !== 'milieu' && typeof t === 'number' && dayOf(t) !== today;
+	});
+}
+/** Assez de plantes et d'animaux connus pour un quiz ? */
+export function quizEnough(state) {
+	const pool = quizPool(state).map(id => SPECIES_BY_ID[id]);
+	return pool.filter(s => s.kind === 'plante').length >= QUIZ_MIN_PLANTS && pool.filter(s => s.kind === 'animal').length >= QUIZ_MIN_ANIMALS;
+}
+/** Note une réponse : l'historique sert à étaler les questions et garde le score de chaque espèce. */
+export function noteAnswer(state, id, ok) {
+	const qz = state.quiz ??= {};
+	(qz.asked ??= []).push(id);
+	if (qz.asked.length > 40) qz.asked.splice(0, qz.asked.length - 40);
+	const r = (qz.score ??= {})[id] ??= { ok: 0, ko: 0 };
+	if (ok) r.ok++; else r.ko++;
+}
 /** La série de bonnes réponses multiplie le gain : × 1, × 1,5, × 2… jusqu'à × 4. */
 export const streakMult = streak => Math.min(4, 1 + 0.5 * streak);
 
@@ -63,12 +88,19 @@ function questionFor(sp, state) {
 
 /** Un quiz : des espèces dont la fiche a été lue (les plus récentes d'abord, un peu au hasard). */
 export function makeQuiz(state) {
-	const read = Object.keys(state.speciesSeen ?? {}).filter(id => state.speciesSeen[id] && SPECIES_BY_ID[id] && SPECIES_BY_ID[id].kind !== 'milieu');
-	if (read.length < QUIZ_MIN_READ) return null;
-	const recent = read.sort((a, b) => (state.species[b] ?? 0) - (state.species[a] ?? 0));
-	const pool = shuffle(recent.slice(0, 12)).concat(shuffle(recent.slice(12)));
+	if (!quizEnough(state)) return null;
+	// Jamais une espèce posée il y a peu : d'abord celles qu'on n'a jamais eues, puis les plus anciennes, en mêlant
+	// plantes et animaux ; une espèce ratée revient plus tôt (mais jamais à la suite).
+	const asked = state.quiz?.asked ?? [], recent = new Set(asked.slice(-SPACING));
+	const lastAt = id => { const i = asked.lastIndexOf(id); return i < 0 ? -1e9 : i; };
+	const missed = id => (state.quiz?.score?.[id]?.ko ?? 0) > (state.quiz?.score?.[id]?.ok ?? 0);
+	const pool = quizPool(state).filter(id => !recent.has(id))
+		.sort((a, b) => (lastAt(a) - (missed(a) ? 6 : 0)) - (lastAt(b) - (missed(b) ? 6 : 0)) || Math.random() - 0.5);
+	const plants = pool.filter(id => SPECIES_BY_ID[id].kind === 'plante'), animals = pool.filter(id => SPECIES_BY_ID[id].kind === 'animal');
+	const mixed = [];
+	while (plants.length || animals.length) { if (animals.length) mixed.push(animals.shift()); if (plants.length) mixed.push(plants.shift()); }
 	const out = [];
-	for (const id of pool) {
+	for (const id of mixed) {
 		if (out.length >= QUIZ_LEN) break;
 		const q = questionFor(SPECIES_BY_ID[id], state);
 		if (q) out.push(q);
@@ -81,7 +113,7 @@ export function quizReady(state, day) {
 	const qz = state.quiz ??= {};
 	if (qz.day !== day) { qz.day = day; qz.n = 0; }
 	if ((qz.n ?? 0) >= QUIZ_PER_DAY || Date.now() - (qz.at ?? 0) < QUIZ_GAP) return false;
-	return Object.keys(state.speciesSeen ?? {}).length >= QUIZ_MIN_READ;
+	return quizEnough(state);
 }
 
 export { pick };

@@ -138,11 +138,11 @@ export const GUILD_BONUS = 0.05;
  * souvent.
  */
 export const MOMENTS = {
-	soleil: { name: 'Soleil', icon: '☀', what: 'les butineurs s’activent : ruches, massifs et hôtels +25 %' },
-	pluie: { name: 'Pluie', icon: '☂', what: 'la terre boit : tes pas font pousser 50 % de plantes en plus' },
-	nuit: { name: 'Nuit', icon: '☾', what: 'les prédateurs utiles chassent : voisinage des habitats +25 %' },
-	hiver: { name: 'Hiver', icon: '❄', what: 'les oiseaux de la mangeoire sèment plus souvent arbustes et arbres' },
-	jour: { name: 'Jour', icon: '◌', what: 'un temps calme, sans bonus' },
+	soleil: { name: 'Soleil', icon: '☀', what: 'ruches, massifs et hôtels +25 %' },
+	pluie: { name: 'Pluie', icon: '☂', what: 'tes pas font pousser 50 % de plantes en plus' },
+	nuit: { name: 'Nuit', icon: '☾', what: 'les habitats profitent 25 % plus de leurs plantes' },
+	hiver: { name: 'Hiver', icon: '❄', what: 'les oiseaux sèment plus souvent' },
+	jour: { name: 'Temps calme', icon: '◌', what: 'pas de bonus' },
 };
 export const guildEffect = state => {
 	const n = guildCounts(state), m = state.moment ?? 'jour';

@@ -3,6 +3,11 @@
 Chaque version, la plus récente en haut. Le site (evolia.sebastienalzamora.workers.dev) est toujours à jour ;
 le Play Store (tests internes) reçoit les versions indiquées « Play ».
 
+## 0.7.72 — 12 novembre 2026
+- **Révélations** : une nouvelle parcelle ou une nouvelle espèce s’annonce en grand au milieu de l’écran (titre sur des rayons de lumière, photo de l’espèce, étincelles dans le jardin, petite fanfare). Une à la fois ; elles attendent qu’aucune page ne soit ouverte. Toucher ouvre la fiche.
+- **Quiz** : seulement sur les espèces découvertes avant aujourd’hui, à partir de 4 plantes et 4 animaux ; une espèce ne revient pas avant 8 autres questions, et plus tôt si on s’est trompé ; les réponses sont gardées ; « Feuilleter le livre des espèces » pendant une question.
+- **Textes** : bulles d’aide, fiches des habitats et des animaux, page Écosystème, messages : plus courts, écrits pour le joueur.
+
 ## 0.7.71 — 12 novembre 2026
 Le quiz des fiches (nouvelles parties) :
 - Quand il n’y a plus rien à acheter ni de fiche à lire, un quiz de trois questions se propose (trois par jour au plus, trois heures d’écart) : « Quelle espèce ? » (un fait de sa fiche, nom caché), « À quoi sert… ? », « Comment aider… ? », « Où vit… ? », sur les espèces dont on a lu la fiche.

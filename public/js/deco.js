@@ -1045,7 +1045,7 @@ export function attracted(place, spId) {
 export const seedBirds = place => (place?.items ?? []).reduce((a, it) => a + (ITEMS[it.kind]?.birds ?? 0), 0);
 
 /** Ce que les oiseaux d'un objet apportent, en clair (nouvelles parties), ou ''. */
-export const birdHelp = kind => (ITEMS[kind]?.birds ? `${ITEMS[kind].birds === 2 ? 'Loge un couple de mésanges' : 'Nourrit un oiseau'} : les oiseaux sèment arbustes et arbres. Sans eux, ton jardin s’arrête aux fleurs.` : '');
+export const birdHelp = kind => (ITEMS[kind]?.birds ? `${ITEMS[kind].birds === 2 ? 'Accueille deux mésanges' : 'Nourrit un oiseau'}, qui sème${ITEMS[kind].birds === 2 ? 'nt' : ''} arbustes et arbres.` : '');
 
 const UNIT = {
 	pollinisateur: ['pollinisateur', 'pollinisateurs'], semeur: ['semeur', 'semeurs'],
@@ -1057,7 +1057,7 @@ export function itemHelp(kind, eco2 = false) {
 	const it = ITEMS[kind];
 	if (!it.team) return '';
 	// Nouvelle économie : pas d'équipes ni de plafond ; un habitat hors échelle fait venir des espèces (+1 % chacune).
-	if (eco2) return birdHelp(kind) || (it.cat === 'habitat' ? 'De nouvelles espèces viennent y vivre (+1 % de production chacune)' : '');
+	if (eco2) return birdHelp(kind) || (it.cat === 'habitat' ? 'Fait venir de nouvelles espèces.' : '');
 	const team = `+${it.power} ${UNIT[it.team][it.power > 1 ? 1 : 0]}`;
 	// Un habitat relève aussi le plafond de l'écosystème, de 3 % par niveau (voir idle.js).
 	return it.cat === 'habitat' ? `${team} · +${3 * it.power} % de production` : team;
