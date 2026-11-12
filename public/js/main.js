@@ -85,14 +85,15 @@ function persist(now = false) {
 
 const species = new Encyclopedia($('#species'), state, e => {
 	// La première lecture d'une fiche rapporte un peu de nectar, directement dans la bourse.
-	if (e?.reward) { state.nectar = (state.nectar ?? 0) + e.reward; renderHud(); sound.chime?.(1); }
+	if (e?.reward) { state.nectar = (state.nectar ?? 0) + e.reward; renderHud(); sound.chime?.(1); rewardFly(e.reward); }
 	persist();
 	updateSpeciesDot();
 });
 // Pendant l'introduction, la toute première fiche lue rapporte de quoi s'offrir la première ruche.
 // Au début, la page Espèces ne montre que ce qu'on a découvert, en plantes et insectes.
 species.simple = () => !!state.intro || (state.eco2 && Object.keys(state.species).length < 12);
-species.rewardFor = () => (state.intro && !state.introPaid ? ((state.introPaid = true), INTRO_NECTAR) : null);
+species.rewardFor = () => (state.intro && !state.introPaid ? ((state.introPaid = true), INTRO_NECTAR) : state.intro ? null : readReward());
+species.rewardPreview = () => readReward();
 const places = new PlacesMap($('#map'), state, showBiome);
 // Aider une équipe de l'écosystème, c'est poser l'objet qui l'attire (s'il est débloqué et payable), sinon voir la liste.
 // La récolte en attente : sans collecteur, elle perle sur les fleurs ; avec, elle remplit les jarres.
@@ -127,6 +128,75 @@ function countPurse(from, delay = 0, dur = 1400) {
 		renderHud();
 	};
 	requestAnimationFrame(step);
+}
+
+/**
+ * Lire une fiche rapporte de plus en plus : 10 nectar, plus 3 par espèce déjà découverte, plus six minutes de la
+ * production du jardin (nouvelles parties). Les fiches gardent leur intérêt toute la partie.
+ */
+function readReward() {
+	if (!state.eco2) return READ_REWARD;
+	const found = Object.keys(state.species).length;
+	return Math.max(10, Math.round((10 + 3 * found + prodPerHour(state) * 0.1) / 5) * 5);
+}
+
+/**
+ * Toute récompense se voit : une volée de gouttes de nectar part de `from` (l'endroit gagné, ou le milieu de
+ * l'écran) et rejoint la bourse, dont le compteur monte avec elles. Si une page est ouverte, la volée part à sa
+ * fermeture, pour qu'on la voie arriver. Le nectar est déjà compté : ce n'est que le spectacle.
+ */
+function rewardFly(amount, from = null) {
+	if (!(amount >= 1)) return;
+	const go = () => {
+		const app = $('#app'), box = app.getBoundingClientRect(), to = $('#hud-steps').getBoundingClientRect();
+		if (!to.width) return;
+		const tx = to.left - box.left + 22, ty = to.top - box.top + to.height / 2;
+		const sx0 = from ? from.x - box.left : box.width / 2, sy0 = from ? from.y - box.top : box.height * 0.5;
+		const n = Math.max(4, Math.min(14, Math.round(3 + Math.log10(amount) * 3))), gap = 70, fly = 850;
+		countPurse(Math.max(0, (state.nectar ?? 0) - amount), fly * 0.8, (n - 1) * gap + 500);
+		const coins = Array.from({ length: n }, (_, i) => {
+			const el = document.createElement('i');
+			el.className = 'intro-coin reward-coin';
+			app.append(el);
+			const sx = sx0 + (Math.random() - 0.5) * 60, sy = sy0 + (Math.random() - 0.5) * 30;
+			return { el, sx, sy, cx: (sx + tx) / 2 + (Math.random() - 0.5) * 120, cy: Math.min(sy, ty) - 50 - Math.random() * 70, t0: i * gap, trail: 0, done: false };
+		});
+		const start = performance.now();
+		const frame = () => {
+			const now = performance.now() - start;
+			let alive = false;
+			for (const k of coins) {
+				const t = (now - k.t0) / fly;
+				if (t < 0) { k.el.style.opacity = '0'; alive = true; continue; }
+				if (t >= 1) {
+					if (!k.done) { k.done = true; k.el.remove(); sound.drip?.(Math.min(1, coins.indexOf(k) / coins.length)); }
+					continue;
+				}
+				alive = true;
+				const e = t * t * (3 - 2 * t), u = 1 - e;
+				const x = u * u * k.sx + 2 * u * e * k.cx + e * e * tx, y = u * u * k.sy + 2 * u * e * k.cy + e * e * ty;
+				k.el.style.opacity = '1';
+				k.el.style.left = `${x}px`;
+				k.el.style.top = `${y}px`;
+				k.el.style.transform = `scale(${1 - 0.4 * e})`;
+				if (now - k.trail > 45) {
+					k.trail = now;
+					const dot = document.createElement('i');
+					dot.className = 'intro-trail reward-coin';
+					dot.style.left = `${x}px`;
+					dot.style.top = `${y}px`;
+					app.append(dot);
+					setTimeout(() => dot.remove(), 500);
+				}
+			}
+			if (alive) requestAnimationFrame(frame);
+			else { const p = $('#hud-steps'); p.classList.remove('got'); void p.offsetWidth; p.classList.add('got'); }
+		};
+		requestAnimationFrame(frame);
+	};
+	// On attend que la page qui couvre la bourse (fiche, espèces, aménager…) soit fermée, pour voir la volée.
+	const wait = () => (document.querySelector('.panel.open, #species.open, #deco.open, #journal.open, #options.open, #eco.open') ? setTimeout(wait, 400) : go());
+	wait();
 }
 
 function jackpot(v, x, y) {
@@ -407,6 +477,7 @@ function checkDailyGoal() {
 	state.goalPaid = dayKey();
 	const gain = goalReward();
 	state.nectar = (state.nectar ?? 0) + gain;
+	rewardFly(gain);
 	persist(true);
 	sound.chime(3);
 	toast(`Objectif du jour atteint : +${fmtInt(gain)} nectar à dépenser comme tu veux`, '#E3A33A', () => openDeco());
@@ -567,6 +638,7 @@ function checkSeason() {
 	if (!state.eco2 || state.intro) return;
 	for (const r of seasonRewards(state)) {
 		state.nectar = (state.nectar ?? 0) + r.reward;
+		rewardFly(r.reward);
 		sound.chime(3);
 		toast(`Album ${r.season.name} : ${r.n} découvertes · +${fmtInt(r.reward)} nectar`, '#F08A3C', () => openJournal());
 		renderHud(); persist(true);
@@ -578,6 +650,7 @@ function celebrateHerbarium() {
 	for (const p of newlyComplete(state)) {
 		state.complete[p.id] = Date.now();
 		state.nectar = (state.nectar ?? 0) + HERBARIUM_REWARD;
+		rewardFly(HERBARIUM_REWARD);
 		persist(true);
 		renderHud();
 		sound.chime(3);
@@ -620,7 +693,7 @@ function mapPills() {
 			// Au-dessus du nom de la parcelle, pour ne pas le cacher.
 			pos = { x: cx + (h % 240) - 120, y: cy - 90 - ((h >> 8) % 80) };
 		}
-		pills.new.push({ ...pos, icon: '✨', label: s.name.length > 16 ? `${s.name.slice(0, 15)}…` : s.name, rank: 4, msg: `${s.name} : lis sa fiche, +${READ_REWARD} nectar`, open: () => species.open(s.id) });
+		pills.new.push({ ...pos, icon: '✨', label: s.name.length > 16 ? `${s.name.slice(0, 15)}…` : s.name, rank: 4, msg: `${s.name} : lis sa fiche, +${fmtInt(readReward())} nectar`, open: () => species.open(s.id) });
 	}
 	for (const p of pl.plants) {
 		if (p.growth >= 1 || (p.type !== 'arbre' && p.type !== 'buisson')) continue;
@@ -768,13 +841,15 @@ function tapCritter(hit, card) {
 	// Un visiteur du moment (de nuit, sous la pluie, l'hiver…) : le toucher le fait découvrir, une récompense d'être là.
 	if (!state.species[sp.id]) {
 		state.species[sp.id] = Date.now();
-		state.nectar = (state.nectar ?? 0) + 25;
+		const vr = readReward() * 2;
+		state.nectar = (state.nectar ?? 0) + vr;
 		noteVisitor(state, garden.moment());
+		{ const r = garden.canvas.getBoundingClientRect(), v = garden.view(), k = r.width / v.w; rewardFly(vr, { x: r.left + (hit.critter.x - v.x0) * k, y: r.top + (hit.critter.y - v.y0) * k }); }
 		renderDaily();
 		updateSpeciesDot(); renderHud(); persist(true);
 		sound.chime(3);
 		garden.burst(hit.critter.x, hit.critter.y - 10, 14, '#F4C23E');
-		toast(`Découverte ${MOMENT_OF[garden.moment()] ?? 'rare'} : ${sp.name} · +25 nectar`, '#F08A3C', () => species.open(sp.id));
+		toast(`Découverte ${MOMENT_OF[garden.moment()] ?? 'rare'} : ${sp.name} · +${fmtInt(vr)} nectar`, '#F08A3C', () => species.open(sp.id));
 		return;
 	}
 	const g = state.eco2 && guildOfSp(sp.id);
@@ -807,6 +882,7 @@ function renderMission() {
 	while (m && m.done()) {
 		state.missions[m.id] = Date.now();
 		state.nectar = (state.nectar ?? 0) + MISSION_REWARD;
+		rewardFly(MISSION_REWARD);
 		toast(`Mission réussie : ${m.text.toLowerCase()} · +${MISSION_REWARD} nectar`, '#5F933E');
 		sound.chime(2);
 		m = currentMission();
@@ -1495,6 +1571,7 @@ function showDaily(gift = false) {
 		sound.chime(3);
 		state.nectar = (state.nectar ?? 0) + got.nectar;
 		if (got.boost) addBoost(state, got.boost);
+		rewardFly(got.nectar);
 		garden.burst(garden.cam.cx, garden.cam.cy, 30, '#F4C23E');
 		toast(`Cadeau : +${got.nectar} nectar${got.boost ? ` et élan ×${fmtNum(boostMult())} pendant ${got.boost} min` : ''}`, '#F4C23E');
 		persist(true);
@@ -1511,6 +1588,7 @@ $('#modal').addEventListener('click', e => {
 	if (!c) return;
 	state.nectar = (state.nectar ?? 0) + c.reward;
 	if (c.boost) addBoost(state, c.boost);
+	{ const r = b.getBoundingClientRect(); rewardFly(c.reward, { x: r.left + r.width / 2, y: r.top + r.height / 2 }); }
 	sound.chime(2);
 	toast(`Défi réussi : +${c.reward} nectar${c.boost ? ` et élan ×${fmtNum(boostMult())} pendant ${c.boost} min` : ''}`, '#F08A3C');
 	persist(true);
@@ -2680,7 +2758,8 @@ function simDay() {
 	state.nectar += prodN;
 	// Les espèces du jour arrivent, et le joueur lit leurs fiches.
 	const found = checkSpecies(state, SPECIES_PER_DAY[day - 1] ?? SPECIES_LATER);
-	for (const sp of found) { (state.speciesSeen ??= {})[sp.id] = true; state.nectar += READ_REWARD; }
+	const rr = readReward();
+	for (const sp of found) { (state.speciesSeen ??= {})[sp.id] = true; state.nectar += rr; }
 	for (const p of PLACES) if (!state.placesOpen[p.id] && placeOpen(state, p)) state.placesOpen[p.id] = Date.now();
 	updateNear();
 	const bought = simBuy();
@@ -2688,7 +2767,7 @@ function simDay() {
 	checkUnlocks();
 	state.prodAt = Date.now();
 	state.boostUntil = Date.now();
-	const row = { day, km: Math.round(km * 10) / 10, walk: Math.round(walkN), prod: Math.round(prodN), read: found.length * READ_REWARD, bought, species: found.map(s => s.name), total: Object.keys(state.species).length, perH: Math.round(prodPerHour(state)) };
+	const row = { day, km: Math.round(km * 10) / 10, walk: Math.round(walkN), prod: Math.round(prodN), read: found.length * rr, bought, species: found.map(s => s.name), total: Object.keys(state.species).length, perH: Math.round(prodPerHour(state)) };
 	row.gain = row.walk + row.prod + row.read;
 	state.sim.log.push(row);
 	if (state.sim.log.length > 120) state.sim.log.shift();

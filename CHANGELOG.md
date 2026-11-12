@@ -3,6 +3,11 @@
 Chaque version, la plus récente en haut. Le site (evolia.sebastienalzamora.workers.dev) est toujours à jour ;
 le Play Store (tests internes) reçoit les versions indiquées « Play ».
 
+## 0.7.70 — 12 novembre 2026
+Les récompenses se voient, et grandissent (nouvelles parties) :
+- **Lire une fiche rapporte de plus en plus** : 10 nectar, plus 3 par espèce découverte, plus six minutes de la production du jardin (par exemple 330 nectar avec 29 espèces au jour 7). La liste l’annonce (« Nouveau · +330 »). Un visiteur du moment découvert rapporte le double.
+- **Le nectar s’envole vers la bourse** à chaque récompense : fiche lue, défi, cadeau du jour, objectif du jour, palier d’album, herbier, visiteur découvert. Une volée de gouttes dorées part de l’endroit gagné et rejoint la bourse, dont le compteur monte avec elles ; si une page est ouverte, la volée part à sa fermeture.
+
 ## 0.7.69 — 12 novembre 2026
 - **Défis du moment** : quand un moment se présente dans la journée, son défi s’ajoute aux défis du jour, une fois : « Marche 1 km sous la pluie » (+80 nectar, élan), « Profite du soleil : marche 1,5 km » (+50), « Découvre un visiteur de la nuit » (+60), « Brave le froid : marche 1 km » (+80, élan). Un message l’annonce.
 - **Albums de saison** : dans le carnet, l’album de la saison en cours (Automne 2026…) rassemble ses découvertes, avec trois paliers (10, 25, 50 découvertes : +300, +1 000, +4 000 nectar) ; les saisons passées gardent leur compte.

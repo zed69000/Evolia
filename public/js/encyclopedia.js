@@ -163,7 +163,7 @@ export class Encyclopedia {
 			const known = !!st.species[s.id];
 			const fresh = known && !st.speciesSeen?.[s.id];
 			return `<button class="sp-card${known ? '' : ' locked'}" data-sp="${s.id}">
-					${fresh ? `<span class="sp-new">Nouveau · +${READ_REWARD}</span>` : ''}
+					${fresh ? `<span class="sp-new">Nouveau · +${this.rewardPreview?.() ?? READ_REWARD}</span>` : ''}
 					<span class="sp-thumb" data-thumb="${s.id}"></span>
 					<span class="sp-name">${known ? esc(s.name) : '???'}</span>
 				</button>`;

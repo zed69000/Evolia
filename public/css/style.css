@@ -1047,3 +1047,6 @@ body:has(.panel.open) #debug { display: none; }
 .season .bar i { background: var(--soleil); }
 .season-list { font-size: 13px; line-height: 1.6; margin: 4px 0 0; }
 .season-list span { cursor: pointer; text-decoration: underline dotted; }
+
+/* La volée de récompense passe au-dessus de tout (fenêtres comprises). */
+.reward-coin { z-index: 2000; }
