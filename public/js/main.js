@@ -15,7 +15,7 @@ import { Soundscape } from './audio.js';
 import { ITEMS, ITEM_ORDER, itemHelp, itemCost, fitsPlace, CATS, MAX_LEVEL, LEVEL_NAME, LEVEL_KM, canLevel, levelCost, CABIN_STYLES } from './deco.js';
 import { VERSION } from './version.js';
 import { startIntro, INTRO_NECTAR } from './intro.js';
-import { LADDER, isLadder, ladderPrice, ladderLock, nextUpgrade, unitProd, prodPerHour, produce, KM_HOURS, UPG_AT, REST, plantCover, ownedOf } from './habitats.js';
+import { LADDER, isLadder, ladderPrice, ladderLock, nextUpgrade, unitProd, prodPerHour, produce, KM_HOURS, KM_VALUE_H, UPG_AT, REST, plantCover, ownedOf } from './habitats.js';
 import { exportCode, importCode, backupAge } from './backup.js';
 import { DebugPanel, debugOn, setDebug, debugLog, ago, dur, trace, traceFlush } from './debug.js';
 import { canNotify, askNotify, scheduleReminders, clearReminders } from './notify.js';
@@ -1878,8 +1878,8 @@ function renderDeco() {
 			const levels = ladder ? (n ? `<small>${n} ici</small>` : '') : n && (canLevel(k) || k === 'collecteur') ? `<small>${mine.map(x => `niv. ${x.level ?? 1}`).join(' · ')}</small>` : n ? `<small>${n} ici</small>` : '';
 			// L'échelle des habitats : ce que chacun rapporte pendant l'élan, et son amélioration (production × 2).
 			const up2 = ladder && !later ? nextUpgrade(state, k) : null;
-			const prodLine = ladder && !later ? `<span class="deco-help">Chacun rapporte ${fmtNum(unitProd(state, k))} nectar par heure d’élan${n ? ` · ${n} posé${n > 1 ? 's' : ''}` : ''}</span>` : '';
-			const upgBtn = up2 ? (up2.ok ? `<button class="btn primary small" data-upg="${k}" ${nectar < up2.cost ? 'disabled' : ''}>Amélioration ${up2.level} : +${fmtNum(n * unitProd(state, k))} par heure · ${fmtInt(up2.cost)}</button>` : `<span class="deco-lock">amélioration ${up2.level} (× 2) dès ${up2.need} posés</span>`) : '';
+			const prodLine = ladder && !later ? `<span class="deco-help">Chacun rapporte ${fmtNum(unitProd(state, k))} nectar par heure d’élan, environ ${fmtInt(unitProd(state, k) * KM_VALUE_H)} par km marché${n ? ` · ${n} posé${n > 1 ? 's' : ''}` : ''}</span>` : '';
+			const upgBtn = up2 ? (up2.ok ? `<button class="btn primary small" data-upg="${k}" ${nectar < up2.cost ? 'disabled' : ''}>Amélioration ${up2.level} : +${fmtInt(n * unitProd(state, k) * KM_VALUE_H)} par km · ${fmtInt(up2.cost)}</button>` : `<span class="deco-lock">amélioration ${up2.level} (× 2) dès ${up2.need} posés</span>`) : '';
 			return `<div class="deco-card${locked ? ' locked' : ''}"><div class="deco-art" data-art="${k}"></div>
 				<div class="deco-body"><h3>${it.name}</h3><p>${it.text}</p>${!ladder && itemHelp(k, state.eco2) ? `<span class="deco-help">${itemHelp(k, state.eco2)}</span>` : ''}
 				${prodLine}<div class="deco-row"><span class="nectar">${fmtInt(cost)}</span>${levels}${action}</div>${up ? `<div class="deco-row deco-up">${up}</div>` : ''}${upgBtn && n ? `<div class="deco-row deco-up">${upgBtn}</div>` : ''}</div></div>`;
@@ -1995,7 +1995,7 @@ $('#btn-place').addEventListener('click', () => {
 		const placed = garden.placeItem(kind, x, y, rot);
 		placed.paid = cost;
 		if (kind === 'collecteur') fillFromDew(placed);
-		const help = state.eco2 && isLadder(kind) ? `+${fmtNum(unitProd(state, kind))} nectar par heure d’élan` : itemHelp(kind, state.eco2);
+		const help = state.eco2 && isLadder(kind) ? `+${fmtInt(unitProd(state, kind) * KM_VALUE_H)} nectar par km marché` : itemHelp(kind, state.eco2);
 		toast(`${ITEMS[kind].name} : installé${/^Une /.test(ITEMS[kind].name) ? 'e' : /^Des /.test(ITEMS[kind].name) ? 's' : ''}${help ? ` · ${help}` : ''}`, '#9A7448');
 		if (kind === 'cabane' && garden.items.filter(x => x.kind === 'cabane').length === 1) {
 			setTimeout(() => chooseFarmer(() => choosePet(() => toast(`${farmerName(true)} s’installe : construis-lui un potager`, '#5F933E', () => openDeco('recolte')))), 1400);
@@ -2198,7 +2198,7 @@ $('#deco').addEventListener('click', e => {
 		state.nectar -= up.cost;
 		(state.upg ??= {})[kind] = up.level;
 		sound.chime(3);
-		toast(`${ITEMS[kind].name} : production × 2 (+${fmtNum(ownedOf(state, kind) * unitProd(state, kind) / 2)} par heure d’élan)`, '#5F933E');
+		toast(`${ITEMS[kind].name} : production × 2 (+${fmtInt(ownedOf(state, kind) * unitProd(state, kind) / 2 * KM_VALUE_H)} nectar par km marché)`, '#5F933E');
 		persist(true);
 		renderHud();
 		return renderDeco();

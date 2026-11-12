@@ -3,6 +3,10 @@
 Chaque version, la plus récente en haut. Le site (evolia.sebastienalzamora.workers.dev) est toujours à jour ;
 le Play Store (tests internes) reçoit les versions indiquées « Play ».
 
+## 0.7.53 — 12 novembre 2026
+- Les habitats rapportent quatre fois plus (massif 6 nectar par heure d’élan, ruche 32, hôtel 120, nichoir 480, mare 2 000, haie 9 600) : un achat se sent tout de suite. La part de l’activité ne bouge pas (environ 62 % pour un marcheur régulier), puisque chaque km vaut aussi trois heures de production.
+- Aménager dit ce qu’un habitat et une amélioration rapportent par km marché (« Amélioration 1 : +132 par km »), l’unité que le joueur ressent.
+
 ## 0.7.52 — 12 novembre 2026
 Un début plus rapide, façon Cookie Clicker (nouvelles parties ; réglé sur 500 joueurs simulés, ouverture par ouverture) :
 - Les premiers habitats se remboursent vite : massif 15 nectar (1,5 par heure d’élan), ruche 100 (8), hôtel 600 (30, dès 2 km), nichoir 5 000 (120, dès 12 km), mare 50 000 (500, dès 50 km), haie 600 000 (2 400, dès 150 km). Les grands habitats s’ouvrent avec les kilomètres.
