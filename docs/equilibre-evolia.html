@@ -124,7 +124,7 @@ td.num { font-variant-numeric: tabular-nums; text-align: right; }
         <p><b>Améliorations</b> (production × 2) : neuf par habitat, à 10, 50, 500, 50 000, 5 millions, 500 millions, 50 milliards, 5 billions et 500 billions de fois le prix de base ; elles s'ouvrent au premier exemplaire puis en remplissant 1 à 4 parcelles de cet habitat. <b>Niveaux</b> de chaque habitat posé : production × 1,5, × 2, × 3, × 4, pour 3, 8, 20, 50 fois le prix de base (+15 % par niveau déjà gagné par cette sorte), dès 2, 6, 15, 30 km.</p>
         <p><b>Production</b> : niveau × améliorations × voisinage (les plantes autour) × (1 + 1 % par espèce) × (1 + 5 % par pollinisateur pour les ruches, massifs et hôtels). Elle tourne à plein pendant l'élan (7 minutes par minute de marche, 8 h au plus), à 5 % au repos.</p>
         <p><b>Marche</b> : environ 60 nectar par km, plus 3 heures de la production du jardin par km, plus l'objectif du jour (60 nectar par km d'objectif). <b>Terrain</b> : 4 crans par parcelle (60 nectar, +35 %). <b>Parcelles</b> : 600 nectar puis × 2,3, et des kilomètres d'exploration (1,5 km puis × 1,5).</p>
-        <p><b>Espèces</b> : 6, 4, 3 puis 2 par jour (le modèle suppose qu'il y en a toujours une à découvrir). <b>Fiche lue</b> : 10 nectar + 3 par espèce + 6 minutes de production. <b>Quiz</b> (les jours où le joueur achète moins de 3 choses, à partir de 8 espèces) : trois questions, 10 + 3 par espèce + 15 minutes de production par bonne réponse, multipliées par la série (× 1,5, × 2… jusqu'à × 4).</p>
+        <p><b>Espèces</b> : 6, 4, 3 puis 2 par jour (le modèle suppose qu'il y en a toujours une à découvrir). <b>Fiche lue</b> : 10 nectar + 3 par espèce + 6 minutes de production. <b>Quiz</b> (les jours où le joueur achète moins de 3 choses, à partir de 8 espèces) : trois questions, 10 + 3 par espèce + 8 minutes de production par bonne réponse, multipliées par la série (× 1,25, × 1,5… jusqu'à × 2), et une demi-réponse de plus pour un sans-faute ; trois quiz par jour au plus.</p>
         <p>Le joueur achète toujours le terrain et les parcelles dès qu'il peut, puis ce qui rapporte le plus pour son prix. Non compté : la ferme, les défis du jour, le cadeau, les bonus du temps (soleil, pluie, nuit, hiver) et les albums de saison, qui ajoutent un peu de nectar.</p>
       </section>
     </main>
@@ -159,7 +159,7 @@ function simulate(P) {
   const itemProd = (k, lv) => unit(k) * LEVEL_PROD[lv] * P.near * (k === 'ruche' || k === 'hotel' ? 1.3 : 1) * (1 + S.species / 100) * (POLL.has(k) ? 1 + 0.05 * guild().poll : 1);
   const prodH = () => ORDER.reduce((a, k) => a + S.items[k].reduce((b, lv) => b + itemProd(k, lv), 0), 0);
   const readReward = () => Math.max(10, Math.round((10 + 3 * S.species + prodH() * 0.1) / 5) * 5);
-  const quizBase = () => Math.max(15, Math.round((10 + 3 * S.species + prodH() * 0.25) / 5) * 5);
+  const quizBase = () => Math.max(15, Math.round((10 + 3 * S.species + prodH() * 8 / 60) / 5) * 5);
   for (let d = 1; d <= P.days; d++) {
     const out = d === 1 || r() < P.out, km = out ? P.km * (0.75 + r() * 0.5) : 0;
     const row = { d, act: 0, elan: 0, rest: 0, read: 0, buys: 0, quiz: false };
@@ -211,8 +211,9 @@ function simulate(P) {
       row.quiz = true;
       let q = 0;
       for (let k = 0; k < 3; k++) {
-        if (r() < P.quizOk) { q += quizBase() * Math.min(4, 1 + 0.5 * S.streak); S.streak++; } else S.streak = 0;
+        if (r() < P.quizOk) { q += quizBase() * Math.min(2, 1 + 0.25 * S.streak); S.streak++; } else S.streak = 0;
       }
+      if (q >= 3 * quizBase()) q += quizBase() / 2;
       row.read += q; S.nectar += q;
     }
     row.prodH = prodH();

@@ -149,11 +149,11 @@ function nothingToDo() {
 }
 
 /**
- * Ce que rapporte une bonne réponse, avant la série : 10 nectar, plus 3 par espèce découverte, plus un quart d'heure
- * de la production du jardin. Un quiz réussi vaut donc près d'une heure de production : un vrai coup de pouce quand il
- * n'y a plus rien à faire, sans jamais valoir une sortie.
+ * Ce que rapporte une bonne réponse, avant la série : 10 nectar, plus 3 par espèce découverte, plus 8 minutes de la
+ * production du jardin. Un quiz réussi vaut une demi-heure à trois quarts d'heure de production (trois par jour au
+ * plus) : un coup de pouce quand il n'y a plus rien à faire, jamais autant qu'une sortie.
  */
-const quizBase = () => Math.max(15, Math.round((10 + 3 * Object.keys(state.species).length + prodPerHour(state) * 0.25) / 5) * 5);
+const quizBase = () => Math.max(15, Math.round((10 + 3 * Object.keys(state.species).length + prodPerHour(state) * 8 / 60) / 5) * 5);
 
 /** La ligne du quiz dans les défis du jour : quand il arrive, ou un bouton pour jouer. */
 function quizLine() {
@@ -171,7 +171,7 @@ function offerQuiz(force = false) {
 	if (!qs) { if (force) toast(`Le quiz porte sur les fiches lues avant aujourd’hui : il en faut ${QUIZ_MIN_PLANTS} de plantes et ${QUIZ_MIN_ANIMALS} d’animaux`, '#9A7448'); return; }
 	const base = quizBase(), streak = state.quizStreak ?? 0;
 	showModal(`<h2>Le quiz des fiches</h2>
-		<p>Trois questions sur les espèces que tu connais. Bonne réponse : <b>${fmtInt(base)} nectar</b>, plus encore si tu enchaînes (jusqu’à × 4). Tu peux feuilleter ton livre des espèces.</p>
+		<p>Trois questions sur les espèces que tu connais. Bonne réponse : <b>${fmtInt(base)} nectar</b>, plus encore si tu enchaînes (jusqu’à × 2). Tu peux feuilleter ton livre des espèces.</p>
 		${streak ? `<p class="item-tip">Ta série en cours : ${streak} bonne${streak > 1 ? 's' : ''} réponse${streak > 1 ? 's' : ''} (× ${fmtNum(streakMult(streak))}).</p>` : ''}
 		<button class="btn primary" id="quiz-go">Jouer</button>
 		<button class="btn ghost wide" id="quiz-later">Plus tard</button>`);
@@ -231,7 +231,7 @@ function endQuiz(qs, score) {
 	qz.at = Date.now();
 	renderQuizChip();
 	let bonus = 0;
-	if (score.right === qs.length) { bonus = quizBase(); state.nectar = (state.nectar ?? 0) + bonus; score.gain += bonus; }
+	if (score.right === qs.length) { bonus = Math.round(quizBase() / 2); state.nectar = (state.nectar ?? 0) + bonus; score.gain += bonus; }
 	persist(true); renderHud();
 	showModal(`<h2>${score.right === qs.length ? 'Sans-faute !' : score.right ? 'Bien joué' : 'La prochaine fois'}</h2>
 		<p>${score.right} bonne${score.right > 1 ? 's' : ''} réponse${score.right > 1 ? 's' : ''} sur ${qs.length} · <b>+${fmtInt(score.gain)} nectar</b>${bonus ? ` (dont ${fmtInt(bonus)} pour le sans-faute)` : ''}.</p>

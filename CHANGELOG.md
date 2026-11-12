@@ -3,6 +3,9 @@
 Chaque version, la plus récente en haut. Le site (evolia.sebastienalzamora.workers.dev) est toujours à jour ;
 le Play Store (tests internes) reçoit les versions indiquées « Play ».
 
+## 0.7.81 — 12 novembre 2026
+- Quiz moins généreux : une bonne réponse vaut 10 nectar, plus 3 par espèce, plus 8 minutes de production (au lieu de 15) ; la série monte de 0,25 par bonne réponse jusqu’à × 2 (au lieu de × 4) ; le sans-faute ajoute une demi-réponse. Trois quiz par jour au plus. Un quiz réussi vaut une demi-heure à trois quarts d’heure de production.
+
 ## 0.7.80 — 12 novembre 2026
 - **Quiz à part** : son propre bouton « ? Quiz », sous le cadeau, qui n’apparaît que quand un quiz attend ; un message prévient le joueur, une fois par quiz. Il n’est plus dans les défis du jour (il s’y affichait mal).
 - **Tas de bois** redessiné : des bûches entières, couchées, vues de 3/4 (bout coupé et cernes devant, écorce vers le fond), comme le reste du jardin.

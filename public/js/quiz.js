@@ -33,8 +33,8 @@ export function noteAnswer(state, id, ok) {
 	const r = (qz.score ??= {})[id] ??= { ok: 0, ko: 0 };
 	if (ok) r.ok++; else r.ko++;
 }
-/** La série de bonnes réponses multiplie le gain : × 1, × 1,5, × 2… jusqu'à × 4. */
-export const streakMult = streak => Math.min(4, 1 + 0.5 * streak);
+/** La série de bonnes réponses multiplie le gain : × 1, × 1,25, × 1,5… jusqu'à × 2. */
+export const streakMult = streak => Math.min(2, 1 + 0.25 * streak);
 
 const pick = arr => arr[Math.floor(Math.random() * arr.length)];
 const shuffle = arr => arr.map(v => [Math.random(), v]).sort((a, b) => a[0] - b[0]).map(x => x[1]);
