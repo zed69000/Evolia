@@ -3,6 +3,9 @@
 Chaque version, la plus récente en haut. Le site (evolia.sebastienalzamora.workers.dev) est toujours à jour ;
 le Play Store (tests internes) reçoit les versions indiquées « Play ».
 
+## 0.7.77 — 12 novembre 2026
+- Trois vues pour tous les objets qui se tournent, haies, murets et pas japonais compris : de face, de 3/4 droite, de 3/4 gauche.
+
 ## 0.7.76 — 12 novembre 2026
 - Bulle « Il faut des plantes » corrigée : tes pas font pousser des fleurs ; les abeilles et les papillons en sèment d’autres, les oiseaux sèment arbustes et arbres (elle disait « marche vite pour des arbustes, cours pour des arbres »).
 

@@ -2,7 +2,6 @@
 
 import { nectarPerEffort, addDayEffort, slots, slotSummary, createSlot, useSlot, renameSlot, deleteSlot, load, save, reset, allPlants, biomeKm, heartOf, ACTIVITIES, ACTIVITY_BY_ID, MAX_SPEED_KMH, activityFor, effortFor, hikeFor, HIKE_WINDOW, dayKey, todayMeters, addDistance, STEP_LENGTH_M, effortMix } from './state.js';
 import { Garden, CELLS, CELL_KM, cellsOpen, cellName, cellOrigin, TURN_VIEWS, snapRot } from './garden.js';
-const LINK_KINDS = new Set(['haie', 'muret', 'pas']);
 import { PlacesMap } from './map.js';
 import { PLANT_TYPES, DECOR, plantName } from './plants.js';
 import { GpsTracker, MotionTracker, SimTracker } from './tracker.js';
@@ -2433,9 +2432,9 @@ $('#btn-place').addEventListener('click', () => {
 $('#btn-place-cancel').addEventListener('click', endPlacing);
 $('#btn-place-turn').addEventListener('click', () => {
 	if (!placing) return;
-	// Trois vues : de face, de 3/4 droite, de 3/4 gauche (haies et murets : par pas de 45°, pour se raccorder).
+	// Trois vues pour tous : de face, de 3/4 droite, de 3/4 gauche.
 	const r0 = garden.ghost.rot ?? 0, k = garden.ghost.kind;
-	garden.ghost.rot = LINK_KINDS.has(k) ? (r0 + 45) % 360 : TURN_VIEWS[(TURN_VIEWS.indexOf(snapRot(k, r0)) + 1) % TURN_VIEWS.length];
+	garden.ghost.rot = TURN_VIEWS[(TURN_VIEWS.indexOf(snapRot(k, r0)) + 1) % TURN_VIEWS.length];
 	renderPlacing();
 });
 
@@ -2533,7 +2532,7 @@ function tapItem(hit, card) {
 			return;
 		}
 		if (e.target.closest('[data-turn]')) {
-			it.rot = LINK_KINDS.has(it.kind) ? ((it.rot ?? 0) + 45) % 360 : TURN_VIEWS[(TURN_VIEWS.indexOf(snapRot(it.kind, it.rot ?? 0)) + 1) % TURN_VIEWS.length];
+			it.rot = TURN_VIEWS[(TURN_VIEWS.indexOf(snapRot(it.kind, it.rot ?? 0)) + 1) % TURN_VIEWS.length];
 			garden.popItem(it);
 			persist(true);
 			clearTimeout(cardTimer);

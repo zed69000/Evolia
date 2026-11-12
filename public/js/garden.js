@@ -167,14 +167,10 @@ const SUCCESSION = {
 	buisson: { every: 4, type: 'arbre', start: 0.06, by: { default: ['un geai', 'un écureuil', 'une sittelle'], montagne: ['un cassenoix', 'un écureuil'], marais: ['un geai', 'le courant'] } },
 };
 
-/**
- * Trois vues pour un objet qui se tourne : de face, de 3/4 droite, de 3/4 gauche (moins de dessins, et on s'y
- * retrouve). Les haies, murets et pas japonais, qui se raccordent, gardent tous les angles.
- */
+/** Trois vues pour tout objet qui se tourne : de face, de 3/4 droite, de 3/4 gauche (moins de dessins, on s'y retrouve). */
 export const TURN_VIEWS = [0, 45, 315];
 export function snapRot(kind, rot) {
 	const r = ((rot % 360) + 360) % 360;
-	if (LINK[kind]) return r;
 	return TURN_VIEWS.reduce((best, v) => (Math.min(Math.abs(v - r), 360 - Math.abs(v - r)) < Math.min(Math.abs(best - r), 360 - Math.abs(best - r)) ? v : best), 0);
 }
 
