@@ -2545,6 +2545,13 @@ export class Garden {
 			}
 			case 'perch': {
 				const target = pick(c.on === 'buisson' ? P.bushes : P.trees);
+				if (!target) {
+					// Pas encore d'arbuste ni d'arbre où se percher : l'oiseau d'une mangeoire ou d'un nichoir sautille au
+					// sol tout autour (il y est déjà, puisqu'on l'a fait venir).
+					const nest = pick(this.itemsIn(P.ci, Object.keys(ITEMS).filter(k => [].concat(ITEMS[k].attracts ?? []).includes(sp.id))));
+					if (!nest) return null;
+					return { ...base, behavior: 'hop', x: nest.x + (Math.random() - 0.5) * 60, y: nest.y + 10 + Math.random() * 16, mode: 'walk', home: { x: nest.x, y: nest.y + 10 } };
+				}
 				return target && { ...base, x: side, y: y - 100, target, ox: c.trunk ? 6 : (Math.random() - 0.5) * (c.on === 'buisson' ? 30 : 60), oy: c.trunk ? 0 : 4, mode: 'seek' };
 			}
 			case 'bound':

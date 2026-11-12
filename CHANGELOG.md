@@ -3,6 +3,10 @@
 Chaque version, la plus récente en haut. Le site (evolia.sebastienalzamora.workers.dev) est toujours à jour ;
 le Play Store (tests internes) reçoit les versions indiquées « Play ».
 
+## 0.7.63 — 12 novembre 2026
+Corrigé :
+- Une mangeoire ou un nichoir restait sans oiseau : l’animal n’apparaissait que si son espèce était déjà découverte, et le merle voulait un arbuste pour se percher. Désormais, poser un habitat fait venir tout de suite l’espèce qu’il attire (merle pour la mangeoire, mésanges pour le nichoir, bourdon pour le massif, hérisson pour le tas de bois, lézard pour les pierres…) : « Nouvelle espèce grâce à une mangeoire : Merle noir », avec sa fiche à lire. Sans arbuste ni arbre, l’oiseau sautille au sol autour de sa mangeoire ou de son nichoir. Les jardins qui ont déjà ces habitats reçoivent leurs espèces au prochain lancement.
+
 ## 0.7.62 — 12 novembre 2026
 Chaque habitat grandit (nouvelles parties) :
 - Chaque massif, ruche, hôtel, nichoir, mare ou haie posé a son niveau, de 1 à 5 (simple, garni, fleuri, foisonnant, remarquable), qui multiplie sa production (× 1,5, × 2, × 3, × 4) et se voit dans le jardin. Prix : 3, 8, 20 puis 50 fois le prix de base, 15 % de plus à chaque niveau déjà gagné par cette sorte d’habitat ; dès 2, 6, 15 puis 30 km.

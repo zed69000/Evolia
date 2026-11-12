@@ -2029,6 +2029,7 @@ $('#btn-place').addEventListener('click', () => {
 		const placed = garden.placeItem(kind, x, y, rot);
 		placed.paid = cost;
 		if (kind === 'collecteur') fillFromDew(placed);
+		bringAttracted(kind);
 		const help = state.eco2 && ITEMS[kind].birds ? `${ITEMS[kind].birds === 2 ? 'un couple de mésanges s’installe' : 'un oiseau vient s’y nourrir'} : ils sèmeront arbustes et arbres`
 			: state.eco2 && isLadder(kind) ? `+${fmtInt(unitProd(state, kind) * KM_VALUE_H)} nectar par km marché` : itemHelp(kind, state.eco2);
 		toast(`${ITEMS[kind].name} : installé${/^Une /.test(ITEMS[kind].name) ? 'e' : /^Des /.test(ITEMS[kind].name) ? 's' : ''}${help ? ` · ${help}` : ''}`, '#9A7448');
@@ -2246,6 +2247,21 @@ $('#deco').addEventListener('click', e => {
 $('#track-alert').addEventListener('click', async () => { sky.locate(true); await enableTracking(true); renderStatus(); });
 $('#btn-deco').addEventListener('click', () => openDeco(state.intro ? 'habitat' : currentMission()?.id === 'collector' ? 'recolte' : undefined));
 
+/**
+ * Un habitat qui attire une espèce (la mangeoire, le merle ; le nichoir, la mésange…) la fait venir dès sa pose : on
+ * voit tout de suite ce que l'achat apporte, et sa fiche attend d'être lue.
+ */
+function bringAttracted(kind, quiet = false) {
+	for (const id of [].concat(ITEMS[kind]?.attracts ?? [])) {
+		const sp = SPECIES_BY_ID[id];
+		if (!sp || state.species[id]) continue;
+		state.species[id] = Date.now();
+		updateSpeciesDot();
+		if (!quiet) setTimeout(() => toast(`Nouvelle espèce grâce à ${ITEMS[kind].name.toLowerCase()} : ${sp.name}`, '#F08A3C', () => species.open(id)), 1600);
+	}
+	garden.nextPopulate = 0;
+}
+
 /** Des fleurs prêtes à donner un arbuste (ou des arbustes un arbre), mais aucun oiseau pour le semer : on le dit. */
 function noBirdsNote(type) {
 	if (state.sim || state.noBirdsDay === dayKey()) return;
@@ -2359,6 +2375,7 @@ function simPlace(k) {
 		if (!spot || garden.cellAt(spot[0], spot[1]) < 0) continue;
 		const it = garden.placeItem(k, spot[0], spot[1], ITEMS[k].turn && Math.random() < 0.5 ? 1 : 0);
 		it.paid = priceOf(k);
+		bringAttracted(k, true);
 		if (k === 'cabane' && !state.gardener) { state.gardener = Math.random() < 0.5 ? 'fermier' : 'fermiere'; state.pet = ['chien', 'chat', null][Math.floor(Math.random() * 3)]; }
 		return true;
 	}
@@ -3026,6 +3043,8 @@ $('#btn-peek').addEventListener('click', () => {
 // gouttes sur les fleurs rejoint la bourse.
 if (!state.eco2 && here().cellSize?.[0] != null && cellsOpen(here()) === 1) state.eco2 = true;
 if (state.eco2 && (state.ground ?? 0) > 0) { state.nectar = (state.nectar ?? 0) + state.ground; state.pending = Math.max(0, (state.pending ?? 0) - state.ground); state.ground = 0; }
+// Les habitats déjà posés font venir leur espèce (avant la 0.7.63, il fallait la découvrir autrement).
+if (state.eco2 && !state.intro) for (const it of Object.values(state.places).flatMap(p => p.items ?? [])) bringAttracted(it.kind, true);
 runHabitats();
 renderHud();
 renderStatus();
