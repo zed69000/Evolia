@@ -229,6 +229,7 @@ function endQuiz(qs, score) {
 	const qz = (state.quiz ??= {});
 	qz.n = (qz.n ?? 0) + 1;
 	qz.at = Date.now();
+	renderQuizChip();
 	let bonus = 0;
 	if (score.right === qs.length) { bonus = quizBase(); state.nectar = (state.nectar ?? 0) + bonus; score.gain += bonus; }
 	persist(true); renderHud();
@@ -239,6 +240,27 @@ function endQuiz(qs, score) {
 	if (bonus) rewardFly(bonus);
 	sound.chime(3);
 }
+
+/**
+ * Le bouton du quiz (sous le cadeau) : il n'apparaît que quand un quiz attend, et le joueur en est prévenu une fois
+ * par quiz (un message, et le bouton qui brille).
+ */
+function renderQuizChip() {
+	const chip = $('#quiz-chip');
+	if (!chip) return;
+	const ready = !!state.eco2 && !state.intro && quizReady(state, dayKey());
+	chip.hidden = !ready;
+	chip.classList.toggle('tip-glow', ready);
+	const key = `${dayKey()}:${state.quiz?.n ?? 0}`;
+	if (ready && state.quizNoted !== key && $('#modal').hidden && !document.querySelector('.panel.open')) {
+		state.quizNoted = key;
+		persist();
+		toast(`Un quiz des fiches t’attend : ${fmtInt(quizBase())} nectar par bonne réponse`, '#F08A3C', () => offerQuiz(true));
+	}
+}
+$('#quiz-chip')?.addEventListener('click', () => offerQuiz(true));
+setInterval(renderQuizChip, 15000);
+setTimeout(renderQuizChip, 4000);
 
 // De temps en temps : quand il n'y a plus rien à faire, le quiz se propose (trois par jour au plus, trois heures
 // d'écart au moins).
@@ -1723,10 +1745,9 @@ function showDaily(gift = false) {
 	const goal = nextGoal(state);
 	showModal(`<div class="modal-body"><h2>${gift ? 'Bonjour !' : "Aujourd'hui"}</h2>
 		${weekHtml(state)}${top}
-		<h3 class="ch-title">Défis du jour</h3>${challengesHtml(state)}${quizLine()}
+		<h3 class="ch-title">Défis du jour</h3>${challengesHtml(state)}
 		${goal ? `<p class="next-line">${goal}</p>` : ''}${note}</div>
 		<div class="modal-foot">${ready ? '<button class="btn primary" id="btn-gift">Ouvrir le cadeau</button>' : '<button class="btn primary" data-close>Voir mon jardin</button>'}</div>`);
-	$('#btn-quiz')?.addEventListener('click', () => offerQuiz(true));
 	$('#btn-gift')?.addEventListener('click', () => {
 		const got = claimGift(state);
 		sound.chime(3);

@@ -3,6 +3,10 @@
 Chaque version, la plus récente en haut. Le site (evolia.sebastienalzamora.workers.dev) est toujours à jour ;
 le Play Store (tests internes) reçoit les versions indiquées « Play ».
 
+## 0.7.80 — 12 novembre 2026
+- **Quiz à part** : son propre bouton « ? Quiz », sous le cadeau, qui n’apparaît que quand un quiz attend ; un message prévient le joueur, une fois par quiz. Il n’est plus dans les défis du jour (il s’y affichait mal).
+- **Tas de bois** redessiné : des bûches entières, couchées, vues de 3/4 (bout coupé et cernes devant, écorce vers le fond), comme le reste du jardin.
+
 ## 0.7.79 — 12 novembre 2026
 - Des couleurs plus franches, toujours à l’aquarelle : le jardin repasse sur lui-même en « lumière douce », comme une seconde couche de peinture (environ +18 % de saturation, +20 % de contraste). Options › Couleurs : de douces à vives.
 

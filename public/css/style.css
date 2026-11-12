@@ -1094,3 +1094,8 @@ body:has(.panel.open) #debug { display: none; }
 /* Options : le curseur des couleurs */
 .opt-range { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--doux); }
 .opt-range input { flex: 1; accent-color: var(--foret); }
+
+/* Le bouton du quiz, sous l'œil, en haut à droite */
+.quiz-chip { top: calc(env(safe-area-inset-top, 0px) + 190px); }
+.quiz-chip b { display: grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; background: var(--elan); color: #FDF7E7; font-size: 13px; }
+#app:has(.panel.open) .quiz-chip, .peek .quiz-chip, #app.intro .quiz-chip { display: none; }

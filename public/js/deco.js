@@ -13,7 +13,7 @@ export const ITEMS = {
 	collecteur: { cat: 'recolte', name: 'Un collecteur de nectar', cost: 60, km: 0, text: 'Une jarre où tes butineurs déposent leur récolte : elle garde le nectar pour toi. Touche-la pour tout récupérer, et améliore-la pour qu’elle en garde plus.', box: { w: 110, h: 130, ax: 55, ay: 112 } },
 	banc: { cat: 'deco', name: 'Un banc', cost: 40, km: 0, turn: true, text: 'Pour s’asseoir et regarder le jardin vivre.', box: { w: 130, h: 104, ax: 65, ay: 78 } },
 	massif: { cat: 'habitat', name: 'Un massif mellifère', cost: 25, km: 0, team: 'pollinisateur', power: 1, attracts: 'bourdon', text: 'Lavande, bourrache et thym : un buffet pour les butineurs.', box: { w: 110, h: 70, ax: 55, ay: 56 } },
-	bois: { cat: 'habitat', name: 'Un tas de bois', cost: 30, km: 0, team: 'sol', power: 1, attracts: 'herisson', text: 'Carabes, cloportes et champignons y décomposent le bois.', box: { w: 110, h: 70, ax: 55, ay: 56 } },
+	bois: { cat: 'habitat', name: 'Un tas de bois', cost: 30, km: 0, team: 'sol', power: 1, attracts: 'herisson', text: 'Carabes, cloportes et champignons y décomposent le bois.', box: { w: 110, h: 86, ax: 55, ay: 74 } },
 	pierres: { cat: 'habitat', name: 'Un tas de pierres', cost: 30, km: 0, team: 'regulateur', power: 1, attracts: 'lezard', text: 'Les lézards viennent s’y chauffer au soleil.', box: { w: 100, h: 60, ax: 50, ay: 46 } },
 	mangeoire: { cat: 'habitat', name: 'Une mangeoire', cost: 45, km: 1, turn: true, team: 'semeur', power: 1, attracts: 'merle', birds: 1, text: 'Les oiseaux qu’elle nourrit sèment ensuite baies et noisettes.', box: { w: 80, h: 120, ax: 40, ay: 104 } },
 	nichoir: { cat: 'habitat', name: 'Un nichoir', cost: 60, km: 2, turn: true, team: 'regulateur', power: 1, attracts: 'mesange', birds: 2, text: 'Un couple de mésanges y élève ses petits… mange les chenilles, et sème baies et graines.', box: { w: 70, h: 136, ax: 35, ay: 124 } },
@@ -262,18 +262,45 @@ function paintMassif(g) {
 	return { top: -44 };
 }
 
+/** Un tas de bûches couchées, vues de 3/4 : le bout coupé (et ses cernes) devant, l'écorce qui fuit vers le fond. */
 function paintBois(g) {
 	const d = rng(42);
-	shade(g, d, 52);
-	const logs = [[-30, -12], [0, -12], [30, -12], [-15, -32], [15, -32], [0, -50]];
-	for (const [x, y] of logs) {
-		wash(g, x, y, 15, 14, '#7A4E2C', d, { layers: 8, alpha: 0.2 });
-		wash(g, x, y, 11, 10, '#D8B07A', d, { layers: 6, alpha: 0.35, edge: 0.3 });
-		g.strokeStyle = rgba('#8A5A34', 0.5); g.lineWidth = 0.7;
-		for (const r of [4, 7]) { g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.stroke(); }
-	}
-	for (let i = 0; i < 4; i++) wash(g, d.range(-40, 40), d.range(-45, -5), 6, 3, '#7FAA48', d, { layers: 4, alpha: 0.25, edge: 0 });
-	return { top: -62 };
+	shade(g, d, 50);
+	const ink = rgba('#4A2E1A', 0.6);
+	const log = (x, y, r, len) => {
+		const dx = len * 0.62, dy = -len * 0.3, rx = r * 0.78;
+		// L'écorce : du bout coupé jusqu'au bout du fond (arrondi).
+		g.beginPath();
+		g.moveTo(x, y - r);
+		g.lineTo(x + dx, y + dy - r);
+		g.ellipse(x + dx, y + dy, rx, r, 0, -Math.PI / 2, Math.PI / 2);
+		g.lineTo(x, y + r);
+		g.closePath();
+		g.fillStyle = rgba(d.pick(['#7A5232', '#6E4A2C', '#82593A']), 0.97);
+		g.fill();
+		g.strokeStyle = ink; g.lineWidth = 0.9; g.stroke();
+		// Les stries de l'écorce, dans le sens de la bûche.
+		g.strokeStyle = rgba('#3E2616', 0.35); g.lineWidth = 0.7;
+		for (let k = -2; k <= 2; k++) {
+			const o = (k / 2.6) * r, a = d.range(0.15, 0.4), b = d.range(0.6, 0.95);
+			g.beginPath(); g.moveTo(x + dx * a, y + dy * a + o); g.lineTo(x + dx * b, y + dy * b + o); g.stroke();
+		}
+		// La lumière sur le dessus de l'écorce.
+		wash(g, x + dx * 0.5, y + dy * 0.5 - r * 0.6, len * 0.28, r * 0.25, '#C89A6A', d, { layers: 3, alpha: 0.25, edge: 0 });
+		// Le bout coupé : bois clair, cernes, une fente.
+		g.beginPath(); g.ellipse(x, y, rx, r, 0, 0, Math.PI * 2);
+		g.fillStyle = rgba('#DDB57E', 0.98); g.fill();
+		g.strokeStyle = rgba('#7A5232', 0.95); g.lineWidth = 1.6; g.stroke();
+		g.strokeStyle = rgba('#A87A4A', 0.55); g.lineWidth = 0.7;
+		for (const k of [0.62, 0.38]) { g.beginPath(); g.ellipse(x + d.range(-0.5, 0.5), y, rx * k, r * k, 0, 0, Math.PI * 2); g.stroke(); }
+		g.strokeStyle = rgba('#6A4426', 0.5); g.lineWidth = 0.6;
+		g.beginPath(); g.moveTo(x, y); g.lineTo(x + rx * 0.7, y - r * 0.5); g.stroke();
+	};
+	// Trois en bas, deux au milieu, une en haut ; les rangs du haut se posent dans le creux de ceux du dessous.
+	for (const [x, y, r] of [[-26, -11, 10], [-4, -11, 10.5], [18, -11, 9.5], [-15, -29, 10], [7, -29, 9.5], [-4, -46, 9.5]]) log(x, y, r, 34);
+	// Un peu de mousse et d'herbe au pied.
+	for (let i = 0; i < 4; i++) wash(g, d.range(-34, 30), d.range(-6, 2), 7, 3, '#7FAA48', d, { layers: 4, alpha: 0.3, edge: 0 });
+	return { top: -66 };
 }
 
 function paintPierres(g) {
