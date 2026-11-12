@@ -3924,6 +3924,16 @@ export class Garden {
 
 		// Lumière de l'heure, de la saison et du temps
 		ctx.setTransform(1, 0, 0, 1, 0, 0);
+		// La couleur : l'image repasse sur elle-même en « lumière douce », comme une seconde couche d'aquarelle. Les
+		// couleurs se saturent, les sombres se creusent, les blancs restent doux (pas de contour dur). Réglable (tuning).
+		const vivid = this.vivid ?? this.state.vivid ?? 0.75;
+		if (vivid > 0.01) {
+			ctx.globalCompositeOperation = 'soft-light';
+			ctx.globalAlpha = vivid;
+			ctx.drawImage(this.canvas, 0, 0);
+			ctx.globalAlpha = 1;
+			ctx.globalCompositeOperation = 'source-over';
+		}
 		// Vu de loin, c'est une carte : ni l'heure ni le temps ne l'assombrissent.
 		if (!glyph && !this.state.intro && amb.a > 0.001) {
 			ctx.globalCompositeOperation = 'multiply';

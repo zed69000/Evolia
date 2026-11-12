@@ -3215,6 +3215,8 @@ function renderOptions() {
 		${optGroup('tech', 'Technique', 'Affichage, batterie')}
 		<h3>Effet miniature</h3>
 		<label class="switch"><input type="checkbox" id="opt-fx" ${fxOn() ? 'checked' : ''}><i></i><span>Haut et bas de l'écran un peu flous, bords adoucis : le jardin comme une maquette</span></label>
+		<h3>Couleurs</h3>
+		<label class="opt-range">Douces<input type="range" id="opt-vivid" min="0" max="1" step="0.05" value="${state.vivid ?? 0.75}">Vives</label>
 		<h3>Ciel du jardin</h3>
 		<div class="seg" id="opt-sky">${[['real', 'Réel'], ['jour', 'Toujours de jour'], ['beau', 'Toujours beau']].map(([k, l]) => `<button data-sky="${k}" class="${(state.skyMode ?? 'real') === k ? 'on' : ''}">${l}</button>`).join('')}</div>
 		<p class="opt-help">Réel : la vraie heure et la vraie météo, avec leurs animaux et leurs bonus. Fixé : toujours lumineux, sans bonus.</p>
@@ -3381,6 +3383,7 @@ $('#options').addEventListener('change', e => {
 });
 $('#options').addEventListener('input', e => {
 	if (e.target.id === 'opt-volume') sound.setVolume(parseFloat(e.target.value));
+	if (e.target.id === 'opt-vivid') { state.vivid = parseFloat(e.target.value); persist(); }
 	if (e.target.id === 'opt-music-vol') sound.setMusicVolume(parseFloat(e.target.value));
 	if (e.target.id === 'sim-prof') {
 		const k = SIM_ORDER[Number(e.target.value)];

@@ -3,6 +3,9 @@
 Chaque version, la plus récente en haut. Le site (evolia.sebastienalzamora.workers.dev) est toujours à jour ;
 le Play Store (tests internes) reçoit les versions indiquées « Play ».
 
+## 0.7.79 — 12 novembre 2026
+- Des couleurs plus franches, toujours à l’aquarelle : le jardin repasse sur lui-même en « lumière douce », comme une seconde couche de peinture (environ +18 % de saturation, +20 % de contraste). Options › Couleurs : de douces à vives.
+
 ## 0.7.78 — 12 novembre 2026
 - Joueur simulé (outils du développeur) : sa barre devient une petite pastille en bas à gauche (profil, jour, « +1 jour ») ; la flèche la déplie (glissière des jours, « Recommencer »). Elle ne recouvre plus le haut de l’écran et se cache quand une page est ouverte.
 

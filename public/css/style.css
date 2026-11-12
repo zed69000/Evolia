@@ -1090,3 +1090,7 @@ body:has(.panel.open) #debug { display: none; }
 .quiz-line { display: flex; align-items: center; gap: 10px; padding: 10px 12px; margin-top: 8px; border-radius: 14px; background: rgba(95,147,62,.10); }
 .quiz-line > div { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .quiz-line small { color: var(--doux); font-size: 12.5px; }
+
+/* Options : le curseur des couleurs */
+.opt-range { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--doux); }
+.opt-range input { flex: 1; accent-color: var(--foret); }
