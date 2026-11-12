@@ -1,7 +1,7 @@
 // Interface : bandeau, suivi automatique du mouvement, récolte des pas, récap, carnet, biodiversité, tutoriel.
 
 import { nectarPerEffort, addDayEffort, slots, slotSummary, createSlot, useSlot, renameSlot, deleteSlot, load, save, reset, allPlants, biomeKm, heartOf, ACTIVITIES, ACTIVITY_BY_ID, MAX_SPEED_KMH, activityFor, effortFor, hikeFor, HIKE_WINDOW, dayKey, todayMeters, addDistance, STEP_LENGTH_M, effortMix } from './state.js';
-import { Garden, CELLS, CELL_KM, cellsOpen, cellName } from './garden.js';
+import { Garden, CELLS, CELL_KM, cellsOpen, cellName, cellOrigin } from './garden.js';
 import { PlacesMap } from './map.js';
 import { PLANT_TYPES, DECOR, plantName } from './plants.js';
 import { GpsTracker, MotionTracker, SimTracker } from './tracker.js';
@@ -14,7 +14,7 @@ import { paperTexture } from './watercolor.js';
 import { Soundscape } from './audio.js';
 import { ITEMS, ITEM_ORDER, itemHelp, itemCost, fitsPlace, CATS, MAX_LEVEL, LEVEL_NAME, LEVEL_KM, canLevel, levelCost, CABIN_STYLES } from './deco.js';
 import { VERSION } from './version.js';
-import { startIntro, INTRO_NECTAR } from './intro.js';
+import { startIntro, INTRO_NECTAR, FLOWER, FLOWER_SEED } from './intro.js';
 import { LADDER, isLadder, ladderPrice, ladderLock, nextUpgrade, unitProd, prodPerHour, produce, KM_HOURS, KM_VALUE_H, UPG_AT, REST, plantCover, ownedOf } from './habitats.js';
 import { exportCode, importCode, backupAge } from './backup.js';
 import { DebugPanel, debugOn, setDebug, debugLog, ago, dur, trace, traceFlush } from './debug.js';
@@ -2230,6 +2230,158 @@ $('#deco').addEventListener('click', e => {
 $('#track-alert').addEventListener('click', async () => { sky.locate(true); await enableTracking(true); renderStatus(); });
 $('#btn-deco').addEventListener('click', () => openDeco(state.intro ? 'habitat' : currentMission()?.id === 'collector' ? 'recolte' : undefined));
 
+// ─── Mode test : un joueur simulé, jour après jour ────────────
+// Trois profils de sportif. Chaque jour simulé joue la sortie avec les vraies règles (effort, plantes qui poussent,
+// nectar, valeur du km, élan), puis la production de la journée (élan, puis 5 % au repos), les espèces du jour (fiches
+// lues), l'objectif du jour, et des achats faits comme un joueur : terrain, parcelles, habitats posés dans le jardin,
+// améliorations. On voit ainsi le jardin tel qu'il serait à la fin du jour 1, 2, 3… Dans une partie à part.
+const SIM_PROFILES = {
+	calme: { name: 'Peu actif', text: '1,5 km de marche tranquille, 6 jours sur 10', km: [0.8, 2.2], kmh: 4.5, p: 0.6 },
+	marcheur: { name: 'Marcheur régulier', text: '3,5 km de marche, presque tous les jours', km: [2.5, 4.5], kmh: 5, p: 0.85 },
+	sportif: { name: 'Sportif', text: '8 km de course, 8 jours sur 10, un peu de marche les autres', km: [5, 11], kmh: 10, p: 0.8, other: [0.5, 1.5] },
+};
+const simRnd = (a, b) => a + Math.random() * (b - a);
+const simName = k => ITEMS[k].name.replace(/^(Un|Une|Des) /, '').toLowerCase();
+
+/** Commence une partie de test pour un profil : elle démarre juste après l'introduction (coquelicot, abeille, ruche). */
+function startSimGame(id) {
+	save(state);
+	const slot = createSlot(`Test · ${SIM_PROFILES[id].name}`);
+	try { localStorage.setItem(`evolia.simNew.${slot}`, id); } catch (e) { /* stockage plein */ }
+	switchSlot(slot);
+}
+
+/** Au chargement d'une partie de test neuve : on saute l'introduction, comme si on venait de la finir. */
+function simSkipIntro() {
+	const key = `evolia.simNew.${slots().active}`;
+	let id = null;
+	try { id = localStorage.getItem(key); localStorage.removeItem(key); } catch (e) { /* idem */ }
+	if (!id || !SIM_PROFILES[id]) return;
+	const pl = here(), b = garden.blob(0);
+	delete state.intro;
+	// repaired748 : le simulateur recule la date de création ; sans lui, la partie passerait pour une partie d’avant l’introduction.
+	state.eco2 = true; state.seenIntro = true; state.introPaid = true; state.repaired748 = true;
+	pl.seeded = true; (pl.renewed ??= {}).prairie = 1;
+	(pl.cellSize ??= {})[0] = 0.4;
+	const [ox, oy] = cellOrigin(0);
+	const f = garden.spawn(state.place, 'fleur', 1, { x: b.cx - ox, y: b.cy - oy + 12 }, 0);
+	f.intro = true; f.single = true; f.seed = FLOWER_SEED; f.variant = { species: FLOWER };
+	for (const sp of [speciesOf(f), 'abeille']) { state.species[sp] = Date.now(); (state.speciesSeen ??= {})[sp] = true; }
+	const spot = garden.nearestPlace('ruche', b.cx + 70, b.cy + 40);
+	if (spot) garden.placeItem('ruche', spot[0], spot[1]);
+	state.ui = {};
+	for (const st of UI_STEPS) state.ui[st.sel] = 1;
+	state.sim = { profile: id, day: 0, log: [] };
+	state.createdAt = Date.now();
+	state.prodAt = Date.now();
+	persist(true);
+}
+
+/** Les achats d'un joueur : le terrain d'abord, puis une parcelle si possible, puis ce qui rapporte le plus pour son prix. */
+function simBuy() {
+	const bought = [], full = new Set();
+	for (let g = 0; g < 300; g++) {
+		const nectar = state.nectar ?? 0, o = [];
+		const gi = growable();
+		if (gi != null) o.push({ label: 'terrain', c: growPrice(), v: 1e9, go: () => { paid(growPrice(), true); garden.growCell(gi); } });
+		else {
+			const i = garden.lockedCells()[0], biome = i != null ? garden.worldBiomeAt(i) : null;
+			if (biome && placeOpen(state, PLACE_BY_ID[biome]) && kmFree() >= parcelKm())
+				o.push({ label: 'parcelle', c: parcelPrice(), v: 1e8, go: () => { here().kmSpent = (here().kmSpent ?? 0) + parcelKm(); paid(parcelPrice()); openParcel(garden.openAt(i, biome), biome); } });
+		}
+		for (const k of Object.keys(LADDER)) {
+			if (ladderLock(state, k) || full.has(k)) continue;
+			const c = ladderPrice(state, k);
+			o.push({ label: simName(k), c, v: unitProd(state, k) / c, go: () => {
+				const cells = garden.openCells(), ci = cells[Math.floor(Math.random() * cells.length)], [cx, cy] = garden.cellCenter(ci);
+				const spot = garden.nearestPlace(k, cx + simRnd(-120, 120), cy + simRnd(-300, 300));
+				if (!spot) { full.add(k); return false; }
+				state.nectar -= c;
+				garden.placeItem(k, spot[0], spot[1]);
+			} });
+			const u = nextUpgrade(state, k);
+			if (u?.ok) o.push({ label: `amélioration (${simName(k)})`, c: u.cost, v: ownedOf(state, k) * unitProd(state, k) / u.cost, go: () => { state.nectar -= u.cost; (state.upg ??= {})[k] = u.level; } });
+		}
+		o.sort((a, b) => b.v - a.v || a.c - b.c);
+		const x = o.find(z => z.c <= nectar);
+		if (!x) break;
+		// Plus de place pour cet habitat : le joueur passe au suivant.
+		if (x.go() === false) continue;
+		bought.push(x.label);
+	}
+	return bought;
+}
+
+/** Joue une journée complète du profil, et note ce qui s'est passé. */
+function simDay() {
+	const P = SIM_PROFILES[state.sim?.profile];
+	if (!P) return null;
+	const day = ++state.sim.day;
+	// La journée qui commence : le jardin a un jour de plus (le quota d'espèces en dépend).
+	state.createdAt = (state.createdAt ?? Date.now()) - 86400000;
+	let km = 0, kmh = P.kmh;
+	if (day === 1 || Math.random() < P.p) km = simRnd(...P.km);
+	else if (P.other) { km = simRnd(...P.other); kmh = 4.8; }
+	let walkN = 0, prodN;
+	if (km > 0) {
+		const m = km * 1000, act = activityFor(kmh), effort = effortFor(m, kmh, act), minutes = km / kmh * 60;
+		const before = state.nectar ?? 0;
+		addDistance(state, m);
+		here().km += km;
+		state.totals.steps += Math.round(m / STEP_LENGTH_M);
+		state.totals.effort += effort;
+		addDayEffort(state, effort);
+		addWaiting(state, effort * nectarPerEffort(), false, state.place);
+		state.nectar += km * KM_HOURS * prodPerHour(state);
+		for (let i = 0; i < 8; i++) growMix(act.plant, effort / 8);
+		addEffortXp(effort);
+		if (km >= (state.goalKm ?? 2.5)) state.nectar += goalReward();
+		walkN = state.nectar - before;
+		// La production de la journée : l'élan de la sortie, puis 5 % au repos.
+		const elanH = Math.min(8, minutes * 7 / 60);
+		prodN = prodPerHour(state) * (elanH + (24 - elanH) * REST);
+	} else prodN = prodPerHour(state) * 24 * REST;
+	state.nectar += prodN;
+	// Les espèces du jour arrivent, et le joueur lit leurs fiches.
+	const found = checkSpecies(state, SPECIES_PER_DAY[day - 1] ?? SPECIES_LATER);
+	for (const sp of found) { (state.speciesSeen ??= {})[sp.id] = true; state.nectar += READ_REWARD; }
+	for (const p of PLACES) if (!state.placesOpen[p.id] && placeOpen(state, p)) state.placesOpen[p.id] = Date.now();
+	const bought = simBuy();
+	checkUnlocks();
+	state.prodAt = Date.now();
+	state.boostUntil = Date.now();
+	const row = { day, km: Math.round(km * 10) / 10, walk: Math.round(walkN), prod: Math.round(prodN), read: found.length * READ_REWARD, bought, species: found.map(s => s.name), total: Object.keys(state.species).length, perH: Math.round(prodPerHour(state)) };
+	row.gain = row.walk + row.prod + row.read;
+	state.sim.log.push(row);
+	if (state.sim.log.length > 120) state.sim.log.shift();
+	return row;
+}
+
+/** Avance de `n` jours, puis montre le jardin et le bilan. */
+function simAdvance(n) {
+	if (!state.sim) return;
+	closeOptions();
+	const rows = [];
+	for (let i = 0; i < n; i++) rows.push(simDay());
+	renderHud(); renderDaily(); renderStatus(); updateSpeciesDot();
+	persist(true);
+	const last = rows[rows.length - 1], P = SIM_PROFILES[state.sim.profile];
+	const sum = k => rows.reduce((a, r) => a + r[k], 0);
+	const buys = rows.flatMap(r => r.bought), count = {};
+	for (const b of buys) count[b] = (count[b] ?? 0) + 1;
+	showModal(`<div class="modal-body"><h2>Fin du jour ${last.day}</h2>
+		<p>${P.name} · ${n > 1 ? `${n} jours simulés, ${fmt(sum('km'))} km` : last.km ? `${fmt(last.km)} km aujourd’hui` : 'pas de sortie aujourd’hui'}.</p>
+		<ul class="sim-sum">
+			<li><b>Nectar gagné</b> : ${fmtInt(sum('gain'))} (marche ${fmtInt(sum('walk'))}, habitats ${fmtInt(sum('prod'))}, fiches ${fmtInt(sum('read'))})</li>
+			<li><b>Achats</b> : ${buys.length ? Object.entries(count).map(([k, v]) => `${k}${v > 1 ? ` × ${v}` : ''}`).join(', ') : 'aucun'}</li>
+			<li><b>Espèces</b> : ${rows.reduce((a, r) => a + r.species.length, 0)} nouvelles, ${last.total} en tout${n === 1 && last.species.length ? ` (${last.species.join(', ')})` : ''}</li>
+			<li><b>Production</b> : ${fmtInt(last.perH)} nectar par heure d’élan · bourse : ${fmtInt(state.nectar)}</li>
+		</ul>
+		<table class="sim-log"><tr><th>Jour</th><th>km</th><th>Gagné</th><th>Achats</th><th>Espèces</th><th>/ h</th></tr>
+		${state.sim.log.slice(-14).reverse().map(r => `<tr><td>${r.day}</td><td>${fmt(r.km)}</td><td>${fmtInt(r.gain)}</td><td>${r.bought.length}</td><td>${r.total}</td><td>${fmtInt(r.perH)}</td></tr>`).join('')}</table></div>
+		<div class="modal-foot"><button class="btn primary" data-close>Voir mon jardin</button></div>`);
+}
+
 // ─── Options : version, réglages, mode test ───────────────────
 
 const isApp = () => !!window.Capacitor?.isNativePlatform?.();
@@ -2490,7 +2642,14 @@ function renderOptions() {
 			<button id="dev-km10">+10 km (ouvrir des milieux)</button>
 			<button id="dev-nectar">+500 nectar</button>
 			<button id="dev-day">Nouveau jour (cadeau et défis)</button>
-			<button id="dev-reset" class="danger">Effacer le jardin</button></div>` : ''}
+			<button id="dev-reset" class="danger">Effacer le jardin</button>
+			<div class="dev-label">Joueur simulé : le jardin à la fin de chaque jour</div>
+			${state.sim ? `<p class="dev-note"><b>${SIM_PROFILES[state.sim.profile].name}</b> · fin du jour ${state.sim.day}</p>
+				<div class="dev-label">Aller à la fin du jour <b id="sim-to-v">${state.sim.day + 1}</b></div>
+				<input type="range" id="sim-to" min="${state.sim.day + 1}" max="${state.sim.day + 60}" step="1" value="${state.sim.day + 1}">
+				<button id="sim-go">Avancer jusqu’à ce jour</button>
+				<div class="seg"><button id="sim-1">Jour suivant</button><button id="sim-7">+ 7 jours</button><button id="sim-30">+ 30 jours</button></div>` : '<p class="dev-note">Chaque scénario ouvre une nouvelle partie à part, juste après l’introduction. Ta partie reste intacte dans Mes parties.</p>'}
+			${Object.entries(SIM_PROFILES).map(([k, p]) => `<button data-sim-new="${k}">Nouveau scénario : ${p.name}<br><small>${p.text}</small></button>`).join('')}</div>` : ''}
 		</details>`;
 }
 
@@ -2550,6 +2709,12 @@ $('#options').addEventListener('click', async e => {
 	}
 	if (id === 'opt-restore') showRestore();
 	if (id === 'dev-hour-real') { garden.hourOverride = null; renderOptions(); }
+	const simNew = e.target.closest('[data-sim-new]');
+	if (simNew) return startSimGame(simNew.dataset.simNew);
+	if (id === 'sim-1') return simAdvance(1);
+	if (id === 'sim-7') return simAdvance(7);
+	if (id === 'sim-30') return simAdvance(30);
+	if (id === 'sim-go') return simAdvance(Math.max(1, Number($('#sim-to').value) - state.sim.day));
 	if (id === 'dev-sim') {
 		if (tracking.sim) { tracking.sim.stop(); tracking.sim = null; }
 		else {
@@ -2616,6 +2781,7 @@ $('#options').addEventListener('change', e => {
 $('#options').addEventListener('input', e => {
 	if (e.target.id === 'opt-volume') sound.setVolume(parseFloat(e.target.value));
 	if (e.target.id === 'opt-music-vol') sound.setMusicVolume(parseFloat(e.target.value));
+	if (e.target.id === 'sim-to') { $('#sim-to-v').textContent = e.target.value; return; }
 	if (e.target.id === 'dev-hour') {
 		garden.hourOverride = parseFloat(e.target.value);
 		$('#dev-h').textContent = `${e.target.value} h`;
@@ -2780,6 +2946,8 @@ if (Tuning.preview) {
 } else {
 	if (!sky.override) sky.start();
 	resumeTracking();
+	// Une partie de test du joueur simulé commence juste après l'introduction.
+	if (state.intro) simSkipIntro();
 	if (state.intro) {
 		// Le temps de l'introduction, il fait beau, quel que soit le vrai ciel.
 		const realSky = sky.override;

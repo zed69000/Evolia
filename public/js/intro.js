@@ -13,7 +13,7 @@ const WALK_M = 20;
 /** Le nectar que rapporte la toute première fiche lue : de quoi s'offrir la première ruche. */
 export const INTRO_NECTAR = 100;
 // La fleur de l'introduction, la même pour tous les joueurs : un coquelicot, toujours dessiné pareil.
-const FLOWER = 'coquelicot', FLOWER_SEED = 20261111;
+export const FLOWER = 'coquelicot', FLOWER_SEED = 20261111;
 const TAGLINE = 'À chacun de tes pas, la nature s’éveille.';
 
 const wait = ms => new Promise(r => setTimeout(r, ms));

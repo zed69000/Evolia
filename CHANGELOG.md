@@ -3,6 +3,11 @@
 Chaque version, la plus récente en haut. Le site (evolia.sebastienalzamora.workers.dev) est toujours à jour ;
 le Play Store (tests internes) reçoit les versions indiquées « Play ».
 
+## 0.7.55 — 12 novembre 2026
+Outils du développeur (Options › Outils du développeur › Mode test) :
+- Joueur simulé : trois scénarios (Peu actif, Marcheur régulier, Sportif). Chacun ouvre une partie à part, juste après l’introduction ; la vraie partie reste intacte dans Mes parties.
+- Une barre pour aller à la fin du jour voulu, et les boutons Jour suivant, + 7 jours, + 30 jours. Chaque jour joue la sortie avec les vraies règles (plantes qui poussent, nectar, valeur du km, élan), la production, les espèces du jour (fiches lues), l’objectif du jour et des achats faits comme un joueur, posés dans le jardin. Un bilan montre le nectar gagné, les achats, les espèces et la production, jour par jour.
+
 ## 0.7.54 — 12 novembre 2026
 L’introduction :
 - Des bruitages : l’oiseau chante en passant, la graine siffle en tombant puis touche la terre, la fleur fait une petite note à chaque étape de sa pousse, et l’abeille bourdonne (vrai enregistrement) quand elle butine et rentre à la ruche.

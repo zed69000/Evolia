@@ -989,3 +989,14 @@ body:has(.panel.open) #debug { display: none; }
 .eco2-table th, .eco2-table td { padding: 6px 8px; border-bottom: 1px solid var(--trait); text-align: left; }
 .eco2-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
 .eco2-list { margin: 0; padding-left: 18px; display: grid; gap: 6px; color: var(--encre); font-size: 14px; }
+
+/* Mode test : le joueur simulé */
+.dev [data-sim-new] { display: block; width: 100%; text-align: left; border-color: var(--foret); color: var(--foret); }
+.dev [data-sim-new] small { font-weight: 400; color: var(--doux); }
+.dev-note { margin: 6px 0; font-size: 13px; color: var(--doux); }
+.dev #sim-to { width: 100%; }
+.sim-sum { padding-left: 18px; margin: 8px 0; }
+.sim-sum li { margin: 4px 0; }
+.sim-log { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 8px; }
+.sim-log th, .sim-log td { padding: 4px 6px; text-align: right; border-bottom: 1px solid rgba(0,0,0,.08); }
+.sim-log th:first-child, .sim-log td:first-child { text-align: left; }
