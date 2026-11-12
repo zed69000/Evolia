@@ -2025,7 +2025,7 @@ export class Garden {
 		window.addEventListener('wheel', touched, { capture: true, passive: true });
 		window.addEventListener('keydown', touched, true);
 		c.addEventListener('pointerdown', e => {
-			c.setPointerCapture(e.pointerId);
+			try { c.setPointerCapture(e.pointerId); } catch (err) { /* toucher déjà relâché */ }
 			this.pointers.set(e.pointerId, local(e));
 			this.camTarget = null;
 			this.vel = { x: 0, y: 0 };
@@ -2036,7 +2036,8 @@ export class Garden {
 				if (drag) clearTimeout(drag.hold);
 				drag = null;
 				this.ghostFinger = null;
-				this.onPeek?.(true);
+				// Introduction : la vue est tenue, l'interface ne s'efface pas (elle montre la consigne).
+				if (!held()) this.onPeek?.(true);
 			} else {
 				const [x, y] = local(e);
 				drag = { x, y, lx: x, ly: y, lt: performance.now(), moved: false };
@@ -2121,7 +2122,8 @@ export class Garden {
 				const now = performance.now();
 				// Double toucher : zoomer d'un cran (ou revenir au zoom normal de très près).
 				if (now - lastTap < 300 && !held()) { this.zoomAt(this.cam.z > 2.4 ? 1 / this.cam.z : 2, x, y); lastTap = 0; }
-				else { lastTap = now; this.onTap?.(this.pick(x, y)); }
+				// Introduction : toucher une plante ou une bête n'ouvre rien (on suit la consigne).
+				else { lastTap = now; if (!held()) this.onTap?.(this.pick(x, y)); }
 				this.vel = { x: 0, y: 0 };
 			} else {
 				this.onPeek?.(false);

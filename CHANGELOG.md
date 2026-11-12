@@ -3,6 +3,11 @@
 Chaque version, la plus récente en haut. Le site (evolia.sebastienalzamora.workers.dev) est toujours à jour ;
 le Play Store (tests internes) reçoit les versions indiquées « Play ».
 
+## 0.7.57 — 12 novembre 2026
+Corrigé, dans l’introduction :
+- Pincer le jardin à deux doigts effaçait l’interface pour de bon : le bouton Espèces disparaissait et on restait bloqué sur « Touche Espèces ». Le verrou du tutoriel ne bloque plus le relâcher du doigt ; c’est le jardin qui ignore les touchers et les gestes pendant l’introduction, et l’interface revient toujours.
+- « Revoir le tutoriel » (Options) ouvrait l’ancien tutoriel, qui ne correspond plus au jeu : dans les nouvelles parties, il fait revenir les bulles d’aide, une à une.
+
 ## 0.7.56 — 12 novembre 2026
 Outils du développeur, plus simples :
 - Options › Outils du développeur › Mode test : une glissière « Joueur simulé » (Désactivé, Sédentaire, Marcheur occasionnel, Marcheur régulier, Marcheur rapide, Coureur, Grand sportif). On la lâche sur un sportif : sa partie de test s’ouvre (reprise si elle existe déjà). Sur « Désactivé » : retour à la vraie partie.

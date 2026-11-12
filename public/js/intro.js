@@ -31,6 +31,8 @@ export function startIntro(c) {
 	const app = $('#app');
 	const place = garden.place;
 	app.classList.add('intro');
+	// L'interface ne reste jamais effacée par un geste d'avant (glisser, pincer) : la consigne doit se voir.
+	app.classList.remove('peek');
 	let over = false;
 	// Une musique pleine d'élan pour l'introduction ; la musique calme du jardin revient à la fin.
 	c.sound.setMood?.('joy');
@@ -92,14 +94,13 @@ export function startIntro(c) {
 		if (app.classList.contains('placing')) ok.push('#placing', '#garden');
 		if (!$('#modal').hidden) ok.push('#modal');
 		if (e.target.closest(ok.join(','))) return;
-		// Le jardin : on n'y bloque que le toucher qui ouvrirait une plante ou une bête (la vue est déjà tenue).
-		if (e.type === 'pointerup' && !e.target.closest('#garden')) return;
 		e.preventDefault();
 		e.stopImmediatePropagation();
 	};
-	// Seuls les « touchers » sont bloqués (clic, et le relâcher du doigt sur le jardin) : glisser pour faire défiler une
-	// fiche ou une page reste libre, sinon la page paraît figée.
-	const GUARDED = ['click', 'dblclick', 'contextmenu', 'pointerup'];
+	// Seuls les « touchers » sont bloqués (clic) : glisser pour faire défiler une fiche ou une page reste libre, sinon
+	// la page paraît figée. Le relâcher du doigt passe toujours : bloqué, le jardin croyait le doigt encore posé (deux
+	// doigts : l'interface restait effacée). C'est le jardin qui ignore les touchers pendant l'introduction.
+	const GUARDED = ['click', 'dblclick', 'contextmenu'];
 	for (const ev of GUARDED) document.addEventListener(ev, guard, { capture: true, passive: false });
 	const say = (html, buttons = [], target = null, allowed) => new Promise(res => {
 		aim = target;

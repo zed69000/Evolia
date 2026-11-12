@@ -2731,7 +2731,8 @@ $('#options').addEventListener('click', async e => {
 	if (id === 'btn-motion') { await enableTracking(true); toast(tracking.motion ? 'Compteur de pas activé' : 'Le téléphone a refusé le compteur de pas : Réglages › Safari › Mouvement et orientation', tracking.motion ? '#5F933E' : '#C0442F'); renderOptions(); }
 	if (id === 'opt-harvest') { closeOptions(); offerHarvest(true); }
 	if (id === 'opt-harvest-now') { closeOptions(); maybeHarvest(); }
-	if (id === 'opt-coach') { closeOptions(); coach(0); }
+	// Nouvelles parties : les bulles d'aide reviennent une à une, au bon moment (l'ancien tutoriel ne les concerne pas).
+	if (id === 'opt-coach') { closeOptions(); if (state.eco2) { state.tips = {}; lastTipEnd = 0; persist(true); toast('Les bulles d’aide vont revenir une à une', '#5F933E'); } else coach(0); }
 	if (id === 'opt-backup') showBackup();
 	// Les sauvegardes : changer, dupliquer, commencer, renommer, effacer.
 	const sl = e.target.closest('[data-slot]');
