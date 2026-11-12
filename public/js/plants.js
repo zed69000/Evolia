@@ -8,7 +8,7 @@ import { SPECIES_BY_ID, speciesIn, speciesOf } from './species.js';
 
 export const PLANT_TYPES = {
 	herbe: { name: 'Herbe folle', plural: 'herbes folles', get cost() { return Tuning.num('plante.cout_herbe', 15); }, spacing: 16, box: { w: 72, h: 76, ax: 36, ay: 62 } },
-	fleur: { name: 'Fleur', plural: 'fleurs', get cost() { return Tuning.num('plante.cout_fleur', 60); }, spacing: 30, box: { w: 90, h: 140, ax: 45, ay: 126 } },
+	fleur: { name: 'Fleur', plural: 'fleurs', get cost() { return Tuning.num('plante.cout_fleur', 60); }, spacing: 34, box: { w: 90, h: 140, ax: 45, ay: 126 } },
 	buisson: { name: 'Arbuste', plural: 'arbustes', get cost() { return Tuning.num('plante.cout_arbuste', 150); }, spacing: 48, box: { w: 200, h: 145, ax: 100, ay: 125 } },
 	arbre: { name: 'Arbre', plural: 'arbres', get cost() { return Tuning.num('plante.cout_arbre', 400); }, spacing: 82, box: { w: 340, h: 315, ax: 170, ay: 297 } },
 };
@@ -858,11 +858,15 @@ function paintFleur(ctx, g, seed, L, env = {}) {
 	const r = rng(seed ^ 0x40f1);
 	const small = (L.h?.[1] ?? 60) < 40;
 	const n = g < 0.35 ? 1 : (small ? 4 : 2) + Math.floor(r() * (small ? 3 : 2)) - (g < 0.7 ? 1 : 0);
-	const stems = Array.from({ length: n - 1 }, (_, i) => ({ x: (i % 2 ? 1 : -1) * r.range(5, small ? 14 : 16), y: r.range(-2, 3), k: r.range(0.72, 0.92), g: Math.min(1, g * r.range(0.75, 1)) }));
+	// Les grandes fleurs (coquelicot, bleuet…) écartent leurs tiges et les penchent vers l'extérieur : leurs têtes ne se
+	// recouvrent pas. Les petites restent serrées en touffe.
+	const big = !small, spread = big ? 22 * (L.size ?? 1) : 0;
+	const stems = Array.from({ length: n - 1 }, (_, i) => ({ side: i % 2 ? 1 : -1, x: (i % 2 ? 1 : -1) * (big ? spread + r.range(4, 9) : r.range(5, 14)), y: r.range(-2, 3), k: r.range(0.72, 0.92), g: Math.min(1, g * r.range(0.75, 1)) }));
 	stems.sort((a, b) => a.y - b.y);
 	for (const [i, st] of stems.entries()) {
 		ctx.save();
 		ctx.translate(st.x, st.y);
+		if (big) ctx.rotate(st.side * 0.22);
 		ctx.scale(st.k, st.k);
 		paintFleurOne(ctx, st.g, seed + (i + 1) * 7919, L, env);
 		ctx.restore();

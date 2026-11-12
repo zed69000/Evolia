@@ -3,6 +3,9 @@
 Chaque version, la plus récente en haut. Le site (evolia.sebastienalzamora.workers.dev) est toujours à jour ;
 le Play Store (tests internes) reçoit les versions indiquées « Play ».
 
+## 0.7.86 — 12 novembre 2026
+- Les grandes fleurs (coquelicot, bleuet…) poussent toujours en touffe, mais leurs tiges s'écartent et penchent vers l'extérieur : les têtes ne se recouvrent plus. Un peu plus d'espace entre deux fleurs.
+
 ## 0.7.85 — 12 novembre 2026
 - Au lancement, le jardin est déjà flou quand le papier s'efface : le logo apparaît dessus, puis le flou s'en va en douceur avec lui.
 
