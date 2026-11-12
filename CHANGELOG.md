@@ -3,6 +3,12 @@
 Chaque version, la plus récente en haut. Le site (evolia.sebastienalzamora.workers.dev) est toujours à jour ;
 le Play Store (tests internes) reçoit les versions indiquées « Play ».
 
+## 0.7.60 — 12 novembre 2026
+Les oiseaux sèment arbustes et arbres (nouvelles parties) :
+- Un nichoir loge un couple de mésanges (2 oiseaux), une mangeoire nourrit un oiseau. Ce sont eux qui sèment les arbustes près des fleurs, puis les arbres près des arbustes ; plus il y a d’oiseaux, plus ils sèment souvent. Sans oiseaux, la succession s’arrête aux fleurs (marcher vite et courir font toujours pousser arbustes et arbres directement).
+- Le joueur est prévenu : une bulle d’aide « Il manque des oiseaux » dès qu’un arbuste aurait pu naître, un message (une fois par jour) qui ouvre Aménager, et les cartes de la mangeoire et du nichoir disent ce qu’apportent leurs oiseaux. À la pose : « un couple de mésanges s’installe : ils sèmeront arbustes et arbres ».
+- Joueur simulé : prévenu qu’il manque des oiseaux, il pose d’abord une mangeoire.
+
 ## 0.7.59 — 12 novembre 2026
 Habitats limités par parcelle (nouvelles parties) :
 - Une parcelle accueille au plus 6 massifs mellifères, 3 ruches, 2 hôtels à insectes, 3 nichoirs, 1 mare et 2 haies. Pour en avoir plus, on les pose dans une autre parcelle, ou on en explore une nouvelle (avec des kilomètres). Aménager l’indique sur chaque habitat ; à la pose, la bulle dit quand une parcelle a déjà son compte.

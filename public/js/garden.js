@@ -12,7 +12,7 @@ import { SPECIES, PLACE_BY_ID, speciesOf } from './species.js';
 import { PARCEL_W, PARCEL_H, CELLS, CELL_KM, GROUND, zoneOf, zoneName, tileSteps, tileSig, keepOut, cellIndexAt, riversIn } from './zones.js';
 import { biomeOf, heartOf, rankOf, biomesIn } from './state.js';
 import { makeWorld, worldBiome } from './world.js';
-import { ITEMS, ITEM_PAINTERS, attracted, paintSoil, PLOT, paintAdorn, canLevel, itemBox, LINK, linkEnds, fitsPlace } from './deco.js';
+import { ITEMS, ITEM_PAINTERS, attracted, paintSoil, PLOT, paintAdorn, canLevel, itemBox, LINK, linkEnds, fitsPlace, seedBirds } from './deco.js';
 
 export { PARCEL_W, PARCEL_H, CELLS, CELL_KM };
 export const cellsOpen = place => Math.min(CELLS.length, place?.cells ?? 1);
@@ -1184,12 +1184,25 @@ export class Garden {
 		const place = this.state.places[pid];
 		place.succ ??= {};
 		place.succ[parent.type] = (place.succ[parent.type] ?? 0) + 1;
-		if (place.succ[parent.type] % next.every) return;
-		// Pas plus de deux jeunes pousses semées qui attendent de grandir, par étage.
-		if (place.plants.filter(q => q.sown && q.type === next.type && q.growth < 1).length >= 2) return;
+		// Nouvelles parties : arbustes et arbres ne sont semés que par les oiseaux (nichoirs, mangeoires). Plus il y en a,
+		// plus ils sèment souvent, et plus de jeunes pousses à la fois.
+		const byBirds = this.state.eco2 && next.type !== 'fleur', birds = byBirds ? seedBirds(place) : 0;
+		const every = byBirds ? Math.max(2, next.every - Math.floor(birds / 2)) : next.every;
+		if (place.succ[parent.type] < every) return;
+		if (byBirds && !birds) {
+			// Prêt à porter un arbuste ou un arbre, mais aucun oiseau pour le semer : on le dit au joueur (main.js).
+			place.succ[parent.type] = 0;
+			place.noBirds = (place.noBirds ?? 0) + 1;
+			events.push({ kind: 'nobird', type: next.type, pid });
+			return;
+		}
+		place.succ[parent.type] = 0;
+		// Pas plus de deux jeunes pousses semées qui attendent de grandir, par étage (plus, avec beaucoup d'oiseaux).
+		if (place.plants.filter(q => q.sown && q.type === next.type && q.growth < 1).length >= 2 + Math.floor(birds / 4)) return;
 		const ci = cellOf(parent);
 		const pos = this.place_(pid, next.type, ci, parent);
-		const by = pick(next.by[this.biomeOf(ci)] ?? next.by.default);
+		const nest = byBirds && place.items.some(it => it.kind === 'nichoir');
+		const by = nest && Math.random() < 0.5 ? 'une mésange' : pick(next.by[this.biomeOf(ci)] ?? next.by.default);
 		const p = this.spawn(pid, next.type, next.start, pos, ci);
 		p.sown = by;
 		events.push({ kind: 'sown', plant: p, pid, by });

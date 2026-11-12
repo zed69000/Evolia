@@ -15,8 +15,8 @@ export const ITEMS = {
 	massif: { cat: 'habitat', name: 'Un massif mellifère', cost: 25, km: 0, team: 'pollinisateur', power: 1, attracts: 'bourdon', text: 'Lavande, bourrache et thym : un buffet pour les butineurs.', box: { w: 110, h: 70, ax: 55, ay: 56 } },
 	bois: { cat: 'habitat', name: 'Un tas de bois', cost: 30, km: 0, team: 'sol', power: 1, attracts: 'herisson', text: 'Carabes, cloportes et champignons y décomposent le bois.', box: { w: 110, h: 70, ax: 55, ay: 56 } },
 	pierres: { cat: 'habitat', name: 'Un tas de pierres', cost: 30, km: 0, team: 'regulateur', power: 1, attracts: 'lezard', text: 'Les lézards viennent s’y chauffer au soleil.', box: { w: 100, h: 60, ax: 50, ay: 46 } },
-	mangeoire: { cat: 'habitat', name: 'Une mangeoire', cost: 45, km: 1, turn: true, team: 'semeur', power: 1, attracts: 'merle', text: 'Les oiseaux qu’elle nourrit sèment ensuite baies et noisettes.', box: { w: 80, h: 120, ax: 40, ay: 104 } },
-	nichoir: { cat: 'habitat', name: 'Un nichoir', cost: 60, km: 2, turn: true, team: 'regulateur', power: 1, attracts: 'mesange', text: 'Une mésange y élève ses petits… et mange les chenilles.', box: { w: 70, h: 136, ax: 35, ay: 124 } },
+	mangeoire: { cat: 'habitat', name: 'Une mangeoire', cost: 45, km: 1, turn: true, team: 'semeur', power: 1, attracts: 'merle', birds: 1, text: 'Les oiseaux qu’elle nourrit sèment ensuite baies et noisettes.', box: { w: 80, h: 120, ax: 40, ay: 104 } },
+	nichoir: { cat: 'habitat', name: 'Un nichoir', cost: 60, km: 2, turn: true, team: 'regulateur', power: 1, attracts: 'mesange', birds: 2, text: 'Un couple de mésanges y élève ses petits… mange les chenilles, et sème baies et graines.', box: { w: 70, h: 136, ax: 35, ay: 124 } },
 	lanterne: { cat: 'deco', name: 'Une lanterne', cost: 50, km: 2, text: 'Une lumière douce pour les soirées, tournée vers le sol.', box: { w: 50, h: 110, ax: 25, ay: 104 } },
 	compost: { cat: 'habitat', name: 'Un bac à compost', cost: 60, km: 3, turn: true, team: 'sol', power: 1, attracts: 'lombric', text: 'Épluchures et feuilles mortes deviennent une terre noire pleine de vers.', box: { w: 100, h: 90, ax: 50, ay: 70 } },
 	hotel: { cat: 'habitat', name: 'Un hôtel à insectes', cost: 80, km: 3, turn: true, team: 'pollinisateur', power: 1, attracts: 'abeille', text: 'Abeilles solitaires et coccinelles y passent l’hiver.', box: { w: 110, h: 140, ax: 55, ay: 124 } },
@@ -1034,9 +1034,18 @@ export function itemCost(kind, owned = 0) {
 export function attracted(place, spId) {
 	let n = 0;
 	// Un habitat fleuri (niveau 3) en attire un de plus, un habitat remarquable (niveau 5) encore un.
-	for (const it of place?.items ?? []) if ([].concat(ITEMS[it.kind]?.attracts ?? []).includes(spId)) n += 1 + ((it.level ?? 1) >= 3) + ((it.level ?? 1) >= 5);
+	for (const it of place?.items ?? []) if ([].concat(ITEMS[it.kind]?.attracts ?? []).includes(spId)) n += (ITEMS[it.kind].birds ?? 1) + ((it.level ?? 1) >= 3) + ((it.level ?? 1) >= 5);
 	return n;
 }
+
+/**
+ * Les oiseaux qui sèment, dans un lieu : 2 par nichoir (un couple de mésanges), 1 par mangeoire. Dans les nouvelles
+ * parties, ce sont eux qui sèment arbustes et arbres : sans eux, la succession s'arrête aux fleurs.
+ */
+export const seedBirds = place => (place?.items ?? []).reduce((a, it) => a + (ITEMS[it.kind]?.birds ?? 0), 0);
+
+/** Ce que les oiseaux d'un objet apportent, en clair (nouvelles parties), ou ''. */
+export const birdHelp = kind => (ITEMS[kind]?.birds ? `${ITEMS[kind].birds === 2 ? 'Loge un couple de mésanges' : 'Nourrit un oiseau'} : les oiseaux sèment arbustes et arbres. Sans eux, ton jardin s’arrête aux fleurs.` : '');
 
 const UNIT = {
 	pollinisateur: ['pollinisateur', 'pollinisateurs'], semeur: ['semeur', 'semeurs'],
@@ -1048,7 +1057,7 @@ export function itemHelp(kind, eco2 = false) {
 	const it = ITEMS[kind];
 	if (!it.team) return '';
 	// Nouvelle économie : pas d'équipes ni de plafond ; un habitat hors échelle fait venir des espèces (+1 % chacune).
-	if (eco2) return it.cat === 'habitat' ? 'De nouvelles espèces viennent y vivre (+1 % de production chacune)' : '';
+	if (eco2) return birdHelp(kind) || (it.cat === 'habitat' ? 'De nouvelles espèces viennent y vivre (+1 % de production chacune)' : '');
 	const team = `+${it.power} ${UNIT[it.team][it.power > 1 ? 1 : 0]}`;
 	// Un habitat relève aussi le plafond de l'écosystème, de 3 % par niveau (voir idle.js).
 	return it.cat === 'habitat' ? `${team} · +${3 * it.power} % de production` : team;

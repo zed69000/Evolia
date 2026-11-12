@@ -12,7 +12,7 @@ import { Sky, WEATHER_LABEL } from './weather.js';
 import { EcoPanel, tick, summaryHtml, addBoost, boostLeft, visualExtra, rates, GUILDS, boostMult, boostPerMin, maxBoostH, nectarCapacity, hasCollector, COLLECTOR_CAP, COLLECTOR_UPGRADE, addWaiting, ECO2_WALK, groundOf, jarOf, jarCap, stockOf, jarCapOf, emptyJar, drainGround } from './idle.js';
 import { paperTexture } from './watercolor.js';
 import { Soundscape } from './audio.js';
-import { ITEMS, ITEM_ORDER, itemHelp, itemCost, fitsPlace, CATS, MAX_LEVEL, LEVEL_NAME, LEVEL_KM, canLevel, levelCost, CABIN_STYLES } from './deco.js';
+import { ITEMS, ITEM_ORDER, itemHelp, itemCost, fitsPlace, CATS, MAX_LEVEL, LEVEL_NAME, LEVEL_KM, canLevel, levelCost, CABIN_STYLES, seedBirds, birdHelp } from './deco.js';
 import { VERSION } from './version.js';
 import { startIntro, INTRO_NECTAR, FLOWER, FLOWER_SEED } from './intro.js';
 import { LADDER, isLadder, ladderPrice, ladderLock, nextUpgrade, unitProd, prodPerHour, produce, KM_HOURS, KM_VALUE_H, UPG_AT, REST, plantCover, ownedOf, PER_PARCEL } from './habitats.js';
@@ -754,6 +754,8 @@ const TIPS = [
 		title: 'Tes pas prennent de la valeur', get text() { return `Chaque km te rapporte 60 nectar, plus ${KM_HOURS} heures de la production de ton jardin (en ce moment, environ ${fmtInt(60 + KM_HOURS * prodPerHour(state))} nectar par km). Plus ton jardin grandit, plus tes pas valent.`; } },
 	{ id: 'upgrade', eco2: true, target: '#btn-deco', when: () => Object.keys(LADDER).some(k => { const u = nextUpgrade(state, k); return u?.ok && (state.nectar ?? 0) >= u.cost; }),
 		title: 'Une amélioration', text: 'Tu as assez d’habitats d’une même sorte pour les améliorer : leur production double. Ouvre Aménager › Habitats, le bouton « Amélioration (× 2) » est sur leur carte.' },
+	{ id: 'birds', eco2: true, target: '#btn-deco', when: () => (here().noBirds ?? 0) > 0 && !seedBirds(here()),
+		title: 'Il manque des oiseaux', text: 'Tes fleurs pourraient donner des arbustes, puis des arbres, mais ce sont les oiseaux qui sèment leurs baies et leurs graines. Pose une <b>mangeoire</b> (un oiseau) ou un <b>nichoir</b> (un couple de mésanges) : choisis bien, c’est ce qui fera venir arbustes, arbres et les animaux qui vont avec.' },
 	{ id: 'plants', eco2: true, target: '#btn-deco', when: () => { const n = Object.keys(LADDER).reduce((a, k) => a + ownedCount(k), 0); return n >= 4 && here().plants.filter(p => p.growth >= 1 && p.type !== 'herbe').length < n * 2; },
 		title: 'Il faut des plantes', text: 'Tes habitats ne produisent bien que s’il y a assez de fleurs, d’arbustes et d’arbres autour d’eux (deux plantes par habitat). Marche pour en faire pousser : en marchant vite, des arbustes ; en courant, des arbres.' },
 	{ id: 'daily', target: '#daily', when: () => totalKm() >= 1,
@@ -1198,6 +1200,7 @@ function onSample(s) {
 	for (const ev of growMix(act.plant, effort)) {
 		session.events.push(ev);
 		if (ev.kind === 'mature' && ev.plant.type !== 'herbe') { toast(`${plantName(ev.plant)} a fini de pousser`, TYPE_COLOR[ev.plant.type]); sound.chime(1); }
+		if (ev.kind === 'nobird') noBirdsNote(ev.type);
 		if (ev.kind === 'sown') toast(`${ev.by[0].toUpperCase() + ev.by.slice(1)} a semé : ${plantName(ev.plant).toLowerCase()}`, TYPE_COLOR[ev.plant.type]);
 	}
 	if (garden.current) session.touched.add(garden.current);
@@ -1888,7 +1891,7 @@ function renderDeco() {
 			const upgBtn = up2 ? (up2.ok ? `<button class="btn primary small" data-upg="${k}" ${nectar < up2.cost ? 'disabled' : ''}>Amélioration ${up2.level} : +${fmtInt(n * unitProd(state, k) * KM_VALUE_H)} par km · ${fmtInt(up2.cost)}</button>` : `<span class="deco-lock">amélioration ${up2.level} (× 2) dès ${up2.need} posés${up2.need > PER_PARCEL[k] ? ` (${Math.round(up2.need / PER_PARCEL[k])} parcelles pleines)` : ''}</span>`) : '';
 			return `<div class="deco-card${locked ? ' locked' : ''}"><div class="deco-art" data-art="${k}"></div>
 				<div class="deco-body"><h3>${it.name}</h3><p>${it.text}</p>${!ladder && itemHelp(k, state.eco2) ? `<span class="deco-help">${itemHelp(k, state.eco2)}</span>` : ''}
-				${prodLine}<div class="deco-row"><span class="nectar">${fmtInt(cost)}</span>${levels}${action}</div>${up ? `<div class="deco-row deco-up">${up}</div>` : ''}${upgBtn && n ? `<div class="deco-row deco-up">${upgBtn}</div>` : ''}</div></div>`;
+				${ladder && birdHelp(k) ? `<span class="deco-help">${birdHelp(k)}</span>` : ''}${prodLine}<div class="deco-row"><span class="nectar">${fmtInt(cost)}</span>${levels}${action}</div>${up ? `<div class="deco-row deco-up">${up}</div>` : ''}${upgBtn && n ? `<div class="deco-row deco-up">${upgBtn}</div>` : ''}</div></div>`;
 		}).join('')}</div>`;
 	for (const el of $('#deco').querySelectorAll('[data-art]')) {
 		const sp = garden.itemSprite(el.dataset.art, 315), c = document.createElement('canvas');
@@ -2023,7 +2026,8 @@ $('#btn-place').addEventListener('click', () => {
 		const placed = garden.placeItem(kind, x, y, rot);
 		placed.paid = cost;
 		if (kind === 'collecteur') fillFromDew(placed);
-		const help = state.eco2 && isLadder(kind) ? `+${fmtInt(unitProd(state, kind) * KM_VALUE_H)} nectar par km marché` : itemHelp(kind, state.eco2);
+		const help = state.eco2 && ITEMS[kind].birds ? `${ITEMS[kind].birds === 2 ? 'un couple de mésanges s’installe' : 'un oiseau vient s’y nourrir'} : ils sèmeront arbustes et arbres`
+			: state.eco2 && isLadder(kind) ? `+${fmtInt(unitProd(state, kind) * KM_VALUE_H)} nectar par km marché` : itemHelp(kind, state.eco2);
 		toast(`${ITEMS[kind].name} : installé${/^Une /.test(ITEMS[kind].name) ? 'e' : /^Des /.test(ITEMS[kind].name) ? 's' : ''}${help ? ` · ${help}` : ''}`, '#9A7448');
 		if (kind === 'cabane' && garden.items.filter(x => x.kind === 'cabane').length === 1) {
 			setTimeout(() => chooseFarmer(() => choosePet(() => toast(`${farmerName(true)} s’installe : construis-lui un potager`, '#5F933E', () => openDeco('recolte')))), 1400);
@@ -2238,6 +2242,13 @@ $('#deco').addEventListener('click', e => {
 $('#track-alert').addEventListener('click', async () => { sky.locate(true); await enableTracking(true); renderStatus(); });
 $('#btn-deco').addEventListener('click', () => openDeco(state.intro ? 'habitat' : currentMission()?.id === 'collector' ? 'recolte' : undefined));
 
+/** Des fleurs prêtes à donner un arbuste (ou des arbustes un arbre), mais aucun oiseau pour le semer : on le dit. */
+function noBirdsNote(type) {
+	if (state.sim || state.noBirdsDay === dayKey()) return;
+	state.noBirdsDay = dayKey();
+	toast(`${type === 'arbre' ? 'Un arbre' : 'Un arbuste'} aurait pu naître, mais aucun oiseau ne sème dans ton jardin : pose une mangeoire ou un nichoir`, '#E3A33A', () => openDeco('habitat'));
+}
+
 // ─── Mode test : un joueur simulé, jour après jour ────────────
 // Trois profils de sportif. Chaque jour simulé joue la sortie avec les vraies règles (effort, plantes qui poussent,
 // nectar, valeur du km, élan), puis la production de la journée (élan, puis 5 % au repos), les espèces du jour (fiches
@@ -2360,8 +2371,10 @@ function simBuy() {
 			if (isLadder(k) || k === 'collecteur' || full.has(k) || ownedCount(k) >= simWant(k)) continue;
 			if (km < it.km || needsFirst(k) || natureLock(k)) continue;
 			const c = priceOf(k);
-			if (c > nectar * 0.25) continue;
-			o.push({ label: simName(k), c, v: 1e7 - c, go: () => { if (!simPlace(k)) { full.add(k); return false; } state.nectar -= c; } });
+			// Prévenu qu'il manque des oiseaux, le joueur pose d'abord de quoi en faire venir.
+			const needBirds = ITEMS[k].birds && (here().noBirds ?? 0) > 0 && !seedBirds(here());
+			if (c > nectar * (needBirds ? 1 : 0.25)) continue;
+			o.push({ label: simName(k), c, v: needBirds ? 2e9 : 1e7 - c, go: () => { if (!simPlace(k)) { full.add(k); return false; } state.nectar -= c; } });
 		}
 		const gi = growable();
 		if (gi != null) o.push({ label: 'terrain', c: growPrice(), v: 1e9, go: () => { paid(growPrice(), true); garden.growCell(gi); } });
