@@ -704,6 +704,53 @@ export class Soundscape {
 		this.note(out, t, f * 3.1, f * 2.2, 0.035, 0.008, 'square');
 	}
 
+	// ─── Les bruitages de l'introduction ───
+	get live() { return this.ctx && this.ctx.state === 'running'; }
+
+	/** L'oiseau qui passe : un vrai chant s'il est chargé, sinon un petit sifflement. */
+	birdCall(pan = 0) {
+		if (!this.live) return;
+		if (this.sample('rougegorge', pan, 1, 1, { vol: 0.7 }) || this.sample('merle', pan, 1, 1, { vol: 0.6 })) return;
+		this.peep(pan, {}, 1);
+	}
+
+	/** La graine qui tombe : un sifflement très doux qui descend. */
+	seedFall() {
+		if (!this.live) return;
+		const out = this.voice(0, 1), t = this.ctx.currentTime + 0.02;
+		this.note(out, t, 1500, 620, 0.85, 0.012);
+		this.note(out, t, 3000, 1240, 0.5, 0.003);
+	}
+
+	/** La graine touche la terre : un petit « pof » sourd (bruit filtré, très court). */
+	seedLand() {
+		if (!this.live) return;
+		const ctx = this.ctx, t = ctx.currentTime + 0.01, n = Math.floor(ctx.sampleRate * 0.12);
+		const buf = ctx.createBuffer(1, n, ctx.sampleRate), d = buf.getChannelData(0);
+		for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / n) ** 3;
+		const src = ctx.createBufferSource(), f = ctx.createBiquadFilter(), g = ctx.createGain();
+		src.buffer = buf; f.type = 'lowpass'; f.frequency.value = 520; g.gain.value = 0.5;
+		src.connect(f).connect(g).connect(this.voice(0, 1).g);
+		src.start(t);
+		const out = this.voice(0, 1);
+		this.note(out, t, 190, 120, 0.14, 0.03, 'sine');
+	}
+
+	/** La plante grandit : une petite note qui monte avec elle (k : 0 → 1), comme une pousse qui se déplie. */
+	sprout(k = 0) {
+		if (!this.live) return;
+		const out = this.voice((Math.random() - 0.5) * 0.3, 1), t = this.ctx.currentTime + 0.01;
+		const f = NOTES[Math.min(NOTES.length - 1, 2 + Math.floor(k * (NOTES.length - 3)))];
+		this.note(out, t, f * 0.98, f * 1.02, 0.6, 0.016, 'sine');
+		this.note(out, t + 0.06, f * 2, f * 2.03, 0.35, 0.005, 'sine');
+	}
+
+	/** Une abeille tout près : le vrai bourdonnement, qui passe d'un côté à l'autre. */
+	beeBuzz(pan = 0) {
+		if (!this.live) return;
+		if (!this.sample('bourdon', pan, 1, 1.15, { swell: true, vol: 0.75 })) this.flyby(pan, 1);
+	}
+
 	chime(size = 1) {
 		if (!this.ctx || this.ctx.state !== 'running') return;
 		const out = this.voice(0, 1), t = this.ctx.currentTime + 0.02;

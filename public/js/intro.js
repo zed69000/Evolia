@@ -75,7 +75,8 @@ export function startIntro(c) {
 		const left = Math.max(10, Math.min(A.width - w - 10, e.left - A.left + e.width / 2 - w / 2));
 		cap.classList.add('placed');
 		cap.style.left = `${left}px`;
-		cap.style.top = `${Math.max(8, top)}px`;
+		// Jamais hors de l'écran : si le bouton est encore plus bas (page pas défilée), la bulle attend en bas, pointe vers lui.
+		cap.style.top = `${Math.max(8, Math.min(A.height - h - 8, top))}px`;
 		cap.classList.remove('no-tail');
 		cap.classList.toggle('tail-up', below);
 		cap.style.setProperty('--tail-x', `${Math.max(26, Math.min(w - 26, e.left - A.left + e.width / 2 - left))}px`);
@@ -153,6 +154,8 @@ export function startIntro(c) {
 	function birdPass(p) {
 		return new Promise(res => {
 			const t0 = performance.now(), D = 3600, drop = 0.42, fall = 900;
+			setTimeout(() => c.sound.birdCall?.(-0.4), D * 0.2);
+			setTimeout(() => c.sound.seedFall?.(), D * drop);
 			const from = { x: p.x - 420, y: p.y - 230 }, to = { x: p.x + 420, y: p.y - 170 };
 			let landed = false;
 			garden.introFx = ctx => {
@@ -171,7 +174,7 @@ export function startIntro(c) {
 					const k = ease(ts), gx = sx + (p.x - sx) * k, gy = sy + (p.y + 12 - sy) * ts * ts;
 					ctx.fillStyle = '#6B4A2E';
 					ctx.beginPath(); ctx.ellipse(gx, gy, 2.6, 1.8, ts * 6, 0, Math.PI * 2); ctx.fill();
-				} else if (ts >= 1 && !landed) { landed = true; res(); }
+				} else if (ts >= 1 && !landed) { landed = true; c.sound.seedLand?.(); res(); }
 				if (t > 1 && landed) garden.introFx = null;
 			};
 		});
@@ -217,9 +220,13 @@ export function startIntro(c) {
 		const buttons = [];
 		if (c.DEV) buttons.push({ label: 'Simuler 5 m', stay: true, run: () => c.addMeters(5) });
 		say('Un oiseau a laissé tomber une graine.<br><b>Marche quelques pas</b> pour la faire pousser.', buttons, 'center');
+		let heard = Math.floor(f.growth * 8);
 		await until(() => {
 			if (over) return true;
 			f.growth = Math.max(f.growth, Math.min(1, 0.03 + (state.totals.distance - d0) / WALK_M));
+			// Une petite note à chaque huitième de croissance : on entend la fleur se déplier.
+			const k = Math.floor(f.growth * 8);
+			if (k > heard && f.growth < 1) { heard = k; c.sound.sprout?.(f.growth); }
 			return f.growth >= 1;
 		});
 		if (over) throw new Skip();
@@ -239,8 +246,10 @@ export function startIntro(c) {
 		const b = P ? garden.newCritter(c.SPECIES_BY_ID.abeille, P) : null;
 		if (b) { b.intro = true; garden.insects.push(b); }
 		say('Une abeille vient la butiner…', [], 'center');
+		for (const t of [600, 3200, 6200]) setTimeout(() => !over && c.sound.beeBuzz?.(t === 3200 ? 0.2 : -0.2), t);
 		await wait(9000);
 		if (b) b.leaving = true;
+		c.sound.beeBuzz?.(0.5);
 		say('… puis elle repart, chargée de pollen.', [], 'center');
 		state.species.abeille ??= Date.now();
 		c.persist(true);
@@ -409,7 +418,10 @@ export function startIntro(c) {
 		garden.insects.push(b);
 		say('Ton abeille butine, puis rapporte son nectar à la ruche.<br>C’est là qu’elle fait le <b>miel</b>.', [], 'center');
 		const t0 = Date.now();
+		const buzz = setInterval(() => { if (over || b.hidden) clearInterval(buzz); else c.sound.beeBuzz?.(Math.random() * 0.6 - 0.3); }, 3500);
+		c.sound.beeBuzz?.(0);
 		await until(() => over || b.hidden || Date.now() - t0 > 25000);
+		clearInterval(buzz);
 		await wait(1800);
 		b.gone = true;
 	}

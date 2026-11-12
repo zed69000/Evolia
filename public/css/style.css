@@ -977,6 +977,8 @@ body:has(.panel.open) #debug { display: none; }
 #app:has(.panel.open) #track-alert, #app:has(.modal:not([hidden])) #track-alert { display: none; }
 #species .sp-credit { text-align: center; }
 .sp-close-bottom { display: block; width: 100%; max-width: 320px; margin: 8px auto 4px; }
+/* Introduction : sous le bouton Fermer, la place de la bulle, pour qu'elle se pose dessous sans cacher le texte. */
+#app.intro:has(.intro-cap.in.placed:not([hidden])) .sp-close-bottom { margin-bottom: calc(var(--cap-h, 150px) + 24px); }
 /* Écosystème, nouvelle économie */
 .eco2-hero { display: grid; gap: 2px; padding: 14px 16px; margin-bottom: 10px; text-align: center; }
 .eco2-hero > b { font: 400 34px/1.1 Courgette, cursive; color: var(--foret); }

@@ -364,7 +364,8 @@ function renderHud() {
 // message stays long enough to be read while walking: its time grows with its length.
 const TOAST_MERGE_MS = 1500, TOAST_MERGE_MAX = 3;
 let lastToast = null;
-const toastTime = (text, link) => Math.max(link ? 5000 : 3200, Math.min(9000, 1500 + text.length * 45));
+// Le temps de lire : environ 15 lettres par seconde, plus deux secondes pour le voir arriver.
+const toastTime = (text, link) => Math.max(link ? 6000 : 4500, Math.min(14000, 2000 + text.length * 70));
 function hideToastLater(el) {
 	clearTimeout(el._timer);
 	el._timer = setTimeout(() => { el.classList.add('out'); setTimeout(() => el.remove(), 400); }, toastTime(el._text, el._link));
@@ -1542,7 +1543,12 @@ async function offerHarvest(force = false) {
 		if (state.webStepsNote !== dayKey()) {
 			state.webStepsNote = dayKey();
 			persist(true);
-			toast('Sur le site, seuls les pas faits Evolia ouverte comptent : garde-la ouverte pendant ta marche', '#E3A33A');
+			// Une vraie fenêtre (et pas un message qui passe) : c'est important, et le joueur doit avoir le temps de le lire.
+			const show = () => $('#modal').hidden ? showModal(`
+				<h2>Sur le site, garde Evolia ouverte</h2>
+				<p>Un navigateur ne peut pas compter tes pas quand la page est fermée : seuls les pas faits <b>Evolia ouverte</b> font pousser ton jardin. Garde-la ouverte pendant ta marche, ou installe l’appli Android.</p>
+				<button class="btn primary" data-close>Compris</button>`) : setTimeout(show, 800);
+			show();
 		}
 		return;
 	}
@@ -1923,8 +1929,22 @@ function startPlacing(kind, item = null) {
 
 /** Ramène l'objet sur la place libre la plus proche, s'il en existe une. */
 function snapPlacing() {
-	const g = garden.ghost, spot = garden.nearestPlace(g.kind, g.x, g.y, placing.item);
+	const g = garden.ghost;
+	introLeash(g);
+	const spot = garden.nearestPlace(g.kind, g.x, g.y, placing.item);
 	if (spot) [g.x, g.y] = spot;
+	introLeash(g);
+}
+
+/** Dans l'introduction, la ruche reste près du coquelicot : la fleur, l'abeille et la ruche tiennent dans le même cadre. */
+const INTRO_LEASH = 110;
+function introLeash(g) {
+	if (!state.intro) return;
+	const f = here().plants.find(p => p.intro);
+	if (!f) return;
+	const [ox, oy] = garden.cellOriginOf(f), fx = ox + f.x, fy = oy + f.y;
+	const dx = g.x - fx, dy = g.y - fy, d = Math.hypot(dx, dy);
+	if (d > INTRO_LEASH) { g.x = fx + dx / d * INTRO_LEASH; g.y = fy + dy / d * INTRO_LEASH; }
 }
 
 function renderPlacing() {

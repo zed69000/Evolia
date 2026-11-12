@@ -3,6 +3,15 @@
 Chaque version, la plus récente en haut. Le site (evolia.sebastienalzamora.workers.dev) est toujours à jour ;
 le Play Store (tests internes) reçoit les versions indiquées « Play ».
 
+## 0.7.54 — 12 novembre 2026
+L’introduction :
+- Des bruitages : l’oiseau chante en passant, la graine siffle en tombant puis touche la terre, la fleur fait une petite note à chaque étape de sa pousse, et l’abeille bourdonne (vrai enregistrement) quand elle butine et rentre à la ruche.
+- La ruche se pose près du coquelicot (on ne peut plus l’emmener trop loin) : la fleur, l’abeille et la ruche restent dans le même cadre.
+- Dans la fiche de l’abeille, la place de la bulle est prévue sous le bouton Fermer : tout en bas, elle ne cache plus le texte, et elle ne revient plus dessus quand on lâche.
+Corrigé :
+- Sur le site, le message « seuls les pas faits Evolia ouverte comptent » passait en trois secondes juste après l’introduction : c’est maintenant une fenêtre qui attend « Compris ».
+- Les petits messages restent plus longtemps à l’écran (le temps de les lire : 4,5 s au moins, jusqu’à 14 s pour les longs).
+
 ## 0.7.53 — 12 novembre 2026
 - Les habitats rapportent quatre fois plus (massif 6 nectar par heure d’élan, ruche 32, hôtel 120, nichoir 480, mare 2 000, haie 9 600) : un achat se sent tout de suite. La part de l’activité ne bouge pas (environ 62 % pour un marcheur régulier), puisque chaque km vaut aussi trois heures de production.
 - Aménager dit ce qu’un habitat et une amélioration rapportent par km marché (« Amélioration 1 : +132 par km »), l’unité que le joueur ressent.
