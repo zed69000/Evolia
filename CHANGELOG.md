@@ -3,6 +3,12 @@
 Chaque version, la plus récente en haut. Le site (evolia.sebastienalzamora.workers.dev) est toujours à jour ;
 le Play Store (tests internes) reçoit les versions indiquées « Play ».
 
+## 0.8.2 — 14 novembre 2026
+**Les bulles d'aide disent vrai, et guident jusqu'au bout.**
+- Une bulle qui propose une action (poser un massif, améliorer un habitat, le faire grandir, poser un potager, une mangeoire) n'apparaît que si c'est possible **maintenant** : assez de nectar, débloqué, de la place. Elle utilise le même calcul que le bouton, et le revérifie à chaque étape.
+- Quand elle apparaît, elle **guide pas à pas**, comme l'introduction : seul le bouton de l'étape brille et répond (Aménager, puis « Amélioration » ou « Installer », puis « Poser ici »), tout le reste s'éteint. Plus de « Compris » à fermer pour chercher ensuite.
+- Le guide s'arrête de lui-même si l'action n'est plus possible, et reprend au début si la page se ferme : on n'est jamais bloqué.
+
 ## 0.8.1 — 14 novembre 2026
 - La nuit reste la nuit quand on dézoome : la vue de loin (la carte du jardin) prend aussi la teinte de l'heure, un peu adoucie pour rester lisible. Elle restait en plein jour.
 

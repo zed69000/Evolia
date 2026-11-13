@@ -2135,7 +2135,8 @@ export class Garden {
 		const c = this.canvas;
 		let drag = null, pinch = null, lastTap = 0;
 		// Pendant l'introduction, la vue est tenue : ni zoom ni déplacement (poser la ruche reste possible).
-		const held = () => !!this.state.intro;
+		// Pendant l'introduction ou un guide, le jardin ignore les touchers (seule l'étape en cours répond).
+		const held = () => !!this.state.intro || !!this.holdTaps?.();
 		const local = e => { const r = c.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
 		// Chaque geste, sur le jardin comme sur un bouton, remet à zéro le temps d'inactivité et arrête le suivi en cours.
 		const touched = () => { this.lastTouch = performance.now(); };

@@ -1183,30 +1183,30 @@ const TIPS = [
 		title: 'Tes abris peuvent grandir', text: `Avec ${LEVEL_KM[2]} km parcourus, tes habitats passent au niveau 2. Touche-en un au jardin, ou ouvre Aménager, pour l’améliorer.` },
 	{ id: 'cabane', old: true, target: '#btn-deco', when: () => totalKm() >= 5 && !owned('cabane'),
 		title: 'Une cabane !', text: 'Avec 5 km parcourus, tu peux poser une cabane (Aménager › Récolte). Un fermier ou une fermière s’y installe et cultivera ton potager.' },
-	{ id: 'potager', target: '#btn-deco', when: () => owned('cabane') && !owned('potager'),
+	{ id: 'potager', target: '#btn-deco', when: () => owned('cabane') && !owned('potager') && buyable('potager'), guide: () => buyGuide('potager', 'Pose un carré de potager près de la cabane : touche « Installer ».', 'recolte'),
 		title: 'Le potager', text: 'Pose des carrés de potager près de la cabane, côte à côte : les légumes poussent quand tu marches, et chaque récolte rapporte du nectar.' },
 	{ id: 'journal', target: '#btn-journal', when: () => (state.walks?.length ?? 0) >= 1,
 		title: 'Ton carnet', text: 'Tes sorties, ta semaine, et l’album de la saison.' },
 	{ id: 'biomes', target: '#hud-act', when: () => cellsOpen(here()) >= 2,
 		title: 'Ton monde', text: 'Chaque nouvelle parcelle a son milieu et ses espèces. Touche l’icône d’activité pour voir ton monde.' },
 	// ─── La nouvelle économie (nouvelles parties) : ce qu'il faut savoir, au moment où ça sert ───
-	{ id: 'habitats2', eco2: true, target: '#btn-deco', when: () => (state.nectar ?? 0) >= 50 && !owned('massif'),
-		title: 'Les habitats', text: 'Ils accueillent des animaux et te rapportent du nectar. Ouvre Aménager.' },
+	{ id: 'habitats2', eco2: true, target: '#btn-deco', when: () => !owned('massif') && buyable('massif'),
+		title: 'Les habitats', text: 'Ils accueillent des animaux et te rapportent du nectar. Ouvre Aménager.', guide: () => buyGuide('massif', 'Pose un massif mellifère : touche « Installer ».') },
 	{ id: 'elan', eco2: true, target: '#hud-act', when: () => (state.walks?.length ?? 0) >= 1 && boostLeft(state) > 0 && prodPerHour(state) > 0,
 		title: 'L’élan', text: 'Après une sortie, tes habitats produisent à plein. Au repos, presque rien.' },
 	{ id: 'kmvalue', eco2: true, target: '#hud-steps', when: () => prodPerHour(state) >= 3,
 		title: 'Tes pas valent de plus en plus', get text() { return `Un km te rapporte maintenant environ ${fmtInt(60 + KM_HOURS * prodPerHour(state))} nectar.`; } },
-	{ id: 'upgrade', eco2: true, target: '#btn-deco', when: () => Object.keys(LADDER).some(k => { const u = nextUpgrade(state, k); return u?.ok && (state.nectar ?? 0) >= u.cost; }),
-		title: 'Une amélioration', text: 'Tu peux doubler la production d’un habitat. Ouvre Aménager.' },
+	{ id: 'upgrade', eco2: true, target: '#btn-deco', when: () => !!upgradable(),
+		title: 'Une amélioration', text: 'Tu peux doubler la production d’un habitat. Ouvre Aménager.', guide: () => upgradeGuide() },
 	{ id: 'gauge', eco2: true, target: '#hud-steps', when: () => prodPerHour(state) > 0,
 		title: 'Ta récolte', text: 'L’hexagone se remplit, puis verse dans ta bourse. Après une sortie, il va vingt fois plus vite.' },
 	{ id: 'near', eco2: true, target: '#btn-deco', when: () => garden.items.some(it => isLadder(it.kind) && nearOf(state, it) < 0.5),
 		title: 'Des plantes autour', text: 'Un habitat produit selon les plantes dans son cercle doré. Chacun a sa portée : le nichoir voit loin, l’hôtel et le massif tout près.' },
 	{ id: 'roles', eco2: true, target: '#btn-species', when: () => Object.keys(state.species).length >= 6,
 		title: 'Chaque espèce aide', text: 'Touche un animal pour voir ce qu’il t’apporte.' },
-	{ id: 'levels', eco2: true, target: '#btn-deco', when: () => garden.items.some(it => isLadder(it.kind) && (it.level ?? 1) === 1 && (() => { const nx = nextLevel(it); return nx?.ok && (state.nectar ?? 0) >= nx.cost; })()),
-		title: 'Fais grandir tes habitats', text: 'Un habitat qui grandit produit plus. Touche-le, ou ouvre Aménager.' },
-	{ id: 'birds', eco2: true, target: '#btn-deco', when: () => (here().noBirds ?? 0) > 0 && !seedBirds(here()),
+	{ id: 'levels', eco2: true, target: '#btn-deco', when: () => !!growable_(),
+		title: 'Fais grandir tes habitats', text: 'Un habitat qui grandit produit plus. Ouvre Aménager.', guide: () => levelGuide() },
+	{ id: 'birds', eco2: true, target: '#btn-deco', when: () => (here().noBirds ?? 0) > 0 && !seedBirds(here()) && buyable('mangeoire'), guide: () => buyGuide('mangeoire', 'Pose une mangeoire : les merles viendront semer arbustes et arbres.'),
 		title: 'Il manque des oiseaux', text: 'Les oiseaux sèment arbustes et arbres. Pose une mangeoire ou un nichoir.' },
 	{ id: 'plants', eco2: true, target: '#btn-deco', when: () => { const n = Object.keys(LADDER).reduce((a, k) => a + ownedCount(k), 0); return n >= 4 && here().plants.filter(p => p.growth >= 1 && p.type !== 'herbe').length < n * 2; },
 		title: 'Il faut des plantes', text: 'Tes habitats manquent de plantes. Tes pas font pousser des fleurs ; les abeilles et les papillons en sèment d’autres, les oiseaux sèment arbustes et arbres.' },
@@ -1215,6 +1215,153 @@ const TIPS = [
 ];
 
 let tipShown = null, lastTipEnd = 0;
+
+// ─── Les guides : une bulle qui invite à agir mène le joueur pas à pas ───
+// Règles (voir le skill Tutoriel) :
+//  - vérité : on ne propose que ce qui est possible maintenant (assez de nectar, débloqué), et on le revérifie à chaque
+//    étape ; si ça ne l'est plus, le guide s'arrête de lui-même ;
+//  - pas de choix : comme dans l'introduction, seul le bouton de l'étape répond et brille, le reste s'éteint ;
+//  - une consigne courte par étape, la bulle pointe sur le bouton ; l'action faite, on passe à la suivante.
+let guideOn = null;
+/** Peut-on poser un exemplaire de plus de cet objet maintenant ? */
+function buyable(kind) {
+	if ((state.nectar ?? 0) < priceOf(kind)) return false;
+	if (isLadder(kind)) return !ladderLock(state, kind);
+	const def = ITEMS[kind], km = state.totals.distance / 1000;
+	if (km < (def.km ?? 0)) return false;
+	if ((kind === 'potager' || kind === 'poulailler') && !owned('cabane')) return false;
+	return fitsPlace(kind, garden.biomeOf(garden.active));
+}
+/** Un habitat dont la prochaine amélioration (× 2) est ouverte et payable maintenant. */
+function upgradable() {
+	return Object.keys(LADDER).find(k => { const u = nextUpgrade(state, k); return u?.ok && (state.nectar ?? 0) >= u.cost; }) ?? null;
+}
+/** Une sorte d'habitat dont l'exemplaire le moins avancé peut grandir maintenant (le bouton « Faire grandir » d'Aménager). */
+function growable_() {
+	return Object.keys(LADDER).find(k => {
+		const low = garden.items.filter(x => x.kind === k && nextLevel(x)).sort((a, b) => (a.level ?? 1) - (b.level ?? 1))[0];
+		const nx = low && nextLevel(low);
+		return nx?.ok && (state.nectar ?? 0) >= nx.cost;
+	}) ?? null;
+}
+/** Le nom d'un objet sans son article (« massif mellifère »). */
+const bare = k => ITEMS[k].name.replace(/^(Un|Une|Des) /, '').toLowerCase();
+const levelsSum = k => garden.items.filter(x => x.kind === k).reduce((a, x) => a + (x.level ?? 1), 0);
+const decoStep = (tab, text = 'Ouvre <b>Aménager</b>.') => ({ sel: '#btn-deco', text, done: () => $('#deco').classList.contains('open'), then: () => { if (decoTab !== tab) { decoTab = tab; renderDeco(); } } });
+function buyGuide(kind, text = `Touche <b>Installer</b> sous « ${bare(kind)} ».`, tab = ITEMS[kind].cat) {
+	if (!buyable(kind)) return null;
+	const n0 = ownedCount(kind);
+	return {
+		check: () => ownedCount(kind) > n0 || placing?.kind === kind || buyable(kind),
+		steps: [
+			decoStep(tab),
+			{ sel: `#deco [data-buy="${kind}"]`, text, done: () => placing?.kind === kind },
+			{ sel: '#btn-place', allow: ['#btn-place-turn', '#garden'], garden: true, text: 'Choisis sa place dans le jardin, puis touche <b>Poser ici</b>.', done: () => ownedCount(kind) > n0 },
+		],
+	};
+}
+function upgradeGuide() {
+	const k = upgradable();
+	if (!k) return null;
+	const u0 = state.upg?.[k] ?? 0;
+	return {
+		check: () => (state.upg?.[k] ?? 0) > u0 || (() => { const u = nextUpgrade(state, k); return u?.ok && (state.nectar ?? 0) >= u.cost; })(),
+		steps: [decoStep('habitat'), { sel: `#deco [data-upg="${k}"]`, text: `Touche <b>Amélioration</b> sous « ${bare(k)} » : sa production double.`, done: () => (state.upg?.[k] ?? 0) > u0 }],
+	};
+}
+function levelGuide() {
+	const k = growable_();
+	if (!k) return null;
+	const l0 = levelsSum(k);
+	return {
+		check: () => levelsSum(k) > l0 || growable_() === k,
+		steps: [decoStep('habitat'), { sel: `#deco [data-level="${k}"]`, text: `Touche <b>Faire grandir</b> sous « ${bare(k)} » : il produira plus.`, done: () => levelsSum(k) > l0 }],
+	};
+}
+
+/** Lance un guide : étapes { sel, text, done, then?, allow?, garden? } et check() (encore possible ?). */
+function startGuide(g) {
+	if (guideOn) return;
+	guideOn = { ...g, i: 0, t0: Date.now(), last: Date.now() };
+	$('#app').classList.add('guided');
+	const card = $('#plant-card'); if (card) card.hidden = true;
+	sound.chime(1);
+	guideTick();
+	guideOn.timer = setInterval(guideTick, 300);
+}
+function endGuide() {
+	if (!guideOn) return;
+	clearInterval(guideOn.timer);
+	for (const el of document.querySelectorAll('.g-on')) el.classList.remove('g-on', 'tip-glow');
+	$('#app').classList.remove('guided');
+	$('#tip').hidden = true;
+	guideOn = null;
+	lastTipEnd = Date.now();
+	persist();
+}
+function guideTick() {
+	const g = guideOn;
+	if (!g) return;
+	// Plus possible (le nectar a été dépensé ailleurs…), ou rien ne bouge depuis longtemps : on arrête, sans bloquer.
+	if (!g.check() || Date.now() - g.last > 180000) return endGuide();
+	let st = g.steps[g.i];
+	while (st && st.done()) {
+		st.then?.();
+		g.i++; g.last = Date.now();
+		st = g.steps[g.i];
+	}
+	if (!st) return endGuide();
+	const el = $(st.sel);
+	for (const x of document.querySelectorAll('.g-on')) if (x !== el) x.classList.remove('g-on', 'tip-glow');
+	if (!el || el.offsetParent === null) {
+		$('#tip').hidden = true;
+		// L'étape a disparu (une fenêtre s'est fermée, la pose a été quittée…) : on reprend au début, jamais bloqué.
+		if (!$('#modal').hidden) return;
+		g.lost ??= Date.now();
+		if (Date.now() - g.lost > 1200) { g.i = 0; g.lost = null; }
+		return;
+	}
+	g.lost = null;
+	// Le bouton de l'étape existe mais ne répond pas : la vérité a changé, on arrête.
+	if (el.disabled) return endGuide();
+	if (!el.classList.contains('g-on')) {
+		el.classList.add('g-on', 'tip-glow');
+		el.scrollIntoView?.({ block: 'center', behavior: 'smooth' });
+	}
+	const tip = $('#tip');
+	const html = `<b>${g.title}</b><p>${g.i === 0 && g.intro ? `${g.intro.replace(/ Ouvre Aménager\.$/, '')} ` : ''}${st.text}</p>`;
+	if (tip.dataset.html !== html) { tip.dataset.html = html; tip.innerHTML = html; }
+	tip.hidden = false;
+	placeTip(el);
+}
+/** Place la bulle d'astuce contre un élément, sa pointe dessus. */
+function placeTip(target) {
+	const el = $('#tip');
+	const r = target.getBoundingClientRect(), app = $('#app').getBoundingClientRect();
+	const below = r.top < app.height / 2;
+	const w = Math.min(320, app.width - 24);
+	const left = Math.max(12, Math.min(app.width - w - 12, r.left - app.left + r.width / 2 - w / 2));
+	el.style.width = `${w}px`;
+	el.style.left = `${left}px`;
+	el.style.top = below ? `${r.bottom - app.top + 12}px` : '';
+	el.style.bottom = below ? '' : `${app.bottom - r.top + 12}px`;
+	el.classList.toggle('below', below);
+	el.style.setProperty('--arrow', `${r.left - app.left + r.width / 2 - left}px`);
+}
+// Pendant un guide, seul ce que montre l'étape répond (comme dans l'introduction).
+for (const ev of ['click', 'dblclick', 'contextmenu']) document.addEventListener(ev, e => {
+	const g = guideOn;
+	if (!g || !(e.target instanceof Element)) return;
+	const st = g.steps[g.i];
+	const ok = ['#tip', '#modal'];
+	if (st) ok.push(st.sel, ...(st.allow ?? []));
+	if (e.target.closest(ok.join(','))) return;
+	e.preventDefault();
+	e.stopImmediatePropagation();
+}, { capture: true, passive: false });
+garden.holdTaps = () => !!guideOn && !guideOn.steps[guideOn.i]?.garden;
+// En test : lancer un guide d'achat à la main (evoliaGuide.buy('mangeoire')).
+if (DEV) window.evoliaGuide = { buy: k => { const g = buyGuide(k); if (g) startGuide({ ...g, title: 'Test' }); return !!g; } };
 
 // ─── L'interface se dévoile au fil du jeu ───
 // Au départ : le jardin, la bourse, les espèces et les options. Le reste arrive quand il devient utile, avec un petit
@@ -1260,12 +1407,17 @@ function focusJar() {
 
 /** Montre la prochaine explication utile, quand rien d'autre n'est ouvert. */
 function nextTip() {
-	if (state.intro || $('#app').classList.contains('booting') || tipShown || Date.now() - lastTipEnd < 20000 || placing || !$('#modal').hidden || !$('#coach').hidden || document.querySelector('.panel.open') || session) return;
+	if (state.intro || guideOn || $('#app').classList.contains('booting') || tipShown || Date.now() - lastTipEnd < 20000 || placing || !$('#modal').hidden || !$('#coach').hidden || document.querySelector('.panel.open') || session) return;
 	const done = (state.tips ??= {});
 	const tip = TIPS.find(t => !done[t.id] && !(t.old && state.eco2) && !(t.eco2 && !state.eco2) && t.when());
 	if (!tip) return;
 	const target = $(tip.target);
 	if (!target || target.offsetParent === null) return;
+	if (tip.guide) {
+		const g = tip.guide();
+		if (g) { (state.tips ??= {})[tip.id] = Date.now(); persist(); startGuide({ ...g, title: tip.title, intro: tip.text }); }
+		return;
+	}
 	tipShown = tip;
 	// L'astuce montre l'endroit seulement si on ne fait rien d'autre.
 	if (garden.autoCam()) tip.show?.();
