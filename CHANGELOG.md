@@ -3,6 +3,10 @@
 Chaque version, la plus récente en haut. Le site (evolia.sebastienalzamora.workers.dev) est toujours à jour ;
 le Play Store (tests internes) reçoit les versions indiquées « Play ».
 
+## 0.7.89 — 13 novembre 2026
+- **La fiche d'un habitat se lit d'un coup d'œil** : son niveau à côté du nom, puis quelques cases (nectar par heure d'élan, voisinage, bonus des massifs, abeilles pour la ruche), une barre pour le prochain pot de miel, et un seul conseil, celui qui compte maintenant. Le gain du prochain niveau est écrit sur le bouton « Faire grandir ».
+- Le réglage « Miel récolté » de la ruche ne déborde plus de la fiche : ses boutons − et + sont redevenus ronds.
+
 ## 0.7.88 — 13 novembre 2026
 - **Plus fluide dans les grands jardins** : le sol ne se repeint plus sans fin (le jeu jetait des morceaux de sol encore à l'écran, puis les repeignait), ne peint plus ce qu'on ne regarde plus, et se prépare petit à petit au lieu de tout d'un coup. Mesuré sur un jardin de 930 plantes et 235 habitats : de 20 à 26 ms à 3 ms par image en vue normale ; la première image vue de loin passe de 3 s à 0,6 s.
 

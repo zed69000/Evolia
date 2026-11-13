@@ -666,7 +666,15 @@ html, body {
 .placing #home, .placing #daily, .placing #quest { opacity: 0; pointer-events: none; }
 .item-tip { display: block; margin-top: 4px; font-size: 12px; color: var(--doux); font-style: italic; }
 .coop-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 8px; font-size: 13px; }
-.coop-row small { color: var(--doux); font-size: 11px; }
+.coop-row small { display: block; color: var(--doux); font-size: 11px; }
+.bubble.actions > b .lvl { margin-left: 8px; font: 700 12px Nunito, sans-serif; color: var(--doux); vertical-align: middle; }
+.hab-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(62px, 1fr)); gap: 6px; margin-top: 8px; }
+.hab-stats span { display: flex; flex-direction: column; align-items: center; padding: 6px 4px; border-radius: 12px; background: rgba(233,240,214,.8); font-size: 11px; line-height: 1.2; color: var(--doux); text-align: center; }
+.hab-stats b { font: 800 17px Nunito, sans-serif; color: var(--foret); }
+.hab-stats b small { font-size: 12px; color: var(--doux); }
+.hab-pot { display: flex; align-items: center; gap: 8px; margin-top: 8px; font-size: 12px; color: var(--doux); }
+.hab-pot i { flex: 1; height: 8px; border-radius: 4px; background: linear-gradient(90deg, #E8B23A var(--p), rgba(0,0,0,.08) var(--p)); }
+.item-actions .btn small { display: block; font-size: 11px; font-weight: 700; opacity: .85; }
 .coop-step { display: inline-flex; align-items: center; gap: 4px; }
 .coop-step b { margin-right: 2px; }
 .coop-step i { font-style: normal; font-weight: 800; min-width: 14px; text-align: center; }
@@ -1028,7 +1036,7 @@ body:has(.panel.open) #debug { display: none; }
 /* Mode test : la glissière des jours du joueur simulé, dans le jeu */
 #sim-bar { position: absolute; left: calc(env(safe-area-inset-left, 0px) + 10px); bottom: calc(env(safe-area-inset-bottom, 0px) + 168px); z-index: 30; padding: 6px 8px; font: 600 12px Nunito, sans-serif; max-width: calc(100% - 20px); opacity: .92; }
 #sim-bar.open { right: calc(env(safe-area-inset-right, 0px) + 10px); }
-#app:has(.panel.open) #sim-bar, #app.peek #sim-bar { display: none; }
+#app:has(.panel.open) #sim-bar, #app.peek #sim-bar, #app:has(#plant-card.actions:not([hidden])) #sim-bar { display: none; }
 #sim-bar .sim-top { display: flex; gap: 8px; align-items: center; }
 #sim-bar #sim-days-v { color: var(--foret); font-weight: 800; }
 #sim-bar input { width: 100%; margin: 8px 0 4px; }
