@@ -3,6 +3,25 @@
 Chaque version, la plus récente en haut. Le site (evolia.sebastienalzamora.workers.dev) est toujours à jour ;
 le Play Store (tests internes) reçoit les versions indiquées « Play ».
 
+## 0.8.0 — 14 novembre 2026
+**Les fêtes du monde au jardin.** Chaque fête décore le jardin toute seule, sans rien à acheter ; plusieurs peuvent tomber ensemble (Noël et Hanoucca, Halloween et Diwali). Les fêtes mobiles ont leurs vraies dates, année par année, jusqu'en 2030.
+- **Hanoucca** : une ménorah près de la cabane, avec une chandelle de plus allumée chaque soir.
+- **Nouvel An** : des feux d'artifice dans le ciel, la nuit.
+- **Nouvel An lunaire** : des lanternes rouges dans les arbres.
+- **Ramadan et Aïd** : des lanternes de verre dans les arbres le soir, sous le croissant de lune.
+- **Holi** : des nuages de poudres colorées s'envolent au-dessus des fleurs.
+- **Pâques** : trois œufs cachés chaque jour au pied des objets ; les trouver rapporte du nectar.
+- **Hanami** : des pétales de cerisier volent au-dessus du jardin.
+- **Jour de la Terre** : un défi spécial, marcher 2 km pour la planète.
+- **Journée des abeilles** : des fanions sur les ruches.
+- **Saint-Jean** : un feu près de la cabane, et des lucioles partout la nuit.
+- **Fête de la mi-automne** : des lanternes rondes dans les arbres, sous la pleine lune.
+- **Diwali** : de petites lampes à huile devant la cabane et le long des pas japonais, et des étoiles dans les arbres.
+- **Halloween** : des citrouilles sculptées qui s'éclairent, des toiles d'araignée sur les objets, des chauves-souris à la nuit tombée.
+- **Jour des morts** : des guirlandes d'œillets d'Inde orange sur la cabane, et des œillets devant.
+- **Noël** : en plus, un nœud rouge et une bougie allumée dans chaque lanterne.
+- Chaque fête est présentée au joueur une fois par an.
+
 ## 0.7.99 — 14 novembre 2026
 **Noël au jardin**, du 1er décembre au 6 janvier, sans rien à acheter :
 - Des **guirlandes lumineuses** de couleur le long des toits et des bords : cabane, poulailler, abri, haies, murets, arche. Elles scintillent, et la nuit chaque ampoule éclaire autour d'elle.

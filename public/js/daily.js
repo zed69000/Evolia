@@ -86,6 +86,17 @@ const MOMENT_CH = {
 	nuit: { id: 'm-nuit', kind: 'visitor', moment: 'nuit', n: 1, reward: 60, label: 'Découvre un visiteur de la nuit (touche-le)', icon: '☾' },
 	hiver: { id: 'm-hiver', kind: 'mkm', moment: 'hiver', n: 1, reward: 80, boost: 45, label: 'Brave le froid : marche 1 km', icon: '❄' },
 };
+/** Les défis de fête : ils comptent les kilomètres du jour, comme le défi « Bouger ». */
+const FETE_CH = {
+	terre: { id: 'f-terre', kind: 'move', n: 2, reward: 120, boost: 60, label: 'Jour de la Terre : marche 2 km pour la planète', icon: '🌍' },
+};
+/** Ajoute le défi d'une fête, une fois ; vrai s'il vient d'apparaître. */
+export function addFeteChallenge(state, id) {
+	const d = state.daily, c = FETE_CH[id];
+	if (!d?.challenges || !c || d.challenges.some(x => x.id === c.id)) return false;
+	d.challenges.push({ ...c });
+	return true;
+}
 /** Ajoute le défi du moment, une fois par jour ; vrai s'il vient d'apparaître. */
 export function addMomentChallenge(state, moment) {
 	const d = state.daily, c = MOMENT_CH[moment];

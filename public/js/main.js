@@ -16,12 +16,12 @@ import { ITEMS, ITEM_ORDER, itemHelp, itemCost, fitsPlace, CATS, MAX_LEVEL, LEVE
 import { VERSION } from './version.js';
 import { startIntro, INTRO_NECTAR, FLOWER, FLOWER_SEED } from './intro.js';
 import { makeQuiz, quizReady, streakMult, noteAnswer, QUIZ_MIN_PLANTS, QUIZ_MIN_ANIMALS, quizBank } from './quiz.js';
-import { FETES, feteAt, feteYear } from './fetes.js';
+import { FETES, fetesAt, feteYear, feteDay } from './fetes.js';
 import { LADDER, isLadder, ladderPrice, ladderLock, nextUpgrade, unitProd, prodPerHour, produce, KM_HOURS, KM_VALUE_H, UPG_AT, REST, plantCover, ownedOf, PER_PARCEL, LEVEL_PROD, LEVEL_KM2, levelPrice, levelsOf, MOMENTS, NEAR_USE, NEAR_R, NEAR_NEED, rangeOf, nearMult, NEAR_MAX, SYN_PER, SYN_MAX, guildEffect, nearOf, itemProd, GUILD_BONUS } from './habitats.js';
 import { exportCode, importCode, backupAge } from './backup.js';
 import { DebugPanel, debugOn, setDebug, debugLog, ago, dur, trace, traceFlush } from './debug.js';
 import { canNotify, askNotify, scheduleReminders, clearReminders } from './notify.js';
-import { rollDay, markActive, giftReady, giftFor, claimGift, claim, toClaim, noteTap, noteQuest, challengesHtml, weekHtml, nextGoal, albumHtml, collection, herbarium, newlyComplete, HERBARIUM_REWARD, addMomentChallenge, noteMomentMeters, noteVisitor, seasonHtml, seasonRewards } from './daily.js';
+import { rollDay, markActive, giftReady, giftFor, claimGift, claim, toClaim, noteTap, noteQuest, challengesHtml, weekHtml, nextGoal, albumHtml, collection, herbarium, newlyComplete, HERBARIUM_REWARD, addMomentChallenge, addFeteChallenge, noteMomentMeters, noteVisitor, seasonHtml, seasonRewards } from './daily.js';
 import { fmtFixed as fmt, fmtInt, fmtNum } from './format.js';
 
 const params = new URLSearchParams(location.search);
@@ -45,22 +45,30 @@ if (params.has('snow')) garden.snowFixed = Math.max(0, Math.min(1, parseFloat(pa
 function updateFete() {
 	const date = garden.dateOverride ? new Date(garden.dateOverride) : new Date();
 	const forced = params.get('fete');
-	garden.fete = forced ? (FETES[forced] ? forced : null) : feteAt(date);
-	// Une fois par fête et par an, on la présente au joueur (pas pendant l'introduction).
-	const f = garden.fete && FETES[garden.fete];
-	if (f && !state.intro && state.eco2) {
-		const key = `${garden.fete}-${feteYear(garden.fete, date)}`;
-		if (!(state.fetesSeen ??= {})[key]) {
-			state.fetesSeen[key] = Date.now();
-			persist();
-			setTimeout(() => toast(f.hello, '#C8302C'), 6000);
-		}
+	const ids = forced ? forced.split(',').filter(id => FETES[id]) : fetesAt(date);
+	garden.fetes = new Set(ids);
+	garden.fete = ids[0] ?? null;
+	garden.feteDays = Object.fromEntries(ids.map(id => [id, Math.max(0, feteDay(id, date))]));
+	if (state.intro || !state.eco2) return;
+	// Le défi du Jour de la Terre, une fois.
+	if (garden.fetes.has('terre') && addFeteChallenge(state, 'terre')) { renderDaily(); persist(); }
+	// Une fois par fête et par an, on la présente au joueur (pas pendant l'introduction), l'une après l'autre.
+	let delay = 6000;
+	for (const id of ids) {
+		const key = `${id}-${feteYear(id, date)}`;
+		if ((state.fetesSeen ??= {})[key]) continue;
+		state.fetesSeen[key] = Date.now();
+		persist();
+		const f = FETES[id];
+		setTimeout(() => toast(f.hello, f.color), delay);
+		delay += 7000;
 	}
 }
 /** Noël : trois lutins se cachent chaque jour derrière des objets du jardin ; les trouver rapporte du nectar. */
 const ELF_SPOTS = new Set(['cabane', 'haie', 'muret', 'ruche', 'hotel', 'bois', 'pierres', 'abri', 'banc', 'epouvantail', 'poulailler', 'compost', 'sandarium', 'bain']);
 function hideElves() {
-	if (garden.fete !== 'noel' || state.intro) { garden.elves = []; return; }
+	const egg = garden.fetes?.has('paques');
+	if (!(garden.fetes?.has('noel') || egg) || state.intro) { garden.elves = []; return; }
 	const day = new Date().toDateString();
 	if (state.elves?.day !== day) state.elves = { day, list: [], got: 0 };
 	// Trois cachettes par jour, tirées d'après la date ; complétées si le jardin n'était pas encore chargé.
@@ -71,7 +79,7 @@ function hideElves() {
 		const rnd = () => ((h = Math.imul(h ^ (h >>> 15), 2246822507) + 0x9e3779b9 >>> 0) % 10000) / 10000;
 		for (let k = 0; k < 40 && list.length < 3 && spots.length; k++) {
 			const it = spots[Math.floor(rnd() * spots.length)];
-			if (!list.some(e => e.item === it.id)) list.push({ item: it.id, side: rnd() < 0.5 ? -1 : 1, phase: rnd() * 6, found: 0 });
+			if (!list.some(e => e.item === it.id)) list.push({ item: it.id, side: rnd() < 0.5 ? -1 : 1, phase: rnd() * 6, found: 0, egg });
 		}
 		persist();
 	}
@@ -89,7 +97,8 @@ function findElf(e) {
 	sound.chime(2);
 	jackpot(v, e.x, e.y - 10);
 	const left = S.list.filter(x => !x.found).length;
-	toast(left ? `Un lutin ! Il en reste ${left} caché${left > 1 ? 's' : ''} dans ton jardin aujourd’hui.` : 'Tous les lutins du jour sont trouvés ! D’autres viendront se cacher demain.', '#2F7A3E');
+	const what = e.egg ? ['Un œuf', 'œuf', 'Tous les œufs du jour sont trouvés ! D’autres seront cachés demain.'] : ['Un lutin', 'lutin', 'Tous les lutins du jour sont trouvés ! D’autres viendront se cacher demain.'];
+	toast(left ? `${what[0]} ! Il en reste ${left} caché${left > 1 ? 's' : ''} dans ton jardin aujourd’hui.` : what[2], e.egg ? '#E8A93A' : '#2F7A3E');
 	setTimeout(() => { garden.elves = state.elves.list.filter(x => !x.found); }, 1300);
 }
 garden.onSleigh = () => {

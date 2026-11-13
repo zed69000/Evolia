@@ -2313,7 +2313,7 @@ export class Garden {
 		for (const d of this.dew ?? []) { const k = Math.hypot(d.x - wx, d.y - wy); if (k < dd) { dd = k; dew = d; } }
 		if (dew) return { dew, x: sx, y: sy };
 		// Un lutin caché (sa tête dépasse) : il est petit, on le touche avant ce qui le cache.
-		if (this.fete === 'noel') for (const e of this.elves ?? []) {
+		if (this.fx('noel') || this.fx('paques')) for (const e of this.elves ?? []) {
 			if (e.found || e.x == null) continue;
 			if (Math.hypot(wx - (e.x + e.side * 8), wy - (e.y - 6)) < 20 / Math.min(1.3, this.cam.z)) return { elf: e, x: sx, y: sy };
 		}
@@ -3707,8 +3707,9 @@ export class Garden {
 			}
 		}
 		this.updateSnowCover(dt);
+		if (this.fetes?.size) this.updateFete(dt);
 		// Noël : le traîneau du père Noël passe de temps en temps (toutes les deux à cinq minutes).
-		if (this.fete === 'noel' && !this.state.intro) {
+		if (this.fx('noel') && !this.state.intro) {
 			this.nextSleigh ??= this.t + 25 + Math.random() * 35;
 			if (!this.sleigh && this.t > this.nextSleigh) {
 				this.sleigh = { t0: this.t, dur: 9, dir: Math.random() < 0.5 ? 1 : -1, y: 0.1 + Math.random() * 0.12 };
@@ -3818,7 +3819,7 @@ export class Garden {
 	}
 
 	/** Des étoiles dorées qui pendent dans les arbres à Noël, au bout d'un fil ; la nuit, elles brillent. */
-	drawHangingStars(ctx, p, s, box) {
+	drawHangingStars(ctx, p, s, box, style = 'star') {
 		if (!s.hang || s.hang.stage !== s.stage) {
 			const c = s.canvas, w = c.width, h = c.height, D = w / box.w;
 			let data = null;
@@ -3842,7 +3843,8 @@ export class Garden {
 			const sw = Math.sin(t * 1.3 + x) * 2, sy = y + len;
 			ctx.strokeStyle = 'rgba(230,220,180,0.7)'; ctx.lineWidth = 0.5;
 			ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + sw, sy - 4); ctx.stroke();
-			this.drawStar(ctx, x + sw, sy, 5.5, 0.7 + 0.3 * Math.sin(t * 2.4 + x));
+			if (style === 'star') this.drawStar(ctx, x + sw, sy, 5.5, 0.7 + 0.3 * Math.sin(t * 2.4 + x));
+			else this.drawLantern(ctx, x + sw, sy, style, 0.75 + 0.25 * Math.sin(t * 1.9 + x));
 		}
 	}
 
@@ -3859,6 +3861,332 @@ export class Garden {
 		ctx.closePath(); ctx.fill(); ctx.stroke();
 		ctx.fillStyle = `rgba(255,250,220,${0.5 * glow})`;
 		ctx.beginPath(); ctx.arc(x - r * 0.15, y - r * 0.15, r * 0.25, 0, Math.PI * 2); ctx.fill();
+	}
+
+	// ─── Les fêtes du monde ───
+	fx(id) { return !!this.fetes?.has(id); }
+
+	/** La décoration suspendue dans les arbres selon la fête du moment. */
+	hangStyle() {
+		if (this.fx('noel')) return 'star';
+		if (this.fx('lunaire')) return 'red';
+		if (this.fx('miautomne')) return 'round';
+		if (this.fx('ramadan')) return 'fanous';
+		if (this.fx('diwali')) return 'star';
+		return null;
+	}
+
+	/** Une lanterne suspendue : rouge (Nouvel An lunaire), ronde et dorée (mi-automne), en verre ajouré (Ramadan). */
+	drawLantern(ctx, x, y, style, glow) {
+		const col = style === 'red' ? '#D8322A' : style === 'round' ? '#F09A2E' : '#2E9A8A';
+		this.glowAt(ctx, x, y + 1, style === 'fanous' ? '255,210,120' : '255,170,90', 0.8 * glow, 16);
+		ctx.save(); ctx.translate(x, y);
+		if (style === 'fanous') {
+			ctx.fillStyle = '#C89A3A';
+			ctx.beginPath(); ctx.moveTo(0, -9); ctx.lineTo(4.5, -4); ctx.lineTo(-4.5, -4); ctx.fill();
+			ctx.fillStyle = col;
+			ctx.beginPath(); ctx.moveTo(-4.5, -4); ctx.lineTo(4.5, -4); ctx.lineTo(5.5, 4); ctx.lineTo(0, 8); ctx.lineTo(-5.5, 4); ctx.closePath(); ctx.fill();
+			ctx.fillStyle = `rgba(255,236,150,${0.6 + 0.4 * glow})`;
+			ctx.beginPath(); ctx.arc(0, 1.5, 2.4, 0, Math.PI * 2); ctx.fill();
+			ctx.strokeStyle = '#C89A3A'; ctx.lineWidth = 0.7; ctx.stroke();
+		} else {
+			ctx.fillStyle = '#3A2A1A'; ctx.fillRect(-3, -8, 6, 1.6); ctx.fillRect(-3, 6.4, 6, 1.6);
+			ctx.fillStyle = col;
+			ctx.beginPath(); ctx.ellipse(0, 0, style === 'round' ? 6.5 : 7, style === 'round' ? 6.5 : 7.5, 0, 0, Math.PI * 2); ctx.fill();
+			ctx.fillStyle = `rgba(255,224,140,${0.35 + 0.35 * glow})`;
+			ctx.beginPath(); ctx.ellipse(0, 0, 3, 5, 0, 0, Math.PI * 2); ctx.fill();
+			ctx.strokeStyle = 'rgba(120,30,20,0.5)'; ctx.lineWidth = 0.6;
+			ctx.beginPath(); ctx.moveTo(-3.5, -6.5); ctx.quadraticCurveTo(-5.5, 0, -3.5, 6.5); ctx.moveTo(3.5, -6.5); ctx.quadraticCurveTo(5.5, 0, 3.5, 6.5); ctx.stroke();
+			if (style === 'red') { ctx.strokeStyle = '#E8B33A'; ctx.lineWidth = 0.9; ctx.beginPath(); ctx.moveTo(0, 8); ctx.lineTo(0, 13); ctx.stroke(); }
+		}
+		ctx.restore();
+	}
+
+	/** Les décors posés au sol pour les fêtes, près de la maison (cabane, sinon première ruche) et le long des allées. */
+	feteDecor() {
+		const key = `${[...this.fetes].join(',')}:${this.items.length}`;
+		if (this.fdCache?.key === key) return this.fdCache.list;
+		const list = [];
+		const home = this.items.find(i => i.kind === 'cabane') ?? this.items.find(i => i.kind === 'ruche');
+		const hb = home ? itemBox(home.kind, home.level) : null;
+		if (home && this.fx('hanoucca')) list.push({ d: 'menorah', x: home.x + hb.w * 0.42, y: home.y + 22 });
+		if (home && this.fx('stjean')) list.push({ d: 'feu', x: home.x + hb.w * 0.75, y: home.y + 60 });
+		if (this.fx('halloween')) {
+			if (home) list.push({ d: 'citrouille', x: home.x - hb.w * 0.3, y: home.y + 26, s: 1.1 }, { d: 'citrouille', x: home.x + hb.w * 0.36, y: home.y + 30, s: 0.85 });
+			for (const r of this.items.filter(i => i.kind === 'ruche' || i.kind === 'epouvantail').slice(0, 6)) list.push({ d: 'citrouille', x: r.x + 26, y: r.y + 10, s: 0.75 });
+		}
+		if (this.fx('diwali')) {
+			if (home) for (let k = 0; k < 7; k++) list.push({ d: 'diya', x: home.x - hb.w * 0.45 + k * hb.w * 0.15, y: home.y + 34 + Math.sin(k * 1.3) * 3 });
+			for (const p of this.items.filter(i => i.kind === 'pas').slice(0, 12)) list.push({ d: 'diya', x: p.x + 30, y: p.y + 6 }, { d: 'diya', x: p.x - 30, y: p.y + 6 });
+		}
+		if (home && this.fx('morts')) for (let k = 0; k < 5; k++) list.push({ d: 'oeillet', x: home.x - hb.w * 0.4 + k * hb.w * 0.2, y: home.y + 30 });
+		this.fdCache = { key, list };
+		return list;
+	}
+
+	drawFeteDeco(ctx, e) {
+		const t = this.t, night = this.night();
+		ctx.save(); ctx.translate(e.x, e.y);
+		if (e.d === 'menorah') {
+			// Neuf branches : la chandelle du milieu (le shamash) allume les autres, une de plus chaque soir.
+			const lit = Math.max(1, Math.min(8, (this.feteDays?.hanoucca ?? 0) + 1));
+			ctx.strokeStyle = '#C89A3A'; ctx.lineWidth = 2; ctx.lineCap = 'round';
+			ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(0, -26); ctx.moveTo(-8, 0); ctx.lineTo(8, 0); ctx.stroke();
+			for (let i = 1; i <= 4; i++) { ctx.beginPath(); ctx.moveTo(0, -12); ctx.quadraticCurveTo(-i * 5, -12, -i * 5, -24); ctx.moveTo(0, -12); ctx.quadraticCurveTo(i * 5, -12, i * 5, -24); ctx.stroke(); }
+			const pos = [-20, -15, -10, -5, 5, 10, 15, 20];
+			const draw = (x, y, on) => {
+				ctx.fillStyle = '#EEF2FA'; ctx.fillRect(x - 1.2, y - 6, 2.4, 6);
+				if (!on) return;
+				const f = 1 + 0.15 * Math.sin(t * 9 + x);
+				this.glowAt(ctx, x, y - 8, '255,200,110', 0.7, 9);
+				ctx.fillStyle = '#F6B83A'; ctx.beginPath(); ctx.ellipse(x, y - 8.5, 1.5, 2.6 * f, 0, 0, Math.PI * 2); ctx.fill();
+				ctx.fillStyle = '#FFF4C8'; ctx.beginPath(); ctx.ellipse(x, y - 8, 0.7, 1.3 * f, 0, 0, Math.PI * 2); ctx.fill();
+			};
+			draw(0, -28, true);
+			// Les chandelles s'allument de droite à gauche, la plus récente en premier.
+			for (let k = 0; k < 8; k++) draw(pos[7 - k], -24, k < lit);
+		} else if (e.d === 'feu') {
+			ctx.fillStyle = 'rgba(60,40,30,0.25)'; ctx.beginPath(); ctx.ellipse(0, 2, 26, 8, 0, 0, Math.PI * 2); ctx.fill();
+			ctx.strokeStyle = '#5A3A22'; ctx.lineWidth = 4; ctx.lineCap = 'round';
+			ctx.beginPath(); ctx.moveTo(-16, 2); ctx.lineTo(14, -4); ctx.moveTo(-14, -4); ctx.lineTo(16, 2); ctx.stroke();
+			for (let k = 0; k < 3; k++) {
+				const h = 26 + 8 * Math.sin(t * 7 + k * 2), w = 9 - k * 2;
+				ctx.fillStyle = ['#E8522A', '#F49A2E', '#FBE07A'][k];
+				ctx.beginPath(); ctx.moveTo(-w, -2); ctx.quadraticCurveTo(-w * 0.6, -h * 0.6, Math.sin(t * 5 + k) * 3, -h); ctx.quadraticCurveTo(w * 0.6, -h * 0.6, w, -2); ctx.fill();
+			}
+			this.glowAt(ctx, 0, -14, '255,150,60', 0.9, 60);
+			for (let k = 0; k < 6; k++) {
+				const u = (t * 0.7 + k / 6) % 1;
+				ctx.fillStyle = `rgba(255,200,90,${1 - u})`;
+				ctx.beginPath(); ctx.arc(Math.sin(k * 3 + t) * 10 * u, -20 - u * 50, 1.2, 0, Math.PI * 2); ctx.fill();
+			}
+		} else if (e.d === 'citrouille') {
+			const s = e.s ?? 1;
+			ctx.scale(s, s);
+			ctx.fillStyle = 'rgba(60,40,30,0.2)'; ctx.beginPath(); ctx.ellipse(0, 1, 14, 4, 0, 0, Math.PI * 2); ctx.fill();
+			for (const [dx, w, c] of [[-6, 8, '#D8701E'], [6, 8, '#D8701E'], [0, 9, '#EE8A2A']]) { ctx.fillStyle = c; ctx.beginPath(); ctx.ellipse(dx, -9, w, 9.5, 0, 0, Math.PI * 2); ctx.fill(); }
+			ctx.strokeStyle = '#4A6A2A'; ctx.lineWidth = 2.2; ctx.beginPath(); ctx.moveTo(0, -18); ctx.quadraticCurveTo(2, -23, 5, -24); ctx.stroke();
+			// Le visage sculpté, éclairé de l'intérieur.
+			const fl = 0.75 + 0.25 * Math.sin(t * 8 + e.x);
+			ctx.fillStyle = `rgba(255,${200 + 30 * fl},90,${0.9})`;
+			ctx.beginPath(); ctx.moveTo(-6, -12); ctx.lineTo(-3, -12); ctx.lineTo(-4.5, -15); ctx.fill();
+			ctx.beginPath(); ctx.moveTo(3, -12); ctx.lineTo(6, -12); ctx.lineTo(4.5, -15); ctx.fill();
+			ctx.beginPath(); ctx.moveTo(-7, -6); ctx.lineTo(-4, -4); ctx.lineTo(-2, -6); ctx.lineTo(0, -4); ctx.lineTo(2, -6); ctx.lineTo(4, -4); ctx.lineTo(7, -6); ctx.lineTo(4, -2); ctx.lineTo(-4, -2); ctx.closePath(); ctx.fill();
+			this.glowAt(ctx, 0, -9, '255,170,70', 0.8 * fl, 26);
+		} else if (e.d === 'diya') {
+			ctx.fillStyle = '#B8582A';
+			ctx.beginPath(); ctx.ellipse(0, -2, 5.5, 2.6, 0, 0, Math.PI); ctx.fill();
+			ctx.fillStyle = '#8A3A1A'; ctx.beginPath(); ctx.ellipse(0, -2, 5.5, 1.4, 0, 0, Math.PI * 2); ctx.fill();
+			const f = 1 + 0.18 * Math.sin(t * 10 + e.x);
+			ctx.fillStyle = '#F6B83A'; ctx.beginPath(); ctx.ellipse(2.5, -5, 1.3, 2.6 * f, 0.3, 0, Math.PI * 2); ctx.fill();
+			ctx.fillStyle = '#FFF4C8'; ctx.beginPath(); ctx.ellipse(2.4, -4.4, 0.6, 1.2 * f, 0.3, 0, Math.PI * 2); ctx.fill();
+			this.glowAt(ctx, 2.5, -5, '255,190,90', 0.8, 14);
+		} else if (e.d === 'oeillet') {
+			for (let k = 0; k < 5; k++) {
+				const a = k * 1.3, x = Math.cos(a) * 6, y = -3 + Math.sin(a) * 2;
+				ctx.fillStyle = k % 2 ? '#F09A1E' : '#F4B42E';
+				ctx.beginPath(); ctx.arc(x, y, 3.2, 0, Math.PI * 2); ctx.fill();
+				ctx.fillStyle = 'rgba(200,90,20,0.6)'; ctx.beginPath(); ctx.arc(x, y, 1.1, 0, Math.PI * 2); ctx.fill();
+			}
+		}
+		ctx.restore();
+		void night;
+	}
+
+	/** Les décorations de fête sur les objets eux-mêmes. */
+	drawFeteItem(ctx, it, sp, box) {
+		if (this.fx('noel') && it.kind === 'lanterne') {
+			// Un nœud rouge et du houx sur le poteau ; la bougie brille aussi le jour.
+			ctx.fillStyle = '#C8302C';
+			ctx.beginPath(); ctx.moveTo(0, -74); ctx.lineTo(-7, -79); ctx.lineTo(-7, -69); ctx.closePath(); ctx.fill();
+			ctx.beginPath(); ctx.moveTo(0, -74); ctx.lineTo(7, -79); ctx.lineTo(7, -69); ctx.closePath(); ctx.fill();
+			ctx.beginPath(); ctx.moveTo(-1, -74); ctx.lineTo(-4, -62); ctx.lineTo(-1.5, -63); ctx.moveTo(1, -74); ctx.lineTo(4, -62); ctx.lineTo(1.5, -63); ctx.fill();
+			ctx.fillStyle = '#2E6A36'; ctx.beginPath(); ctx.ellipse(-4, -80, 3, 1.5, -0.5, 0, Math.PI * 2); ctx.ellipse(4, -80, 3, 1.5, 0.5, 0, Math.PI * 2); ctx.fill();
+			const f = 1 + 0.2 * Math.sin(this.t * 9 + it.x);
+			ctx.fillStyle = '#F6B83A'; ctx.beginPath(); ctx.ellipse(0, -91, 1.8, 3.4 * f, 0, 0, Math.PI * 2); ctx.fill();
+			this.glowAt(ctx, 0, -90, '255,200,110', 0.8, 18);
+		}
+		if (this.fx('halloween') && ['cabane', 'abri', 'poulailler', 'hotel', 'ruche', 'haie', 'muret', 'arche'].includes(it.kind)) {
+			// Une toile d'araignée dans le coin haut gauche de l'objet.
+			const sil = this.silhouette(sp.canvas, box);
+			const top = sil.length ? sil.reduce((a, b) => (a[1] < b[1] ? a : b)) : [0, -box.ay];
+			const cx = -box.ax + box.w * 0.18, cy = Math.max(top[1] + 10, -box.ay * 0.75);
+			ctx.strokeStyle = 'rgba(245,245,250,0.75)'; ctx.lineWidth = 0.5;
+			for (let k = 0; k < 5; k++) { const a = Math.PI * 0.05 + k * Math.PI * 0.11; ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(cx + Math.cos(a) * 18, cy + Math.sin(a) * 18); ctx.stroke(); }
+			for (const r of [6, 11, 16]) { ctx.beginPath(); for (let k = 0; k < 5; k++) { const a = Math.PI * 0.05 + k * Math.PI * 0.11; ctx.lineTo(cx + Math.cos(a) * r, cy + Math.sin(a) * r); } ctx.stroke(); }
+			ctx.fillStyle = '#2A2226'; ctx.beginPath(); ctx.arc(cx + 9, cy + 12 + Math.sin(this.t * 1.2) * 2, 1.6, 0, Math.PI * 2); ctx.fill();
+		}
+		const flagFor = this.fx('abeilles') && it.kind === 'ruche' ? ['#F4C23E', '#E8822E', '#FBF2D0'] : this.fx('morts') && ['cabane', 'arche', 'abri'].includes(it.kind) ? 'oeillet' : null;
+		if (flagFor) {
+			const sil = this.silhouette(sp.canvas, box).filter(([, y]) => y < -box.ay * 0.35);
+			const pts = [];
+			for (const [x, y] of sil) if (!pts.length || x - pts[pts.length - 1][0] >= 8) pts.push([x, y + 3]);
+			ctx.strokeStyle = 'rgba(80,60,40,0.6)'; ctx.lineWidth = 0.6;
+			ctx.beginPath(); pts.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y))); ctx.stroke();
+			pts.forEach(([x, y], i) => {
+				if (flagFor === 'oeillet') {
+					ctx.fillStyle = i % 2 ? '#F09A1E' : '#F4B42E';
+					ctx.beginPath(); ctx.arc(x, y + 1.5, 3, 0, Math.PI * 2); ctx.fill();
+				} else {
+					ctx.fillStyle = flagFor[i % 3];
+					ctx.beginPath(); ctx.moveTo(x - 3.5, y); ctx.lineTo(x + 3.5, y); ctx.lineTo(x, y + 7 + Math.sin(this.t * 3 + i) * 0.8); ctx.closePath(); ctx.fill();
+				}
+			});
+		}
+	}
+
+	/** Particules de fête : poudres de Holi, pétales de cerisier, lucioles de la Saint-Jean, chauves-souris. */
+	updateFete(dt) {
+		const v = this.view();
+		this.fparts ??= [];
+		const add = (n, make) => { for (let i = 0; i < n && this.fparts.length < 220; i++) this.fparts.push(make()); };
+		const rate = k => Math.random() < k * dt;
+		if (this.fx('holi') && rate(5)) {
+			// Sur une fleur qu'on voit : la liste des fleurs de l'écran est refaite chaque seconde.
+			if (!this.holiFl || this.t - this.holiFl.t > 1) {
+				const list = [];
+				for (const q of this.place.plants) {
+					if (q.type !== 'fleur' || q.growth < 1) continue;
+					const [ox, oy] = cellOrigin(cellOf(q)), x = ox + q.x, y = oy + q.y;
+					if (x > v.x0 && x < v.x0 + v.w && y > v.y0 && y < v.y0 + v.h) list.push([x, y]);
+				}
+				this.holiFl = { t: this.t, list };
+			}
+			const pick = this.holiFl.list[Math.floor(Math.random() * this.holiFl.list.length)];
+			const p = pick, x = pick?.[0], y = pick ? pick[1] - 40 : 0;
+			if (p) {
+				const c = ['232,64,138', '250,180,40', '64,170,230', '120,200,80', '160,90,220'][Math.floor(Math.random() * 5)];
+				add(1, () => ({ k: 'puff', x, y, c, t0: this.t, life: 3.5 }));
+			}
+		}
+		if (this.fx('hanami')) {
+			const wind = Math.min(40, this.weather.wind ?? 10);
+			// Au début (ou après un grand saut de vue), des pétales partout ; ensuite, ils arrivent par le haut.
+			const n = this.fparts.filter(p => p.k === 'petal').length;
+			if (n < 40) add(60, () => ({ k: 'petal', x: v.x0 + Math.random() * v.w, y: v.y0 + Math.random() * v.h, t0: this.t - Math.random() * 6, life: 14, vx: 10 + wind * 0.6, vy: 22 + Math.random() * 14, r: Math.random() * 6 }));
+			if (rate(22)) add(1, () => ({ k: 'petal', x: v.x0 - 30 + Math.random() * (v.w + 60), y: v.y0 - 20, t0: this.t, life: 14, vx: 10 + wind * 0.6, vy: 22 + Math.random() * 14, r: Math.random() * 6 }));
+		}
+		for (const p of this.fparts) if (p.k === 'petal') { p.x += (p.vx + Math.sin(this.t * 2 + p.r) * 14) * dt; p.y += p.vy * dt; }
+		this.fparts = this.fparts.filter(p => this.t - p.t0 < p.life && p.y < v.y0 + v.h + 40);
+		// Feux d'artifice (Nouvel An, la nuit) : une gerbe toutes les secondes environ.
+		if (this.fx('nouvelan') && this.night() > 0.3 && rate(1.1)) {
+			const c = ['255,90,90', '255,210,90', '120,220,255', '190,130,255', '140,255,160'][Math.floor(Math.random() * 5)];
+			(this.fireworks ??= []).push({ x: 0.15 + Math.random() * 0.7, y: 0.08 + Math.random() * 0.25, t0: this.t, c, n: 26 + Math.floor(Math.random() * 14) });
+		}
+		if (this.fireworks) this.fireworks = this.fireworks.filter(f => this.t - f.t0 < 2.2);
+	}
+
+	/** Les particules de fête dans le monde (poudres, pétales). */
+	drawFeteWorld(ctx, v) {
+		for (const p of this.fparts ?? []) {
+			const u = (this.t - p.t0) / p.life;
+			if (p.k === 'puff') {
+				const r = 14 + u * 60, a = 0.7 * (1 - u) * Math.min(1, u * 8);
+				const grd = ctx.createRadialGradient(p.x, p.y - u * 30, 0, p.x, p.y - u * 30, r);
+				grd.addColorStop(0, `rgba(${p.c},${a})`); grd.addColorStop(1, `rgba(${p.c},0)`);
+				ctx.fillStyle = grd; ctx.beginPath(); ctx.arc(p.x, p.y - u * 30, r, 0, Math.PI * 2); ctx.fill();
+			} else if (p.k === 'petal') {
+				ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(this.t * 1.5 + p.r);
+				ctx.fillStyle = 'rgba(244,170,200,0.95)';
+				ctx.beginPath(); ctx.ellipse(0, 0, 4.4, 2.6, 0, 0, Math.PI * 2); ctx.fill();
+				ctx.fillStyle = 'rgba(255,230,240,0.8)';
+				ctx.beginPath(); ctx.ellipse(-1, -0.5, 1.8, 1, 0, 0, Math.PI * 2); ctx.fill();
+				ctx.restore();
+			}
+		}
+		// Saint-Jean : des lucioles en masse la nuit, autour de la vue.
+		if (this.fx('stjean') && this.night() > 0.2) {
+			for (let i = 0; i < 60; i++) {
+				const x = v.x0 + ((i * 0.618 + Math.sin(this.t * 0.2 + i) * 0.04) % 1) * v.w, y = v.y0 + ((i * 0.377 + Math.cos(this.t * 0.17 + i * 2) * 0.05) % 1) * v.h;
+				const b = Math.max(0, Math.sin(this.t * 2 + i * 1.7));
+				this.glowAt(ctx, x, y, '200,255,120', 0.9 * b, 10);
+				ctx.fillStyle = `rgba(220,255,150,${b})`; ctx.beginPath(); ctx.arc(x, y, 1.3, 0, Math.PI * 2); ctx.fill();
+			}
+		}
+	}
+
+	/** Le ciel des fêtes, en pixels d'écran : feux d'artifice, croissant de lune, pleine lune, chauves-souris. */
+	drawFeteSky(ctx, cw, ch, night) {
+		ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0);
+		const s = Math.min(cw, ch) / 600;
+		if (this.fireworks?.length && night > 0.3) {
+			// En couleurs franches (le ciel du jardin reste clair la nuit) : une traînée, puis l'étincelle et son cœur blanc.
+			for (const f of this.fireworks) {
+				const u = (this.t - f.t0) / 2.2, r = (30 + 90 * Math.sqrt(u)) * s, fade = 1 - u;
+				const cx = f.x * cw, cy = f.y * ch;
+				if (u < 0.12) {
+					ctx.fillStyle = `rgba(255,255,240,${1 - u / 0.12})`;
+					ctx.beginPath(); ctx.arc(cx, cy, (6 + 30 * u) * s, 0, Math.PI * 2); ctx.fill();
+				}
+				for (let k = 0; k < f.n; k++) {
+					const a = k / f.n * Math.PI * 2, x = cx + Math.cos(a) * r, y = cy + Math.sin(a) * r + u * u * 40 * s;
+					ctx.strokeStyle = `rgba(${f.c},${0.55 * fade})`; ctx.lineWidth = 1.6 * s;
+					ctx.beginPath(); ctx.moveTo(cx + Math.cos(a) * r * 0.55, cy + Math.sin(a) * r * 0.55 + u * u * 20 * s); ctx.lineTo(x, y); ctx.stroke();
+					ctx.fillStyle = `rgba(${f.c},${fade})`;
+					ctx.beginPath(); ctx.arc(x, y, 3 * s * (1 - u * 0.4), 0, Math.PI * 2); ctx.fill();
+					ctx.fillStyle = `rgba(255,255,255,${0.8 * fade})`;
+					ctx.beginPath(); ctx.arc(x, y, 1.1 * s, 0, Math.PI * 2); ctx.fill();
+				}
+			}
+		}
+		const moon = this.fx('ramadan') ? 'crescent' : this.fx('miautomne') ? 'full' : null;
+		if (moon && night > 0.2) {
+			const x = cw * 0.82, y = ch * 0.14, r = 26 * s;
+			ctx.globalAlpha = Math.min(1, night * 1.4);
+			const grd = ctx.createRadialGradient(x, y, r * 0.5, x, y, r * 3);
+			grd.addColorStop(0, 'rgba(255,240,200,0.35)'); grd.addColorStop(1, 'rgba(255,240,200,0)');
+			ctx.fillStyle = grd; ctx.beginPath(); ctx.arc(x, y, r * 3, 0, Math.PI * 2); ctx.fill();
+			if (moon === 'crescent') {
+				// Le croissant se découpe sur une petite toile à part (le découper sur le jardin y ferait un trou).
+				const n = Math.ceil(r * 2.2), o = this.moonCanvas?.width === n ? this.moonCanvas : (this.moonCanvas = Object.assign(document.createElement('canvas'), { width: n, height: n }));
+				const m = o.getContext('2d');
+				m.clearRect(0, 0, n, n);
+				m.fillStyle = '#FFF2C8'; m.beginPath(); m.arc(n / 2, n / 2, r, 0, Math.PI * 2); m.fill();
+				m.globalCompositeOperation = 'destination-out';
+				m.beginPath(); m.arc(n / 2 + r * 0.45, n / 2 - r * 0.15, r * 0.88, 0, Math.PI * 2); m.fill();
+				m.globalCompositeOperation = 'source-over';
+				ctx.drawImage(o, x - n / 2, y - n / 2);
+			} else {
+				ctx.fillStyle = '#FFF2C8';
+				ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+				ctx.fillStyle = 'rgba(220,200,150,0.35)';
+				for (const [dx, dy, rr] of [[-0.3, -0.2, 0.22], [0.25, 0.15, 0.16], [-0.05, 0.35, 0.12]]) { ctx.beginPath(); ctx.arc(x + dx * r, y + dy * r, rr * r, 0, Math.PI * 2); ctx.fill(); }
+			}
+			ctx.globalAlpha = 1;
+		}
+		// Halloween : des chauves-souris, à la tombée du jour et la nuit.
+		if (this.fx('halloween') && night > 0.15) {
+			for (let i = 0; i < 5; i++) {
+				const u = ((this.t * 0.05 + i * 0.23) % 1), x = cw * (1.1 - u * 1.2), y = ch * (0.12 + 0.18 * Math.sin(i * 2.1)) + Math.sin(this.t * 2 + i) * 14 * s;
+				const flap = Math.sin(this.t * 14 + i * 2);
+				ctx.fillStyle = 'rgba(30,24,34,0.9)';
+				ctx.beginPath();
+				ctx.moveTo(x, y);
+				ctx.quadraticCurveTo(x - 9 * s, y - 8 * s * flap, x - 16 * s, y - 2 * s * flap);
+				ctx.quadraticCurveTo(x - 10 * s, y + 2 * s, x, y + 3 * s);
+				ctx.quadraticCurveTo(x + 10 * s, y + 2 * s, x + 16 * s, y - 2 * s * flap);
+				ctx.quadraticCurveTo(x + 9 * s, y - 8 * s * flap, x, y);
+				ctx.fill();
+			}
+		}
+		ctx.restore();
+	}
+
+	/** Un œuf de Pâques caché au pied d'un objet : seule sa moitié dépasse. */
+	drawEgg(ctx, e) {
+		const t = this.t, found = e.found ? Math.min(1, (t - e.found) / 1.2) : 0;
+		const cols = [['#E86A8A', '#FBE07A'], ['#5AA8E0', '#FBF2D0'], ['#8ACB5A', '#F4B42E'], ['#B07AD8', '#FBF2D0']][Math.floor(e.phase) % 4];
+		ctx.save();
+		ctx.translate(e.x + e.side * 4, e.y - found * 30);
+		ctx.globalAlpha = 1 - found * found;
+		ctx.rotate(e.side * 0.25 + Math.sin(t * 2 + e.phase) * 0.05);
+		ctx.fillStyle = cols[0];
+		ctx.beginPath(); ctx.ellipse(0, -7, 5.5, 7.5, 0, 0, Math.PI * 2); ctx.fill();
+		ctx.strokeStyle = cols[1]; ctx.lineWidth = 1.6;
+		ctx.beginPath(); ctx.moveTo(-5, -8); ctx.quadraticCurveTo(0, -5, 5, -8); ctx.moveTo(-4.6, -4); ctx.quadraticCurveTo(0, -1, 4.6, -4); ctx.stroke();
+		ctx.fillStyle = 'rgba(255,255,255,0.5)'; ctx.beginPath(); ctx.ellipse(-2, -10, 1.4, 2.4, 0, 0, Math.PI * 2); ctx.fill();
+		ctx.restore();
+		if (found && !e.burst) { e.burst = true; this.burst(e.x, e.y - 10, 14, cols[0]); }
 	}
 
 	// ─── Noël ───
@@ -4418,6 +4746,10 @@ export class Garden {
 			if (wx + box.w < v.x0 || wx - box.w > v.x0 + v.w || wy - box.ay > v.y0 + v.h + 20 || wy + 30 < v.y0) continue;
 			entities.push({ plant: p, x: wx, y: wy });
 		}
+		// Les décors de fête posés au sol (ménorah, feu, citrouilles, lampes à huile).
+		if (this.fetes?.size && !this.state.intro) for (const d of this.feteDecor()) {
+			if (d.x > v.x0 - 60 && d.x < v.x0 + v.w + 60 && d.y > v.y0 - 40 && d.y < v.y0 + v.h + 120) entities.push({ fdeco: d, x: d.x, y: d.y });
+		}
 		// Le bonhomme de neige : il apparaît quand il y a assez de neige au sol, près de la maison.
 		if (this.snowCover() > 0.35 && !this.state.intro) {
 			const home = this.items.find(i => i.kind === 'cabane') ?? this.items.find(i => i.kind === 'ruche');
@@ -4427,13 +4759,13 @@ export class Garden {
 			}
 		}
 		// Les lutins de Noël se cachent juste derrière un objet : dessinés avant lui, il les cache en partie.
-		if (this.fete === 'noel') for (const e of this.elves ?? []) {
+		if (this.fx('noel') || this.fx('paques')) for (const e of this.elves ?? []) {
 			if (e.found && this.t - e.found > 1.2) continue;
 			const it = this.items.find(i => i.id === e.item);
 			if (!it) continue;
 			const box = itemBox(it.kind, it.level);
 			// Sa tête dépasse du bord de l'objet, à mi-hauteur ; il est rangé juste derrière lui.
-			e.x = it.x + e.side * box.w * 0.34; e.y = it.y - box.ay * 0.3;
+			e.x = it.x + e.side * box.w * 0.34; e.y = e.egg ? it.y - 3 : it.y - box.ay * 0.3;
 			if (e.x > v.x0 - 60 && e.x < v.x0 + v.w + 60 && e.y > v.y0 - 40 && e.y < v.y0 + v.h + 160) entities.push({ elf: e, x: e.x, y: it.y - 2 });
 		}
 		for (const it of this.items) if (it !== this.lifted && it.x > v.x0 - 120 && it.x < v.x0 + v.w + 120 && it.y > v.y0 - 40 && it.y < v.y0 + v.h + 200) entities.push({ item: it, x: it.x, y: it.y });
@@ -4444,8 +4776,9 @@ export class Garden {
 		entities.sort((a, b) => a.y - b.y);
 
 		for (const e of entities) {
-			if (e.elf) { world(); this.drawElf(ctx, e.elf); continue; }
+			if (e.elf) { world(); if (e.elf.egg) this.drawEgg(ctx, e.elf); else this.drawElf(ctx, e.elf); continue; }
 			if (e.snowman) { world(); this.drawSnowman(ctx, e.x, e.y); continue; }
+			if (e.fdeco) { world(); this.drawFeteDeco(ctx, e.fdeco); continue; }
 			if (e.critter) {
 				world();
 				this.drawInsect(ctx, e.critter);
@@ -4473,7 +4806,8 @@ export class Garden {
 				ctx.drawImage(isp.canvas, -box.ax, -box.ay, box.w, box.h);
 				if (!glyph && it.kind === 'mare') this.pondLife(ctx, 0.75, it.x);
 				if (this.snowCover() > 0.25) this.drawSnowCap(ctx, isp.canvas, box, isp.canvas);
-				if (this.fete === 'noel') this.drawXmasItem(ctx, it, isp, box);
+				if (this.fx('noel')) this.drawXmasItem(ctx, it, isp, box);
+				if (this.fetes?.size) this.drawFeteItem(ctx, it, isp, box);
 				continue;
 			}
 			if (e.decor) {
@@ -4543,7 +4877,10 @@ export class Garden {
 				ctx.translate(0, cut); ctx.transform(1, 0, shear, 1, 0, 0); ctx.translate(0, -cut);
 				ctx.drawImage(img.canvas, -box.ax, -box.ay, box.w, box.h);
 				if (this.snowCover() > 0.25) this.drawSnowCap(ctx, s.canvas, box, s, -box.ay * 0.42);
-				if (this.fete === 'noel' && s.stage >= STAGES * 0.6) { if (this.xmasTree(p)) this.drawXmasTree(ctx, p, s, box); else this.drawHangingStars(ctx, p, s, box); }
+				if (s.stage >= STAGES * 0.6 && this.fetes?.size) {
+					if (this.fx('noel') && this.xmasTree(p)) this.drawXmasTree(ctx, p, s, box);
+					else { const hs = this.hangStyle(); if (hs) this.drawHangingStars(ctx, p, s, box, hs); }
+				}
 				ctx.restore();
 			} else {
 				ctx.transform(1, 0, shear, 1, 0, 0);
@@ -4626,7 +4963,8 @@ export class Garden {
 
 		if (!glyph) { world(); this.drawAmbient(ctx, v); }
 
-		if (this.fete === 'noel' && !glyph) this.drawSleigh(ctx, cw, ch);
+		if (this.fx('noel') && !glyph) this.drawSleigh(ctx, cw, ch);
+		if (this.fetes?.size && !glyph) { world(); this.drawFeteWorld(ctx, v); this.drawFeteSky(ctx, cw, ch, night); }
 
 		// La nuit, les lanternes et la fenêtre de la cabane s'allument.
 		if (!glyph && night > 0.05) {
