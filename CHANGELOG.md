@@ -3,6 +3,9 @@
 Chaque version, la plus récente en haut. Le site (evolia.sebastienalzamora.workers.dev) est toujours à jour ;
 le Play Store (tests internes) reçoit les versions indiquées « Play ».
 
+## 0.7.92 — 14 novembre 2026
+- Au lancement, plus de flou derrière le logo : un voile de papier clair, léger, qui s'efface avec lui.
+
 ## 0.7.91 — 13 novembre 2026
 - **Plus de fleurs coupées net** : depuis que leurs tiges s'écartent (0.7.86), les grandes touffes (coquelicot, mauve, bourrache, lavande…) débordaient du cadre où chaque plante est peinte, et leurs bords étaient tranchés en ligne droite. Elles ont maintenant un cadre assez large, au jardin comme dans les fiches d'espèces.
 
