@@ -3,6 +3,12 @@
 Chaque version, la plus récente en haut. Le site (evolia.sebastienalzamora.workers.dev) est toujours à jour ;
 le Play Store (tests internes) reçoit les versions indiquées « Play ».
 
+## 0.7.93 — 14 novembre 2026
+- **Chaque habitat a sa portée** : le nichoir voit loin (300), la ruche 220, la mare 220, la haie 200, l'hôtel à insectes 180, le massif tout près (160). Elle était de 200 pour tous. Le cercle doré montre la vraie portée quand on pose ou déplace l'habitat.
+- **Faire grandir un habitat élargit son cercle** : +8 % de portée par niveau (un nichoir remarquable porte à 396).
+- **L'abondance rapporte** : un habitat ne s'arrête plus à 100 % avec trois plantes. Au-delà, il gagne encore, de moins en moins : 125 % avec le double, 150 % au plus avec quatre fois ce qu'il lui faut. Une plante reste partagée entre les habitats qui en vivent : serrer les habitats ou les étaler devient un vrai choix.
+- Équilibre vérifié sur 90 jours simulés (sédentaire, marcheur régulier, grand sportif), sur les mêmes jardins avec les anciennes et les nouvelles règles : personne n'y perd ; +6 à +10 % de production au jour 10, +23 à +52 % au jour 30, +37 à +41 % au jour 90. La part de la marche ne change pas (un km vaut toujours 3 heures de production). Un plafond à 200 % doublait la production : écarté.
+
 ## 0.7.92 — 14 novembre 2026
 - Au lancement, plus de flou derrière le logo : un voile de papier clair, léger, qui s'efface avec lui.
 

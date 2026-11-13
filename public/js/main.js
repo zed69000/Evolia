@@ -16,7 +16,7 @@ import { ITEMS, ITEM_ORDER, itemHelp, itemCost, fitsPlace, CATS, MAX_LEVEL, LEVE
 import { VERSION } from './version.js';
 import { startIntro, INTRO_NECTAR, FLOWER, FLOWER_SEED } from './intro.js';
 import { makeQuiz, quizReady, streakMult, noteAnswer, QUIZ_MIN_PLANTS, QUIZ_MIN_ANIMALS, quizBank } from './quiz.js';
-import { LADDER, isLadder, ladderPrice, ladderLock, nextUpgrade, unitProd, prodPerHour, produce, KM_HOURS, KM_VALUE_H, UPG_AT, REST, plantCover, ownedOf, PER_PARCEL, LEVEL_PROD, LEVEL_KM2, levelPrice, levelsOf, MOMENTS, NEAR_USE, NEAR_R, NEAR_NEED, SYN_PER, SYN_MAX, guildEffect, nearOf, itemProd, GUILD_BONUS } from './habitats.js';
+import { LADDER, isLadder, ladderPrice, ladderLock, nextUpgrade, unitProd, prodPerHour, produce, KM_HOURS, KM_VALUE_H, UPG_AT, REST, plantCover, ownedOf, PER_PARCEL, LEVEL_PROD, LEVEL_KM2, levelPrice, levelsOf, MOMENTS, NEAR_USE, NEAR_R, NEAR_NEED, rangeOf, nearMult, NEAR_MAX, SYN_PER, SYN_MAX, guildEffect, nearOf, itemProd, GUILD_BONUS } from './habitats.js';
 import { exportCode, importCode, backupAge } from './backup.js';
 import { DebugPanel, debugOn, setDebug, debugLog, ago, dur, trace, traceFlush } from './debug.js';
 import { canNotify, askNotify, scheduleReminders, clearReminders } from './notify.js';
@@ -38,7 +38,7 @@ state.placesOpen ??= { prairie: true };
 const garden = new Garden($('#garden'), state);
 garden.idleBonus = sp => visualExtra(state, state.place, sp);
 // L'agencement (nouvelle économie) : chaque habitat de l'échelle vit des plantes à sa portée.
-Object.assign(garden, { nearUse: NEAR_USE, nearR: NEAR_R, nearNeed: NEAR_NEED, synPer: SYN_PER, synMax: SYN_MAX });
+Object.assign(garden, { nearUse: NEAR_USE, nearR: NEAR_R, rangeOf, nearNeed: NEAR_NEED, synPer: SYN_PER, synMax: SYN_MAX });
 /** Remesure le voisinage des habitats d'ici, et ce que les semeurs découverts apportent aux oiseaux. */
 function updateNear() {
 	if (!state.eco2) return;
@@ -1127,7 +1127,7 @@ const TIPS = [
 	{ id: 'gauge', eco2: true, target: '#hud-steps', when: () => prodPerHour(state) > 0,
 		title: 'Ta récolte', text: 'L’hexagone se remplit, puis verse dans ta bourse. Après une sortie, il va vingt fois plus vite.' },
 	{ id: 'near', eco2: true, target: '#btn-deco', when: () => garden.items.some(it => isLadder(it.kind) && nearOf(state, it) < 0.5),
-		title: 'Des plantes autour', text: 'Un habitat produit selon les plantes près de lui. Pose-le là où il y en a, le cercle doré montre sa portée.' },
+		title: 'Des plantes autour', text: 'Un habitat produit selon les plantes dans son cercle doré. Chacun a sa portée : le nichoir voit loin, l’hôtel et le massif tout près.' },
 	{ id: 'roles', eco2: true, target: '#btn-species', when: () => Object.keys(state.species).length >= 6,
 		title: 'Chaque espèce aide', text: 'Touche un animal pour voir ce qu’il t’apporte.' },
 	{ id: 'levels', eco2: true, target: '#btn-deco', when: () => garden.items.some(it => isLadder(it.kind) && (it.level ?? 1) === 1 && (() => { const nx = nextLevel(it); return nx?.ok && (state.nectar ?? 0) >= nx.cost; })()),
@@ -2356,7 +2356,7 @@ function renderPlacing() {
 	const ok = garden.canPlace(placing.kind, garden.ghost.x, garden.ghost.y, placing.item);
 	const ci = garden.cellAt(garden.ghost.x, garden.ghost.y), full = !garden.placeLimit(placing.kind, ci, placing.item);
 	const ni = state.eco2 && isLadder(placing.kind) ? garden.nearInfo(placing.kind, garden.ghost.x, garden.ghost.y, placing.item) : null;
-	$('#placing-hint').textContent = ok && ni ? `Ici : ${Math.round(nearOf(state, { near: ni.near }) * 100)} %${ni.syn ? ` +${Math.round(ni.syn * 100)} %` : ''} · ${nearWhat(placing.kind, ni.counts)}. Cherche le coin le plus fleuri.`
+	$('#placing-hint').textContent = ok && ni ? `Ici : ${Math.round(nearOf(state, { near: ni.near }) * 100)} %${ni.syn ? ` +${Math.round(ni.syn * 100)} %` : ''} · ${nearWhat(placing.kind, ni.counts)}. Plus son cercle est fleuri, plus il produit (jusqu’à ${NEAR_MAX * 100} %).`
 		: ok ? 'Fais-le glisser avec le doigt, puis pose-le.'
 		: full ? `Cette parcelle a déjà ses ${PER_PARCEL[placing.kind]} ${ITEMS[placing.kind].name.replace(/^(Un|Une) /, '').toLowerCase()}${PER_PARCEL[placing.kind] > 1 ? 's' : ''} : pose-le dans une autre parcelle.`
 		: 'Place prise : lâche-le, il trouvera une place libre à côté.';
@@ -2698,6 +2698,7 @@ function habStats(it, nx) {
 	if (it.kind === 'ruche') cells.push([`${hiveBees()}<small>/${hiveCap()}</small>`, 'abeilles']);
 	const tip = pct < 100 ? `Plante ${NEAR_WANT[it.kind]} tout près : il produira plus.`
 		: it.kind === 'ruche' && hiveBees() >= hiveCap() ? 'Tes ruches sont pleines : fais-en grandir une pour accueillir plus d’abeilles.'
+		: pct < NEAR_MAX * 100 ? `Plus il y a de plantes dans son cercle, plus il produit (jusqu’à ${NEAR_MAX * 100} %).${nx?.ok ? ' Le faire grandir élargit son cercle.' : ''}`
 		: nx && !nx.ok ? `Niveau ${nx.level} dès ${nx.km} km parcourus.` : !nx ? 'Il est au plus haut.' : '';
 	const pot = it.kind === 'ruche' ? Math.floor(((state.honeyAcc ?? 0) % 1) * 100) : -1;
 	return `<div class="hab-stats">${cells.map(([v, l]) => `<span><b>${v}</b>${l}</span>`).join('')}</div>${pot >= 0 ? `<div class="hab-pot"><span>Prochain pot de miel</span><i style="--p:${pot}%"></i><b>${pot} %</b></div>` : ''}${tip ? `<small class="item-tip">${tip}</small>` : ''}`;
@@ -2850,7 +2851,7 @@ function simPlace(k) {
 		const sp2 = garden.nearestPlace(k, cx + simRnd(-130, 130), cy + simRnd(-320, 320));
 		if (sp2 && garden.cellAt(sp2[0], sp2[1]) >= 0) cand.push(sp2);
 	}
-	if (tries > 1) cand.sort((a, b) => { const na = garden.nearInfo(k, ...a), nb = garden.nearInfo(k, ...b); return (nb.near * (1 + nb.syn)) - (na.near * (1 + na.syn)); });
+	if (tries > 1) cand.sort((a, b) => { const na = garden.nearInfo(k, ...a), nb = garden.nearInfo(k, ...b); return (nearMult(nb.near) * (1 + nb.syn)) - (nearMult(na.near) * (1 + na.syn)); });
 	for (let t = 0; t < 1 && cand.length; t++) {
 		const spot = cand[0];
 		const it = garden.placeItem(k, spot[0], spot[1], ITEMS[k].turn && Math.random() < 0.5 ? 1 : 0);

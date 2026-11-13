@@ -2781,10 +2781,13 @@ export class Garden {
 	 * Le voisinage d'un habitat de l'échelle placé en (x, y) : les plantes mûres à portée, partagées avec les autres
 	 * habitats qui en vivent aussi, et les massifs proches (pour une ruche ou un hôtel). `except` : l'objet déplacé.
 	 */
-	nearInfo(kind, x, y, except = null, use = this.nearUse) {
+	nearInfo(kind, x, y, except = null, use = this.nearUse, level = except?.level ?? 1) {
 		const U = use?.[kind];
 		if (!U) return null;
-		const R = this.nearR, items = this.items.filter(it => it !== except && use[it.kind]);
+		// Chaque habitat a sa portée (selon sa sorte et son niveau) : la sienne pour ce qu'il compte, celle des autres
+		// pour savoir avec qui il partage une plante.
+		const R = this.rangeOf(kind, level), items = this.items.filter(it => it !== except && use[it.kind]);
+		const reach = items.map(it => this.rangeOf(it.kind, it.level ?? 1));
 		const counts = { herbe: 0, fleur: 0, buisson: 0, arbre: 0 };
 		let green = 0;
 		for (const p of this.place.plants) {
@@ -2793,11 +2796,13 @@ export class Garden {
 			if (Math.hypot(px - x, py - y) > R) continue;
 			counts[p.type]++;
 			// La plante est partagée entre tous les habitats qui en vivent, à portée d'elle.
-			const others = items.filter(it => use[it.kind][p.type] && Math.hypot(it.x - px, it.y - py) <= R).length;
+			let others = 0;
+			for (let i = 0; i < items.length; i++) if (use[items[i].kind][p.type] && Math.hypot(items[i].x - px, items[i].y - py) <= reach[i]) others++;
 			green += U[p.type] / (1 + 0.5 * others);
 		}
 		const massifs = kind === 'ruche' || kind === 'hotel' ? items.filter(it => it.kind === 'massif' && Math.hypot(it.x - x, it.y - y) <= R).length : 0;
-		return { near: Math.min(1, green / this.nearNeed), green, counts, massifs, syn: Math.min(this.synMax, massifs * this.synPer) };
+		// near : points de plantes ÷ besoin, sans plafond (au-delà de 1, l'abondance : voir nearMult).
+		return { near: green / this.nearNeed, green, range: R, counts, massifs, syn: Math.min(this.synMax, massifs * this.synPer) };
 	}
 
 	/** Mesure le voisinage de tous les habitats de l'échelle posés ici (it.near, it.syn), pour la production. */
@@ -4115,7 +4120,7 @@ export class Garden {
 			const rx = box.w * (kind === 'plant' ? 0.25 : 0.42), ry = box.w * (kind === 'plant' ? 0.08 : 0.14);
 			const col = ok ? '95,147,62' : '192,68,47';
 			if (this.nearUse?.[kind]) {
-				const R = this.nearR;
+				const R = this.rangeOf(kind, this.lifted?.level ?? 1);
 				ctx.fillStyle = 'rgba(244,194,62,0.10)';
 				ctx.beginPath(); ctx.ellipse(x, y, R, R, 0, 0, Math.PI * 2); ctx.fill();
 				// L'onde : un anneau qui grandit jusqu'au bord et s'efface.

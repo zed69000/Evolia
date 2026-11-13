@@ -117,8 +117,25 @@ export const NEAR_USE = {
 	mare: { herbe: 0.3, fleur: 1, buisson: 1 },
 	haie: { fleur: 0.5, buisson: 2, arbre: 2 },
 };
-/** Ce qu'il faut autour d'un habitat pour qu'il produise à plein. */
+/** Ce qu'il faut autour d'un habitat pour qu'il produise à plein (100 %). */
 export const NEAR_NEED = 3;
+/**
+ * Chaque habitat a sa portée, selon qui y vit : la mésange va chercher loin, l'abeille sauvage de l'hôtel reste près
+ * de son nid, le massif ne compte que ce qui le touche presque. La portée grandit de 8 % par niveau de l'habitat.
+ * Le placement devient un choix : un nichoir couvre large (et partage ses plantes avec plus de voisins), un hôtel
+ * demande un coin fleuri bien à lui.
+ */
+export const NEAR_RANGE = { massif: 160, ruche: 220, hotel: 180, nichoir: 300, mare: 220, haie: 200 };
+export const RANGE_PER_LEVEL = 0.08;
+export const rangeOf = (kind, level = 1) => Math.round((NEAR_RANGE[kind] ?? NEAR_R) * (1 + RANGE_PER_LEVEL * (Math.min(5, Math.max(1, level)) - 1)));
+/**
+ * Au-delà de ce qu'il lui faut, un habitat profite encore de l'abondance, de moins en moins : 100 % avec 3 points de
+ * plantes, 125 % avec 6, 150 % avec 12 (le plafond). Entourer un habitat de plantes, ou le poser au cœur d'un coin
+ * touffu, rapporte donc toujours ; mais chaque plante est partagée entre les habitats qui en vivent.
+ * Plafond à 150 % (et non 200 %) : simulé sur 90 jours, 200 % doublait la production d'un marcheur régulier.
+ */
+export const NEAR_RICH = 12, NEAR_MAX = 1.5;
+export const nearMult = r => r <= 1 ? Math.max(0, r) : Math.min(NEAR_MAX, 1 + (NEAR_MAX - 1) * Math.log(r) / Math.log(NEAR_RICH / NEAR_NEED));
 /** Une ruche ou un hôtel gagne 20 % par massif mellifère tout proche (60 % au plus) : les butineurs y mangent. */
 export const SYN_PER = 0.2, SYN_MAX = 0.6;
 const POLLINATED = new Set(['massif', 'ruche', 'hotel']);
@@ -154,8 +171,9 @@ export const guildEffect = state => {
 		sow: n.semeur + (m === 'hiver' ? 4 : 0), // les oiseaux sèment plus souvent
 	};
 };
-/** Le voisinage d'un habitat posé (0 à 1), calculé par le jardin (it.near) ; 1 tant qu'il n'a pas été mesuré. */
-export const nearOf = (state, it) => Math.min(1, (it.near ?? 1) * guildEffect(state).guard);
+/** Le voisinage d'un habitat posé (0 à 2 : 1 = ce qu'il lui faut, au-delà c'est l'abondance), d'après it.near mesuré
+ * par le jardin (points de plantes ÷ besoin) ; 1 tant qu'il n'a pas été mesuré. */
+export const nearOf = (state, it) => nearMult((it.near ?? 1) * guildEffect(state).guard);
 
 /** Ce que les plantes permettent : les habitats ne produisent pleinement qu'avec deux plantes chacun, au moins. */
 export function plantCover(state) {
@@ -172,7 +190,7 @@ export function itemProd(state, it, ge = guildEffect(state)) {
 	if (!LADDER[it.kind]) return 0;
 	const bio = 1 + Object.keys(state.species ?? {}).length / 100;
 	const fam = POLLINATED.has(it.kind) ? ge.pollen : 1;
-	return unitProd(state, it.kind) * LEVEL_PROD[Math.min(5, it.level ?? 1)] * Math.min(1, (it.near ?? 1) * ge.guard) * (1 + (it.syn ?? 0)) * bio * fam;
+	return unitProd(state, it.kind) * LEVEL_PROD[Math.min(5, it.level ?? 1)] * nearMult((it.near ?? 1) * ge.guard) * (1 + (it.syn ?? 0)) * bio * fam;
 }
 
 /** La production du jardin, en nectar par heure d'élan, tous habitats confondus ; `byKind` détaille par habitat. */
