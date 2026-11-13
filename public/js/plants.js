@@ -874,6 +874,16 @@ function paintFleur(ctx, g, seed, L, env = {}) {
 	return paintFleurOne(ctx, g, seed, L, env);
 }
 
+/**
+ * Le cadre où l'on peint une plante (son image). Les grandes fleurs écartent et penchent leurs tiges : leur touffe
+ * déborde du cadre d'une fleur (jusqu'à 80 de chaque côté), on leur donne un cadre plus large, sinon elle est coupée net.
+ */
+const WIDE_FLOWER = { w: 176, h: 140, ax: 88, ay: 126 };
+export function plantArt(p) {
+	if (p.type === 'fleur' && !p.single && (lookOf(p).h?.[1] ?? 60) >= 40) return WIDE_FLOWER;
+	return PLANT_TYPES[p.type].box;
+}
+
 const PAINTERS = { herbe: paintHerbe, fleur: paintFleur, buisson: paintBuisson, arbre: paintArbre };
 
 export function lookOf(p) {

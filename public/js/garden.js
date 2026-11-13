@@ -5,7 +5,7 @@
 // le monde les décale de l'origine de la parcelle (colonne × PARCEL_W, rangée × PARCEL_H).
 
 import { rng, wash, rgba, mix, paperTexture, lerp, blurred } from './watercolor.js';
-import { PLANT_TYPES, DECOR, DECOR_PAINTERS, paintPlant, paintTurf, newVariant, lookOf } from './plants.js';
+import { PLANT_TYPES, DECOR, DECOR_PAINTERS, paintPlant, paintTurf, newVariant, lookOf, plantArt } from './plants.js';
 import { drawCritter, CRITTER_SIZE, FLIGHT } from './critters.js';
 import { GAIT, strideOf, HEN_LOOKS, drawFromSheet, loadSheets, SHEETS, sheetIdOf } from './beasts.js';
 import { SPECIES, PLACE_BY_ID, speciesOf, unlocked } from './species.js';
@@ -1331,7 +1331,7 @@ export class Garden {
 			return s ?? null;
 		}
 		if (!s || s.stage !== stage) {
-			const box = PLANT_TYPES[p.type].box;
+			const box = plantArt(p);
 			const D = this.density * (detail ? DETAIL_DENSITY : 1);
 			const c = s?.canvas ?? document.createElement('canvas');
 			c.width = Math.ceil(box.w * D);
@@ -3970,7 +3970,8 @@ export class Garden {
 				ctx.restore();
 			} else {
 				ctx.transform(1, 0, shear, 1, 0, 0);
-				ctx.drawImage(img.canvas, -box.ax, -box.ay, box.w, box.h);
+				const art = plantArt(p);
+				ctx.drawImage(img.canvas, -art.ax, -art.ay, art.w, art.h);
 			}
 		}
 
@@ -4105,7 +4106,8 @@ export class Garden {
 			world();
 			ctx.globalAlpha = 0.6;
 			const img = kind === 'plant' ? this.spriteFor(this.ghost.plant, false)?.canvas : this.itemSprite(kind, this.ghost.rot, this.lifted?.kind === 'potager' ? null : this.lifted).canvas;
-			if (img) ctx.drawImage(img, x - box.ax, y - box.ay, box.w, box.h);
+			const art = kind === 'plant' ? plantArt(this.ghost.plant) : box;
+			if (img) ctx.drawImage(img, x - art.ax, y - art.ay, art.w, art.h);
 			ctx.globalAlpha = 1;
 			// Le pied de l'objet et sa portée bougent doucement : pointillés qui tournent, halo qui respire, et une onde
 			// qui part du centre vers le bord de la portée. On les voit tout de suite, même sur un jardin chargé.

@@ -3,6 +3,9 @@
 Chaque version, la plus récente en haut. Le site (evolia.sebastienalzamora.workers.dev) est toujours à jour ;
 le Play Store (tests internes) reçoit les versions indiquées « Play ».
 
+## 0.7.91 — 13 novembre 2026
+- **Plus de fleurs coupées net** : depuis que leurs tiges s'écartent (0.7.86), les grandes touffes (coquelicot, mauve, bourrache, lavande…) débordaient du cadre où chaque plante est peinte, et leurs bords étaient tranchés en ligne droite. Elles ont maintenant un cadre assez large, au jardin comme dans les fiches d'espèces.
+
 ## 0.7.90 — 13 novembre 2026
 - **Le cercle se voit quand on pose ou déplace un objet** : le pied de l'objet respire doucement et ses pointillés tournent (vert si la place est bonne, rouge sinon) ; la portée d'un habitat a un bord doré bien marqué, et une onde part du centre vers ce bord.
 

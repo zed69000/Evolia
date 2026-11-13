@@ -1,7 +1,7 @@
 // Encyclopédie de la biodiversité, lieu par lieu : les espèces découvertes, leur rôle et comment les aider.
 
 import { SPECIES, PLACES, PLACE_BY_ID, placeOpen } from './species.js';
-import { PLANT_TYPES, DECOR, DECOR_PAINTERS, paintPlant } from './plants.js';
+import { PLANT_TYPES, DECOR, DECOR_PAINTERS, paintPlant, plantArt } from './plants.js';
 import { drawCritter } from './critters.js';
 
 const KINDS = { plante: 'Plante', animal: 'Animal', milieu: 'Milieu' };
@@ -32,8 +32,9 @@ export function thumb(sp, size, locked) {
 		g.scale(k, k);
 	};
 	if (sp.kind === 'plante') {
-		fit(PLANT_TYPES[sp.type].box);
-		paintPlant(g, { type: sp.type, seed: 4242, variant: { species: sp.id } }, 1);
+		const pl = { type: sp.type, seed: 4242, variant: { species: sp.id } };
+		fit(plantArt(pl));
+		paintPlant(g, pl, 1);
 	} else if (sp.kind === 'milieu') {
 		fit(DECOR[sp.decor].box);
 		DECOR_PAINTERS[sp.decor](g);
