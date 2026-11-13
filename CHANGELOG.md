@@ -3,6 +3,9 @@
 Chaque version, la plus récente en haut. Le site (evolia.sebastienalzamora.workers.dev) est toujours à jour ;
 le Play Store (tests internes) reçoit les versions indiquées « Play ».
 
+## 0.7.90 — 13 novembre 2026
+- **Le cercle se voit quand on pose ou déplace un objet** : le pied de l'objet respire doucement et ses pointillés tournent (vert si la place est bonne, rouge sinon) ; la portée d'un habitat a un bord doré bien marqué, et une onde part du centre vers ce bord.
+
 ## 0.7.89 — 13 novembre 2026
 - **La fiche d'un habitat se lit d'un coup d'œil** : son niveau à côté du nom, puis quelques cases (nectar par heure d'élan, voisinage, bonus des massifs, abeilles pour la ruche), une barre pour le prochain pot de miel, et un seul conseil, celui qui compte maintenant. Le gain du prochain niveau est écrit sur le bouton « Faire grandir ».
 - Le réglage « Miel récolté » de la ruche ne déborde plus de la fiche : ses boutons − et + sont redevenus ronds.

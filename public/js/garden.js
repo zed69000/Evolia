@@ -4107,25 +4107,46 @@ export class Garden {
 			const img = kind === 'plant' ? this.spriteFor(this.ghost.plant, false)?.canvas : this.itemSprite(kind, this.ghost.rot, this.lifted?.kind === 'potager' ? null : this.lifted).canvas;
 			if (img) ctx.drawImage(img, x - box.ax, y - box.ay, box.w, box.h);
 			ctx.globalAlpha = 1;
-			ctx.strokeStyle = ok ? 'rgba(95,147,62,0.9)' : 'rgba(192,68,47,0.9)';
-			ctx.lineWidth = 2.5 / this.cam.z;
-			ctx.setLineDash([6 / this.cam.z, 5 / this.cam.z]);
-			ctx.beginPath();
-			ctx.ellipse(x, y, box.w * (kind === 'plant' ? 0.25 : 0.42), box.w * (kind === 'plant' ? 0.08 : 0.14), 0, 0, Math.PI * 2);
-			ctx.stroke();
-			ctx.setLineDash([]);
-			ctx.fillStyle = ok ? 'rgba(95,147,62,0.18)' : 'rgba(192,68,47,0.14)';
-			ctx.fill();
+			// Le pied de l'objet et sa portée bougent doucement : pointillés qui tournent, halo qui respire, et une onde
+			// qui part du centre vers le bord de la portée. On les voit tout de suite, même sur un jardin chargé.
+			const z = this.cam.z, t = this.t, pulse = 0.5 + 0.5 * Math.sin(t * 4);
+			const rx = box.w * (kind === 'plant' ? 0.25 : 0.42), ry = box.w * (kind === 'plant' ? 0.08 : 0.14);
+			const col = ok ? '95,147,62' : '192,68,47';
 			if (this.nearUse?.[kind]) {
-				// Sa portée : les plantes dans ce cercle le font produire.
-				ctx.setLineDash([3 / this.cam.z, 7 / this.cam.z]);
-				ctx.strokeStyle = 'rgba(244,194,62,0.85)';
-				ctx.lineWidth = 2 / this.cam.z;
-				ctx.beginPath();
-				ctx.ellipse(x, y, this.nearR, this.nearR, 0, 0, Math.PI * 2);
+				const R = this.nearR;
+				ctx.fillStyle = 'rgba(244,194,62,0.10)';
+				ctx.beginPath(); ctx.ellipse(x, y, R, R, 0, 0, Math.PI * 2); ctx.fill();
+				// L'onde : un anneau qui grandit jusqu'au bord et s'efface.
+				const w = (t * 0.6) % 1;
+				ctx.strokeStyle = `rgba(244,194,62,${0.55 * (1 - w)})`;
+				ctx.lineWidth = 3 / z;
+				ctx.beginPath(); ctx.ellipse(x, y, R * (0.25 + 0.75 * w), R * (0.25 + 0.75 * w), 0, 0, Math.PI * 2); ctx.stroke();
+				// Le bord : un trait clair dessous, des pointillés dorés qui tournent dessus.
+				ctx.strokeStyle = 'rgba(255,250,235,0.7)';
+				ctx.lineWidth = 5 / z;
+				ctx.beginPath(); ctx.ellipse(x, y, R, R, 0, 0, Math.PI * 2); ctx.stroke();
+				ctx.setLineDash([10 / z, 7 / z]);
+				ctx.lineDashOffset = -t * 24 / z;
+				ctx.strokeStyle = `rgba(226,160,30,${0.75 + 0.25 * pulse})`;
+				ctx.lineWidth = 3 / z;
 				ctx.stroke();
 				ctx.setLineDash([]);
+				ctx.lineDashOffset = 0;
 			}
+			ctx.beginPath();
+			ctx.ellipse(x, y, rx * (1 + 0.06 * pulse), ry * (1 + 0.06 * pulse), 0, 0, Math.PI * 2);
+			ctx.fillStyle = `rgba(${col},${0.16 + 0.14 * pulse})`;
+			ctx.fill();
+			ctx.strokeStyle = 'rgba(255,250,235,0.75)';
+			ctx.lineWidth = 5 / z;
+			ctx.stroke();
+			ctx.setLineDash([7 / z, 5 / z]);
+			ctx.lineDashOffset = -t * 18 / z;
+			ctx.strokeStyle = `rgba(${col},0.95)`;
+			ctx.lineWidth = 3 / z;
+			ctx.stroke();
+			ctx.setLineDash([]);
+			ctx.lineDashOffset = 0;
 		}
 
 		world();
