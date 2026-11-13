@@ -76,7 +76,7 @@ td.num { font-variant-numeric: tabular-nums; text-align: right; }
 <div class="wrap">
   <header>
     <h1>Équilibre d'Evolia</h1>
-    <p>Le modèle de l'économie actuelle du jeu (version 0.7.72). L'activité physique est le moteur : elle rapporte du nectar, met les habitats au travail (l'élan) et ouvre les grands habitats et les parcelles. Choisis un joueur, déplace les curseurs, et regarde ce que donnent ses 90 premiers jours.</p>
+    <p>Le modèle de l'économie actuelle du jeu (version 0.7.97 : cercles des habitats plus petits au départ, qui grandissent avec le niveau). L'activité physique est le moteur : elle rapporte du nectar, met les habitats au travail (l'élan) et ouvre les grands habitats et les parcelles. Choisis un joueur, déplace les curseurs, et regarde ce que donnent ses 90 premiers jours.</p>
   </header>
 
   <div class="grid">
@@ -86,7 +86,7 @@ td.num { font-variant-numeric: tabular-nums; text-align: right; }
       <div class="ctl"><label for="km">Kilomètres par jour <output id="km-o"></output></label><input id="km" type="range" min="0.2" max="20" step="0.1" value="3.5"><small>En moyenne, les jours de sortie.</small></div>
       <div class="ctl"><label for="days-out">Jours de sortie <output id="days-out-o"></output></label><input id="days-out" type="range" min="0.3" max="1" step="0.05" value="0.85"></div>
       <div class="ctl"><label for="kmh">Allure <output id="kmh-o"></output></label><input id="kmh" type="range" min="3.5" max="12" step="0.5" value="5"><small>Plus vite : plus d'arbustes et d'arbres, et une sortie plus courte (donc moins d'élan).</small></div>
-      <div class="ctl"><label for="near">Voisinage moyen des habitats <output id="near-o"></output></label><input id="near" type="range" min="0.3" max="1" step="0.05" value="0.75"><small>La part de production qu'un habitat tire de ses plantes. Un joueur qui place bien : 65 à 80 %.</small></div>
+      <div class="ctl"><label for="near">Voisinage moyen des habitats <output id="near-o"></output></label><input id="near" type="range" min="0.3" max="1.5" step="0.05" value="0.9"><small>Ce qu'un habitat tire des plantes de son cercle : 100 % quand il en a assez (1,7 point), jusqu'à 150 % dans un coin foisonnant. Mesuré en jeu au jour 90 : 49 % (sédentaire), 107 % (régulier), 126 % (grand sportif). Chaque profil règle sa valeur.</small></div>
       <div class="ctl"><label for="quiz">Bonnes réponses au quiz <output id="quiz-o"></output></label><input id="quiz" type="range" min="0" max="1" step="0.05" value="0.7"></div>
       <h2>Les réglages du jeu</h2>
       <div class="ctl"><label for="kmh-h">Chaque km vaut aussi <output id="kmh-h-o"></output></label><input id="kmh-h" type="range" min="0" max="8" step="0.5" value="3"><small>…heures de production du jardin.</small></div>
@@ -118,11 +118,19 @@ td.num { font-variant-numeric: tabular-nums; text-align: right; }
         <div class="tl"><table><thead><tr><th>Étape</th><th>Jour</th><th>Prix</th></tr></thead><tbody id="tl"></tbody></table></div>
       </section>
 
+      <section class="card" aria-labelledby="c5">
+        <h2 id="c5">Mesuré dans le jeu</h2>
+        <p class="sub">Le joueur simulé du jeu (Options › Outils du développeur), avec les vraies règles : sorties, pousse, achats posés dans le jardin, fiches et quiz. Production en nectar par heure d'élan ; voisinage moyen de ses habitats. Une partie par profil : d'une partie à l'autre, la production varie d'environ 30 % au jour 10, moins ensuite.</p>
+        <div class="tl"><table><thead><tr><th>Profil</th><th>Jour</th><th>Production</th><th>Habitats</th><th>Voisinage</th><th>Espèces</th><th>Avant (0.7.93)</th></tr></thead><tbody id="mes"></tbody></table></div>
+        <p class="sub">Avant : mêmes profils avec les cercles de la 0.7.93 (ruche 220, +8 % par niveau, 3 points pour 100 %). Après : cercles de la 0.7.97 (ruche 150, +15 % par niveau, 1,7 point pour 100 %). Sur les mêmes jardins, recalculés avec les deux règles, la production reste entre 98 et 113 %.</p>
+      </section>
+
       <section class="card notes" aria-labelledby="c4">
         <h2 id="c4">Les règles du modèle</h2>
         <p><b>Habitats</b> (prix de base, nectar par heure d'élan, kilomètres pour l'ouvrir) : massif mellifère (15, 6), ruche (100, 32), hôtel à insectes (600, 120, 2 km), nichoir (5 000, 480, 12 km), mare (50 000, 2 000, 50 km), haie (600 000, 9 600, 150 km). Chaque exemplaire coûte 15 % de plus. Une parcelle en accueille au plus 6 massifs, 3 ruches, 2 hôtels, 3 nichoirs, 1 mare et 2 haies.</p>
         <p><b>Améliorations</b> (production × 2) : neuf par habitat, à 10, 50, 500, 50 000, 5 millions, 500 millions, 50 milliards, 5 billions et 500 billions de fois le prix de base ; elles s'ouvrent au premier exemplaire puis en remplissant 1 à 4 parcelles de cet habitat. <b>Niveaux</b> de chaque habitat posé : production × 1,5, × 2, × 3, × 4, pour 3, 8, 20, 50 fois le prix de base (+15 % par niveau déjà gagné par cette sorte), dès 2, 6, 15, 30 km.</p>
-        <p><b>Production</b> : niveau × améliorations × voisinage (les plantes autour) × (1 + 1 % par espèce) × (1 + 5 % par pollinisateur pour les ruches, massifs et hôtels). Elle tourne à plein pendant l'élan (7 minutes par minute de marche, 8 h au plus), à 5 % au repos.</p>
+        <p><b>Voisinage</b> (0.7.97) : chaque habitat vit des plantes mûres dans son cercle doré, une ellipse un peu plus large que haute. Portée au niveau 1 : massif 110, hôtel 120, haie 140, ruche 150, mare 150, nichoir 200 ; +15 % par niveau (une ruche au niveau 5 : 240). Valeur des plantes : 1 par fleur, 1,5 par arbuste, 1 par arbre pour ruche, massif et hôtel (nichoir 0,3 / 2 / 4 ; mare 0,3 par herbe, 1 par fleur et arbuste ; haie 0,5 / 2 / 2). Il faut 1,7 point pour 100 % ; au-delà, l'abondance rapporte encore, de moins en moins : 125 % avec 3,4 points, 150 % au plus avec 6,8. Une plante à portée de n autres habitats vaut 1 / (1 + 0,5 n). Ruche et hôtel : +20 % par massif dans leur cercle (60 % au plus). Le modèle résume tout cela en un voisinage moyen par profil.</p>
+        <p><b>Production</b> : niveau × améliorations × voisinage (les plantes du cercle) × (1 + 1 % par espèce) × (1 + 5 % par pollinisateur pour les ruches, massifs et hôtels). Elle tourne à plein pendant l'élan (7 minutes par minute de marche, 8 h au plus), à 5 % au repos.</p>
         <p><b>Marche</b> : environ 60 nectar par km, plus 3 heures de la production du jardin par km, plus l'objectif du jour (60 nectar par km d'objectif). <b>Terrain</b> : 4 crans par parcelle (60 nectar, +35 %). <b>Parcelles</b> : 600 nectar puis × 2,3, et des kilomètres d'exploration (1,5 km puis × 1,5).</p>
         <p><b>Espèces</b> : 6, 4, 3 puis 2 par jour (le modèle suppose qu'il y en a toujours une à découvrir). <b>Fiche lue</b> : 10 nectar + 3 par espèce + 6 minutes de production. <b>Quiz</b> (les jours où le joueur achète moins de 3 choses, à partir de 8 espèces) : trois questions, 10 + 3 par espèce + 8 minutes de production par bonne réponse, multipliées par la série (× 1,25, × 1,5… jusqu'à × 2), et une demi-réponse de plus pour un sans-faute ; trois quiz par jour au plus.</p>
         <p>Le joueur achète toujours le terrain et les parcelles dès qu'il peut, puis ce qui rapporte le plus pour son prix. Non compté : la ferme, les défis du jour, le cadeau, les bonus du temps (soleil, pluie, nuit, hiver) et les albums de saison, qui ajoutent un peu de nectar.</p>
@@ -132,7 +140,7 @@ td.num { font-variant-numeric: tabular-nums; text-align: right; }
 </div>
 
 <script>
-// ─── Les règles du jeu (Evolia 0.7.72, habitats.js et main.js) ───
+// ─── Les règles du jeu (Evolia 0.7.97, habitats.js et main.js) ───
 const LADDER = { massif: [15, 6, 0], ruche: [100, 32, 0], hotel: [600, 120, 2], nichoir: [5000, 480, 12], mare: [50000, 2000, 50], haie: [600000, 9600, 150] };
 const NAME = { massif: 'Massif mellifère', ruche: 'Ruche', hotel: 'Hôtel à insectes', nichoir: 'Nichoir', mare: 'Mare', haie: 'Haie' };
 const ORDER = Object.keys(LADDER);
@@ -140,9 +148,11 @@ const CAP = { massif: 6, ruche: 3, hotel: 2, nichoir: 3, mare: 1, haie: 2 };
 const UPG_PARCELS = [0, 1, 1, 2, 2, 3, 3, 4, 4], UPG_COST = [10, 50, 500, 5e4, 5e6, 5e8, 5e10, 5e12, 5e14];
 const LEVEL_PROD = [0, 1, 1.5, 2, 3, 4], LEVEL_PRICE = [0, 0, 3, 8, 20, 50], LEVEL_KM = [0, 0, 2, 6, 15, 30];
 const POLL = new Set(['massif', 'ruche', 'hotel']);
+// Nom, km par jour, part des jours de sortie, allure, voisinage moyen (mesuré par le joueur simulé du jeu, 0.7.97 :
+// 31 à 59 % pour le sédentaire, 72 à 107 % pour le régulier, 99 à 126 % pour le grand sportif ; valeur des jours 30 à 90).
 const PROFILES = [
-  ['Sédentaire', 0.6, 0.45, 3.8], ['Occasionnel', 1.7, 0.6, 4.5], ['Régulier', 3.5, 0.85, 5],
-  ['Rapide', 4.5, 0.85, 6], ['Coureur', 7.5, 0.6, 10], ['Grand sportif', 15, 0.9, 10],
+  ['Sédentaire', 0.6, 0.45, 3.8, 0.45], ['Occasionnel', 1.7, 0.6, 4.5, 0.7], ['Régulier', 3.5, 0.85, 5, 0.9],
+  ['Rapide', 4.5, 0.85, 6, 0.95], ['Coureur', 7.5, 0.6, 10, 1.05], ['Grand sportif', 15, 0.9, 10, 1.2],
 ];
 
 // Un tirage stable : les mêmes jours de sortie à chaque réglage, pour comparer.
@@ -312,12 +322,19 @@ function render() {
 $('presets').innerHTML = PROFILES.map(([n, km, out, kmh], i) => `<button data-i="${i}" aria-pressed="${i === 2}">${n} · ${km.toLocaleString('fr-FR')} km</button>`).join('');
 $('presets').addEventListener('click', e => {
   const b = e.target.closest('button'); if (!b) return;
-  const [, km, out, kmh] = PROFILES[+b.dataset.i];
-  $('km').value = km; $('days-out').value = out; $('kmh').value = kmh;
+  const [, km, out, kmh, near] = PROFILES[+b.dataset.i];
+  $('km').value = km; $('days-out').value = out; $('kmh').value = kmh; $('near').value = near;
   for (const x of $('presets').children) x.setAttribute('aria-pressed', String(x === b));
   render();
 });
-for (const id of Object.keys(ctl)) $(id).addEventListener('input', () => { if (['km', 'days-out', 'kmh'].includes(id)) for (const x of $('presets').children) x.setAttribute('aria-pressed', 'false'); render(); });
+for (const id of Object.keys(ctl)) $(id).addEventListener('input', () => { if (['km', 'days-out', 'kmh', 'near'].includes(id)) for (const x of $('presets').children) x.setAttribute('aria-pressed', 'false'); render(); });
+// Les mesures du joueur simulé (0.7.97), et la même chose en 0.7.93 pour comparer.
+const MEASURED = [
+  ['Sédentaire', [[3, 43, 7, 31, 7, 12], [10, 308, 14, 59, 17, 142], [30, 8974, 33, 31, 61, 16758], [60, 110783, 70, 38, 122, 106535], [90, 197314, 84, 49, 134, 215202]]],
+  ['Régulier', [[3, 418, 16, 99, 19, 497], [10, 11368, 58, 72, 37, 12621], [30, 906693, 135, 78, 77, 1020370], [60, 6012978, 165, 91, 138, 5070764], [90, 8525185, 171, 107, 177, 7971401]]],
+  ['Grand sportif', [[3, 1279, 23, 99, 21, 374], [10, 256252, 119, 104, 38, 57331], [30, 9584266, 188, 116, 79, 8229926], [60, 15359369, 194, 119, 139, 12912482], [90, 20653603, 200, 126, 199, 17631163]]],
+];
+$('mes').innerHTML = MEASURED.map(([n, rows]) => rows.map(([d, prod, hab, near, sp, before], i) => `<tr><td>${i ? '' : n}</td><td>${d}</td><td>${fmt(prod)}</td><td>${hab}</td><td>${near} %</td><td>${sp}</td><td>${fmt(before)}</td></tr>`).join('')).join('');
 matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', render);
 render();
 </script>

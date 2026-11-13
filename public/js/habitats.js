@@ -118,23 +118,25 @@ export const NEAR_USE = {
 	haie: { fleur: 0.5, buisson: 2, arbre: 2 },
 };
 /** Ce qu'il faut autour d'un habitat pour qu'il produise à plein (100 %). */
-export const NEAR_NEED = 3;
+export const NEAR_NEED = 1.7;
 /**
  * Chaque habitat a sa portée, selon qui y vit : la mésange va chercher loin, l'abeille sauvage de l'hôtel reste près
- * de son nid, le massif ne compte que ce qui le touche presque. La portée grandit de 8 % par niveau de l'habitat.
+ * de son nid, le massif ne compte que ce qui le touche presque. Petite au départ (0.7.97 : le cercle d'une ruche neuve
+ * couvrait tout l'écran), elle grandit de 15 % par niveau : faire grandir un habitat se voit dans le jardin.
  * Le placement devient un choix : un nichoir couvre large (et partage ses plantes avec plus de voisins), un hôtel
  * demande un coin fleuri bien à lui.
  */
-export const NEAR_RANGE = { massif: 160, ruche: 220, hotel: 180, nichoir: 300, mare: 220, haie: 200 };
-export const RANGE_PER_LEVEL = 0.08;
+export const NEAR_RANGE = { massif: 110, ruche: 150, hotel: 120, nichoir: 200, mare: 150, haie: 140 };
+export const RANGE_PER_LEVEL = 0.15;
 export const rangeOf = (kind, level = 1) => Math.round((NEAR_RANGE[kind] ?? NEAR_R) * (1 + RANGE_PER_LEVEL * (Math.min(5, Math.max(1, level)) - 1)));
 /**
- * Au-delà de ce qu'il lui faut, un habitat profite encore de l'abondance, de moins en moins : 100 % avec 3 points de
- * plantes, 125 % avec 6, 150 % avec 12 (le plafond). Entourer un habitat de plantes, ou le poser au cœur d'un coin
+ * Au-delà de ce qu'il lui faut, un habitat profite encore de l'abondance, de moins en moins : 100 % avec 1,7 point de
+ * plantes, 125 % avec le double, 150 % avec quatre fois (le plafond). Besoin à 1,7 (et non 3) depuis que les cercles
+ * sont plus petits : simulé sur les mêmes jardins, la production reste entre 98 et 113 % de ce qu'elle était. Entourer un habitat de plantes, ou le poser au cœur d'un coin
  * touffu, rapporte donc toujours ; mais chaque plante est partagée entre les habitats qui en vivent.
  * Plafond à 150 % (et non 200 %) : simulé sur 90 jours, 200 % doublait la production d'un marcheur régulier.
  */
-export const NEAR_RICH = 12, NEAR_MAX = 1.5;
+export const NEAR_RICH = NEAR_NEED * 4, NEAR_MAX = 1.5;
 export const nearMult = r => r <= 1 ? Math.max(0, r) : Math.min(NEAR_MAX, 1 + (NEAR_MAX - 1) * Math.log(r) / Math.log(NEAR_RICH / NEAR_NEED));
 /** Une ruche ou un hôtel gagne 20 % par massif mellifère tout proche (60 % au plus) : les butineurs y mangent. */
 export const SYN_PER = 0.2, SYN_MAX = 0.6;

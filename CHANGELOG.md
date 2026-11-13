@@ -3,6 +3,11 @@
 Chaque version, la plus récente en haut. Le site (evolia.sebastienalzamora.workers.dev) est toujours à jour ;
 le Play Store (tests internes) reçoit les versions indiquées « Play ».
 
+## 0.7.97 — 14 novembre 2026
+- **Des cercles plus petits au départ, qui grandissent avec l'habitat** : au niveau 1, massif 110, hôtel 120, haie 140, ruche 150 (au lieu de 220), mare 150, nichoir 200 ; +15 % par niveau (au lieu de +8 %). Une ruche neuve ne couvre plus tout l'écran, et faire grandir un habitat se voit dans le jardin (une ruche au niveau 5 porte à 240).
+- **Moins de plantes pour produire à plein** : 1,7 point de plantes suffit pour 100 % (au lieu de 3), et l'abondance monte toujours jusqu'à 150 %. Un cercle plus petit garde ainsi la même production.
+- Équilibre vérifié : sur les mêmes jardins, recalculés avec les anciennes et les nouvelles règles, la production reste entre 98 et 113 % ; sur trois parties simulées de 90 jours (sédentaire, régulier, grand sportif), elle reste dans l'écart habituel d'une partie à l'autre. La page « Équilibre d'Evolia » montre ces mesures.
+
 ## 0.7.96 — 14 novembre 2026
 Le cercle doré des habitats, expliqué au joueur :
 - **À la pose**, les trois premières fois : « Le cercle doré, c'est là où tes abeilles vont butiner. Plus il y a de fleurs et arbustes dedans, plus il produit (jusqu'à 150 %). Une plante partagée avec un voisin compte moins. » Chaque habitat dit qui y vit : les butineurs (massif), les abeilles sauvages (hôtel), les mésanges qui chassent les chenilles (nichoir), grenouilles et libellules (mare), hérissons et oiseaux (haie). Ensuite, une ligne courte.
