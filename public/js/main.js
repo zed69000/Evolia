@@ -38,6 +38,8 @@ state.placesOpen ??= { prairie: true };
 const garden = new Garden($('#garden'), state);
 garden.idleBonus = sp => visualExtra(state, state.place, sp);
 // L'agencement (nouvelle économie) : chaque habitat de l'échelle vit des plantes à sa portée.
+// Essai du pinceau : ?brush=1.5 (taille des touches, en unités du jardin), ?brushmix=0.8 (dosage).
+if (params.has('brush')) { garden.brush = parseFloat(params.get('brush')) || 0; garden.brushAmount = params.has('brushmix') ? parseFloat(params.get('brushmix')) : 1; }
 Object.assign(garden, { nearUse: NEAR_USE, nearR: NEAR_R, rangeOf, nearNeed: NEAR_NEED, synPer: SYN_PER, synMax: SYN_MAX });
 /** Remesure le voisinage des habitats d'ici, et ce que les semeurs découverts apportent aux oiseaux. */
 function updateNear() {
