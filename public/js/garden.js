@@ -5,7 +5,6 @@
 // le monde les décale de l'origine de la parcelle (colonne × PARCEL_W, rangée × PARCEL_H).
 
 import { rng, wash, rgba, mix, paperTexture, lerp, blurred } from './watercolor.js';
-import { brushFilter } from './brush.js';
 import { PLANT_TYPES, DECOR, DECOR_PAINTERS, paintPlant, paintTurf, newVariant, lookOf, plantArt } from './plants.js';
 import { drawCritter, CRITTER_SIZE, FLIGHT } from './critters.js';
 import { GAIT, strideOf, HEN_LOOKS, drawFromSheet, loadSheets, SHEETS, sheetIdOf } from './beasts.js';
@@ -1347,8 +1346,6 @@ export class Garden {
 			const g = c.getContext('2d');
 			g.setTransform(D, 0, 0, D, box.ax * D, box.ay * D);
 			const meta = paintPlant(g, p, stage / STAGES, { detail, season: this.season });
-			// Le pinceau (essai) : un Kuwahara anisotrope léger, une fois par image de plante.
-			if (this.brush > 0) brushFilter(c, this.brush * D, this.brushAmount ?? 1);
 			const old = this.meta.get(p.id);
 			const grew = !detail && old && old.stage < stage;
 			if (detail && !this.sprites.has(key)) this.detailCount = (this.detailCount ?? 0) + 1;
