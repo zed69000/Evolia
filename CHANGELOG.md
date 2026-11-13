@@ -3,6 +3,11 @@
 Chaque version, la plus récente en haut. Le site (evolia.sebastienalzamora.workers.dev) est toujours à jour ;
 le Play Store (tests internes) reçoit les versions indiquées « Play ».
 
+## 0.7.98 — 14 novembre 2026
+- **Des saisons plus marquées** : chaque saison a sa lumière et la couleur de son sol, nettement plus visibles : printemps frais et tendre, été doré (il n'avait pas de teinte), automne cuivré, hiver froid et gris-bleu.
+- **La neige tient au sol** : quand il neige, des plaques blanches se posent et finissent en tapis (en une heure environ), puis fondent doucement quand la neige s'arrête (en deux jours s'il gèle, en six heures sinon), même appli fermée.
+- **Des flocons plus gros** et plus nombreux, avec un halo, qui tournent un peu en tombant.
+
 ## 0.7.97 — 14 novembre 2026
 - **Des cercles plus petits au départ, qui grandissent avec l'habitat** : au niveau 1, massif 110, hôtel 120, haie 140, ruche 150 (au lieu de 220), mare 150, nichoir 200 ; +15 % par niveau (au lieu de +8 %). Une ruche neuve ne couvre plus tout l'écran, et faire grandir un habitat se voit dans le jardin (une ruche au niveau 5 porte à 240).
 - **Moins de plantes pour produire à plein** : 1,7 point de plantes suffit pour 100 % (au lieu de 3), et l'abondance monte toujours jusqu'à 150 %. Un cercle plus petit garde ainsi la même production.

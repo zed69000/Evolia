@@ -38,6 +38,8 @@ state.placesOpen ??= { prairie: true };
 const garden = new Garden($('#garden'), state);
 garden.idleBonus = sp => visualExtra(state, state.place, sp);
 // L'agencement (nouvelle économie) : chaque habitat de l'échelle vit des plantes à sa portée.
+// Tests : ?snow=0.8 pose de la neige au sol (0 à 1), sans attendre qu'il neige.
+if (params.has('snow')) garden.snowFixed = Math.max(0, Math.min(1, parseFloat(params.get('snow')) || 0));
 Object.assign(garden, { nearUse: NEAR_USE, nearR: NEAR_R, rangeOf, nearNeed: NEAR_NEED, synPer: SYN_PER, synMax: SYN_MAX });
 /** Remesure le voisinage des habitats d'ici, et ce que les semeurs découverts apportent aux oiseaux. */
 function updateNear() {

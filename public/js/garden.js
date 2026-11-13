@@ -653,7 +653,7 @@ export class Garden {
 	/** Saison du moment : elle recolore feuillages et sols ; on repeint quand elle change. */
 	setSeason(s) {
 		this.season = s;
-		const key = ['autumn', 'winter', 'spring'].map(k => Math.round((s[k] ?? 0) * 10)).join('-');
+		const key = ['autumn', 'winter', 'spring', 'summer'].map(k => Math.round((s[k] ?? 0) * 10)).join('-');
 		if (key !== this.seasonKey) {
 			this.seasonKey = key;
 			this.sprites.clear();
@@ -665,7 +665,11 @@ export class Garden {
 	groundColor(c) {
 		const s = this.season;
 		if (!s) return c;
-		return mix(mix(c, '#B8A060', (s.autumn ?? 0) * 0.16), '#A8B098', (s.winter ?? 0) * 0.3);
+		// Le sol suit la saison : plus frais au printemps, doré en été, roux en automne, gris-bleu en hiver.
+		let g = mix(c, '#8EC25A', (s.spring ?? 0) * 0.12);
+		g = mix(g, '#C8B868', (s.summer ?? 0) * 0.14);
+		g = mix(g, '#BE9A56', (s.autumn ?? 0) * 0.3);
+		return mix(g, '#A9B4A4', (s.winter ?? 0) * 0.45);
 	}
 
 	/**
@@ -3692,11 +3696,12 @@ export class Garden {
 		const amount = this.precip();
 		if (amount > 0) {
 			const snow = k === 'snow';
-			const rate = (snow ? 40 : 160) * amount * Math.min(4, (v.w * v.h) / (420 * 900));
+			const rate = (snow ? 70 : 160) * amount * Math.min(4, (v.w * v.h) / (420 * 900));
 			for (let i = 0; i < rate * dt && this.drops.length < 450; i++) {
-				this.drops.push({ x: v.x0 - 40 + Math.random() * (v.w + 80), y: v.y0 - 20 - Math.random() * 40, z: 0.6 + Math.random() * 0.6, snow, ground: v.y0 + Math.random() * v.h, ph: Math.random() * 6.28 });
+				this.drops.push({ x: v.x0 - 40 + Math.random() * (v.w + 80), y: v.y0 - 20 - Math.random() * 40, z: 0.6 + Math.random() * 0.6, snow, ground: v.y0 + Math.random() * v.h, ph: Math.random() * 6.28, r: 1.6 + Math.random() * 2.2 });
 			}
 		}
+		this.updateSnowCover(dt);
 		const wind = Math.min(40, this.weather.wind ?? 10);
 		for (const d of this.drops) {
 			if (d.splash != null) { d.splash += dt * 3; continue; }
@@ -3709,16 +3714,77 @@ export class Garden {
 		this.flash = Math.max(0, this.flash - dt * 3);
 	}
 
+	/**
+	 * La neige au sol (0 à 1), gardée dans la partie : elle tient quand il neige (pleine en une heure environ), puis fond
+	 * doucement (en deux jours s'il gèle, en six heures sinon), appli fermée comprise. `snowFixed` la force (tests).
+	 */
+	snowCover() {
+		if (this.snowFixed != null) return this.snowFixed;
+		return this.state.snowCover?.v ?? 0;
+	}
+
+	updateSnowCover(dt) {
+		if (this.snowFixed != null || this.state.intro) return;
+		const S = this.state.snowCover ??= { v: 0, t: Date.now() };
+		const now = Date.now();
+		// Le temps passé appli fermée : la neige a fondu entre-temps.
+		const away = Math.max(0, (now - S.t) / 1000 - dt);
+		const temp = this.weather.temp, cold = temp != null ? temp <= 1 : (this.season?.winter ?? 0) > 0.5;
+		const melt = 1 / (cold ? 172800 : 21600);
+		if (away > 5) S.v = Math.max(0, S.v - away * melt);
+		if (this.weather.kind === 'snow') S.v = Math.min(1, S.v + dt * this.precip() / 3600);
+		else if (S.v > 0) S.v = Math.max(0, S.v - dt * melt);
+		S.t = now;
+	}
+
+	/**
+	 * La couche de neige d'une case du sol, pour un niveau donné (5 niveaux) : des plaques blanches posées sur une grille
+	 * du monde (pas sur la case), pour qu'elles se raccordent sans couture d'une case à l'autre. Mise en cache.
+	 */
+	snowTile(gx, gy, level) {
+		const key = `${gx},${gy}:${level}`;
+		this.snowTiles ??= new Map();
+		let c = this.snowTiles.get(key);
+		if (c) return c;
+		if (this.snowTiles.size > 80) this.snowTiles.clear();
+		const K = 0.25, W = Math.ceil(PARCEL_W * K), H = Math.ceil(PARCEL_H * K), x0 = gx * PARCEL_W, y0 = gy * PARCEL_H;
+		c = document.createElement('canvas');
+		c.width = W; c.height = H;
+		const g = c.getContext('2d');
+		g.scale(K, K);
+		const CELL = 46, M = 70, k = level / 5;
+		const hash = (a, b, s) => { let h = Math.imul(a * 73856093 ^ b * 19349663 ^ s * 83492791, 2654435761) >>> 0; return () => ((h = Math.imul(h ^ (h >>> 15), 2246822507) >>> 0) % 10000) / 10000; };
+		for (let cy = Math.floor((y0 - M) / CELL); cy <= Math.floor((y0 + PARCEL_H + M) / CELL); cy++) {
+			for (let cx = Math.floor((x0 - M) / CELL); cx <= Math.floor((x0 + PARCEL_W + M) / CELL); cx++) {
+				const r = hash(cx, cy, 7);
+				// Peu de neige : quelques plaques ; beaucoup : un tapis presque continu.
+				if (r() > 0.25 + 0.8 * k) continue;
+				const x = cx * CELL + r() * CELL - x0, y = cy * CELL + r() * CELL - y0;
+				const rad = CELL * (0.45 + 0.75 * k) * (0.7 + r() * 0.6);
+				const grd = g.createRadialGradient(x, y, 0, x, y, rad);
+				grd.addColorStop(0, 'rgba(252,253,255,0.95)');
+				grd.addColorStop(0.55, 'rgba(246,249,253,0.75)');
+				grd.addColorStop(1, 'rgba(240,245,252,0)');
+				g.fillStyle = grd;
+				g.beginPath(); g.ellipse(x, y, rad, rad * 0.62, 0, 0, Math.PI * 2); g.fill();
+			}
+		}
+		this.snowTiles.set(key, c);
+		return c;
+	}
+
 	drawWeather(ctx) {
 		if (!this.drops.length) return;
 		const wind = Math.min(40, this.weather.wind ?? 10);
 		ctx.lineCap = 'round';
 		for (const d of this.drops) {
 			if (d.snow) {
-				ctx.fillStyle = 'rgba(253,253,250,0.9)';
-				ctx.beginPath();
-				ctx.arc(d.x, d.y, 1.2 * d.z, 0, Math.PI * 2);
-				ctx.fill();
+				// Un flocon : un halo pâle et un cœur blanc, qui tourne un peu sur lui-même en tombant.
+				const r = (d.r ?? 2) * d.z, wob = 1 + 0.12 * Math.sin(this.t * 3 + d.ph);
+				ctx.fillStyle = 'rgba(255,255,255,0.32)';
+				ctx.beginPath(); ctx.ellipse(d.x, d.y, r * 1.9 * wob, r * 1.9 / wob, 0, 0, Math.PI * 2); ctx.fill();
+				ctx.fillStyle = 'rgba(255,255,253,0.95)';
+				ctx.beginPath(); ctx.ellipse(d.x, d.y, r * wob, r / wob, 0, 0, Math.PI * 2); ctx.fill();
 			} else if (d.splash != null) {
 				ctx.strokeStyle = `rgba(230,240,245,${0.5 * (1 - d.splash)})`;
 				ctx.lineWidth = 0.5;
@@ -3790,6 +3856,14 @@ export class Garden {
 			const tile = this.tileFor(gx, gy, lo);
 			if (tile) ctx.drawImage(tile, gx * PARCEL_W, gy * PARCEL_H, PARCEL_W + seam, PARCEL_H + seam);
 			else { ctx.fillStyle = this.groundColor(GROUND[this.tileAt(gx, gy).biome].base); ctx.fillRect(gx * PARCEL_W, gy * PARCEL_H, PARCEL_W, PARCEL_H); }
+		}
+		// La neige tombée : par-dessus le sol, sous l'eau des ruisseaux et sous les plantes. Sans débord d'une case sur
+		// l'autre : la neige est à demi transparente, un débord doublé se verrait en trait clair.
+		const snowLv = Math.ceil(this.snowCover() * 5);
+		if (snowLv > 0) {
+			ctx.globalAlpha = Math.min(1, 0.55 + 0.1 * snowLv);
+			for (let gy = gy0; gy <= gy1; gy++) for (let gx = gx0; gx <= gx1; gx++) ctx.drawImage(this.snowTile(gx, gy, snowLv), gx * PARCEL_W, gy * PARCEL_H, PARCEL_W, PARCEL_H);
+			ctx.globalAlpha = 1;
 		}
 		if (!glyph) this.drawStreams(ctx, v, gx0, gx1, gy0, gy1);
 		// Ombres de nuages, plus denses par temps couvert. Sous la brume : elles assombrissent le sol, jamais le brouillard.
@@ -4061,8 +4135,8 @@ export class Garden {
 			ctx.fillRect(0, 0, cw, ch);
 		}
 		const se = this.season ?? {};
-		// Automne cuivré, hiver froid et bleuté, printemps à peine plus frais.
-		const grade = [['#F2CFA8', 0.12 * (se.autumn ?? 0)], ['#CCD8EC', 0.16 * (se.winter ?? 0)], ['#EEF6DA', 0.05 * (se.spring ?? 0)]];
+		// Chaque saison a sa lumière : printemps frais et tendre, été doré, automne cuivré, hiver froid et bleuté.
+		const grade = [['#F0BC84', 0.24 * (se.autumn ?? 0)], ['#BFCDEA', 0.28 * (se.winter ?? 0)], ['#E4F2D0', 0.12 * (se.spring ?? 0)], ['#FCE3A6', 0.14 * (se.summer ?? 0)]];
 		ctx.globalCompositeOperation = 'multiply';
 		for (const [c, a] of grade) if (a > 0.005) { ctx.fillStyle = rgba(c, a * day); ctx.fillRect(0, 0, cw, ch); }
 		ctx.globalCompositeOperation = 'source-over';
