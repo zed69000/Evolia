@@ -502,7 +502,8 @@ export function startIntro(c) {
 		await beeHome();
 		c.showModal(`<h2>Ta ruche</h2>
 			<p>Elle accueille <b>3 abeilles</b> pour commencer. Elles font du <b>miel</b>, surtout quand tu bouges, et tu pourras le troquer contre du nectar. Pour en accueillir plus, tu l’amélioreras ou tu poseras une autre ruche.</p>
-			<p>Pour attirer des abeilles, il faut des <b>fleurs</b> : plus il y en a, plus il en vient. Et les fleurs poussent quand tu bouges.</p>
+			<p>Le <b>cercle doré</b> autour d’elle, c’est là que tes abeilles vont butiner : chaque fleur qui pousse dedans lui fait produire plus. Et les fleurs poussent quand tu bouges.</p>
+			<p>Touche ta ruche à tout moment pour revoir son cercle.</p>
 			<button class="btn primary" data-close>Compris</button>`);
 		await until(() => over || $('#modal').hidden);
 	}

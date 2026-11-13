@@ -3,6 +3,13 @@
 Chaque version, la plus récente en haut. Le site (evolia.sebastienalzamora.workers.dev) est toujours à jour ;
 le Play Store (tests internes) reçoit les versions indiquées « Play ».
 
+## 0.7.96 — 14 novembre 2026
+Le cercle doré des habitats, expliqué au joueur :
+- **À la pose**, les trois premières fois : « Le cercle doré, c'est là où tes abeilles vont butiner. Plus il y a de fleurs et arbustes dedans, plus il produit (jusqu'à 150 %). Une plante partagée avec un voisin compte moins. » Chaque habitat dit qui y vit : les butineurs (massif), les abeilles sauvages (hôtel), les mésanges qui chassent les chenilles (nichoir), grenouilles et libellules (mare), hérissons et oiseaux (haie). Ensuite, une ligne courte.
+- En direct sous l'explication : ce qu'il y a dans le cercle, le pourcentage obtenu, le bonus des massifs, et « partagé avec un voisin » quand ses plantes sont aussi dans le cercle d'un autre habitat.
+- **Toucher un habitat posé montre son cercle** pendant quelques secondes. Sa fiche dit « son cercle » au lieu de « voisinage », et rappelle à quoi il sert.
+- Dans l'introduction, la fenêtre « Ta ruche » présente son cercle doré.
+
 ## 0.7.95 — 14 novembre 2026
 L'ouverture d'une nouvelle partie, refaite d'après le story-board de Seb :
 - **Une graine tombe du ciel**, en brillant, et se plante avec un petit choc : la terre saute, deux ondes de poussière s'écartent, la caméra sursaute (et le téléphone vibre un peu). L'oiseau qui la lâchait n'est plus là.

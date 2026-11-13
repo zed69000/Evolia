@@ -660,6 +660,9 @@ html, body {
 }
 .placing-bar b { font: 400 22px Courgette, cursive; color: var(--foret); }
 .placing-bar span { font-size: 13px; color: var(--doux); }
+.placing-bar .ph-what { display: block; line-height: 1.35; }
+.placing-bar span b { font: 800 13px/1.35 Nunito, sans-serif; color: #B07A12; }
+.placing-bar .ph-now { display: block; margin-top: 6px; color: var(--foret); font-weight: 700; }
 .placing-actions { display: flex; gap: 8px; margin-top: 8px; }
 .placing-actions .btn { flex: 1; margin: 0; }
 .placing-actions .btn.primary:disabled { opacity: .5; }

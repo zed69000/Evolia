@@ -2796,7 +2796,7 @@ export class Garden {
 		const R = this.rangeOf(kind, level), items = this.items.filter(it => it !== except && use[it.kind]);
 		const reach = items.map(it => this.rangeOf(it.kind, it.level ?? 1));
 		const counts = { herbe: 0, fleur: 0, buisson: 0, arbre: 0 };
-		let green = 0;
+		let green = 0, raw = 0;
 		for (const p of this.place.plants) {
 			if (p.growth < 1 || !U[p.type]) continue;
 			const [ox, oy] = cellOrigin(cellOf(p)), px = ox + p.x, py = oy + p.y;
@@ -2806,10 +2806,43 @@ export class Garden {
 			let others = 0;
 			for (let i = 0; i < items.length; i++) if (use[items[i].kind][p.type] && nearDist(items[i].x - px, items[i].y - py) <= reach[i]) others++;
 			green += U[p.type] / (1 + 0.5 * others);
+			raw += U[p.type];
 		}
 		const massifs = kind === 'ruche' || kind === 'hotel' ? items.filter(it => it.kind === 'massif' && nearDist(it.x - x, it.y - y) <= R).length : 0;
 		// near : points de plantes ÷ besoin, sans plafond (au-delà de 1, l'abondance : voir nearMult).
-		return { near: green / this.nearNeed, green, range: R, counts, massifs, syn: Math.min(this.synMax, massifs * this.synPer) };
+		return { near: green / this.nearNeed, green, raw, range: R, counts, massifs, syn: Math.min(this.synMax, massifs * this.synPer) };
+	}
+
+	/**
+	 * Le cercle d'un habitat, à sa portée : un voile doré, une onde qui part du centre, un bord en pointillés qui tournent.
+	 * `a` : son opacité (pour l'apparition et la disparition).
+	 */
+	drawRange(ctx, x, y, R, a = 1) {
+		const z = this.cam.z, t = this.t, pulse = 0.5 + 0.5 * Math.sin(t * 4);
+		ctx.save();
+		ctx.globalAlpha = a;
+		ctx.fillStyle = 'rgba(244,194,62,0.10)';
+		ctx.beginPath(); ctx.ellipse(x, y, R * NEAR_RX, R * NEAR_RY, 0, 0, Math.PI * 2); ctx.fill();
+		// L'onde : un anneau qui grandit jusqu'au bord et s'efface.
+		const w = (t * 0.6) % 1;
+		ctx.strokeStyle = `rgba(244,194,62,${0.55 * (1 - w)})`;
+		ctx.lineWidth = 3 / z;
+		ctx.beginPath(); ctx.ellipse(x, y, R * NEAR_RX * (0.25 + 0.75 * w), R * NEAR_RY * (0.25 + 0.75 * w), 0, 0, Math.PI * 2); ctx.stroke();
+		// Le bord : un trait clair dessous, des pointillés dorés qui tournent dessus.
+		ctx.strokeStyle = 'rgba(255,250,235,0.7)';
+		ctx.lineWidth = 5 / z;
+		ctx.beginPath(); ctx.ellipse(x, y, R * NEAR_RX, R * NEAR_RY, 0, 0, Math.PI * 2); ctx.stroke();
+		ctx.setLineDash([10 / z, 7 / z]);
+		ctx.lineDashOffset = -t * 24 / z;
+		ctx.strokeStyle = `rgba(226,160,30,${0.75 + 0.25 * pulse})`;
+		ctx.lineWidth = 3 / z;
+		ctx.stroke();
+		ctx.restore();
+	}
+
+	/** Montre le cercle d'un habitat posé pendant quelques secondes (quand on le touche). */
+	showRange(it, s = 5) {
+		this.rangeShow = it ? { it, t: this.t, until: this.t + s } : null;
 	}
 
 	/** Mesure le voisinage de tous les habitats de l'échelle posés ici (it.near, it.syn), pour la production. */
@@ -4126,27 +4159,7 @@ export class Garden {
 			const z = this.cam.z, t = this.t, pulse = 0.5 + 0.5 * Math.sin(t * 4);
 			const rx = box.w * (kind === 'plant' ? 0.25 : 0.42), ry = box.w * (kind === 'plant' ? 0.08 : 0.14);
 			const col = ok ? '95,147,62' : '192,68,47';
-			if (this.nearUse?.[kind]) {
-				const R = this.rangeOf(kind, this.lifted?.level ?? 1);
-				ctx.fillStyle = 'rgba(244,194,62,0.10)';
-				ctx.beginPath(); ctx.ellipse(x, y, R * NEAR_RX, R * NEAR_RY, 0, 0, Math.PI * 2); ctx.fill();
-				// L'onde : un anneau qui grandit jusqu'au bord et s'efface.
-				const w = (t * 0.6) % 1;
-				ctx.strokeStyle = `rgba(244,194,62,${0.55 * (1 - w)})`;
-				ctx.lineWidth = 3 / z;
-				ctx.beginPath(); ctx.ellipse(x, y, R * NEAR_RX * (0.25 + 0.75 * w), R * NEAR_RY * (0.25 + 0.75 * w), 0, 0, Math.PI * 2); ctx.stroke();
-				// Le bord : un trait clair dessous, des pointillés dorés qui tournent dessus.
-				ctx.strokeStyle = 'rgba(255,250,235,0.7)';
-				ctx.lineWidth = 5 / z;
-				ctx.beginPath(); ctx.ellipse(x, y, R * NEAR_RX, R * NEAR_RY, 0, 0, Math.PI * 2); ctx.stroke();
-				ctx.setLineDash([10 / z, 7 / z]);
-				ctx.lineDashOffset = -t * 24 / z;
-				ctx.strokeStyle = `rgba(226,160,30,${0.75 + 0.25 * pulse})`;
-				ctx.lineWidth = 3 / z;
-				ctx.stroke();
-				ctx.setLineDash([]);
-				ctx.lineDashOffset = 0;
-			}
+			if (this.nearUse?.[kind]) this.drawRange(ctx, x, y, this.rangeOf(kind, this.lifted?.level ?? 1), 1);
 			ctx.beginPath();
 			ctx.ellipse(x, y, rx * (1 + 0.06 * pulse), ry * (1 + 0.06 * pulse), 0, 0, Math.PI * 2);
 			ctx.fillStyle = `rgba(${col},${0.16 + 0.14 * pulse})`;
@@ -4161,6 +4174,14 @@ export class Garden {
 			ctx.stroke();
 			ctx.setLineDash([]);
 			ctx.lineDashOffset = 0;
+		}
+
+		// Un habitat qu'on vient de toucher montre son cercle quelques secondes : là où vivent ses habitants.
+		const rs = this.rangeShow;
+		if (rs && !this.ghost) {
+			const age = this.t - rs.t, a = Math.min(1, age / 0.35) * Math.min(1, (rs.until - this.t) / 0.6);
+			if (a > 0 && this.items.includes(rs.it)) { world(); this.drawRange(ctx, rs.it.x, rs.it.y, this.rangeOf(rs.it.kind, rs.it.level ?? 1), a); }
+			else if (a <= 0) this.rangeShow = null;
 		}
 
 		world();

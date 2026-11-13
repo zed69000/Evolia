@@ -2322,6 +2322,7 @@ function startPlacing(kind, item = null) {
 	$('#btn-place-turn').hidden = !ITEMS[kind].turn;
 	snapPlacing();
 	$('#placing-name').textContent = item ? `Déplacer : ${ITEMS[kind].name.toLowerCase()}` : ITEMS[kind].name;
+	if (state.eco2 && isLadder(kind)) state.circleTips = (state.circleTips ?? 0) + 1;
 	$('#app').classList.add('placing');
 	$('#placing').hidden = false;
 	renderPlacing();
@@ -2356,8 +2357,15 @@ function renderPlacing() {
 	const ok = garden.canPlace(placing.kind, garden.ghost.x, garden.ghost.y, placing.item);
 	const ci = garden.cellAt(garden.ghost.x, garden.ghost.y), full = !garden.placeLimit(placing.kind, ci, placing.item);
 	const ni = state.eco2 && isLadder(placing.kind) ? garden.nearInfo(placing.kind, garden.ghost.x, garden.ghost.y, placing.item) : null;
-	$('#placing-hint').textContent = ok && ni ? `Ici : ${Math.round(nearOf(state, { near: ni.near }) * 100)} %${ni.syn ? ` +${Math.round(ni.syn * 100)} %` : ''} · ${nearWhat(placing.kind, ni.counts)}. Plus son cercle est fleuri, plus il produit (jusqu’à ${NEAR_MAX * 100} %).`
-		: ok ? 'Fais-le glisser avec le doigt, puis pose-le.'
+	if (ok && ni) {
+		// Le cercle doré, expliqué : en entier les premières fois, puis en une ligne ; et ce qu'il y a dedans, en direct.
+		const L = HAB_LIFE[placing.kind], pct = Math.round(nearOf(state, { near: ni.near }) * 100);
+		const full = (state.circleTips ?? 0) <= 3;
+		const intro = full
+			? `<span class="ph-what">Le <b>cercle doré</b>, c’est là où ${L.who} ${L.act}. Plus il y a de ${L.food} dedans, plus il produit (jusqu’à ${NEAR_MAX * 100} %). Une plante partagée avec un voisin compte moins.</span>`
+			: `<span class="ph-what">Cercle doré : là où ${L.who} ${L.act}.</span>`;
+		$('#placing-hint').innerHTML = `${intro}<span class="ph-now">Dans le cercle : ${nearWhat(placing.kind, ni.counts)} → <b>${pct} %</b>${ni.syn ? `, massifs +${Math.round(ni.syn * 100)} %` : ''}${sharedNear(ni) ? ' · partagé avec un voisin' : ''}</span>`;
+	} else $('#placing-hint').textContent = ok ? 'Fais-le glisser avec le doigt, puis pose-le.'
 		: full ? `Cette parcelle a déjà ses ${PER_PARCEL[placing.kind]} ${ITEMS[placing.kind].name.replace(/^(Un|Une) /, '').toLowerCase()}${PER_PARCEL[placing.kind] > 1 ? 's' : ''} : pose-le dans une autre parcelle.`
 		: 'Place prise : lâche-le, il trouvera une place libre à côté.';
 	$('#btn-place').disabled = !ok;
@@ -2693,16 +2701,30 @@ const NEAR_WANT = { massif: 'des fleurs et des arbustes', ruche: 'des fleurs et 
 function habStats(it, nx) {
 	const ni = garden.nearInfo(it.kind, it.x, it.y, it);
 	const pct = ni ? Math.round(nearOf(state, { near: ni.near }) * 100) : 100;
-	const cells = [[fmtInt(itemProd(state, it)), 'nectar / h d’élan'], [`${pct} %`, 'voisinage']];
+	const cells = [[fmtInt(itemProd(state, it)), 'nectar / h d’élan'], [`${pct} %`, 'son cercle']];
 	if (ni?.massifs) cells.push([`+${Math.round(ni.syn * 100)} %`, 'massifs']);
 	if (it.kind === 'ruche') cells.push([`${hiveBees()}<small>/${hiveCap()}</small>`, 'abeilles']);
-	const tip = pct < 100 ? `Plante ${NEAR_WANT[it.kind]} tout près : il produira plus.`
+	const L = HAB_LIFE[it.kind];
+	garden.showRange(it);
+	const tip = pct < 100 ? `Son cercle doré, c’est là où ${L.who} ${L.act}. Plante ${NEAR_WANT[it.kind]} dedans : il produira plus.`
+		: sharedNear(ni) && pct < NEAR_MAX * 100 ? `Une partie de son cercle est partagée avec un voisin : ses plantes comptent moins pour chacun.`
 		: it.kind === 'ruche' && hiveBees() >= hiveCap() ? 'Tes ruches sont pleines : fais-en grandir une pour accueillir plus d’abeilles.'
 		: pct < NEAR_MAX * 100 ? `Plus il y a de plantes dans son cercle, plus il produit (jusqu’à ${NEAR_MAX * 100} %).${nx?.ok ? ' Le faire grandir élargit son cercle.' : ''}`
 		: nx && !nx.ok ? `Niveau ${nx.level} dès ${nx.km} km parcourus.` : !nx ? 'Il est au plus haut.' : '';
 	const pot = it.kind === 'ruche' ? Math.floor(((state.honeyAcc ?? 0) % 1) * 100) : -1;
 	return `<div class="hab-stats">${cells.map(([v, l]) => `<span><b>${v}</b>${l}</span>`).join('')}</div>${pot >= 0 ? `<div class="hab-pot"><span>Prochain pot de miel</span><i style="--p:${pot}%"></i><b>${pot} %</b></div>` : ''}${tip ? `<small class="item-tip">${tip}</small>` : ''}`;
 }
+/** Qui vit autour de chaque habitat, et ce qu'il y fait : c'est ce que montre son cercle doré. */
+const HAB_LIFE = {
+	massif: { who: 'les butineurs', act: 'viennent butiner', food: 'fleurs et arbustes' },
+	ruche: { who: 'tes abeilles', act: 'vont butiner', food: 'fleurs et arbustes' },
+	hotel: { who: 'les abeilles sauvages', act: 'butinent', food: 'fleurs et arbustes' },
+	nichoir: { who: 'les mésanges', act: 'chassent les chenilles', food: 'arbustes et arbres' },
+	mare: { who: 'grenouilles et libellules', act: 'vivent', food: 'herbes, fleurs et arbustes' },
+	haie: { who: 'hérissons et oiseaux', act: 'trouvent à manger', food: 'arbustes et arbres' },
+};
+/** Les plantes à portée sont-elles partagées avec un autre habitat (elles comptent alors moins) ? */
+const sharedNear = ni => ni && ni.raw > 0 && ni.green < ni.raw * 0.97;
 /** La ligne « voisinage » de la fiche d'un habitat posé. */
 function nearLine(it) {
 	const ni = garden.nearInfo(it.kind, it.x, it.y, it);
