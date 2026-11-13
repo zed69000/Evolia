@@ -3,6 +3,9 @@
 Chaque version, la plus récente en haut. Le site (evolia.sebastienalzamora.workers.dev) est toujours à jour ;
 le Play Store (tests internes) reçoit les versions indiquées « Play ».
 
+## 0.8.1 — 14 novembre 2026
+- La nuit reste la nuit quand on dézoome : la vue de loin (la carte du jardin) prend aussi la teinte de l'heure, un peu adoucie pour rester lisible. Elle restait en plein jour.
+
 ## 0.8.0 — 14 novembre 2026
 **Les fêtes du monde au jardin.** Chaque fête décore le jardin toute seule, sans rien à acheter ; plusieurs peuvent tomber ensemble (Noël et Hanoucca, Halloween et Diwali). Les fêtes mobiles ont leurs vraies dates, année par année, jusqu'en 2030.
 - **Hanoucca** : une ménorah près de la cabane, avec une chandelle de plus allumée chaque soir.

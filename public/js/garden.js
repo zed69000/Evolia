@@ -4924,10 +4924,11 @@ export class Garden {
 			ctx.globalAlpha = 1;
 			ctx.globalCompositeOperation = 'source-over';
 		}
-		// Vu de loin, c'est une carte : ni l'heure ni le temps ne l'assombrissent.
-		if (!glyph && !this.state.intro && amb.a > 0.001) {
+		// L'heure colore aussi la vue de loin (la nuit reste la nuit quand on dézoome), un peu adoucie pour que la carte
+		// reste lisible.
+		if (!this.state.intro && amb.a > 0.001) {
 			ctx.globalCompositeOperation = 'multiply';
-			ctx.fillStyle = rgba(amb.color, amb.a);
+			ctx.fillStyle = rgba(amb.color, amb.a * (glyph ? 0.75 : 1));
 			ctx.fillRect(0, 0, cw, ch);
 		}
 		const se = this.season ?? {};
