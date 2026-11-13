@@ -90,7 +90,8 @@ export function startIntro(c) {
 	// reste est bloqué jusqu'à son tour, pour qu'aucun geste ne casse le tutoriel.
 	let allow = null;
 	const guard = e => {
-		if (over || !(e.target instanceof Element)) return;
+		// Seul le jeu est guidé : ce qui est posé hors de #app (rapport de bug du kit, mise à jour) reste cliquable.
+		if (over || !(e.target instanceof Element) || !app.contains(e.target)) return;
 		const ok = ['.intro-cap'];
 		if (allow) ok.push(allow);
 		if (app.classList.contains('placing')) ok.push('#placing', '#garden');
