@@ -174,6 +174,13 @@ export function snapRot(kind, rot) {
 	return TURN_VIEWS.reduce((best, v) => (Math.min(Math.abs(v - r), 360 - Math.abs(v - r)) < Math.min(Math.abs(best - r), 360 - Math.abs(best - r)) ? v : best), 0);
 }
 
+/**
+ * La portée d'un habitat suit la vue du jardin, légèrement plongeante : une ellipse un peu plus large que haute, de
+ * même surface que le cercle (la production ne change pas). Le dessin et le calcul utilisent la même forme.
+ */
+const NEAR_FLAT = 0.75, NEAR_RX = 1 / Math.sqrt(NEAR_FLAT), NEAR_RY = Math.sqrt(NEAR_FLAT);
+const nearDist = (dx, dy) => Math.hypot(dx / NEAR_RX, dy / NEAR_RY);
+
 export class Garden {
 	constructor(canvas, state) {
 		this.canvas = canvas;
@@ -2793,14 +2800,14 @@ export class Garden {
 		for (const p of this.place.plants) {
 			if (p.growth < 1 || !U[p.type]) continue;
 			const [ox, oy] = cellOrigin(cellOf(p)), px = ox + p.x, py = oy + p.y;
-			if (Math.hypot(px - x, py - y) > R) continue;
+			if (nearDist(px - x, py - y) > R) continue;
 			counts[p.type]++;
 			// La plante est partagée entre tous les habitats qui en vivent, à portée d'elle.
 			let others = 0;
-			for (let i = 0; i < items.length; i++) if (use[items[i].kind][p.type] && Math.hypot(items[i].x - px, items[i].y - py) <= reach[i]) others++;
+			for (let i = 0; i < items.length; i++) if (use[items[i].kind][p.type] && nearDist(items[i].x - px, items[i].y - py) <= reach[i]) others++;
 			green += U[p.type] / (1 + 0.5 * others);
 		}
-		const massifs = kind === 'ruche' || kind === 'hotel' ? items.filter(it => it.kind === 'massif' && Math.hypot(it.x - x, it.y - y) <= R).length : 0;
+		const massifs = kind === 'ruche' || kind === 'hotel' ? items.filter(it => it.kind === 'massif' && nearDist(it.x - x, it.y - y) <= R).length : 0;
 		// near : points de plantes ÷ besoin, sans plafond (au-delà de 1, l'abondance : voir nearMult).
 		return { near: green / this.nearNeed, green, range: R, counts, massifs, syn: Math.min(this.synMax, massifs * this.synPer) };
 	}
@@ -4122,16 +4129,16 @@ export class Garden {
 			if (this.nearUse?.[kind]) {
 				const R = this.rangeOf(kind, this.lifted?.level ?? 1);
 				ctx.fillStyle = 'rgba(244,194,62,0.10)';
-				ctx.beginPath(); ctx.ellipse(x, y, R, R, 0, 0, Math.PI * 2); ctx.fill();
+				ctx.beginPath(); ctx.ellipse(x, y, R * NEAR_RX, R * NEAR_RY, 0, 0, Math.PI * 2); ctx.fill();
 				// L'onde : un anneau qui grandit jusqu'au bord et s'efface.
 				const w = (t * 0.6) % 1;
 				ctx.strokeStyle = `rgba(244,194,62,${0.55 * (1 - w)})`;
 				ctx.lineWidth = 3 / z;
-				ctx.beginPath(); ctx.ellipse(x, y, R * (0.25 + 0.75 * w), R * (0.25 + 0.75 * w), 0, 0, Math.PI * 2); ctx.stroke();
+				ctx.beginPath(); ctx.ellipse(x, y, R * NEAR_RX * (0.25 + 0.75 * w), R * NEAR_RY * (0.25 + 0.75 * w), 0, 0, Math.PI * 2); ctx.stroke();
 				// Le bord : un trait clair dessous, des pointillés dorés qui tournent dessus.
 				ctx.strokeStyle = 'rgba(255,250,235,0.7)';
 				ctx.lineWidth = 5 / z;
-				ctx.beginPath(); ctx.ellipse(x, y, R, R, 0, 0, Math.PI * 2); ctx.stroke();
+				ctx.beginPath(); ctx.ellipse(x, y, R * NEAR_RX, R * NEAR_RY, 0, 0, Math.PI * 2); ctx.stroke();
 				ctx.setLineDash([10 / z, 7 / z]);
 				ctx.lineDashOffset = -t * 24 / z;
 				ctx.strokeStyle = `rgba(226,160,30,${0.75 + 0.25 * pulse})`;

@@ -3,6 +3,9 @@
 Chaque version, la plus récente en haut. Le site (evolia.sebastienalzamora.workers.dev) est toujours à jour ;
 le Play Store (tests internes) reçoit les versions indiquées « Play ».
 
+## 0.7.94 — 14 novembre 2026
+- Le cercle de portée d'un habitat suit la vue du jardin, légèrement plongeante : c'est une ellipse un peu plus large que haute (comme le pied de l'objet). Le calcul utilise la même forme, de même surface que l'ancien cercle : ce qui est dans l'ellipse compte, et la production ne change pas.
+
 ## 0.7.93 — 14 novembre 2026
 - **Chaque habitat a sa portée** : le nichoir voit loin (300), la ruche 220, la mare 220, la haie 200, l'hôtel à insectes 180, le massif tout près (160). Elle était de 200 pour tous. Le cercle doré montre la vraie portée quand on pose ou déplace l'habitat.
 - **Faire grandir un habitat élargit son cercle** : +8 % de portée par niveau (un nichoir remarquable porte à 396).
