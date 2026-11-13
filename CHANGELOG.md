@@ -3,6 +3,20 @@
 Chaque version, la plus récente en haut. Le site (evolia.sebastienalzamora.workers.dev) est toujours à jour ;
 le Play Store (tests internes) reçoit les versions indiquées « Play ».
 
+## 0.7.99 — 14 novembre 2026
+**Noël au jardin**, du 1er décembre au 6 janvier, sans rien à acheter :
+- Des **guirlandes lumineuses** de couleur le long des toits et des bords : cabane, poulailler, abri, haies, murets, arche. Elles scintillent, et la nuit chaque ampoule éclaire autour d'elle.
+- **Le sapin du jardin** (les conifères, et l'arbre le plus proche de la cabane) : des boules de couleur, une guirlande dorée et une étoile au sommet qui brille la nuit. Dans les autres arbres, des **étoiles dorées pendent** au bout d'un fil et brillent la nuit.
+- L'épouvantail porte un **bonnet de Noël**.
+- Le **traîneau du père Noël** et ses rennes passent dans le ciel, toutes les deux à cinq minutes, avec une traînée d'étincelles.
+- Chaque jour, **trois lutins se cachent** derrière des objets du jardin : on ne voit que leur tête et leur bonnet qui dépassent. Les trouver rapporte du nectar.
+- Une annonce présente Noël la première fois, et le premier passage du traîneau.
+
+Et toute l'année, en hiver :
+- **La neige se pose sur les toits, les objets, les arbustes et les arbres**, plus épaisse quand il en tombe beaucoup ; au sol, elle devient un vrai tapis.
+- Un **bonhomme de neige** apparaît près de la cabane quand la neige tient.
+- La nuit, la neige garde le bleu de la nuit (plus de voile gris).
+
 ## 0.7.98 — 14 novembre 2026
 - **Des saisons plus marquées** : chaque saison a sa lumière et la couleur de son sol, nettement plus visibles : printemps frais et tendre, été doré (il n'avait pas de teinte), automne cuivré, hiver froid et gris-bleu.
 - **La neige tient au sol** : quand il neige, des plaques blanches se posent et finissent en tapis (en une heure environ), puis fondent doucement quand la neige s'arrête (en deux jours s'il gèle, en six heures sinon), même appli fermée.

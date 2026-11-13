@@ -16,6 +16,7 @@ import { ITEMS, ITEM_ORDER, itemHelp, itemCost, fitsPlace, CATS, MAX_LEVEL, LEVE
 import { VERSION } from './version.js';
 import { startIntro, INTRO_NECTAR, FLOWER, FLOWER_SEED } from './intro.js';
 import { makeQuiz, quizReady, streakMult, noteAnswer, QUIZ_MIN_PLANTS, QUIZ_MIN_ANIMALS, quizBank } from './quiz.js';
+import { FETES, feteAt, feteYear } from './fetes.js';
 import { LADDER, isLadder, ladderPrice, ladderLock, nextUpgrade, unitProd, prodPerHour, produce, KM_HOURS, KM_VALUE_H, UPG_AT, REST, plantCover, ownedOf, PER_PARCEL, LEVEL_PROD, LEVEL_KM2, levelPrice, levelsOf, MOMENTS, NEAR_USE, NEAR_R, NEAR_NEED, rangeOf, nearMult, NEAR_MAX, SYN_PER, SYN_MAX, guildEffect, nearOf, itemProd, GUILD_BONUS } from './habitats.js';
 import { exportCode, importCode, backupAge } from './backup.js';
 import { DebugPanel, debugOn, setDebug, debugLog, ago, dur, trace, traceFlush } from './debug.js';
@@ -40,6 +41,67 @@ garden.idleBonus = sp => visualExtra(state, state.place, sp);
 // L'agencement (nouvelle économie) : chaque habitat de l'échelle vit des plantes à sa portée.
 // Tests : ?snow=0.8 pose de la neige au sol (0 à 1), sans attendre qu'il neige.
 if (params.has('snow')) garden.snowFixed = Math.max(0, Math.min(1, parseFloat(params.get('snow')) || 0));
+// Les fêtes : le jardin se décore tout seul pendant la fête (?fete=noel la force, ?fete=aucune les coupe).
+function updateFete() {
+	const date = garden.dateOverride ? new Date(garden.dateOverride) : new Date();
+	const forced = params.get('fete');
+	garden.fete = forced ? (FETES[forced] ? forced : null) : feteAt(date);
+	// Une fois par fête et par an, on la présente au joueur (pas pendant l'introduction).
+	const f = garden.fete && FETES[garden.fete];
+	if (f && !state.intro && state.eco2) {
+		const key = `${garden.fete}-${feteYear(garden.fete, date)}`;
+		if (!(state.fetesSeen ??= {})[key]) {
+			state.fetesSeen[key] = Date.now();
+			persist();
+			setTimeout(() => toast(f.hello, '#C8302C'), 6000);
+		}
+	}
+}
+/** Noël : trois lutins se cachent chaque jour derrière des objets du jardin ; les trouver rapporte du nectar. */
+const ELF_SPOTS = new Set(['cabane', 'haie', 'muret', 'ruche', 'hotel', 'bois', 'pierres', 'abri', 'banc', 'epouvantail', 'poulailler', 'compost', 'sandarium', 'bain']);
+function hideElves() {
+	if (garden.fete !== 'noel' || state.intro) { garden.elves = []; return; }
+	const day = new Date().toDateString();
+	if (state.elves?.day !== day) state.elves = { day, list: [], got: 0 };
+	// Trois cachettes par jour, tirées d'après la date ; complétées si le jardin n'était pas encore chargé.
+	const list = state.elves.list;
+	if (list.length < 3) {
+		const spots = garden.items.filter(it => ELF_SPOTS.has(it.kind) && !list.some(e => e.item === it.id));
+		let h = [...day].reduce((a, ch) => (a * 31 + ch.charCodeAt(0)) >>> 0, 11 + list.length);
+		const rnd = () => ((h = Math.imul(h ^ (h >>> 15), 2246822507) + 0x9e3779b9 >>> 0) % 10000) / 10000;
+		for (let k = 0; k < 40 && list.length < 3 && spots.length; k++) {
+			const it = spots[Math.floor(rnd() * spots.length)];
+			if (!list.some(e => e.item === it.id)) list.push({ item: it.id, side: rnd() < 0.5 ? -1 : 1, phase: rnd() * 6, found: 0 });
+		}
+		persist();
+	}
+	garden.elves = state.elves.list.filter(e => !e.found);
+}
+function findElf(e) {
+	e.found = garden.t;
+	const S = state.elves;
+	const done = S.list.find(x => x.item === e.item && x.side === e.side);
+	if (done) done.found = Date.now();
+	S.got = (S.got ?? 0) + 1;
+	const v = readReward() * 2;
+	state.nectar = (state.nectar ?? 0) + v;
+	persist(true);
+	sound.chime(2);
+	jackpot(v, e.x, e.y - 10);
+	const left = S.list.filter(x => !x.found).length;
+	toast(left ? `Un lutin ! Il en reste ${left} caché${left > 1 ? 's' : ''} dans ton jardin aujourd’hui.` : 'Tous les lutins du jour sont trouvés ! D’autres viendront se cacher demain.', '#2F7A3E');
+	setTimeout(() => { garden.elves = state.elves.list.filter(x => !x.found); }, 1300);
+}
+garden.onSleigh = () => {
+	sound.chime(3);
+	// La première fois de l'année, on le dit (il passe vite, tout en haut).
+	const key = `sleigh-${new Date().getFullYear()}`;
+	if (!(state.fetesSeen ??= {})[key]) { state.fetesSeen[key] = Date.now(); persist(); setTimeout(() => toast('Regarde en haut : le traîneau du père Noël passe au-dessus de ton jardin !', '#C8302C'), 800); }
+};
+setInterval(hideElves, 30000);
+// Après la lecture des paramètres d'adresse (date forcée), plus bas.
+setTimeout(() => { updateFete(); hideElves(); }, 0);
+setInterval(updateFete, 60000);
 Object.assign(garden, { nearUse: NEAR_USE, nearR: NEAR_R, rangeOf, nearNeed: NEAR_NEED, synPer: SYN_PER, synMax: SYN_MAX });
 /** Remesure le voisinage des habitats d'ici, et ce que les semeurs découverts apportent aux oiseaux. */
 function updateNear() {
@@ -962,6 +1024,7 @@ garden.onTap = hit => {
 		if (v >= 1) jackpot(v, d.x, d.y);
 		return;
 	}
+	if (hit.elf) { card.hidden = true; return findElf(hit.elf); }
 	if (hit.item) return tapItem(hit, card);
 	if (hit.critter) return tapCritter(hit, card);
 	if (hit.cell != null) {

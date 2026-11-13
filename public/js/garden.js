@@ -2312,6 +2312,11 @@ export class Garden {
 		let dew = null, dd = 22 / Math.min(1.4, this.cam.z);
 		for (const d of this.dew ?? []) { const k = Math.hypot(d.x - wx, d.y - wy); if (k < dd) { dd = k; dew = d; } }
 		if (dew) return { dew, x: sx, y: sy };
+		// Un lutin caché (sa tête dépasse) : il est petit, on le touche avant ce qui le cache.
+		if (this.fete === 'noel') for (const e of this.elves ?? []) {
+			if (e.found || e.x == null) continue;
+			if (Math.hypot(wx - (e.x + e.side * 8), wy - (e.y - 6)) < 20 / Math.min(1.3, this.cam.z)) return { elf: e, x: sx, y: sy };
+		}
 		// L'étiquette au-dessus d'un collecteur se touche comme le collecteur.
 		{
 			const z = Math.max(1, 1.2 / this.cam.z);
@@ -3702,6 +3707,16 @@ export class Garden {
 			}
 		}
 		this.updateSnowCover(dt);
+		// Noël : le traîneau du père Noël passe de temps en temps (toutes les deux à cinq minutes).
+		if (this.fete === 'noel' && !this.state.intro) {
+			this.nextSleigh ??= this.t + 25 + Math.random() * 35;
+			if (!this.sleigh && this.t > this.nextSleigh) {
+				this.sleigh = { t0: this.t, dur: 9, dir: Math.random() < 0.5 ? 1 : -1, y: 0.1 + Math.random() * 0.12 };
+				this.nextSleigh = this.t + 120 + Math.random() * 180;
+				this.onSleigh?.();
+			}
+			if (this.sleigh && this.t - this.sleigh.t0 > this.sleigh.dur) this.sleigh = null;
+		}
 		const wind = Math.min(40, this.weather.wind ?? 10);
 		for (const d of this.drops) {
 			if (d.splash != null) { d.splash += dt * 3; continue; }
@@ -3712,6 +3727,422 @@ export class Garden {
 		this.drops = this.drops.filter(d => !d.gone && !(d.splash > 1) && d.y < v.y0 + v.h + 40);
 		if (k === 'storm' && Math.random() < dt * 0.12) this.flash = 1;
 		this.flash = Math.max(0, this.flash - dt * 3);
+	}
+
+	// ─── Neige épaisse, bonhomme de neige ───
+	/**
+	 * La neige posée sur un objet ou une plante : un bourrelet blanc et doux le long du haut de son image, plus épais
+	 * quand il y a beaucoup de neige. Peint une fois par image et par niveau de neige. `holder` garde le cache (pour
+	 * les plantes, leur image change de stade) ; `below` : ne pas en mettre plus bas (le tronc d'un arbre).
+	 */
+	drawSnowCap(ctx, canvas, box, holder, below = Infinity) {
+		const lv = Math.ceil(this.snowCover() * 4);
+		this.capCache ??= new WeakMap();
+		let c = this.capCache.get(holder);
+		const key = `${lv}:${holder.stage ?? 0}:${canvas.width}`;
+		if (!c || c.key !== key) {
+			const sil = this.silhouetteFresh(canvas, box).filter(([, y]) => y < below && y < -4);
+			const K = 2, o = document.createElement('canvas');
+			o.width = Math.ceil(box.w * K); o.height = Math.ceil(box.h * K);
+			const g = o.getContext('2d');
+			g.scale(K, K); g.translate(box.ax, box.ay);
+			const r = 1.6 + lv * 0.9;
+			g.fillStyle = 'rgba(250,252,255,0.96)';
+			for (let i = 0; i < sil.length; i++) {
+				const [x, y] = sil[i], prev = sil[i - 1];
+				// Pas sur un bord presque vertical : la neige ne tient que sur ce qui est à peu près à plat.
+				if (prev && Math.abs(prev[1] - y) > 5) continue;
+				g.beginPath(); g.ellipse(x, y + r * 0.35, r * 1.25, r, 0, 0, Math.PI * 2); g.fill();
+			}
+			g.fillStyle = 'rgba(200,214,236,0.45)';
+			for (const [x, y] of sil) { g.beginPath(); g.ellipse(x, y + r * 0.9, r * 1.1, r * 0.35, 0, 0, Math.PI * 2); g.fill(); }
+			c = { key, canvas: o };
+			this.capCache.set(holder, c);
+		}
+		ctx.drawImage(c.canvas, -box.ax, -box.ay, box.w, box.h);
+	}
+
+	/** Le contour du haut d'une image, sans cache (une image de plante change de stade sur la même toile). */
+	silhouetteFresh(canvas, box) {
+		const w = canvas.width, h = canvas.height, D = w / box.w;
+		let data;
+		try { data = canvas.getContext('2d').getImageData(0, 0, w, h).data; } catch (e) { return []; }
+		const s = [], step = Math.max(1, Math.round(D * 2.5));
+		for (let px = 0; px < w; px += step) {
+			let py = 0;
+			while (py < h && data[(py * w + px) * 4 + 3] < 150) py++;
+			if (py < h) s.push([px / D - box.ax, py / D - box.ay]);
+		}
+		return s;
+	}
+
+	/** Un bonhomme de neige : trois boules, un chapeau, une écharpe rouge, un nez en carotte, des bras en branches. */
+	drawSnowman(ctx, x, y) {
+		const t = this.t;
+		ctx.save();
+		ctx.translate(x, y);
+		ctx.fillStyle = 'rgba(70,80,110,0.18)';
+		ctx.beginPath(); ctx.ellipse(4, 2, 26, 7, 0, 0, Math.PI * 2); ctx.fill();
+		const ball = (cy, r) => {
+			const grd = ctx.createRadialGradient(-r * 0.35, cy - r * 0.4, r * 0.2, 0, cy, r);
+			grd.addColorStop(0, '#FFFFFF'); grd.addColorStop(1, '#D8E2F0');
+			ctx.fillStyle = grd;
+			ctx.beginPath(); ctx.arc(0, cy, r, 0, Math.PI * 2); ctx.fill();
+			ctx.strokeStyle = 'rgba(140,160,196,0.55)'; ctx.lineWidth = 1;
+			ctx.stroke();
+		};
+		ball(-14, 17); ball(-40, 12.5); ball(-60, 9.5);
+		// Les bras.
+		ctx.strokeStyle = '#5A3E26'; ctx.lineWidth = 1.6; ctx.lineCap = 'round';
+		ctx.beginPath();
+		ctx.moveTo(-11, -42); ctx.lineTo(-27, -52); ctx.moveTo(-22, -49); ctx.lineTo(-26, -57);
+		ctx.moveTo(11, -42); ctx.lineTo(27, -50 + Math.sin(t * 1.5) * 2); ctx.moveTo(22, -48); ctx.lineTo(27, -55);
+		ctx.stroke();
+		// Les boutons, les yeux, le nez.
+		ctx.fillStyle = '#2A2420';
+		for (const by of [-46, -38, -30]) { ctx.beginPath(); ctx.arc(0, by, 1.3, 0, Math.PI * 2); ctx.fill(); }
+		ctx.beginPath(); ctx.arc(-3, -63, 1.2, 0, Math.PI * 2); ctx.arc(3, -63, 1.2, 0, Math.PI * 2); ctx.fill();
+		ctx.fillStyle = '#E8822E';
+		ctx.beginPath(); ctx.moveTo(0, -60); ctx.lineTo(11, -58); ctx.lineTo(0, -57); ctx.fill();
+		// L'écharpe rouge, dont un pan flotte.
+		ctx.fillStyle = '#C8302C';
+		ctx.beginPath(); ctx.ellipse(0, -51.5, 10, 3.2, 0, 0, Math.PI * 2); ctx.fill();
+		ctx.beginPath(); ctx.moveTo(4, -51); ctx.lineTo(8 + Math.sin(t * 2) * 1.5, -40); ctx.lineTo(12 + Math.sin(t * 2) * 1.5, -41); ctx.lineTo(8, -51); ctx.fill();
+		// Le chapeau noir.
+		ctx.fillStyle = '#2A2426';
+		ctx.beginPath(); ctx.ellipse(0, -68, 11, 2.6, 0, 0, Math.PI * 2); ctx.fill();
+		ctx.fillRect(-7, -82, 14, 14);
+		ctx.fillStyle = '#C8302C';
+		ctx.fillRect(-7, -72, 14, 2.4);
+		ctx.restore();
+	}
+
+	/** Des étoiles dorées qui pendent dans les arbres à Noël, au bout d'un fil ; la nuit, elles brillent. */
+	drawHangingStars(ctx, p, s, box) {
+		if (!s.hang || s.hang.stage !== s.stage) {
+			const c = s.canvas, w = c.width, h = c.height, D = w / box.w;
+			let data = null;
+			try { data = c.getContext('2d').getImageData(0, 0, w, h).data; } catch (e) { /* toile protégée */ }
+			const solid = (x, y) => data && x >= 0 && y >= 0 && x < w && y < h && data[(Math.floor(y) * w + Math.floor(x)) * 4 + 3] > 200;
+			let r = ((p.seed ?? 3) * 2654435761) >>> 0;
+			const rnd = () => ((r = Math.imul(r ^ (r >>> 15), 2246822507) + 0x9e3779b9 >>> 0) % 10000) / 10000;
+			const stars = [];
+			for (let k = 0; k < 300 && stars.length < 3; k++) {
+				const x = w * (0.15 + 0.7 * rnd()), y = h * (0.12 + 0.4 * rnd());
+				// Accrochée sous une branche : du feuillage au-dessus, du vide juste en dessous.
+				if (!solid(x, y) || solid(x, y + 10 * D)) continue;
+				const bx = x / D - box.ax, by = y / D - box.ay;
+				if (stars.some(([ax]) => Math.abs(ax - bx) < 22)) continue;
+				stars.push([bx, by, 8 + rnd() * 14]);
+			}
+			s.hang = { stage: s.stage, stars };
+		}
+		const t = this.t;
+		for (const [x, y, len] of s.hang.stars) {
+			const sw = Math.sin(t * 1.3 + x) * 2, sy = y + len;
+			ctx.strokeStyle = 'rgba(230,220,180,0.7)'; ctx.lineWidth = 0.5;
+			ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + sw, sy - 4); ctx.stroke();
+			this.drawStar(ctx, x + sw, sy, 5.5, 0.7 + 0.3 * Math.sin(t * 2.4 + x));
+		}
+	}
+
+	/** Une étoile dorée à cinq branches, qui brille (sa lueur passe par-dessus la nuit). */
+	drawStar(ctx, x, y, r, glow) {
+		this.glowAt(ctx, x, y, '255,214,110', 0.75 * glow, r * 3.2);
+		ctx.fillStyle = '#F6CE52';
+		ctx.strokeStyle = 'rgba(160,110,20,0.75)'; ctx.lineWidth = 0.6;
+		ctx.beginPath();
+		for (let i = 0; i < 10; i++) {
+			const a = -Math.PI / 2 + i * Math.PI / 5, rr = i % 2 ? r * 0.45 : r;
+			ctx.lineTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr);
+		}
+		ctx.closePath(); ctx.fill(); ctx.stroke();
+		ctx.fillStyle = `rgba(255,250,220,${0.5 * glow})`;
+		ctx.beginPath(); ctx.arc(x - r * 0.15, y - r * 0.15, r * 0.25, 0, Math.PI * 2); ctx.fill();
+	}
+
+	// ─── Noël ───
+	/**
+	 * Un lutin caché derrière un objet : seules sa tête, son bonnet et une main dépassent du bord ; il se penche pour
+	 * regarder, puis se recache. Trouvé, il saute et disparaît dans une gerbe dorée.
+	 */
+	drawElf(ctx, e) {
+		const t = this.t, found = e.found ? Math.min(1, (t - e.found) / 1.2) : 0;
+		const peek = found ? 1 : Math.max(0, Math.sin(t * 1.4 + e.phase)) ** 0.6;
+		const jump = found ? -Math.sin(found * Math.PI) * 34 : 0;
+		ctx.save();
+		ctx.translate(e.x, e.y + jump);
+		ctx.globalAlpha = 1 - found * found;
+		ctx.scale(e.side, 1);
+		ctx.translate(2 + 9 * peek, 0);
+		ctx.rotate(0.25 * peek);
+		// La main, accrochée au bord.
+		ctx.fillStyle = '#F2D2B6';
+		ctx.beginPath(); ctx.ellipse(-6, 8, 2.6, 2, 0, 0, Math.PI * 2); ctx.fill();
+		// La tête, une oreille pointue, la joue rouge, l'œil.
+		ctx.beginPath(); ctx.moveTo(4, -3); ctx.lineTo(10, -8); ctx.lineTo(5, 1); ctx.fill();
+		ctx.beginPath(); ctx.arc(0, 0, 6, 0, Math.PI * 2); ctx.fill();
+		ctx.fillStyle = 'rgba(220,90,80,0.45)';
+		ctx.beginPath(); ctx.arc(3, 2.5, 1.6, 0, Math.PI * 2); ctx.fill();
+		ctx.fillStyle = '#2A1E16';
+		ctx.beginPath(); ctx.arc(2.4, -1, 0.95, 0, Math.PI * 2); ctx.fill();
+		// Le bonnet rouge à grelot, qui retombe derrière.
+		const sw = Math.sin(t * 2.2 + e.phase) * 2;
+		ctx.fillStyle = '#C8302C';
+		ctx.beginPath(); ctx.moveTo(-6.5, -3.5); ctx.quadraticCurveTo(-4, -20, -14 + sw, -15); ctx.lineTo(6.5, -4); ctx.closePath(); ctx.fill();
+		ctx.fillStyle = '#FBF8F0';
+		ctx.beginPath(); ctx.ellipse(0, -4, 7.4, 2.2, 0.1, 0, Math.PI * 2); ctx.fill();
+		ctx.fillStyle = '#F4C23E';
+		ctx.beginPath(); ctx.arc(-14 + sw, -15, 2, 0, Math.PI * 2); ctx.fill();
+		// Un bout de col vert.
+		ctx.fillStyle = '#2F7A3E';
+		ctx.beginPath(); ctx.ellipse(-1, 8, 6, 3, 0, 0, Math.PI); ctx.fill();
+		ctx.restore();
+		if (found && !e.burst) { e.burst = true; this.burst(e.x, e.y - 10, 16, '#F4C23E'); }
+	}
+
+	/** Le traîneau du père Noël et ses rennes traversent le haut de l'écran, avec une traînée d'étincelles. */
+	drawSleigh(ctx, cw, ch) {
+		const sl = this.sleigh;
+		if (!sl) return;
+		const u = (this.t - sl.t0) / sl.dur, s = Math.min(cw, ch * 1.2) / 900;
+		const x = sl.dir > 0 ? -0.25 * cw + u * 1.5 * cw : 1.25 * cw - u * 1.5 * cw;
+		const y = ch * sl.y - Math.sin(u * Math.PI) * ch * 0.05 + Math.sin(this.t * 3) * 4 * s;
+		ctx.save();
+		ctx.setTransform(1, 0, 0, 1, 0, 0);
+		// La traînée : des étincelles dorées qui s'éteignent derrière lui.
+		for (let k = 1; k <= 24; k++) {
+			const uu = u - k * 0.006;
+			if (uu < 0) break;
+			const xx = sl.dir > 0 ? -0.25 * cw + uu * 1.5 * cw : 1.25 * cw - uu * 1.5 * cw, yy = ch * sl.y - Math.sin(uu * Math.PI) * ch * 0.05;
+			ctx.fillStyle = `rgba(255,224,130,${0.6 * (1 - k / 24)})`;
+			ctx.beginPath(); ctx.arc(xx - sl.dir * 60 * s + Math.sin(k * 7.1) * 6 * s, yy + 16 * s + Math.cos(k * 3.3) * 6 * s, (1 + (k % 3)) * s * 1.6, 0, Math.PI * 2); ctx.fill();
+		}
+		ctx.translate(x, y);
+		ctx.scale(sl.dir * s * 1.4, s * 1.4);
+		// Les rennes (trois), devant, qui galopent.
+		for (let i = 0; i < 3; i++) {
+			const rx = 70 + i * 46, gal = Math.sin(this.t * 10 + i) * 4;
+			ctx.fillStyle = '#7A5232';
+			ctx.beginPath(); ctx.ellipse(rx, -6 + gal * 0.3, 15, 6.5, -0.1, 0, Math.PI * 2); ctx.fill();
+			ctx.beginPath(); ctx.ellipse(rx + 15, -13 + gal * 0.3, 5, 4, -0.5, 0, Math.PI * 2); ctx.fill();
+			ctx.strokeStyle = '#7A5232'; ctx.lineWidth = 2.4; ctx.lineCap = 'round';
+			ctx.beginPath();
+			ctx.moveTo(rx - 9, -2); ctx.lineTo(rx - 13 - gal, 9);
+			ctx.moveTo(rx + 8, -2); ctx.lineTo(rx + 13 + gal, 8);
+			ctx.stroke();
+			ctx.strokeStyle = '#5A3A22'; ctx.lineWidth = 1.4;
+			ctx.beginPath();
+			ctx.moveTo(rx + 15, -16); ctx.lineTo(rx + 12, -25); ctx.lineTo(rx + 8, -28);
+			ctx.moveTo(rx + 12, -22); ctx.lineTo(rx + 16, -27);
+			ctx.stroke();
+			if (i === 2) { ctx.fillStyle = '#E8322C'; ctx.beginPath(); ctx.arc(rx + 20, -12, 2.2, 0, Math.PI * 2); ctx.fill(); }
+		}
+		// Les rênes.
+		ctx.strokeStyle = 'rgba(90,50,30,0.8)'; ctx.lineWidth = 1;
+		ctx.beginPath(); ctx.moveTo(18, -14); ctx.quadraticCurveTo(60, -4, 160, -8); ctx.stroke();
+		// Le traîneau, rouge et or, avec ses patins.
+		ctx.fillStyle = '#B8262A';
+		ctx.beginPath(); ctx.moveTo(-40, -18); ctx.lineTo(28, -18); ctx.quadraticCurveTo(36, -18, 34, -6); ctx.lineTo(-36, -2); ctx.quadraticCurveTo(-46, -6, -40, -18); ctx.fill();
+		ctx.strokeStyle = '#E8B33A'; ctx.lineWidth = 2.2;
+		ctx.beginPath(); ctx.moveTo(-44, 6); ctx.lineTo(30, 6); ctx.quadraticCurveTo(44, 6, 42, -4); ctx.stroke();
+		ctx.beginPath(); ctx.moveTo(-28, -2); ctx.lineTo(-28, 6); ctx.moveTo(18, -4); ctx.lineTo(18, 6); ctx.stroke();
+		// Le sac de cadeaux.
+		ctx.fillStyle = '#8A6A3E';
+		ctx.beginPath(); ctx.ellipse(-28, -24, 12, 10, 0, 0, Math.PI * 2); ctx.fill();
+		// Le père Noël : manteau rouge, barbe blanche, bonnet.
+		ctx.fillStyle = '#D42E2A';
+		ctx.beginPath(); ctx.ellipse(-2, -26, 11, 12, 0, 0, Math.PI * 2); ctx.fill();
+		ctx.fillStyle = '#F2D2B6';
+		ctx.beginPath(); ctx.arc(2, -42, 6, 0, Math.PI * 2); ctx.fill();
+		ctx.fillStyle = '#FBF8F0';
+		ctx.beginPath(); ctx.ellipse(3, -36, 7, 6, 0, 0, Math.PI * 2); ctx.fill();
+		ctx.fillStyle = '#D42E2A';
+		ctx.beginPath(); ctx.moveTo(-5, -45); ctx.quadraticCurveTo(2, -58, -12, -54); ctx.lineTo(9, -46); ctx.closePath(); ctx.fill();
+		ctx.fillStyle = '#FBF8F0';
+		ctx.beginPath(); ctx.ellipse(2, -46, 7.5, 2.2, 0, 0, Math.PI * 2); ctx.fill();
+		ctx.beginPath(); ctx.arc(-12, -54, 2.4, 0, Math.PI * 2); ctx.fill();
+		ctx.restore();
+	}
+
+	/**
+	 * Le contour du haut d'une image (en unités du monde, depuis son ancre) : pour chaque colonne, le premier pixel
+	 * opaque. Calculé une fois par image. Sert à poser une guirlande le long d'un toit, d'une haie, d'une arche.
+	 */
+	silhouette(canvas, box) {
+		this.silCache ??= new WeakMap();
+		let s = this.silCache.get(canvas);
+		if (s) return s;
+		const w = canvas.width, h = canvas.height, D = w / box.w;
+		let data;
+		try { data = canvas.getContext('2d').getImageData(0, 0, w, h).data; } catch (e) { return []; }
+		s = [];
+		const step = Math.max(1, Math.round(D * 3));
+		for (let px = 0; px < w; px += step) {
+			let py = 0;
+			while (py < h && data[(py * w + px) * 4 + 3] < 140) py++;
+			if (py < h) s.push([px / D - box.ax, py / D - box.ay]);
+		}
+		this.silCache.set(canvas, s);
+		return s;
+	}
+
+	/** Les objets qui portent une guirlande à Noël. */
+	static XMAS_LIGHTS = new Set(['cabane', 'poulailler', 'haie', 'muret', 'arche', 'abri']);
+
+	drawXmasItem(ctx, it, sp, box) {
+		if (it.kind === 'epouvantail') return this.drawSantaHat(ctx);
+		if (!Garden.XMAS_LIGHTS.has(it.kind)) return;
+		// La guirlande suit le haut de l'objet, sauf ce qui dépasse à peine du sol (herbes au pied).
+		const sil = this.silhouette(sp.canvas, box).filter(([, y]) => y < -box.ay * 0.35);
+		if (sil.length < 3) return;
+		const pts = [];
+		for (let i = 0; i < sil.length; i++) {
+			const [x, y] = sil[i];
+			if (pts.length && x - pts[pts.length - 1][0] < 9) continue;
+			pts.push([x, y + 3.5]);
+		}
+		// Un décalage de couleurs propre à chaque objet (son identifiant est un texte).
+		const seed = [...String(it.id ?? it.x)].reduce((a, ch) => (a * 31 + ch.charCodeAt(0)) >>> 0, 7) % 5;
+		this.drawLights(ctx, pts, seed);
+	}
+
+	/** Retient une lueur (en pixels de la toile) pour la passe de nuit : elle brille par-dessus l'obscurité. */
+	glowAt(ctx, x, y, c, a, r) {
+		if (!this.xmasGlow || this.night() < 0.1) return;
+		const m = ctx.getTransform();
+		this.xmasGlow.push([m.a * x + m.c * y + m.e, m.b * x + m.d * y + m.f, c, a, r * Math.hypot(m.a, m.b)]);
+	}
+
+	/** Un fil, et des ampoules de couleur qui scintillent ; la nuit, elles éclairent autour d'elles. */
+	drawLights(ctx, pts, seed) {
+		const t = this.t, night = this.night(), z = this.cam.z;
+		ctx.strokeStyle = 'rgba(40,52,36,0.75)';
+		ctx.lineWidth = 0.9;
+		ctx.beginPath();
+		for (let i = 0; i < pts.length; i++) {
+			const [x, y] = pts[i];
+			if (!i) { ctx.moveTo(x, y); continue; }
+			const [px, py] = pts[i - 1];
+			ctx.quadraticCurveTo((x + px) / 2, Math.max(y, py) + 3, x, y);
+		}
+		ctx.stroke();
+		const COLS = ['255,72,64', '255,196,64', '96,214,120', '96,170,255', '255,140,210'];
+		for (let i = 0; i < pts.length; i++) {
+			const [x, y] = pts[i], c = COLS[(i + seed) % COLS.length];
+			const tw = 0.55 + 0.45 * Math.sin(t * 2.3 + i * 1.7 + seed);
+			this.glowAt(ctx, x, y + 2, c, 0.55 * tw, 9);
+			ctx.fillStyle = `rgba(${c},${0.7 + 0.3 * tw})`;
+			ctx.beginPath(); ctx.ellipse(x, y + 2.2, 2.4, 3.2, 0, 0, Math.PI * 2); ctx.fill();
+			ctx.fillStyle = `rgba(255,255,240,${0.6 * tw})`;
+			ctx.beginPath(); ctx.arc(x - 0.7, y + 1.3, 0.9, 0, Math.PI * 2); ctx.fill();
+		}
+		void z;
+	}
+
+	/** Le bonnet de Noël de l'épouvantail, posé sur son chapeau de paille. */
+	drawSantaHat(ctx) {
+		const sway = Math.sin(this.t * 1.3) * 1.5;
+		ctx.save();
+		ctx.translate(0, -121);
+		ctx.fillStyle = '#C8302C';
+		ctx.beginPath();
+		ctx.moveTo(-13, 0);
+		ctx.quadraticCurveTo(-6, -18, 6 + sway, -24);
+		ctx.quadraticCurveTo(12 + sway, -20, 15 + sway, -10);
+		ctx.quadraticCurveTo(10, -10, 13, 0);
+		ctx.closePath();
+		ctx.fill();
+		ctx.fillStyle = 'rgba(120,20,18,0.35)';
+		ctx.beginPath(); ctx.moveTo(2, -2); ctx.quadraticCurveTo(6, -14, 6 + sway, -24); ctx.quadraticCurveTo(4, -12, 10, -2); ctx.fill();
+		ctx.fillStyle = '#FBF8F0';
+		ctx.beginPath(); ctx.ellipse(0, 0, 15, 4.2, 0, 0, Math.PI * 2); ctx.fill();
+		ctx.beginPath(); ctx.arc(15 + sway, -9, 3.6, 0, Math.PI * 2); ctx.fill();
+		ctx.restore();
+	}
+
+	/**
+	 * Les arbres décorés : les conifères, et « le sapin du jardin », l'arbre adulte le plus proche de la cabane (ou de la
+	 * première ruche), pour qu'il y en ait un même dans une prairie sans conifère.
+	 */
+	xmasTree(p) {
+		if (lookOf(p).form === 'conifere') return true;
+		if (this.xmasPick?.t > this.t - 5) return this.xmasPick.id === p.id;
+		const home = this.items.find(it => it.kind === 'cabane') ?? this.items.find(it => it.kind === 'ruche');
+		let best = null, bd = Infinity;
+		if (home) for (const q of this.place.plants) {
+			if (q.type !== 'arbre' || q.growth < 0.6) continue;
+			const [ox, oy] = cellOrigin(cellOf(q)), d = Math.hypot(ox + q.x - home.x, oy + q.y - home.y);
+			if (d < bd) { bd = d; best = q; }
+		}
+		this.xmasPick = { t: this.t, id: best?.id };
+		return best?.id === p.id;
+	}
+
+	/** Des boules de couleur dans la couronne, une guirlande en travers, et une étoile au sommet. */
+	drawXmasTree(ctx, p, s, box) {
+		if (!s.xmas || s.xmas.stage !== s.stage) {
+			const c = s.canvas, w = c.width, h = c.height, D = w / box.w;
+			let data = null;
+			try { data = c.getContext('2d').getImageData(0, 0, w, h).data; } catch (e) { /* toile protégée */ }
+			const solid = (x, y) => data && x >= 0 && y >= 0 && x < w && y < h && data[(Math.floor(y) * w + Math.floor(x)) * 4 + 3] > 200;
+			let top = null;
+			for (let y = 0; y < h * 0.6 && !top; y += 2) for (let x = w * 0.3; x < w * 0.7; x += 2) if (solid(x, y)) { top = [x / D - box.ax, y / D - box.ay]; break; }
+			let r = (p.seed ?? 1) >>> 0;
+			const rnd = () => ((r = Math.imul(r ^ (r >>> 15), 2246822507) + 0x9e3779b9 >>> 0) % 10000) / 10000;
+			const balls = [];
+			const crownBottom = h * 0.58;
+			for (let k = 0; k < 400 && balls.length < 16; k++) {
+				const x = w * (0.12 + 0.76 * rnd()), y = (top ? (top[1] + box.ay) * D : 0) + (crownBottom - (top ? (top[1] + box.ay) * D : 0)) * (0.12 + 0.85 * rnd());
+				if (!solid(x, y) || !solid(x, y + 6 * D)) continue;
+				const bx = x / D - box.ax, by = y / D - box.ay;
+				if (balls.some(([ax, ay]) => Math.hypot(ax - bx, ay - by) < 15)) continue;
+				balls.push([bx, by, Math.floor(rnd() * 4)]);
+			}
+			s.xmas = { stage: s.stage, top, balls };
+		}
+		const { top, balls } = s.xmas, t = this.t, night = this.night();
+		const COLS = ['#D3322C', '#E8B33A', '#3E78C8', '#F2F0E8'];
+		for (const [x, y, ci] of balls) {
+			ctx.strokeStyle = 'rgba(60,50,30,0.5)'; ctx.lineWidth = 0.5;
+			ctx.beginPath(); ctx.moveTo(x, y - 6); ctx.lineTo(x, y - 3); ctx.stroke();
+			ctx.fillStyle = COLS[ci];
+			ctx.beginPath(); ctx.arc(x, y, 3.4, 0, Math.PI * 2); ctx.fill();
+			ctx.fillStyle = 'rgba(255,255,255,0.65)';
+			ctx.beginPath(); ctx.arc(x - 1.1, y - 1.1, 1, 0, Math.PI * 2); ctx.fill();
+		}
+		// Une guirlande lumineuse qui fait le tour de la couronne, en deux arcs.
+		if (balls.length > 3) {
+			const xs = balls.map(b => b[0]), ys = balls.map(b => b[1]);
+			const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
+			const pts = [];
+			for (const f of [0.38, 0.75]) for (let k = 0; k <= 7; k++) { const u = k / 7; pts.push([x0 + (x1 - x0) * u, y0 + (y1 - y0) * f + Math.sin(u * Math.PI) * 8 - (u - 0.5) * 6]); }
+			this.drawLightsDots(ctx, pts, (p.seed ?? 0) % 2);
+		}
+		if (top) {
+			const [x, y] = top, glow = 0.7 + 0.3 * Math.sin(t * 2);
+			this.glowAt(ctx, x, y - 5, '255,214,90', 0.7 * glow, 20);
+			ctx.fillStyle = '#F4C23E';
+			ctx.strokeStyle = 'rgba(150,100,20,0.8)'; ctx.lineWidth = 0.7;
+			ctx.beginPath();
+			for (let i = 0; i < 10; i++) {
+				const a = -Math.PI / 2 + i * Math.PI / 5, rr = i % 2 ? 3.4 : 8;
+				ctx.lineTo(x + Math.cos(a) * rr, y - 5 + Math.sin(a) * rr);
+			}
+			ctx.closePath(); ctx.fill(); ctx.stroke();
+		}
+	}
+
+	/** Des ampoules seules (sans fil), pour la guirlande du sapin. */
+	drawLightsDots(ctx, pts, seed) {
+		const t = this.t, night = this.night();
+		const COLS = ['255,210,90', '255,240,200'];
+		for (let i = 0; i < pts.length; i++) {
+			const [x, y] = pts[i], c = COLS[(i + seed) % 2], tw = 0.5 + 0.5 * Math.sin(t * 2.6 + i * 2.1 + seed);
+			this.glowAt(ctx, x, y, c, 0.5 * tw, 8);
+			ctx.fillStyle = `rgba(${c},${0.6 + 0.4 * tw})`;
+			ctx.beginPath(); ctx.arc(x, y, 1.9, 0, Math.PI * 2); ctx.fill();
+		}
 	}
 
 	/**
@@ -3760,7 +4191,7 @@ export class Garden {
 				// Peu de neige : quelques plaques ; beaucoup : un tapis presque continu.
 				if (r() > 0.25 + 0.8 * k) continue;
 				const x = cx * CELL + r() * CELL - x0, y = cy * CELL + r() * CELL - y0;
-				const rad = CELL * (0.45 + 0.75 * k) * (0.7 + r() * 0.6);
+				const rad = CELL * (0.5 + 0.95 * k) * (0.7 + r() * 0.6);
 				const grd = g.createRadialGradient(x, y, 0, x, y, rad);
 				grd.addColorStop(0, 'rgba(252,253,255,0.95)');
 				grd.addColorStop(0.55, 'rgba(246,249,253,0.75)');
@@ -3781,8 +4212,8 @@ export class Garden {
 			if (d.snow) {
 				// Un flocon : un halo pâle et un cœur blanc, qui tourne un peu sur lui-même en tombant.
 				const r = (d.r ?? 2) * d.z, wob = 1 + 0.12 * Math.sin(this.t * 3 + d.ph);
-				ctx.fillStyle = 'rgba(255,255,255,0.32)';
-				ctx.beginPath(); ctx.ellipse(d.x, d.y, r * 1.9 * wob, r * 1.9 / wob, 0, 0, Math.PI * 2); ctx.fill();
+				ctx.fillStyle = 'rgba(255,255,255,0.28)';
+				ctx.beginPath(); ctx.ellipse(d.x, d.y, r * 1.5 * wob, r * 1.5 / wob, 0, 0, Math.PI * 2); ctx.fill();
 				ctx.fillStyle = 'rgba(255,255,253,0.95)';
 				ctx.beginPath(); ctx.ellipse(d.x, d.y, r * wob, r / wob, 0, 0, Math.PI * 2); ctx.fill();
 			} else if (d.splash != null) {
@@ -3838,6 +4269,8 @@ export class Garden {
 		ctx.globalAlpha = 1;
 		ctx.fillStyle = '#E4DEC6';
 		ctx.fillRect(0, 0, cw, ch);
+		// Les lumières de fête de cette image, à faire briller par-dessus la nuit (voir plus bas).
+		this.xmasGlow = [];
 
 		// Le sol continue partout ; hors des clairières ouvertes, une prairie sauvage voilée de brume.
 		// Peintures en attente (sol, plantes) : quelques millisecondes par image, jamais d'écran figé.
@@ -3861,7 +4294,7 @@ export class Garden {
 		// l'autre : la neige est à demi transparente, un débord doublé se verrait en trait clair.
 		const snowLv = Math.ceil(this.snowCover() * 5);
 		if (snowLv > 0) {
-			ctx.globalAlpha = Math.min(1, 0.55 + 0.1 * snowLv);
+			ctx.globalAlpha = Math.min(1, 0.6 + 0.09 * snowLv);
 			for (let gy = gy0; gy <= gy1; gy++) for (let gx = gx0; gx <= gx1; gx++) ctx.drawImage(this.snowTile(gx, gy, snowLv), gx * PARCEL_W, gy * PARCEL_H, PARCEL_W, PARCEL_H);
 			ctx.globalAlpha = 1;
 		}
@@ -3985,6 +4418,24 @@ export class Garden {
 			if (wx + box.w < v.x0 || wx - box.w > v.x0 + v.w || wy - box.ay > v.y0 + v.h + 20 || wy + 30 < v.y0) continue;
 			entities.push({ plant: p, x: wx, y: wy });
 		}
+		// Le bonhomme de neige : il apparaît quand il y a assez de neige au sol, près de la maison.
+		if (this.snowCover() > 0.35 && !this.state.intro) {
+			const home = this.items.find(i => i.kind === 'cabane') ?? this.items.find(i => i.kind === 'ruche');
+			if (home) {
+				const hb = itemBox(home.kind, home.level), sx = home.x - hb.w * 0.62, sy = home.y + 46;
+				if (sx > v.x0 - 80 && sx < v.x0 + v.w + 80 && sy > v.y0 - 40 && sy < v.y0 + v.h + 140) entities.push({ snowman: true, x: sx, y: sy });
+			}
+		}
+		// Les lutins de Noël se cachent juste derrière un objet : dessinés avant lui, il les cache en partie.
+		if (this.fete === 'noel') for (const e of this.elves ?? []) {
+			if (e.found && this.t - e.found > 1.2) continue;
+			const it = this.items.find(i => i.id === e.item);
+			if (!it) continue;
+			const box = itemBox(it.kind, it.level);
+			// Sa tête dépasse du bord de l'objet, à mi-hauteur ; il est rangé juste derrière lui.
+			e.x = it.x + e.side * box.w * 0.34; e.y = it.y - box.ay * 0.3;
+			if (e.x > v.x0 - 60 && e.x < v.x0 + v.w + 60 && e.y > v.y0 - 40 && e.y < v.y0 + v.h + 160) entities.push({ elf: e, x: e.x, y: it.y - 2 });
+		}
 		for (const it of this.items) if (it !== this.lifted && it.x > v.x0 - 120 && it.x < v.x0 + v.w + 120 && it.y > v.y0 - 40 && it.y < v.y0 + v.h + 200) entities.push({ item: it, x: it.x, y: it.y });
 		if (!glyph) for (const b of this.insects) if (onGround(b)) entities.push({ critter: b, y: b.behavior === 'trail' ? -1e9 : b.y + 2 });
 		if (!glyph && this.farmer && !this.farmer.hidden) entities.push({ critter: this.farmer, y: this.farmer.y + 2 });
@@ -3993,6 +4444,8 @@ export class Garden {
 		entities.sort((a, b) => a.y - b.y);
 
 		for (const e of entities) {
+			if (e.elf) { world(); this.drawElf(ctx, e.elf); continue; }
+			if (e.snowman) { world(); this.drawSnowman(ctx, e.x, e.y); continue; }
 			if (e.critter) {
 				world();
 				this.drawInsect(ctx, e.critter);
@@ -4016,8 +4469,11 @@ export class Garden {
 				const k = age < 0.6 ? 0.7 + 0.3 * Math.min(1, age / 0.35) + 0.08 * Math.sin(Math.min(1, age / 0.6) * Math.PI) : 1;
 				ctx.translate(e.x, e.y);
 				ctx.scale(k, k);
-				ctx.drawImage(this.itemSprite(it.kind, it.rot, it).canvas, -box.ax, -box.ay, box.w, box.h);
+				const isp = this.itemSprite(it.kind, it.rot, it);
+				ctx.drawImage(isp.canvas, -box.ax, -box.ay, box.w, box.h);
 				if (!glyph && it.kind === 'mare') this.pondLife(ctx, 0.75, it.x);
+				if (this.snowCover() > 0.25) this.drawSnowCap(ctx, isp.canvas, box, isp.canvas);
+				if (this.fete === 'noel') this.drawXmasItem(ctx, it, isp, box);
 				continue;
 			}
 			if (e.decor) {
@@ -4086,11 +4542,14 @@ export class Garden {
 				ctx.save(); ctx.beginPath(); ctx.rect(-box.ax - 40, -box.ay - 10, box.w + 80, box.ay * 0.58 + 10.5); ctx.clip();
 				ctx.translate(0, cut); ctx.transform(1, 0, shear, 1, 0, 0); ctx.translate(0, -cut);
 				ctx.drawImage(img.canvas, -box.ax, -box.ay, box.w, box.h);
+				if (this.snowCover() > 0.25) this.drawSnowCap(ctx, s.canvas, box, s, -box.ay * 0.42);
+				if (this.fete === 'noel' && s.stage >= STAGES * 0.6) { if (this.xmasTree(p)) this.drawXmasTree(ctx, p, s, box); else this.drawHangingStars(ctx, p, s, box); }
 				ctx.restore();
 			} else {
 				ctx.transform(1, 0, shear, 1, 0, 0);
 				const art = plantArt(p);
 				ctx.drawImage(img.canvas, -art.ax, -art.ay, art.w, art.h);
+				if (p.type === 'buisson' && this.snowCover() > 0.25) this.drawSnowCap(ctx, s.canvas, art, s);
 			}
 		}
 
@@ -4149,7 +4608,8 @@ export class Garden {
 		}
 		ctx.globalCompositeOperation = 'source-over';
 		if (wk === 'snow' || (se.winter ?? 0) > 0.7) {
-			ctx.fillStyle = `rgba(250,252,255,${wk === 'snow' ? 0.22 : 0.08})`;
+			// Un voile blanc de jour ; la nuit, la neige garde le bleu de la nuit (pas de brume grise).
+			ctx.fillStyle = `rgba(250,252,255,${(wk === 'snow' ? 0.22 : 0.08) * day})`;
 			ctx.fillRect(0, 0, cw, ch);
 		}
 		if (wk === 'fog') {
@@ -4165,6 +4625,8 @@ export class Garden {
 		}
 
 		if (!glyph) { world(); this.drawAmbient(ctx, v); }
+
+		if (this.fete === 'noel' && !glyph) this.drawSleigh(ctx, cw, ch);
 
 		// La nuit, les lanternes et la fenêtre de la cabane s'allument.
 		if (!glyph && night > 0.05) {
@@ -4184,6 +4646,16 @@ export class Garden {
 				const gx = x, gy = it.y * S + ty + 6 * S, w = size * 1.9, h = size * 0.6;
 				ctx.globalAlpha = Math.min(1, night * 1.2) * flicker * 0.7;
 				ctx.drawImage(this.glow, gx - w / 2, gy - h / 2, w, h);
+			}
+			// Les lumières de fête : chaque ampoule éclaire autour d'elle, de sa couleur.
+			ctx.globalAlpha = 1;
+			for (const [x, y, c, a, r] of this.xmasGlow ?? []) {
+				if (x < -50 || x > cw + 50 || y < -50 || y > ch + 50) continue;
+				const grd = ctx.createRadialGradient(x, y, 0, x, y, r);
+				grd.addColorStop(0, `rgba(${c},${Math.min(1, a * night * 1.3)})`);
+				grd.addColorStop(1, `rgba(${c},0)`);
+				ctx.fillStyle = grd;
+				ctx.fillRect(x - r, y - r, r * 2, r * 2);
 			}
 			ctx.globalAlpha = 1;
 			ctx.globalCompositeOperation = 'source-over';
