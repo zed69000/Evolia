@@ -1,5 +1,7 @@
-// L'introduction d'une nouvelle partie, jouée dans le jardin lui-même, sans HUD : une minuscule motte de terre, un
-// oiseau qui laisse tomber une graine, quelques pas qui la font fleurir, une abeille qui passe. Puis le logo, et un
+// L'introduction d'une nouvelle partie, jouée dans le jardin lui-même, sans HUD, d'après le story-board de Seb : une
+// graine tombe du ciel et se plante (« poc »), une petite pousse sort, un rayon de soleil apparaît ; la caméra respire
+// et se rapproche à mesure que les pas font grandir la fleur ; une abeille vient ; le logo apparaît au-dessus de la
+// fleur pendant qu'un insecte passe ; puis la vue s'éloigne. Ensuite, un
 // tutoriel qui se fait plutôt qu'il ne se raconte : une seule consigne à la fois, sur ce qu'on est en train de faire
 // (ouvrir les espèces, lire la fiche de l'abeille, voir le nectar arriver dans la bourse, acheter sa première ruche,
 // regarder l'icône d'activité passer à la marche).
@@ -132,72 +134,156 @@ export function startIntro(c) {
 	const center = () => { const b = garden.blob(0); return { x: b.cx, y: b.cy }; };
 	const flowerOf = () => place.plants.find(p => p.intro);
 
-	// ─── 1. La motte de terre, l'oiseau, la graine ───
+	// ─── La mise en scène de l'ouverture : caméra, rayons de soleil, petits effets dessinés par-dessus le jardin ───
+	const Z_FAR = 1.7, Z_NEAR = 3.2;
+	// La caméra vise la fleur : `z` son zoom, `lift` la hauteur visée au-dessus du pied, `rays` les rayons (0 à 1).
+	const cine = { on: false, z: Z_FAR, lift: 0, down: 0, rays: 0, raysTo: 0, kick: 0 };
+	const fx = new Set();
+	const now = () => performance.now() / 1000;
+	garden.introFx = ctx => { drawRays(ctx); for (const f of fx) f(ctx); };
+	/** La caméra respire : un souffle lent sur le zoom, une dérive à peine visible. Elle suit `cine` en douceur. */
+	function cineLoop() {
+		if (over || !cine.on) return;
+		const t = now(), p = center();
+		cine.kick *= 0.9;
+		cine.rays += (cine.raysTo - cine.rays) * 0.025;
+		const z = cine.z * (1 + 0.014 * Math.sin(t * 0.85)) * (1 + cine.kick);
+		garden.flyTo(p.x + Math.sin(t * 0.37) * 2.4 / z, p.y + 12 - cine.lift + cine.down + Math.cos(t * 0.29) * 1.8 / z, z);
+		requestAnimationFrame(cineLoop);
+	}
+	const cineOn = () => { if (!cine.on) { cine.on = true; requestAnimationFrame(cineLoop); } };
+	/** La fleur grandit : la caméra se rapproche et monte avec sa tête. */
+	const cineFollow = f => {
+		const g = Math.max(0, Math.min(1, f.growth));
+		cine.z = Z_FAR + (Z_NEAR - Z_FAR) * ease(g);
+		cine.lift = -(garden.meta.get(f.id)?.top ?? -70 * g) * 0.5;
+	};
+
+	/** Des rayons de soleil en biais, depuis le haut à droite, qui ondulent doucement (dessinés en pixels d'écran). */
+	function drawRays(ctx) {
+		if (cine.rays < 0.01) return;
+		const cw = ctx.canvas.width, ch = ctx.canvas.height, t = now();
+		ctx.save();
+		ctx.setTransform(1, 0, 0, 1, 0, 0);
+		for (let i = 0; i < 6; i++) {
+			const a = cine.rays * (0.24 + 0.12 * Math.sin(t * 0.7 + i * 1.9));
+			if (a <= 0) continue;
+			const x0 = cw * (0.22 + 0.19 * i) + Math.sin(t * 0.23 + i * 2.1) * cw * 0.025, w = cw * (0.05 + 0.035 * ((i * 7) % 3)), slant = ch * 0.62;
+			const g = ctx.createLinearGradient(x0, 0, x0 - slant, ch);
+			g.addColorStop(0, `rgba(255,206,92,${a})`);
+			g.addColorStop(0.55, `rgba(255,222,130,${a * 0.6})`);
+			g.addColorStop(1, 'rgba(255,240,190,0)');
+			ctx.fillStyle = g;
+			ctx.beginPath();
+			ctx.moveTo(x0, -10); ctx.lineTo(x0 + w, -10); ctx.lineTo(x0 + w * 1.7 - slant, ch); ctx.lineTo(x0 - w * 0.7 - slant, ch);
+			ctx.fill();
+		}
+		// Des poussières dorées flottent dans la lumière.
+		for (let i = 0; i < 16; i++) {
+			const u = (i * 0.618 + t * (0.012 + 0.004 * (i % 4))) % 1, v = (i * 0.371 + t * 0.008 * (1 + (i % 3))) % 1;
+			const x = cw * (1.05 - u * 1.1) + Math.sin(t * 0.8 + i) * cw * 0.02, y = ch * (v * 0.9) + u * ch * 0.25;
+			const tw = 0.5 + 0.5 * Math.sin(t * 2.2 + i * 2.7);
+			ctx.fillStyle = `rgba(255,236,170,${cine.rays * 0.55 * tw})`;
+			ctx.beginPath(); ctx.arc(x, y, cw * (0.0022 + 0.0016 * (i % 3)), 0, Math.PI * 2); ctx.fill();
+		}
+		ctx.restore();
+	}
+
+	// ─── 1. Une graine tombe du ciel et se plante ───
 	async function scene() {
 		step('scene');
 		const p = center();
-		garden.cam.cx = p.x; garden.cam.cy = p.y; garden.cam.z = 2.4;
-		garden.flyTo(p.x, p.y, 2.4);
-		if (flowerOf()) return;
-		await wait(1800);
-		await birdPass(p);
+		garden.cam.cx = p.x; garden.cam.cy = p.y + 12; garden.cam.z = Z_FAR;
+		cineOn();
+		if (flowerOf()) { cine.raysTo = 1; cineFollow(flowerOf()); return; }
+		await wait(1500);
+		await seedDrop(p);
 		const [ox, oy] = cellOrigin(0);
 		const f = garden.spawn(state.place, 'fleur', 0.03, { x: p.x - ox, y: p.y - oy + 12 }, 0);
 		f.intro = true;
 		f.single = true;
 		f.seed = FLOWER_SEED; f.variant = { species: FLOWER };
-		garden.burst(p.x, p.y + 12, 8, '#9A7448');
 		c.persist(true);
+		await wait(700);
+		// Une petite pousse sort de terre, et le premier rayon de soleil arrive sur elle.
+		cine.raysTo = 1;
+		c.sound.sprout?.(0.1);
+		for (let k = 1; k <= 20; k++) { f.growth = Math.max(f.growth, 0.03 + 0.07 * ease(k / 20)); cineFollow(f); await wait(60); }
 		await wait(900);
 	}
 
-	/** Un oiseau traverse la vue ; à mi-chemin, une graine tombe sur la motte. */
-	function birdPass(p) {
+	/** La graine tombe tout droit, en brillant ; elle se plante avec un petit choc (« poc »). */
+	function seedDrop(p) {
 		return new Promise(res => {
-			const t0 = performance.now(), D = 3600, drop = 0.42, fall = 900;
-			setTimeout(() => c.sound.birdCall?.(-0.4), D * 0.2);
-			setTimeout(() => c.sound.seedFall?.(), D * drop);
-			const from = { x: p.x - 420, y: p.y - 230 }, to = { x: p.x + 420, y: p.y - 170 };
-			let landed = false;
-			garden.introFx = ctx => {
-				const t = (performance.now() - t0) / D;
-				if (t <= 1) {
-					const x = from.x + (to.x - from.x) * t, y = from.y + (to.y - from.y) * t - Math.sin(t * Math.PI) * 30;
-					drawBird(ctx, x, y, performance.now() / 1000);
-					// Son ombre, très pâle, glisse sur le sol.
-					ctx.fillStyle = 'rgba(60,50,40,0.10)';
-					ctx.beginPath(); ctx.ellipse(x, p.y + 30, 12, 4, 0, 0, Math.PI * 2); ctx.fill();
-				}
-				// La graine : lâchée par l'oiseau, elle tombe sur la motte.
-				const ts = (performance.now() - t0 - drop * D) / fall;
-				if (ts > 0 && ts < 1) {
-					const sx = from.x + (to.x - from.x) * drop, sy = from.y + (to.y - from.y) * drop - Math.sin(drop * Math.PI) * 30;
-					const k = ease(ts), gx = sx + (p.x - sx) * k, gy = sy + (p.y + 12 - sy) * ts * ts;
+			const t0 = performance.now(), FALL = 1250, gy = p.y + 12, top = gy - 300;
+			c.sound.seedFall?.();
+			let hit = 0;
+			const draw = ctx => {
+				const ms = performance.now() - t0, t = ms / FALL;
+				if (t < 1) {
+					const y = top + (gy - top) * t * t;
+					// Sa traînée, pâle, et la graine qui tourne.
+					const g = ctx.createLinearGradient(0, y - 70, 0, y);
+					g.addColorStop(0, 'rgba(244,194,62,0)'); g.addColorStop(1, 'rgba(244,194,62,0.55)');
+					ctx.strokeStyle = g; ctx.lineWidth = 1.6; ctx.lineCap = 'round';
+					ctx.beginPath(); ctx.moveTo(p.x, y - 70 * Math.min(1, t * 3)); ctx.lineTo(p.x, y); ctx.stroke();
 					ctx.fillStyle = '#6B4A2E';
-					ctx.beginPath(); ctx.ellipse(gx, gy, 2.6, 1.8, ts * 6, 0, Math.PI * 2); ctx.fill();
-				} else if (ts >= 1 && !landed) { landed = true; c.sound.seedLand?.(); res(); }
-				if (t > 1 && landed) garden.introFx = null;
+					ctx.beginPath(); ctx.ellipse(p.x, y, 3, 2.1, ms / 90, 0, Math.PI * 2); ctx.fill();
+					// Son éclat : une petite étoile qui scintille autour d'elle.
+					const k = 5 + 2.5 * Math.sin(ms / 70);
+					ctx.strokeStyle = `rgba(255,236,170,${0.75 + 0.25 * Math.sin(ms / 50)})`; ctx.lineWidth = 1.1;
+					ctx.beginPath();
+					for (let i = 0; i < 4; i++) { const a = ms / 400 + i * Math.PI / 4; ctx.moveTo(p.x - Math.cos(a) * k, y - Math.sin(a) * k); ctx.lineTo(p.x + Math.cos(a) * k, y + Math.sin(a) * k); }
+					ctx.stroke();
+					return;
+				}
+				if (!hit) {
+					// Le choc : la terre saute, la caméra sursaute un peu.
+					hit = performance.now();
+					c.sound.seedLand?.();
+					garden.burst(p.x, gy, 14, '#9A7448');
+					garden.burst(p.x, gy - 4, 6, '#F4C23E');
+					cine.kick = 0.07;
+					try { navigator.vibrate?.(18); } catch (e) { /* pas de vibreur */ }
+					res();
+				}
+				// Deux ondes de poussière qui s'écartent au sol.
+				const h = (performance.now() - hit) / 650;
+				if (h >= 1) { fx.delete(draw); return; }
+				for (const [d, w] of [[0, 2.2], [0.18, 1.3]]) {
+					const u = h - d;
+					if (u <= 0) continue;
+					const r = 6 + 34 * ease(Math.min(1, u));
+					ctx.strokeStyle = `rgba(122,92,58,${0.5 * (1 - u)})`; ctx.lineWidth = w;
+					ctx.beginPath(); ctx.ellipse(p.x, gy, r, r * 0.36, 0, 0, Math.PI * 2); ctx.stroke();
+				}
 			};
+			fx.add(draw);
 		});
 	}
 
-	function drawBird(ctx, x, y, t) {
-		const flap = Math.sin(t * 16) * 0.9;
-		ctx.save();
-		ctx.translate(x, y);
-		ctx.strokeStyle = 'rgba(70,52,40,0.9)';
-		ctx.fillStyle = 'rgba(92,70,52,0.92)';
-		ctx.lineCap = 'round';
-		ctx.lineWidth = 3.2;
-		// Les ailes, qui battent.
-		ctx.beginPath(); ctx.moveTo(-2, 0); ctx.quadraticCurveTo(-10, -10 * flap, -20, -4 - 12 * flap); ctx.stroke();
-		ctx.beginPath(); ctx.moveTo(2, 0); ctx.quadraticCurveTo(10, -10 * flap, 20, -4 - 12 * flap); ctx.stroke();
-		// Le corps, la tête et le bec.
-		ctx.beginPath(); ctx.ellipse(0, 1, 9, 5, 0, 0, Math.PI * 2); ctx.fill();
-		ctx.beginPath(); ctx.arc(9, -1, 3.6, 0, Math.PI * 2); ctx.fill();
-		ctx.fillStyle = '#E3A33A';
-		ctx.beginPath(); ctx.moveTo(12, -2); ctx.lineTo(16, -0.5); ctx.lineTo(12, 0.5); ctx.fill();
-		ctx.restore();
+	/** Un insecte traverse le bas de l'image pendant que le logo est là : une coccinelle qui trottine. */
+	function bugPass(p, ms = 5200) {
+		const t0 = performance.now(), y = p.y + 46;
+		const draw = ctx => {
+			const t = (performance.now() - t0) / ms;
+			if (t >= 1 || over) { fx.delete(draw); return; }
+			const x = p.x - 150 + 300 * t, step = Math.sin(t * 90);
+			ctx.save();
+			ctx.translate(x, y + Math.abs(step) * 0.5);
+			ctx.strokeStyle = 'rgba(40,30,24,0.85)'; ctx.lineWidth = 0.6; ctx.lineCap = 'round';
+			for (const [lx, ph] of [[-2, 0], [0, 2], [2, 4]]) {
+				const k = Math.sin(t * 90 + ph) * 1.2;
+				ctx.beginPath(); ctx.moveTo(lx, 0.5); ctx.lineTo(lx + k, 3); ctx.stroke();
+			}
+			ctx.fillStyle = '#C8342B';
+			ctx.beginPath(); ctx.ellipse(0, 0, 3.6, 2.7, 0, Math.PI, 0); ctx.fill();
+			ctx.fillStyle = '#2A211C';
+			ctx.beginPath(); ctx.arc(3.3, -0.9, 1.35, 0, Math.PI * 2); ctx.fill();
+			for (const [dx, dy] of [[-1.6, -1.5], [0.5, -1.9], [-0.4, -0.7], [1.7, -0.9]]) { ctx.beginPath(); ctx.arc(dx, dy, 0.45, 0, Math.PI * 2); ctx.fill(); }
+			ctx.restore();
+		};
+		fx.add(draw);
 	}
 
 	// ─── 2. Quelques pas : la fleur pousse ───
@@ -220,11 +306,13 @@ export function startIntro(c) {
 		}
 		const buttons = [];
 		if (c.DEV) buttons.push({ label: 'Simuler 5 m', stay: true, run: () => c.addMeters(5) });
-		say('Un oiseau a laissé tomber une graine.<br><b>Marche quelques pas</b> pour la faire pousser.', buttons, 'center');
+		say('Une graine vient de se planter.<br><b>Marche quelques pas</b> pour la faire pousser.', buttons, 'center');
 		let heard = Math.floor(f.growth * 8);
 		await until(() => {
 			if (over) return true;
-			f.growth = Math.max(f.growth, Math.min(1, 0.03 + (state.totals.distance - d0) / WALK_M));
+			f.growth = Math.max(f.growth, Math.min(1, 0.1 + 0.9 * (state.totals.distance - d0) / WALK_M));
+			// Plus elle pousse, plus on s'approche.
+			cineFollow(f);
 			// Une petite note à chaque huitième de croissance : on entend la fleur se déplier.
 			const k = Math.floor(f.growth * 8);
 			if (k > heard && f.growth < 1) { heard = k; c.sound.sprout?.(f.growth); }
@@ -233,7 +321,9 @@ export function startIntro(c) {
 		if (over) throw new Skip();
 		delete state.introD0;
 		const p = center();
-		garden.burst(p.x, p.y - 20, 18, '#F4C23E');
+		cineFollow(f);
+		cine.kick = 0.04;
+		garden.burst(p.x, p.y + 12 - cine.lift * 1.7, 22, '#F4C23E');
 		c.sound.chime(3);
 		state.species[c.speciesOf(f)] ??= Date.now();
 		say('Elle a fleuri !', [], 'center');
@@ -257,19 +347,16 @@ export function startIntro(c) {
 		await wait(3500);
 	}
 
-	// ─── 4. La vue s'éloigne, le terrain s'étend un peu, le logo apparaît ───
+	// ─── 4. Le logo apparaît au-dessus de la fleur, un insecte passe ; puis la vue s'éloigne et le terrain s'étend ───
 	async function logo() {
 		cap.hidden = true;
-		const p = center(), z0 = garden.cam.z, z1 = 1.3;
-		for (let k = 1; k <= 45; k++) {
-			const e = ease(k / 45);
-			garden.flyTo(p.x, p.y, z0 + (z1 - z0) * e);
-			if (k === 18) (place.cellSize ??= {})[0] = 0.25;
-			if (k === 32) place.cellSize[0] = 0.4;
-			await wait(110);
-		}
+		const p = center();
+		// La fleur descend un peu dans l'image pour laisser sa place au logo, au-dessus d'elle.
+		cineOn();
+		cine.raysTo = 1;
+		for (let k = 1; k <= 20; k++) { cine.z = Z_NEAR - 0.75 * ease(k / 20); cine.down = -62 * ease(k / 20); await wait(40); }
 		const el = document.createElement('div');
-		el.className = 'intro-logo off';
+		el.className = 'intro-logo over off';
 		el.innerHTML = `<img src="assets/logo-detoure.png" srcset="assets/logo-detoure.png 1x, assets/logo-detoure@2x.webp 2x" alt="Evolia"><p>${TAGLINE}</p>`;
 		app.append(el);
 		void el.offsetWidth;
@@ -278,11 +365,24 @@ export function startIntro(c) {
 		// L'ouverture musicale : la musique de l'introduction s'efface un instant pour la laisser sonner.
 		c.sound.setMood?.('hush');
 		c.sound.fanfare?.();
-		await wait(4200);
+		setTimeout(() => !over && bugPass(p), 500);
+		await wait(4600);
 		c.sound.setMood?.('joy');
 		el.classList.remove('in');
 		el.classList.add('off');
-		await wait(1500);
+		// Le mouvement inverse : la vue s'éloigne, les rayons s'en vont, le terrain s'étend.
+		cine.on = false;
+		cine.raysTo = 0;
+		const z0 = garden.cam.z, y0 = garden.cam.cy, z1 = 1.3;
+		for (let k = 1; k <= 45; k++) {
+			const e = ease(k / 45);
+			cine.rays *= 0.93;
+			garden.flyTo(p.x, y0 + (p.y - y0) * e, z0 + (z1 - z0) * e);
+			if (k === 18) (place.cellSize ??= {})[0] = 0.25;
+			if (k === 32) place.cellSize[0] = 0.4;
+			await wait(110);
+		}
+		cine.rays = 0;
 		el.remove();
 	}
 
@@ -447,6 +547,7 @@ export function startIntro(c) {
 		if (over) return;
 		over = true;
 		garden.introFx = null;
+		cine.on = false;
 		c.sound.setMood?.(null);
 		clearInterval(tailTimer);
 		for (const ev of GUARDED) document.removeEventListener(ev, guard, { capture: true });
@@ -489,6 +590,8 @@ export function startIntro(c) {
 		const from = Math.max(0, order.indexOf(at === 'logo' ? 'species' : at));
 		if (from >= 1) { (place.cellSize ??= {})[0] = Math.max(place.cellSize[0] ?? 0.15, from >= 3 ? 0.4 : 0.15); }
 		if (from <= 1) { await scene(); await walk(); }
+		// Reprise à l'abeille : la vue est déjà tout près de la fleur, rayons allumés.
+		if (from === 2) { const f = flowerOf(), q = center(); if (f) cineFollow(f); cine.rays = cine.raysTo = 1; garden.cam.cx = q.x; garden.cam.cy = q.y + 12 - cine.lift; garden.cam.z = cine.z; cineOn(); }
 		if (from <= 2) { await bee(); await logo(); }
 		if (from >= 3) { const p = center(); garden.flyTo(p.x, p.y, 1.3); }
 		if (from >= 4) app.classList.add('i-sheet'), $('#btn-species').classList.add('i-on');

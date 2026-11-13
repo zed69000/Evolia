@@ -3,6 +3,15 @@
 Chaque version, la plus récente en haut. Le site (evolia.sebastienalzamora.workers.dev) est toujours à jour ;
 le Play Store (tests internes) reçoit les versions indiquées « Play ».
 
+## 0.7.95 — 14 novembre 2026
+L'ouverture d'une nouvelle partie, refaite d'après le story-board de Seb :
+- **Une graine tombe du ciel**, en brillant, et se plante avec un petit choc : la terre saute, deux ondes de poussière s'écartent, la caméra sursaute (et le téléphone vibre un peu). L'oiseau qui la lâchait n'est plus là.
+- **Une petite pousse sort**, et des **rayons de soleil** arrivent en biais, avec des poussières dorées qui flottent dedans. Ils ondulent pendant toute l'ouverture.
+- **La caméra respire** légèrement, et **se rapproche à mesure que la fleur grandit** sous les pas, jusqu'au zoom le plus fort quand elle fleurit.
+- L'abeille vient la butiner, vue de tout près.
+- **Le logo apparaît au-dessus de la fleur**, qu'on regarde encore, pendant qu'une coccinelle traverse le bas de l'image. Puis la vue s'éloigne (le mouvement inverse) et le terrain s'étend.
+- La suite ne change pas : les espèces, la fiche de l'abeille et son nectar, puis Aménager et la première ruche.
+
 ## 0.7.94 — 14 novembre 2026
 - Le cercle de portée d'un habitat suit la vue du jardin, légèrement plongeante : c'est une ellipse un peu plus large que haute (comme le pied de l'objet). Le calcul utilise la même forme, de même surface que l'ancien cercle : ce qui est dans l'ellipse compte, et la production ne change pas.
 

@@ -959,6 +959,11 @@ body:has(.panel.open) #debug { display: none; }
 .intro-logo::before { content: ''; position: absolute; inset: 0; z-index: -1; background: rgba(253, 247, 231, .38); transition: background 1.6s ease; }
 /* .off : sans voile (avant d'entrer dans l'introduction, et à la sortie, où il s'en va en douceur). */
 .intro-logo.off::before { background: rgba(253, 247, 231, 0); }
+/* Dans l'ouverture, le logo se pose en haut, au-dessus de la fleur qu'on regarde encore ; voile en dégradé. */
+.intro-logo.over { justify-content: flex-start; padding-top: calc(env(safe-area-inset-top, 0px) + 9vh); }
+.intro-logo.over img { width: min(190px, 48vw); }
+.intro-logo.over::before { background: linear-gradient(rgba(253, 247, 231, .55), rgba(253, 247, 231, .2) 45%, rgba(253, 247, 231, 0) 62%); transition: opacity 1.6s ease; }
+.intro-logo.over.off::before { opacity: 0; }
 .intro-logo p { font-size: 25px; color: #1B5A3A; }
 .intro-coin { position: absolute; width: 16px; height: 16px; margin: -8px 0 0 -8px; border-radius: 50%; z-index: 80; pointer-events: none; background: radial-gradient(circle at 35% 35%, #FFE7A0, #F4C23E 60%, #C8901A); box-shadow: 0 0 12px rgba(244, 194, 62, .8); }
 .intro-trail { position: absolute; width: 6px; height: 6px; margin: -3px 0 0 -3px; border-radius: 50%; z-index: 79; pointer-events: none; background: rgba(248, 212, 106, .55); animation: intro-trail .5s ease-out forwards; }
