@@ -16,3 +16,7 @@ keystore.properties
 # Enregistrements sonores d’origine (lourds) : voir CREDITS-AUDIO.md pour les retrouver
 art/audio-sources/
 __pycache__/
+
+# le plugin commun de sauvegarde en ligne a ses sources Android dans le dépôt (le dossier android/ du jeu, lui, est régénéré)
+!native/play-cloud-save/android/
+native/play-cloud-save/android/build/
