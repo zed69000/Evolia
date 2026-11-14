@@ -3,6 +3,14 @@
 Chaque version, la plus récente en haut. Le site (evolia.sebastienalzamora.workers.dev) est toujours à jour ;
 le Play Store (tests internes) reçoit les versions indiquées « Play ».
 
+## 0.8.7 — 14 novembre 2026
+**Le petit bonhomme bouge avec toi.** L'icône d'activité, en haut à gauche, s'anime image par image selon ce que tu fais :
+- **au repos**, il somnole (la tête qui tombe un peu) et des « z » s'envolent ;
+- **à pied**, il marche (le pas, puis le passage) ;
+- **en courant**, il court penché en avant, avec une grande foulée ;
+- **à vélo**, ses pieds tournent avec le pédalier et les roues tournent.
+Plus il va vite, plus l'animation est rapide. Pas d'animation si le téléphone demande de réduire les mouvements.
+
 ## 0.8.6 — 14 novembre 2026
 - **Plus de réglage « Miel récolté »** sur la ruche : il ne servait à rien (« le reste nourrit la colonie » n'avait aucun effet), et le monter doublait le miel sans contrepartie. Toute la production de la ruche devient du miel, au prix d'avant (30 %). La fiche le dit : « Ta ruche fait du miel au lieu de nectar : troque tes pots au panier, 60 nectar le pot. »
 - « Faire grandir » dit « +313 nectar par km » au lieu de « +313 par km marché », qu'on pouvait lire comme des kilomètres.

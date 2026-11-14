@@ -929,8 +929,22 @@ body:has(.panel.open) #debug { display: none; }
 .hud-act .ring { position: absolute; inset: 0; width: 46px; height: 46px; }
 .act-ico { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; }
 .act-ico svg { width: 24px; height: 24px; }
-.hud-act:not([data-act="rest"]) .act-ico svg { animation: act-bob .5s ease-in-out infinite alternate; }
-@keyframes act-bob { from { transform: translateY(0); } to { transform: translateY(-1.5px); } }
+/* Le bonhomme s'anime image par image : chaque image (g.fr) n'est visible que pendant sa part du cycle. */
+.act-ico .fr { opacity: 0; animation: act-f2 var(--dur, .9s) steps(1, end) infinite; animation-delay: calc(var(--k) * var(--dur, .9s) / var(--n, 2) - var(--dur, .9s)); }
+.act-ico .n3 .fr { animation-name: act-f3; --n: 3; }
+.hud-act[data-act="rest"] { --dur: 2.4s; }
+.hud-act[data-act="walk"] { --dur: .75s; }
+.hud-act[data-act="run"] { --dur: .45s; }
+.hud-act[data-act="bike"] { --dur: .5s; }
+@keyframes act-f2 { 0% { opacity: 1; } 50%, 100% { opacity: 0; } }
+@keyframes act-f3 { 0% { opacity: 1; } 33.34%, 100% { opacity: 0; } }
+/* Au repos, des « z » montent de sa tête, l'un après l'autre. */
+.act-z { position: absolute; top: 3px; right: 2px; width: 14px; height: 18px; pointer-events: none; }
+.act-z i { position: absolute; left: 0; bottom: 0; font: 800 9px 'Nunito', sans-serif; font-style: normal; color: var(--foret); opacity: 0; animation: act-z 3s ease-out infinite; }
+.act-z i:nth-child(2) { animation-delay: 1s; font-size: 10px; }
+.act-z i:nth-child(3) { animation-delay: 2s; font-size: 11px; }
+@keyframes act-z { 0% { opacity: 0; transform: translate(0, 0); } 15% { opacity: .9; } 100% { opacity: 0; transform: translate(7px, -14px); } }
+@media (prefers-reduced-motion: reduce) { .act-ico .fr { animation: none; } .act-ico .fr:first-child { opacity: 1; } .act-z i { animation: none; } }
 /* Plus d'objectif ni de statut affichés en permanence : tout est derrière l'icône. */
 #home .status, #next-goal, #live, #mission { display: none !important; }
 

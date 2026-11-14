@@ -1366,7 +1366,7 @@ for (const ev of ['click', 'dblclick', 'contextmenu']) document.addEventListener
 }, { capture: true, passive: false });
 garden.holdTaps = () => !!guideOn && !guideOn.steps[guideOn.i]?.garden;
 // En test : lancer un guide d'achat à la main (evoliaGuide.buy('mangeoire')).
-if (DEV) window.evoliaTrack = { tracking: () => tracking, nag: () => { trackAskedAt = 0; nagTracking(); } };
+if (DEV) window.evoliaTrack = { frames: () => ACT_FRAMES, tracking: () => tracking, nag: () => { trackAskedAt = 0; nagTracking(); } };
 if (DEV) window.evoliaGuide = { buy: k => { const g = buyGuide(k); if (g) startGuide({ ...g, title: 'Test' }); return !!g; }, quiz: () => offerQuiz(true) };
 
 // ─── L'interface se dévoile au fil du jeu ───
@@ -1943,11 +1943,40 @@ setInterval(() => {
 }, 5000);
 
 // ─── L'icône d'activité, en haut : au repos, marche, course ou vélo ───
-const ACT_ICONS = {
-	rest: '<circle cx="12" cy="4.6" r="2.2"/><path d="M12 7.5v6.5M12 14l-2.6 7M12 14l2.6 7M12 9.2l-3.4 3.4M12 9.2l3.4 3.4"/>',
-	walk: '<circle cx="13" cy="4.6" r="2.2"/><path d="M12.6 7.6l-1.8 6M10.8 13.6l-2.8 7.2M10.8 13.6l3.2 3 .8 4.4M12.2 9.4l-3.4 2.8M12.2 9.4l3.4 2"/>',
-	run: '<circle cx="15.4" cy="4.4" r="2.2"/><path d="M14.6 7.4l-3.4 6M11.2 13.4l-4 3.4-2.4-.8M11.2 13.4l4 2.6-1 5M13.6 9.2l-4.2.2M13.6 9.2l3.8 3.4"/>',
-	bike: '<circle cx="6" cy="17" r="3.6"/><circle cx="18" cy="17" r="3.6"/><circle cx="13.5" cy="4.6" r="2"/><path d="M6 17l4-6h5l3 6M10 11l2.4 6L15 11M12.6 7.2l-1.6 3.8"/>',
+// Le petit bonhomme s'anime image par image selon ce qu'on fait : il marche, court ou pédale ; au repos, il somnole
+// (la tête qui tombe un peu) et des « z » s'envolent. Chaque activité a ses images, qui défilent en boucle (CSS).
+const stk = (...pts) => pts.map((p, k) => `${k ? 'L' : 'M'}${p[0]} ${p[1]}`).join('');
+// Le vélo : les pieds tournent avec le pédalier (trois positions), les roues aussi.
+const bikeFrame = k => {
+	const a = (k * 2 * Math.PI) / 3, cx = 12.4, cy = 17, r = 2.4, hip = [10.4, 10.6];
+	const leg = ang => {
+		const pd = [cx + r * Math.cos(ang), cy + r * Math.sin(ang)];
+		const knee = [(hip[0] + pd[0]) / 2 + 2, (hip[1] + pd[1]) / 2 - 1.4];
+		return `<path d="${stk(hip, knee, pd)}"/>`;
+	};
+	const spoke = (x, y) => { const b = a / 2; return `<path d="${stk([x - 3 * Math.cos(b), y - 3 * Math.sin(b)], [x + 3 * Math.cos(b), y + 3 * Math.sin(b)])}" stroke-width="1"/>`; };
+	return `<circle cx="5.6" cy="17.4" r="3.6"/><circle cx="18.6" cy="17.4" r="3.6"/>${spoke(5.6, 17.4)}${spoke(18.6, 17.4)}
+		<path d="M5.6 17.4L9.6 11.4h5.4l3.6 6M9.6 11.4L12.4 17l2.6-5.6"/><circle cx="14.6" cy="4.6" r="2"/>
+		<path d="${stk([13.8, 7], hip)}M13.2 8.4L15.4 11"/>${leg(a)}${leg(a + Math.PI)}`;
+};
+const ACT_FRAMES = {
+	// Au repos : debout, la tête droite puis qui penche, endormie.
+	rest: [
+		'<circle cx="12" cy="4.6" r="2.2"/><path d="M12 7.5v6.5M12 14l-2.2 7M12 14l2.2 7M12 9.2l-2.6 4M12 9.2l2.6 4"/>',
+		'<circle cx="12.8" cy="5.4" r="2.2"/><path d="M12 7.9v6.1M12 14l-2.2 7M12 14l2.2 7M12 9.6l-2.4 4.2M12 9.6l2.4 4.2"/>',
+	],
+	// La marche : le pas (jambes écartées, bras qui balancent), puis le passage (jambes serrées, bras le long du corps).
+	walk: [
+		`<circle cx="12.8" cy="4.4" r="2.2"/><path d="${stk([12.6, 7.2], [12, 13.4])}${stk([12, 13.4], [14, 17], [15.8, 20.8])}${stk([12, 13.4], [10.4, 17.2], [8.2, 20.4])}${stk([12.4, 9], [14.4, 11], [15.6, 13.4])}${stk([12.4, 9], [10.6, 11.4], [9.4, 13.6])}"/>`,
+		`<circle cx="12.8" cy="3.8" r="2.2"/><path d="${stk([12.6, 6.6], [12.2, 13])}${stk([12.2, 13], [12.4, 17], [12, 21])}${stk([12.2, 13], [14.2, 16.2], [13.2, 19.6])}${stk([12.5, 8.4], [13.4, 11], [13.4, 13.4])}${stk([12.5, 8.4], [11.6, 11], [11.2, 13.2])}"/>`,
+	],
+	// La course : penché en avant, grande foulée, puis en l'air genoux pliés.
+	run: [
+		`<circle cx="15" cy="4.2" r="2.2"/><path d="${stk([14.2, 7], [11.6, 13])}${stk([11.6, 13], [15, 15.6], [15.6, 20.6])}${stk([11.6, 13], [8.4, 16], [5, 16.6])}${stk([13.4, 8.8], [16.6, 10.2], [18, 8])}${stk([13.4, 8.8], [10, 9.4], [8.4, 12.2])}"/>`,
+		`<circle cx="15" cy="3.4" r="2.2"/><path d="${stk([14.2, 6.2], [11.8, 12.2])}${stk([11.8, 12.2], [14.8, 14.4], [13.2, 17.8])}${stk([11.8, 12.2], [9.6, 15.6], [10.6, 18.8])}${stk([13.4, 8], [15.6, 10.6], [17.6, 9.6])}${stk([13.4, 8], [11, 10.2], [10.4, 12.8])}"/>`,
+		`<circle cx="15" cy="4.2" r="2.2"/><path d="${stk([14.2, 7], [11.6, 13])}${stk([11.6, 13], [9.6, 16.6], [8.4, 20.6])}${stk([11.6, 13], [14.6, 14.4], [17.4, 13.2])}${stk([13.4, 8.8], [10.4, 10.4], [9.4, 7.8])}${stk([13.4, 8.8], [16, 11], [18, 12.4])}"/>`,
+	],
+	bike: [0, 1, 2].map(bikeFrame),
 };
 function renderAct() {
 	const a = session?.act, kind = !session ? 'rest' : a?.bike ? 'bike' : a && a.mult >= 2 ? 'run' : 'walk';
@@ -1962,7 +1991,8 @@ function renderAct() {
 	if (!el || el.dataset.act === kind) return;
 	el.dataset.act = kind;
 	el.setAttribute('aria-label', kind === 'rest' ? 'Au repos' : a?.name ?? 'En mouvement');
-	$('#act-ico').innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ACT_ICONS[kind]}</svg>`;
+	const fr = ACT_FRAMES[kind];
+	$('#act-ico').innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="frames n${fr.length}">${fr.map((f, k) => `<g class="fr" style="--k:${k}">${f}</g>`).join('')}</svg>${kind === 'rest' ? '<span class="act-z" aria-hidden="true"><i>z</i><i>z</i><i>z</i></span>' : ''}`;
 }
 
 /** Le détail derrière l'icône : l'activité en cours, les kilomètres du jour, l'objectif, les milieux. */
