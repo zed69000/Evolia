@@ -1220,7 +1220,9 @@ const TIPS = [
 	{ id: 'habitats2', eco2: true, target: '#btn-deco', when: () => !owned('massif') && buyable('massif'),
 		title: 'Les habitats', text: 'Ils accueillent des animaux et te rapportent du nectar. Ouvre Aménager.', guide: () => buyGuide('massif', 'Pose un massif mellifère : touche « Installer ».') },
 	{ id: 'elan', eco2: true, target: '#hud-act', when: () => (state.walks?.length ?? 0) >= 1 && boostLeft(state) > 0 && prodPerHour(state) > 0,
-		title: 'L’élan', text: 'Après une sortie, tes habitats produisent à plein. Au repos, presque rien.' },
+		title: 'L’élan', sub: 'Tes pas donnent vie au jardin', text: 'Après une sortie, tes habitats produisent à plein régime.',
+		rows: [{ ico: '👟🌱', b: 'Après une sortie', t: 'Production à plein régime', on: true }, { ico: '🌙🌿', b: 'Au repos', t: 'Production très faible' }],
+		foot: 'Bouge pour relancer ton élan.' },
 	{ id: 'kmvalue', eco2: true, target: '#hud-steps', when: () => prodPerHour(state) >= 3,
 		title: 'Tes pas valent de plus en plus', get text() { return `Un km te rapporte maintenant environ ${fmtInt(60 + KM_HOURS * prodPerHour(state))} nectar.`; } },
 	{ id: 'upgrade', eco2: true, target: '#btn-deco', when: () => !!upgradable(),
@@ -1389,7 +1391,7 @@ for (const ev of ['click', 'dblclick', 'contextmenu']) document.addEventListener
 garden.holdTaps = () => !!guideOn && !guideOn.steps[guideOn.i]?.garden;
 // En test : lancer un guide d'achat à la main (evoliaGuide.buy('mangeoire')).
 if (DEV) window.evoliaTrack = { frames: () => ACT_FRAMES, tracking: () => tracking, nag: () => { trackAskedAt = 0; nagTracking(); } };
-if (DEV) window.evoliaGuide = { buy: k => { const g = buyGuide(k); if (g) startGuide({ ...g, title: 'Test' }); return !!g; }, quiz: () => offerQuiz(true) };
+if (DEV) window.evoliaGuide = { buy: k => { const g = buyGuide(k); if (g) startGuide({ ...g, title: 'Test' }); return !!g; }, quiz: () => offerQuiz(true), tip: id => nextTip(id) };
 
 // ─── L'interface se dévoile au fil du jeu ───
 // Au départ : le jardin, la bourse, les espèces et les options. Le reste arrive quand il devient utile, avec un petit
@@ -1434,10 +1436,11 @@ function focusJar() {
 }
 
 /** Montre la prochaine explication utile, quand rien d'autre n'est ouvert. */
-function nextTip() {
-	if (state.intro || guideOn || $('#app').classList.contains('booting') || tipShown || Date.now() - lastTipEnd < 20000 || placing || !$('#modal').hidden || !$('#coach').hidden || document.querySelector('.panel.open') || session) return;
+function nextTip(force = null) {
+	if (!force && (state.intro || guideOn || $('#app').classList.contains('booting') || tipShown || Date.now() - lastTipEnd < 20000 || placing || !$('#modal').hidden || !$('#coach').hidden || document.querySelector('.panel.open') || session)) return;
 	const done = (state.tips ??= {});
-	const tip = TIPS.find(t => !done[t.id] && !(t.old && state.eco2) && !(t.eco2 && !state.eco2) && t.when());
+	// `force` (outils du développeur) : montrer une astuce précise, sans ses conditions.
+	const tip = force ? TIPS.find(t => t.id === force) : TIPS.find(t => !done[t.id] && !(t.old && state.eco2) && !(t.eco2 && !state.eco2) && t.when());
 	if (!tip) return;
 	const target = $(tip.target);
 	if (!target || target.offsetParent === null) return;
@@ -1451,12 +1454,19 @@ function nextTip() {
 	if (garden.autoCam()) tip.show?.();
 	target.classList.add('tip-glow');
 	const el = $('#tip');
-	el.innerHTML = `<b>${tip.title}</b><p>${tip.text}</p><button class="btn primary small" data-tip-ok>Compris</button>`;
+	// Une bulle « riche » (sous-titre, lignes illustrées, phrase de fin) est plus large et plus aérée.
+	const rich = !!tip.rows;
+	el.classList.toggle('rich', rich);
+	el.innerHTML = rich
+		? `<b class="tip-title">${tip.title}</b><strong class="tip-sub">${tip.sub}</strong><p>${tip.text}</p>
+			${tip.rows.map(r => `<div class="tip-row${r.on ? ' on' : ''}"><span class="tip-ico" aria-hidden="true">${r.ico}</span><div><b>${r.b}</b><span>${r.t}</span></div></div>`).join('')}
+			<p class="tip-foot">${tip.foot}</p><button class="btn primary" data-tip-ok>Compris</button>`
+		: `<b>${tip.title}</b><p>${tip.text}</p><button class="btn primary small" data-tip-ok>Compris</button>`;
 	el.hidden = false;
 	// La bulle se place au-dessus d'un bouton du bas, ou sous un élément du haut ; sa pointe vise le bouton.
 	const r = target.getBoundingClientRect(), app = $('#app').getBoundingClientRect();
 	const below = r.top < app.height / 2;
-	const w = Math.min(320, app.width - 24);
+	const w = Math.min(rich ? 380 : 320, app.width - 24);
 	const left = Math.max(12, Math.min(app.width - w - 12, r.left - app.left + r.width / 2 - w / 2));
 	el.style.width = `${w}px`;
 	el.style.left = `${left}px`;
@@ -2096,20 +2106,23 @@ function showDaily(gift = false) {
 	const d = state.daily;
 	const g = giftFor(state);
 	const ready = giftReady(state);
-	const streak = d.streak > 0 ? `<b>${d.streak} jour${d.streak > 1 ? 's' : ''} actif${d.streak > 1 ? 's' : ''}</b> de suite${d.best > d.streak ? ` · record ${d.best}` : ''}` : 'Bouge 500 m pour lancer ta série';
-	const top = ready
-		? `<div class="gift"><span class="gift-box" aria-hidden="true">🎁</span><div><p>${streak}. Ton jardin t'a gardé un cadeau :</p>
-			<span class="chip gold">+${g.nectar} nectar</span>${g.boost ? `<span class="chip">élan ×${fmtNum(boostMult())} · ${g.boost} min</span>` : ''}</div></div>`
-		: `<p class="streak">${streak}</p>`;
+	const streak = d.streak > 0 ? `<b>${d.streak} jour${d.streak > 1 ? 's' : ''} actif${d.streak > 1 ? 's' : ''}</b> de suite${d.best > d.streak ? ` · record ${d.best}` : ''}` : 'Marche 500 m pour lancer ta série';
+	// Le cadeau : une carte avec son bouton « Ouvrir » ; une fois ouvert, la carte disparaît.
+	const top = `<p class="streak">${streak}</p>${ready ? `<div class="gift"><span class="gift-box" aria-hidden="true">🎁</span>
+		<div class="gift-txt"><b>Ton cadeau du jour</b><span class="chip gold">+${g.nectar} nectar</span>${g.boost ? `<span class="chip">élan ×${fmtNum(boostMult())} · ${g.boost} min</span>` : ''}</div>
+		<button class="btn primary" id="btn-gift">Ouvrir</button></div>` : ''}`;
 	// Le bilan de l'absence reste replié : la fenêtre tient sur l'écran.
 	const note = gift && idleNote ? `<details class="away"><summary>Pendant ton absence</summary>${idleNote}</details>` : '';
 	if (gift) idleNote = '';
-	const goal = nextGoal(state);
-	showModal(`<div class="modal-body"><h2>${gift ? 'Bonjour !' : "Aujourd'hui"}</h2>
+	// La prochaine découverte, dite simplement : « Un vieux tronc dans 0,6 km ».
+	const goal = nextGoal(state), gm = goal?.match(/^Plus que (.+?) pour (.+)$/);
+	const goalTxt = gm ? `${gm[2][0].toUpperCase()}${gm[2].slice(1)} dans ${gm[1]}` : goal;
+	const nGot = d.challenges.filter(c => d.claimed[c.id]).length;
+	showModal(`<div class="modal-body daily-body"><h2>${gift ? 'Bonjour !' : "Aujourd'hui"}</h2>
+		${gift ? '<p class="daily-sub">Un petit pas pour ton jardin</p>' : ''}
 		${weekHtml(state)}${top}
-		<h3 class="ch-title">Défis du jour <span>${d.challenges.filter(c => d.claimed[c.id]).length} / ${d.challenges.length} · nectar à gagner</span></h3>${challengesHtml(state)}
-		${goal ? `<p class="next-line">🧭 ${goal}</p>` : ''}${note}</div>
-		<div class="modal-foot">${ready ? '<button class="btn primary" id="btn-gift">Ouvrir le cadeau</button>' : '<button class="btn primary" data-close>Voir mon jardin</button>'}</div>`);
+		<h3 class="ch-title">Défis du jour <span>${nGot} / ${d.challenges.length} récupéré${nGot > 1 ? 's' : ''}</span></h3>${challengesHtml(state)}
+		${goal ? `<div class="next-card"><span class="next-ico" aria-hidden="true">🧭</span><div><b>Prochaine découverte</b><span>${goalTxt}</span></div></div>` : ''}${note}</div>`);
 	$('#btn-gift')?.addEventListener('click', () => {
 		const got = claimGift(state);
 		sound.chime(3);
@@ -2384,7 +2397,7 @@ function renderJournal() {
 		days.push({ d, km: (state.days[dayKey(d)] ?? 0) / 1000, today: i === 0 });
 	}
 	const max = Math.max(state.goalKm * 1.2, ...days.map(x => x.km));
-	const letters = ['D', 'L', 'M', 'M', 'J', 'V', 'S'];
+	const DAY3 = ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'];
 	const walks = state.walks.slice(0, 12).map(w => {
 		const date = new Date(w.start).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' });
 		return `<li><span>${date}</span><span><b>${fmt(w.distance / 1000)} km</b> · ${fmtTime(w.duration)}</span></li>`;
@@ -2393,29 +2406,25 @@ function renderJournal() {
 	const pl = here();
 	$('#journal').innerHTML = `
 		<div class="panel-head"><h2>Carnet</h2><button class="close" data-close-journal aria-label="Fermer">×</button></div>
-		<div class="tiles">
-			<div class="tile"><b>${fmt(km, 1)}</b><span>km au total</span></div>
-			<div class="tile"><b>${fmtInt(state.totals.steps)}</b><span>pas</span></div>
-			<div class="tile"><b>${plants.filter(p => p.growth >= 1).length}</b><span>plantes</span></div>
+		<div class="jr-hero"><b>${fmt(km, 1)} km</b><span>parcourus au total</span><em>${fmtInt(state.totals.steps)} pas</em></div>
+		<div class="jr-grid">
+			<div class="jr-tile"><b>${plants.filter(p => p.growth >= 1).length}</b><span>plantes</span></div>
+			<div class="jr-tile"><b>${collection(state).found} / ${collection(state).total}</b><span>espèces</span></div>
+			<div class="jr-tile"><b>${state.daily?.streak ?? 0}</b><span>jour${(state.daily?.streak ?? 0) > 1 ? 's' : ''} de suite</span></div>
+			<div class="jr-tile"><b>${state.daily?.best ?? 0}</b><span>jour${(state.daily?.best ?? 0) > 1 ? 's' : ''} · record</span></div>
 		</div>
-		<div class="tiles">
-			<div class="tile"><b>${state.daily?.streak ?? 0}</b><span>jours de suite</span></div>
-			<div class="tile"><b>${state.daily?.best ?? 0}</b><span>record</span></div>
-			<div class="tile"><b>${collection(state).found}</b><span>espèces sur ${collection(state).total}</span></div>
-		</div>
-		<h3>Ces 7 derniers jours</h3>
-		<div class="week">
-			<div class="goal" style="bottom:${(state.goalKm / max) * 100}%" title="Objectif"></div>
-			${days.map(x => `<div class="col${x.today ? ' today' : ''}"><div class="b" style="height:${(x.km / max) * 100}%"></div><span>${letters[x.d.getDay()]}</span></div>`).join('')}
-		</div>
-		<h3>Ton jardin</h3>
-		<ul class="rows">
-			${Object.entries(PLANT_TYPES).map(([t, d]) => `<li><span>${d.plural[0].toUpperCase() + d.plural.slice(1)} <small>· ${ACTIVITIES.filter(a => a.plant === t).map(a => a.name.toLowerCase()).join(', ')}</small></span><b>${mature(t)}</b></li>`).join('')}
-		</ul>
-		${[...new Set(pl.biomes ?? ['prairie'])].map(b => `<h3>${PLACE_BY_ID[b].name} · ${(pl.biomes ?? ['prairie']).filter(x => x === b).length} parcelle${(pl.biomes ?? ['prairie']).filter(x => x === b).length > 1 ? 's' : ''}</h3>
-		<ul class="rows">
-			${Object.entries(DECOR).filter(([, d]) => d.place === b && !d.always).map(([k, d]) => `<li><span>${d.name}</span><b>${pl.unlocked[k] ? '✓' : `dans ${fmt(Math.max(0.1, d.km - biomeKm(pl, b)), 1)} km`}</b></li>`).join('')}
-		</ul>`).join('')}
+		<section class="jr-card"><h3>Ces 7 derniers jours</h3><p class="jr-sub">Distance parcourue</p>
+			<div class="jr-week">
+				${days.map(x => `<div class="jr-col${x.today ? ' today' : ''}${x.km > 0 ? ' has' : ''}"><small>${fmt(x.km, x.km > 0 && x.km < 10 ? 1 : 0)} km</small><div class="jr-bar" style="height:${Math.max(6, (x.km / max) * 90)}px"></div><span>${DAY3[x.d.getDay()]}</span></div>`).join('')}
+			</div></section>
+		<section class="jr-card"><h3>Ton jardin</h3>
+		<ul class="jr-rows">
+			${Object.entries(PLANT_TYPES).map(([t, d]) => `<li><div><b>${d.plural[0].toUpperCase() + d.plural.slice(1)}</b><small>${(s => s[0].toUpperCase() + s.slice(1))(ACTIVITIES.filter(a => a.plant === t).map(a => a.name.toLowerCase()).join(', '))}</small></div><strong>${mature(t)}</strong></li>`).join('')}
+		</ul></section>
+		${[...new Set(pl.biomes ?? ['prairie'])].map(b => { const n = (pl.biomes ?? ['prairie']).filter(x => x === b).length; return `<section class="jr-card"><h3>À découvrir</h3><p class="jr-sub">${PLACE_BY_ID[b].name} · ${n} parcelle${n > 1 ? 's' : ''}</p>
+		<ul class="jr-find">
+			${Object.entries(DECOR).filter(([, d]) => d.place === b && !d.always).map(([k, d]) => `<li class="${pl.unlocked[k] ? 'got' : ''}"><span>${d.name}</span><em>${pl.unlocked[k] ? '✓ découvert' : `dans ${fmt(Math.max(0.1, d.km - biomeKm(pl, b)), 1)} km`}</em></li>`).join('')}
+		</ul></section>`; }).join('')}
 		<h3>L’album de la saison</h3>
 		${seasonHtml(state)}
 		<h3>Ton album</h3>
@@ -3797,7 +3806,7 @@ $('#options').addEventListener('change', e => {
 	if (e.target.id !== 'opt-dev') return;
 	DEV = e.target.checked;
 	try { localStorage.setItem(DEV_KEY, DEV ? '1' : '0'); } catch (err) { /* stockage indisponible */ }
-	if (DEV) window.evolia = { garden, state, sky, sound };
+	if (DEV) window.evolia = { garden, state, sky, sound, species };
 	renderOptions();
 });
 // La glissière du joueur simulé agit quand on la lâche : on change de partie.
@@ -3840,27 +3849,34 @@ function openEco2() {
 	const plants = here().plants.filter(p => p.growth >= 1), count = t => plants.filter(p => p.type === t).length;
 	updateNear();
 	const nearAvg = k => { const its = garden.items.filter(it => it.kind === k); return its.length ? Math.round(its.reduce((a, it) => a + nearOf(state, it), 0) / its.length * 100) : null; };
-	const rows = Object.keys(LADDER).filter(k => ownedOf(state, k)).map(k => `<tr><td>${ITEMS[k].name}</td><td class="num">${ownedOf(state, k)}</td><td class="num">${nearAvg(k) ?? '—'}${nearAvg(k) != null ? ' %' : ''}</td><td class="num">${state.upg?.[k] ? `× ${2 ** state.upg[k]}` : '—'}</td><td class="num">${byKind[k] >= 100 ? fmtInt(byKind[k]) : fmtNum(byKind[k])}</td></tr>`).join('');
+	const nph = v => (v >= 100 ? fmtInt(v) : fmtNum(v));
+	// Le premier mot dit le genre (Ruche, Mare, Haie… au féminin ; Massif, Hôtel, Nichoir… au masculin).
+	const fem = k => /^Une /.test(ITEMS[k].name);
+	const bare = k => (t => t[0].toUpperCase() + t.slice(1))(ITEMS[k].name.replace(/^(Une?|Des) /, ''));
+	const habitats = Object.keys(LADDER).filter(k => ownedOf(state, k)).map(k => {
+		const n = ownedOf(state, k), e = fem(k) ? 'e' : '', near = nearAvg(k);
+		return `<div class="eco-card eco-hab"><div class="eco-hab-top"><div><b>${bare(k)}</b><span>${n} posé${e}${n > 1 ? 's' : ''}</span></div><em>${nph(byKind[k] ?? 0)} nectar/h</em></div>
+			<div class="eco-hab-bot"><span>Voisinage : ${near ?? '—'}${near != null ? ' %' : ''}</span><span>${state.upg?.[k] ? `Amélioré${e} × ${2 ** state.upg[k]}` : `Non amélioré${e}`}</span></div></div>`;
+	}).join('');
 	const ge = guildEffect(state);
+	const plural = (n, one, many) => `${n} ${n > 1 ? many : one}`;
 	$('#eco').innerHTML = `
 		<div class="panel-head"><h2>Écosystème</h2><button class="close" data-close-eco aria-label="Fermer">×</button></div>
-		<div class="eco2-hero card">
-			<b>${perH >= 100 ? fmtInt(perH) : fmtNum(perH)}</b><span>nectar par heure d’élan</span>
-			<p>${left > 0 ? `Élan : encore <b>${h ? `${h} h ` : ''}${m} min</b>. Tes habitats travaillent à plein.` : `Au repos : tes habitats ne produisent que ${Math.round(REST * 100)} % (${fmtInt(perH * REST)} nectar par heure). Une sortie relance l’élan : environ 7 minutes par minute de marche.`}</p>
+		<div class="eco-card eco-hero">
+			<b>${nph(perH)}</b><span>nectar / heure d’élan</span>
+			${left > 0 ? `<em class="on">Élan actif · encore ${h ? `${h} h ` : ''}${m} min</em>` : `<em>Au repos · ${Math.round(REST * 100)} % (${fmtInt(perH * REST)} nectar/h)</em><p>Une sortie relance l’élan : environ 7 minutes par minute de marche.</p>`}
 		</div>
-		<p class="sp-intro">Un km te rapporte <b>${fmtInt(60 + KM_HOURS * perH)} nectar</b>.</p>
-		${rows ? `<h3 class="sp-section">Tes habitats</h3><div class="eco2-table"><table><thead><tr><th>Habitat</th><th>Posés</th><th>Voisinage</th><th>Amélioré</th><th>Nectar / h</th></tr></thead><tbody>${rows}</tbody></table></div>`
-			: '<p class="sp-intro">Pas encore d’habitat : ouvre Aménager › Habitats pour en poser un.</p>'}
-		<h3 class="sp-section">Ce qui les fait produire</h3>
-		<ul class="eco2-list">
-			<li><b>Plantes</b> : ${count('fleur')} fleurs, ${count('buisson')} arbustes, ${count('arbre')} arbres. Chaque habitat produit selon celles qui l’entourent.</li>
-			<li><b>Espèces</b> : ${sp}, soit +${sp} % de production.</li>
-		</ul>
-		<h3 class="sp-section">Ce que font tes espèces</h3>
-		<ul class="eco2-list">
-			${Object.keys(GUILD_TEXT).map(g => `<li><b>${GUILD_TEXT[g].plural}</b> (${ge.n[g]}) : ${ge.n[g] ? GUILD_TEXT[g].what(ge.n[g]) : `aucun encore : ${GUILD_TEXT[g].one}`}.</li>`).join('')}
-			<li><b>Élan</b> : après une sortie, tout tourne à plein ; au repos, ${Math.round(REST * 100)} % seulement.</li>
-		</ul>`;
+		<div class="eco-card eco-km">1 km parcouru = <b>${fmtInt(60 + KM_HOURS * perH)}</b> nectar</div>
+		<h3 class="eco-h">Tes habitats</h3>
+		${habitats || '<p class="sp-intro">Pas encore d’habitat : ouvre Aménager › Habitats pour en poser un.</p>'}
+		<h3 class="eco-h">Ce qui les fait produire</h3>
+		<div class="eco-card eco-prod"><b>${plural(count('fleur'), 'fleur', 'fleurs')} · ${plural(count('buisson'), 'arbuste', 'arbustes')} · ${plural(count('arbre'), 'arbre', 'arbres')}</b>
+			<span>Chaque habitat profite des plantes qui l’entourent.</span>
+			<em>${plural(sp, 'espèce', 'espèces')} : +${sp} % de production</em></div>
+		<h3 class="eco-h">Le rôle des espèces</h3>
+		<div class="eco-card eco-roles">
+			${Object.keys(GUILD_TEXT).map(g => `<div class="eco-role"><div><b>${GUILD_TEXT[g].plural}</b><span>${(t => t[0].toUpperCase() + t.slice(1))(ge.n[g] ? GUILD_TEXT[g].what(ge.n[g]) : `aucun encore : ${GUILD_TEXT[g].one}`)}</span></div><em>${ge.n[g]}</em></div>`).join('')}
+		</div>`;
 	$('#eco').classList.add('open');
 	$('#eco').setAttribute('aria-hidden', 'false');
 }
@@ -4041,3 +4057,4 @@ if (Tuning.preview) {
 		save: () => persist(true),
 	};
 }
+if (DEV && window.evolia) window.evolia.species = species;

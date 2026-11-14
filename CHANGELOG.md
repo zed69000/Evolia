@@ -3,6 +3,14 @@
 Chaque version, la plus récente en haut. Le site (evolia.sebastienalzamora.workers.dev) est toujours à jour ;
 le Play Store (tests internes) reçoit les versions indiquées « Play ».
 
+## 0.9.0 — 14 novembre 2026
+**Une interface plus claire, en cartes.**
+- **Bonjour !** : « Un petit pas pour ton jardin », les jours en entier (Lun, Mar…), le cadeau dans sa carte avec un bouton **Ouvrir**, « 0 / 4 récupérés », des défis en cartes (icône ronde, barre et compteur, gain à droite ; défi rempli : coche « Terminé » et bouton **Récupérer**), et en bas « Prochaine découverte : un vieux tronc dans 0,6 km ».
+- **L'élan** : une bulle illustrée, « Tes pas donnent vie au jardin », avec deux lignes « Après une sortie : production à plein régime » et « Au repos : production très faible ».
+- **Carnet** : une grande carte des km parcourus (et des pas), quatre tuiles (plantes, espèces, jours de suite, record), la semaine en barres avec les km de chaque jour (aujourd'hui en orange), « Ton jardin » et « À découvrir » en cartes, avec la distance dans une pastille.
+- **Espèces** (début de partie) : « Les rencontres de ton jardin », le compte des espèces découvertes, une rangée de « ? » par section et un bouton « Voir les plantes à découvrir ».
+- **Écosystème** : la production en grand avec « Élan actif · encore 21 min », « 1 km parcouru = … nectar », une carte par habitat (nectar/h, voisinage, amélioration), ce qui les fait produire, et le rôle de chaque famille d'espèces avec son nombre.
+
 ## 0.8.9 — 14 novembre 2026
 - **Toucher une bête cachée par une autre** : si l'une des deux a une fiche que tu n'as pas encore lue, c'est elle qui s'ouvre, même si l'autre est un peu plus près du doigt.
 - **Le jeu se joue en hauteur** : sur un téléphone ou une tablette tourné en paysage, un écran « Tourne ton téléphone » couvre le jeu (l'appli installée reste bloquée en portrait). Sur ordinateur, rien ne change.

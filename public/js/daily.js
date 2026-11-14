@@ -148,7 +148,7 @@ export function noteQuest(state) {
 
 const LABEL = {
 	'm-pluie': c => c.label, 'm-soleil': c => c.label, 'm-nuit': c => c.label, 'm-hiver': c => c.label,
-	move: c => `Bouge ${fmt(c.n, c.n % 1 ? 1 : 0)} km aujourd'hui`,
+	move: c => `Bouge ${fmt(c.n, c.n % 1 ? 1 : 0)} km`,
 	quest: c => `Gagne ${c.n} fois au jeu « Trouve… »`,
 	taps: c => `Touche ${c.n} animaux différents`,
 	bloom: c => `Fais pousser ${c.n} plantes jusqu'au bout`,
@@ -161,13 +161,16 @@ export function challengesHtml(state) {
 		const shown = c.kind === 'move' || c.kind === 'mkm' ? `${fmt(Math.min(p, c.n))} / ${fmt(c.n, c.n % 1 ? 1 : 0)} km` : `${Math.min(p, c.n)} / ${c.n}`;
 		const boost = c.boost ? `<small class="ch-boost">Bonus : élan ×${fmtNum(boostMult())} pendant ${c.boost} min</small>` : '';
 		const end = got ? '<span class="ch-ok" aria-label="Pris">✓</span>'
-			: done ? `<button class="btn primary small" data-claim="${c.id}">Prendre<small>+${c.reward} nectar</small></button>`
+			: done ? `<button class="btn primary small" data-claim="${c.id}">Récupérer<small>+${c.reward} nectar</small></button>`
 			: `<span class="ch-prize">+${c.reward}<small>nectar</small></span>`;
+		// Défi rempli : une coche « Terminé » remplace la barre, le bouton Récupérer attend à droite.
+		const prog = done ? `<div class="ch-done"><span class="ch-check" aria-hidden="true">✓</span>${got ? 'Récupéré' : 'Terminé'} · ${shown}</div>`
+			: `<div class="ch-prog"><div class="bar"><i style="width:${Math.min(100, (p / c.n) * 100)}%"></i></div><small>${shown}</small></div>`;
 		return `<li class="ch${done ? ' done' : ''}${got ? ' got' : ''}">
 			<span class="ch-ico" aria-hidden="true">${c.icon ?? ICON[c.kind]}</span>
 			<div class="ch-body"><b>${LABEL[c.id](c)}</b>
-				<div class="ch-prog"><div class="bar"><i style="width:${Math.min(100, (p / c.n) * 100)}%"></i></div><small>${shown}</small></div>
-				${boost}</div>
+				${prog}
+				${done ? '' : boost}</div>
 			${end}
 		</li>`;
 	}).join('')}</ul>`;
@@ -175,7 +178,7 @@ export function challengesHtml(state) {
 
 /** Les 7 derniers jours : un point plein pour chaque jour actif. */
 export function weekHtml(state) {
-	const letters = ['D', 'L', 'M', 'M', 'J', 'V', 'S'];
+	const letters = ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'];
 	const out = [];
 	for (let i = 6; i >= 0; i--) {
 		const d = new Date(); d.setDate(d.getDate() - i);

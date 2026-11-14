@@ -102,6 +102,8 @@ export class Encyclopedia {
 			if (f) { this.filter = f.dataset.filter; return this.showGrid(); }
 			const gr = e.target.closest('[data-group]');
 			if (gr) { this.group = gr.dataset.group; return this.showGrid(); }
+			const mo = e.target.closest('[data-more]');
+			if (mo) { this.moreOpen[mo.dataset.more] = !this.moreOpen[mo.dataset.more]; return this.showSimple(); }
 			if (e.target.closest('[data-back]')) return this.showGrid();
 			if (e.target.closest('[data-close-species]')) this.close();
 		});
@@ -128,15 +130,24 @@ export class Encyclopedia {
 		const ICON = { plantes: '🌿', insectes: '🐝', animaux: '🐦' };
 		// Les espèces du milieu de départ : celles venues au jardin, puis deux rangées à découvrir.
 		const home = SPECIES.filter(s => s.place === 'prairie' && s.kind !== 'milieu');
+		// Par section : les espèces venues, puis une rangée de « ? » ; un bouton montre toutes celles à découvrir.
+		this.moreOpen ??= {};
 		const sections = GROUPS.map(([g, title]) => {
-			const items = home.filter(s => groupOf(s) === g), got = items.filter(s => st.species[s.id]).length;
-			if (!got) return '';
-			return `<h3 class="sp-section"><span class="sp-ico">${ICON[g]}</span> ${g === 'insectes' ? 'Insectes' : title} <small>${got} / ${items.length}</small></h3>${this.sectionGrid(items, s => this.cardHtml(s))}`;
+			const items = home.filter(s => groupOf(s) === g), got = items.filter(s => st.species[s.id]);
+			if (!got.length) return '';
+			const locked = items.filter(s => !st.species[s.id]), all = this.moreOpen[g];
+			const shown = all ? locked : locked.slice(0, 3);
+			const name = g === 'insectes' ? 'Insectes' : title;
+			const more = locked.length > shown.length || all
+				? `<button class="sp-more-btn" data-more="${g}">${all ? 'Replier' : g === 'plantes' ? `Voir les ${locked.length} plantes à découvrir` : `Voir tous les ${name.toLowerCase()}`}</button>` : '';
+			return `<h3 class="sp-section"><span class="sp-ico">${ICON[g]}</span> ${name} <small>${got.length} / ${items.length}</small></h3>
+				<div class="sp-grid">${got.map(x => this.cardHtml(x)).join('')}${shown.map(x => this.cardHtml(x)).join('')}</div>${more}`;
 		}).join('');
 		this.panel.innerHTML = `
-			<div class="panel-head"><h2>Espèces</h2><button class="close" data-close-species aria-label="Fermer">×</button></div>
-			<p class="sp-intro">Les espèces venues dans ton jardin. Touche-en une pour lire sa fiche.</p>
-			${sections}`;
+			<div class="panel-head"><div><h2>Espèces</h2><p class="sp-tag">Les rencontres de ton jardin</p></div><button class="close" data-close-species aria-label="Fermer">×</button></div>
+			<p class="sp-count"><span aria-hidden="true">🍯</span> ${known.length} espèce${known.length > 1 ? 's' : ''} découverte${known.length > 1 ? 's' : ''} sur ${SPECIES.length}</p>
+			${sections}
+			<p class="sp-foot">Touche une espèce pour lire sa fiche.</p>`;
 		this.paintThumbs(home);
 		this.panel.scrollTop = 0;
 	}
@@ -158,7 +169,7 @@ export class Encyclopedia {
 		return `<button class="sp-card${known ? '' : ' locked'}" data-sp="${s.id}">
 				${fresh ? `<span class="sp-new">Nouveau</span>` : ''}
 				<span class="sp-thumb" data-thumb="${s.id}"></span>
-				<span class="sp-name">${known ? esc(s.name) : '???'}</span>
+				<span class="sp-name">${known ? esc(s.name) : '?'}</span>
 			</button>`;
 	}
 
