@@ -1,4 +1,4 @@
-# Envoie Evolia sur Google Play (tests internes) par la chaîne commune zed69000/game-pipeline.
+# Envoie Evolia sur Google Play (test fermé « Alpha », là où sont les testeurs) par la chaîne commune zed69000/game-pipeline.
 # Pour l'instant, seulement à la main : Actions > « Android · Google Play » > Run workflow.
 # On essaie d'abord chaque version sur le site Cloudflare. Plus tard, pour envoyer à chaque nouvelle version,
 # ajouter sous « on: » : push: { branches: [master], paths: [public/js/version.js] }.
@@ -15,7 +15,10 @@ jobs:
     with:
       package-name: com.zed69000.evolia
       aab-path: android/app/build/outputs/bundle/release/app-release.aab
-      # l'appli n'est pas encore publiée en production : la release arrive en brouillon, il reste à cliquer « Déployer »
+      # Les testeurs sont inscrits au test fermé « Alpha » : une version laissée en tests internes n'arrive chez personne.
+      track: alpha
+      # l'appli n'est pas encore publiée en production : la release arrive en brouillon, il reste à la vérifier (Tests fermés - Alpha),
+      # puis Vue d'ensemble de la publication › « Envoyer pour examen » (examen Google : quelques heures à quelques jours)
       release-status: draft
       build-command: |
         npm install --no-audit --no-fund
