@@ -1709,6 +1709,8 @@ async function enableTracking(gesture = false) {
 			} else if (!tracking.motionRefused) { tracking.motionRefused = true; debugLog('Accéléromètre refusé ou indisponible'); }
 		}
 	}
+	// Position refusée la fois d'avant : on la redemande (le joueur a pu l'autoriser entre-temps).
+	if (tracking.gps && tracking.gpsState === 'error' && gesture) { tracking.gps.stop(); tracking.gps = null; tracking.gpsState = null; }
 	if (!tracking.gps && GpsTracker.available()) {
 		tracking.gps = new GpsTracker(onSample, onGpsStatus);
 		tracking.gps.onFix = f => trace('gps-point', f);
@@ -1719,6 +1721,55 @@ async function enableTracking(gesture = false) {
 	state.tracking = true;
 	persist(true);
 	renderStatus();
+}
+
+/**
+ * Où en est le suivi des pas, capteur par capteur : 'ok' (marche), 'wait' (position : signal en recherche), 'refused'
+ * (le téléphone a dit non), 'off' (pas encore demandé), 'none' (le téléphone ne l'a pas).
+ */
+function trackState() {
+	const motion = tracking.motion ? 'ok' : tracking.motionRefused ? 'refused' : 'off';
+	const gps = !GpsTracker.available() ? 'none' : !tracking.gps ? 'off' : tracking.gpsState === 'error' ? 'refused'
+		: tracking.gpsState === 'ok' || tracking.gpsState === 'weak' ? 'ok' : 'wait';
+	return { motion, gps, on: !!state.tracking && (motion === 'ok' || gps === 'ok' || gps === 'wait') };
+}
+
+/** Les deux lignes « ✓ / ✗ » du suivi, pour le joueur. */
+function trackLinesHtml(t = trackState()) {
+	const mark = { ok: '<i class="tk ok">✓</i>', wait: '<i class="tk wait">…</i>', refused: '<i class="tk no">✗</i>', off: '<i class="tk no">✗</i>', none: '<i class="tk no">✗</i>' };
+	const gpsTxt = { ok: 'activée, signal trouvé', wait: 'activée, recherche du signal (va dehors)', refused: 'refusée', off: 'pas encore autorisée', none: 'absente sur ce téléphone' }[t.gps];
+	const motTxt = { ok: 'activé', refused: 'refusé', off: 'pas encore autorisé' }[t.motion];
+	return `<ul class="track-lines">
+		<li>${mark[t.gps]}<span><span><b>Position</b> : ${gpsTxt}</span><small>Elle mesure la distance que tu parcours.</small></span></li>
+		<li>${mark[t.motion]}<span><span><b>Mouvement du téléphone</b> : ${motTxt}</span><small>Il compte tes pas quand Evolia est ouverte.</small></span></li>
+	</ul>`;
+}
+
+/** Comment autoriser ce qui a été refusé, selon le téléphone. */
+function trackFixHtml() {
+	if (isApp()) return '<p class="item-tip">Pour l’autoriser : Réglages du téléphone › Applications › Evolia › Autorisations › Position : « Toujours » ou « Pendant l’utilisation ». Puis reviens ici et touche de nouveau l’alerte.</p>';
+	if (/iPhone|iPad/.test(navigator.userAgent)) return '<p class="item-tip">Sur iPhone : dans Safari, touche <b>aA</b> à gauche de l’adresse › <b>Réglages du site web</b>, et mets Position et Mouvement sur « Autoriser ». Recharge ensuite la page. Si rien ne change : Réglages › Confidentialité › Service de localisation doit être activé, avec Safari sur « Lorsque l’app est active ».</p>';
+	return '<p class="item-tip">Autorise la position pour ce site dans les réglages de ton navigateur (le cadenas à gauche de l’adresse), puis recharge la page.</p>';
+}
+
+/**
+ * Après un toucher sur « Active le suivi » : le téléphone pose ses questions, puis une fenêtre dit clairement ce qui
+ * marche (✓) et ce qui est refusé (✗), avec comment le corriger. On attend la réponse de la position (6 s au plus).
+ */
+async function askTracking() {
+	sky.locate(true);
+	await enableTracking(true);
+	const t0 = Date.now();
+	while (tracking.gps && !['ok', 'weak', 'error'].includes(tracking.gpsState) && Date.now() - t0 < 6000) await new Promise(r => setTimeout(r, 250));
+	renderStatus();
+	const t = trackState(), all = t.motion === 'ok' && (t.gps === 'ok' || t.gps === 'wait');
+	showModal(`<h2>${all ? 'Le suivi de tes pas est activé' : t.on ? 'Le suivi de tes pas marche à moitié' : 'Le suivi de tes pas est coupé'}</h2>
+		${trackLinesHtml(t)}
+		<p>${all ? 'C’est bon : marche, et ton jardin pousse. Tu peux revoir cet état à tout moment en touchant le petit marcheur en haut à gauche.'
+			: t.on ? 'Tes pas comptent, mais moins bien. Autorise aussi ce qui manque.' : 'Sans position ni mouvement, Evolia ne peut pas savoir que tu marches.'}</p>
+		${all ? '' : trackFixHtml()}
+		<button class="btn primary" data-close>${all ? 'Super' : 'Compris'}</button>`);
+	if (all) sound.chime(2);
 }
 
 /** Au lancement : reprendre le suivi sans redemander, si la position est déjà autorisée. */
@@ -1890,20 +1941,22 @@ function showActivity() {
 	const km = todayMeters(state) / 1000, goal = state.goalKm, next = nextGoal(state);
 	const now = session
 		? `<p><b>${session.act?.name ?? 'En mouvement'}</b> · ${fmt(session.distance / 1000)} km · ${fmtTime(sessionSeconds(session))}</p>`
-		: `<p><b>${state.tracking ? 'Au repos' : 'Suivi en pause'}</b>${state.tracking ? '' : ' : active le suivi pour que tes pas comptent.'}</p>`;
+		: trackState().on ? '<p><b>Au repos</b></p>' : '';
 	showModal(`<h2>Ton activité</h2>${now}
+		<p class="track-head">Suivi de tes pas</p>${trackLinesHtml()}${trackState().on ? '' : '<button class="btn primary wide" id="btn-act-track">Activer le suivi</button>'}
 		<div class="chips"><span class="chip">${fmt(km, 1)} km aujourd’hui</span><span class="chip">objectif ${fmt(goal, goal % 1 ? 1 : 0)} km</span></div>
 		${next ? `<p class="item-tip">${next}</p>` : ''}
 		<button class="btn ghost wide" id="btn-act-places">Voir tout mon monde</button>
-		<button class="btn primary" data-close>Fermer</button>`);
+		<button class="btn ${trackState().on ? 'primary' : 'ghost wide'}" data-close>Fermer</button>`);
 	// La carte des cinq milieux fixes n'a plus de sens dans un monde tiré pour chaque partie : on montre le sien, de loin.
 	$('#btn-act-places').onclick = () => { closeModal(); if (!garden.glyph) garden.toggleOverview(); };
+	$('#btn-act-track')?.addEventListener('click', askTracking);
 }
 
 function renderStatus() {
 	renderAct();
 	// Sans suivi des pas, le jeu ne peut rien faire pousser : une alerte reste affichée tant qu'il n'est pas actif.
-	$('#track-alert').hidden = !!state.intro || (!!state.tracking && !!(tracking.motion || tracking.gps));
+	$('#track-alert').hidden = !!state.intro || trackState().on;
 	const dot = $('#status-dot'), title = $('#status-title'), sub = $('#status-sub');
 	$('#btn-track').hidden = !!state.tracking;
 	$('#live').hidden = !session;
@@ -2012,7 +2065,7 @@ function newDay() {
 	return giftReady(state);
 }
 
-$('#btn-track').addEventListener('click', () => { enableTracking(true); sky.locate(true); });
+$('#btn-track').addEventListener('click', askTracking);
 
 // ─── Récap d'une balade ───────────────────────────────────────
 
@@ -2882,7 +2935,7 @@ $('#deco').addEventListener('click', e => {
 	if (b && !b.disabled) startPlacing(b.dataset.buy);
 });
 // Pendant la mission du collecteur, Aménager s'ouvre directement sur l'onglet Récolte.
-$('#track-alert').addEventListener('click', async () => { sky.locate(true); await enableTracking(true); renderStatus(); });
+$('#track-alert').addEventListener('click', askTracking);
 $('#btn-deco').addEventListener('click', () => openDeco(state.intro ? 'habitat' : currentMission()?.id === 'collector' ? 'recolte' : undefined));
 
 // ─── Le moment (soleil, pluie, nuit, hiver) : un bonus chacun, un badge dans le bandeau ───

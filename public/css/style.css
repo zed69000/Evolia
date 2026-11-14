@@ -1148,3 +1148,12 @@ body:has(.panel.open) #debug { display: none; }
 #app.guided button:not(.g-on):not(#tip button):not(#modal button), #app.guided #daily, #app.guided #hud-act, #app.guided #hud-steps, #app.guided .deco-tabs [role=tab]:not(.g-on) { opacity: .35; filter: saturate(.4); transition: opacity .3s, filter .3s; }
 #app.guided #placing .placing-actions .btn.g-on { opacity: 1; filter: none; }
 #app.guided .g-on { position: relative; z-index: 2; }
+
+/* L'état du suivi des pas (fenêtre après activation, fenêtre « Ton activité ») */
+.track-head { margin: 10px 0 0; font: 700 13px 'Nunito', sans-serif; color: var(--doux); text-transform: uppercase; letter-spacing: .04em; }
+.track-lines { list-style: none; padding: 0; margin: 8px 0; display: flex; flex-direction: column; gap: 8px; text-align: left; }
+.track-lines li { display: flex; gap: 10px; align-items: flex-start; }
+.track-lines li > span { display: flex; flex-direction: column; line-height: 1.35; }
+.track-lines small { color: var(--doux); font-size: 12.5px; }
+.tk { flex: none; display: grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; font: 800 14px 'Nunito', sans-serif; font-style: normal; color: #FDF7E7; }
+.tk.ok { background: #5F933E; } .tk.wait { background: #E3A33A; } .tk.no { background: #C0442F; }

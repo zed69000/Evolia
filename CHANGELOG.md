@@ -3,6 +3,13 @@
 Chaque version, la plus récente en haut. Le site (evolia.sebastienalzamora.workers.dev) est toujours à jour ;
 le Play Store (tests internes) reçoit les versions indiquées « Play ».
 
+## 0.8.4 — 14 novembre 2026
+**Tu sais enfin si le suivi de tes pas marche.**
+- Après avoir touché « Le suivi de tes pas est coupé », une fenêtre dit clairement ce qui marche : ✓ Position (la distance), ✓ Mouvement du téléphone (les pas, appli ouverte), ou ✗ refusé.
+- Si quelque chose est refusé, elle explique où l'autoriser (sur iPhone : « aA » › Réglages du site web dans Safari ; sur Android : les autorisations de l'appli), et un nouveau toucher redemande la position.
+- Le même état se revoit à tout moment en touchant le petit marcheur en haut à gauche, avec un bouton « Activer le suivi » s'il est coupé.
+- L'alerte rouge ne disparaît plus quand la position a été refusée.
+
 ## 0.8.3 — 14 novembre 2026
 **Le quiz des fiches, plus clair et du plus facile au plus dur.**
 - Chaque quiz commence par une question **Facile** : « Qui est sur cette photo ? », avec la vraie photo de l'espèce et des réponses qu'on distingue d'un coup d'œil (une fleur, un oiseau, un papillon). Puis une **Moyenne**, puis une **Plus dure**. Les deux premiers quiz restent doux.
