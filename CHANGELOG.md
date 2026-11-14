@@ -3,6 +3,12 @@
 Chaque version, la plus récente en haut. Le site (evolia.sebastienalzamora.workers.dev) est toujours à jour ;
 le Play Store (tests internes) reçoit les versions indiquées « Play ».
 
+## 0.8.5 — 14 novembre 2026
+**Quand la position manque, le jeu te le redemande.**
+- Si la position n'est pas autorisée, a été refusée, ou ne trouve plus de signal depuis une minute, une fenêtre « Evolia ne voit pas tes pas » (ou « Ton téléphone ne trouve plus ta position ») s'ouvre avec un seul bouton : « Activer le suivi » ou « Relancer la position ». Elle revient à l'ouverture, au retour dans l'appli et toutes les 5 minutes tant que ça dure, jamais par-dessus une autre fenêtre.
+- La bulle rouge dit ce qui se passe : « La position est refusée », « Pas de signal de position » ou « Le suivi de tes pas est coupé ».
+- Au retour dans l'appli après plus d'une minute, la position est relancée d'elle-même (le téléphone la coupe souvent en arrière-plan).
+
 ## 0.8.4 — 14 novembre 2026
 **Tu sais enfin si le suivi de tes pas marche.**
 - Après avoir touché « Le suivi de tes pas est coupé », une fenêtre dit clairement ce qui marche : ✓ Position (la distance), ✓ Mouvement du téléphone (les pas, appli ouverte), ou ✗ refusé.

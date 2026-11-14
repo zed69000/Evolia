@@ -1366,6 +1366,7 @@ for (const ev of ['click', 'dblclick', 'contextmenu']) document.addEventListener
 }, { capture: true, passive: false });
 garden.holdTaps = () => !!guideOn && !guideOn.steps[guideOn.i]?.garden;
 // En test : lancer un guide d'achat à la main (evoliaGuide.buy('mangeoire')).
+if (DEV) window.evoliaTrack = { tracking: () => tracking, nag: () => { trackAskedAt = 0; nagTracking(); } };
 if (DEV) window.evoliaGuide = { buy: k => { const g = buyGuide(k); if (g) startGuide({ ...g, title: 'Test' }); return !!g; }, quiz: () => offerQuiz(true) };
 
 // ─── L'interface se dévoile au fil du jeu ───
@@ -1710,7 +1711,7 @@ async function enableTracking(gesture = false) {
 		}
 	}
 	// Position refusée la fois d'avant : on la redemande (le joueur a pu l'autoriser entre-temps).
-	if (tracking.gps && tracking.gpsState === 'error' && gesture) { tracking.gps.stop(); tracking.gps = null; tracking.gpsState = null; }
+	if (tracking.gps && gesture && ['refused', 'lost'].includes(trackState().gps)) { tracking.gps.stop(); tracking.gps = null; tracking.gpsState = null; }
 	if (!tracking.gps && GpsTracker.available()) {
 		tracking.gps = new GpsTracker(onSample, onGpsStatus);
 		tracking.gps.onFix = f => trace('gps-point', f);
@@ -1727,17 +1728,20 @@ async function enableTracking(gesture = false) {
  * Où en est le suivi des pas, capteur par capteur : 'ok' (marche), 'wait' (position : signal en recherche), 'refused'
  * (le téléphone a dit non), 'off' (pas encore demandé), 'none' (le téléphone ne l'a pas).
  */
+const GPS_LOST_MS = 60000;
 function trackState() {
 	const motion = tracking.motion ? 'ok' : tracking.motionRefused ? 'refused' : 'off';
 	const gps = !GpsTracker.available() ? 'none' : !tracking.gps ? 'off' : tracking.gpsState === 'error' ? 'refused'
-		: tracking.gpsState === 'ok' || tracking.gpsState === 'weak' ? 'ok' : 'wait';
+		: tracking.gpsState === 'ok' || tracking.gpsState === 'weak' ? 'ok'
+		// Toujours en recherche au bout d'une minute (ou plus aucun point) : le signal est perdu.
+		: Date.now() - (tracking.gpsSince ?? Date.now()) > GPS_LOST_MS ? 'lost' : 'wait';
 	return { motion, gps, on: !!state.tracking && (motion === 'ok' || gps === 'ok' || gps === 'wait') };
 }
 
 /** Les deux lignes « ✓ / ✗ » du suivi, pour le joueur. */
 function trackLinesHtml(t = trackState()) {
-	const mark = { ok: '<i class="tk ok">✓</i>', wait: '<i class="tk wait">…</i>', refused: '<i class="tk no">✗</i>', off: '<i class="tk no">✗</i>', none: '<i class="tk no">✗</i>' };
-	const gpsTxt = { ok: 'activée, signal trouvé', wait: 'activée, recherche du signal (va dehors)', refused: 'refusée', off: 'pas encore autorisée', none: 'absente sur ce téléphone' }[t.gps];
+	const mark = { ok: '<i class="tk ok">✓</i>', wait: '<i class="tk wait">…</i>', lost: '<i class="tk no">✗</i>', refused: '<i class="tk no">✗</i>', off: '<i class="tk no">✗</i>', none: '<i class="tk no">✗</i>' };
+	const gpsTxt = { ok: 'activée, signal trouvé', wait: 'activée, recherche du signal', lost: 'pas de signal', refused: 'refusée', off: 'pas encore autorisée', none: 'absente sur ce téléphone' }[t.gps];
 	const motTxt = { ok: 'activé', refused: 'refusé', off: 'pas encore autorisé' }[t.motion];
 	return `<ul class="track-lines">
 		<li>${mark[t.gps]}<span><span><b>Position</b> : ${gpsTxt}</span><small>Elle mesure la distance que tu parcours.</small></span></li>
@@ -1760,17 +1764,41 @@ async function askTracking() {
 	sky.locate(true);
 	await enableTracking(true);
 	const t0 = Date.now();
-	while (tracking.gps && !['ok', 'weak', 'error'].includes(tracking.gpsState) && Date.now() - t0 < 6000) await new Promise(r => setTimeout(r, 250));
+	while (tracking.gps && !['ok', 'weak', 'error'].includes(tracking.gpsState) && Date.now() - t0 < 8000) await new Promise(r => setTimeout(r, 250));
 	renderStatus();
 	const t = trackState(), all = t.motion === 'ok' && (t.gps === 'ok' || t.gps === 'wait');
 	showModal(`<h2>${all ? 'Le suivi de tes pas est activé' : t.on ? 'Le suivi de tes pas marche à moitié' : 'Le suivi de tes pas est coupé'}</h2>
 		${trackLinesHtml(t)}
 		<p>${all ? 'C’est bon : marche, et ton jardin pousse. Tu peux revoir cet état à tout moment en touchant le petit marcheur en haut à gauche.'
 			: t.on ? 'Tes pas comptent, mais moins bien. Autorise aussi ce qui manque.' : 'Sans position ni mouvement, Evolia ne peut pas savoir que tu marches.'}</p>
-		${all ? '' : trackFixHtml()}
+		${all ? '' : t.gps === 'wait' || t.gps === 'lost' ? '<p class="item-tip">Le signal de position se trouve mieux dehors, loin des grands bâtiments. Si rien ne vient, vérifie que la localisation du téléphone est allumée.</p>' : trackFixHtml()}
 		<button class="btn primary" data-close>${all ? 'Super' : 'Compris'}</button>`);
 	if (all) sound.chime(2);
 }
+
+/**
+ * La position manque (jamais autorisée, refusée, ou plus de signal) : on le redemande au joueur, avec une fenêtre et
+ * un seul bouton, à l'ouverture, au retour dans l'appli, et toutes les 5 minutes tant que ça dure. Sinon il marche
+ * sans rien voir pousser. Le bouton est aussi le geste qu'exige l'iPhone pour redemander.
+ */
+let trackAskedAt = 0;
+function nagTracking() {
+	if (state.intro || Tuning.preview || tracking.sim || !$('#modal').hidden || Date.now() - trackAskedAt < 5 * 60000) return;
+	const t = trackState();
+	if (t.on && t.gps !== 'refused' && t.gps !== 'off' && t.gps !== 'lost') return;
+	whenFree(() => {
+		if (!$('#modal').hidden || state.intro) return;
+		const u = trackState();
+		if (u.on && !['refused', 'off', 'lost'].includes(u.gps)) return;
+		trackAskedAt = Date.now();
+		showModal(`<h2>${u.gps === 'lost' ? 'Ton téléphone ne trouve plus ta position' : 'Evolia ne voit pas tes pas'}</h2>
+			${trackLinesHtml(u)}
+			<p>${u.on ? 'Tes pas comptent mal : la distance ne se mesure pas.' : 'Tant que le suivi est coupé, tu peux marcher : rien ne poussera.'}</p>
+			<button class="btn primary" id="nag-track">${u.gps === 'lost' ? 'Relancer la position' : 'Activer le suivi'}</button>`);
+		$('#nag-track').onclick = askTracking;
+	});
+}
+setInterval(() => { if (!document.hidden) { renderStatus(); nagTracking(); } }, 30000);
 
 /** Au lancement : reprendre le suivi sans redemander, si la position est déjà autorisée. */
 async function resumeTracking() {
@@ -1791,6 +1819,7 @@ function onGpsStatus(st) {
 	if (st.kind !== 'ok') trace('gps-état', { état: st.kind, ...(st.accuracy ? { précision: st.accuracy } : {}), ...(st.seconds ? { trou_s: st.seconds } : {}), ...(st.message ? { message: st.message } : {}) });
 	if (st.kind === 'gap') { debugLog(`GPS : aucun point pendant ${dur(st.seconds)} (écran éteint ou appli en arrière-plan ?)`); return; }
 	if (st.kind !== tracking.gpsState) debugLog(`GPS : ${{ searching: 'recherche', ok: 'bon signal', weak: `signal faible (±${Math.round(st.accuracy)} m)`, error: `erreur ${st.code} (${st.message})` }[st.kind] ?? st.kind}`);
+	if (st.kind !== tracking.gpsState) tracking.gpsSince = Date.now();
 	tracking.gpsState = st.kind;
 	if (st.kind === 'ok' && !tracking.located && tracking.gps?.last) {
 		tracking.located = true;
@@ -1956,7 +1985,11 @@ function showActivity() {
 function renderStatus() {
 	renderAct();
 	// Sans suivi des pas, le jeu ne peut rien faire pousser : une alerte reste affichée tant qu'il n'est pas actif.
-	$('#track-alert').hidden = !!state.intro || trackState().on;
+	const ts = trackState();
+	$('#track-alert').hidden = !!state.intro || (ts.on && ts.gps !== 'lost' && ts.gps !== 'refused');
+	$('#track-alert').innerHTML = ts.gps === 'lost' ? 'Pas de signal de position : <b>touche ici pour relancer</b>'
+		: ts.gps === 'refused' ? 'La position est refusée : <b>touche ici pour l’autoriser</b>'
+		: 'Le suivi de tes pas est coupé : <b>touche ici pour l’activer</b>';
 	const dot = $('#status-dot'), title = $('#status-title'), sub = $('#status-sub');
 	$('#btn-track').hidden = !!state.tracking;
 	$('#live').hidden = !session;
@@ -2280,6 +2313,10 @@ document.addEventListener('visibilitychange', async () => {
 	if (newDay()) whenFree(() => $('#modal').hidden && showDaily(true));
 	else whenFree(showIdleRecap);
 	sky.refresh();
+	// Après un long moment caché, le téléphone a souvent coupé la position : on la relance.
+	if (tracking.gps && Date.now() - (tracking.hiddenAt ?? Date.now()) > 60000) { tracking.gps.stop(); tracking.gps = null; tracking.gpsState = null; if (state.tracking) enableTracking(false); }
+	trackAskedAt = 0;
+	setTimeout(nagTracking, 4000);
 });
 
 // ─── Carnet ───────────────────────────────────────────────────
@@ -3902,6 +3939,7 @@ if (Tuning.preview) {
 } else {
 	if (!sky.override) sky.start();
 	resumeTracking();
+	setTimeout(nagTracking, 9000);
 	// Une partie de test du joueur simulé commence juste après l'introduction.
 	if (state.intro) simSkipIntro();
 	renderSimBar();
