@@ -558,7 +558,7 @@ garden.onPick = tree => {
 	garden.say(`${kg} kg de ${fruit} !`);
 };
 
-// Les ruches : la colonie produit du miel ; le fermier en prend une part (réglable), le reste nourrit les abeilles.
+// Les ruches : la colonie produit du miel, que l'on troque au panier.
 // Une ruche accueille 6 abeilles au plus ; il en vient autant que les fleurs en attirent (une, plus une par trois
 // fleurs écloses). Chaque abeille fait du miel ; il faut du temps (et des fleurs) pour en remplir un pot.
 // Une ruche neuve n'accueille que 3 abeilles : on l'agrandit (3 de plus par niveau, de plus en plus cher) ou l'on en
@@ -575,7 +575,7 @@ setInterval(() => {
 	const bees = hiveBees();
 	if (state.eco2 || !bees || (garden.season?.winter ?? 0) > 0.6) return;
 	const pace = !state.eco2 || boostLeft(state) > 0 ? 1 : HONEY_REST;
-	state.honeyAcc = (state.honeyAcc ?? 0) + bees * HONEY_PER_BEE * pace * (state.honeyShare ?? 0.3) / 60;
+	state.honeyAcc = (state.honeyAcc ?? 0) + bees * HONEY_PER_BEE * pace * 0.3 / 60;
 	if (state.honeyAcc >= 1) {
 		const n = Math.floor(state.honeyAcc);
 		state.honeyAcc -= n;
@@ -583,14 +583,14 @@ setInterval(() => {
 	}
 }, 60000);
 
-// Nouvelle économie : les habitats produisent, à plein pendant l'élan d'une sortie, à 5 % au repos ; la part des
-// ruches devient du miel (un pot pour 60 nectar), le reste va dans la bourse.
+// Nouvelle économie : les habitats produisent, à plein pendant l'élan d'une sortie, à 5 % au repos ; la production
+// des ruches devient du miel (un pot pour 60 nectar de production, troqué 60 nectar au panier), le reste va dans la
+// bourse. (Le réglage « Miel récolté » a disparu en 0.8.6 : il doublait le miel sans contrepartie.)
 function runHabitats() {
 	if (!state.eco2 || state.intro) { state.prodAt = Date.now(); return; }
 	updateNear();
 	const got = produce(state);
-	const honey = got.honey * (state.honeyShare ?? 0.3) / 0.3;
-	state.honeyAcc = (state.honeyAcc ?? 0) + honey / 60;
+	state.honeyAcc = (state.honeyAcc ?? 0) + got.honey / 60;
 	state.nectar = (state.nectar ?? 0) + Math.max(0, got.nectar - got.honey);
 	if (state.honeyAcc >= 1) {
 		const n = Math.floor(state.honeyAcc);
@@ -2845,24 +2845,17 @@ function tapItem(hit, card) {
 	const short = ['poulailler', 'cabane', 'collecteur'].includes(it.kind) || (state.eco2 && isLadder(it.kind)) ? '' : def.text.split(/(?<=[.!?…])\s/)[0];
 	const tip = (state.longPressTips ?? 0) < 3 ? (state.longPressTips = (state.longPressTips ?? 0) + 1, '<small class="item-tip">Astuce : un appui long dessus le soulève directement.</small>') : '';
 	// La ferme : le panier à la cabane, la part de miel prise aux ruches, le compost à épandre.
-	const share = Math.round((state.honeyShare ?? 0.3) * 100), fill = it.kind === 'compost' ? compostFill(it) : 0;
+	const fill = it.kind === 'compost' ? compostFill(it) : 0;
 	const farm = it.kind === 'cabane' && ITEMS.cabane ? `<div class="item-actions"><button class="btn primary" data-market>Le panier${basketCount() ? ` (${fmtInt(basketCount())})` : ''}</button></div>`
-		: it.kind === 'ruche' ? `<div class="item-actions"><button class="btn primary" data-market>Le panier${basketCount() ? ` (${fmtInt(basketCount())})` : ''}</button></div><div class="coop-row"><span>Miel récolté<small>le reste nourrit la colonie</small></span><span class="coop-step"><button data-share="-1" ${share <= 0 ? 'disabled' : ''}>−</button><i>${share} %</i><button data-share="1" ${share >= 60 ? 'disabled' : ''}>+</button></span></div>`
+		: it.kind === 'ruche' ? `<div class="item-actions"><button class="btn primary" data-market>Le panier${basketCount() ? ` (${fmtInt(basketCount())})` : ''}</button></div>`
 		: it.kind === 'compost' ? `<small class="item-tip">${fill >= 1 ? 'Plein : épands-le sur le potager, ses prochaines récoltes donneront plus.' : `Rempli à ${Math.round(fill * 100)} % (il se remplit quand tu marches).`}</small>${fill >= 1 ? '<div class="item-actions"><button class="btn primary" data-spread>Épandre sur le potager</button></div>' : ''}`
 		: '';
 	card.innerHTML = `<b>${def.name}${state.eco2 && isLadder(it.kind) ? `<span class="lvl">niveau ${lv}/${MAX_LEVEL}</span>` : ''}</b>${short}${info}${tip}
-		${it.kind === 'poulailler' ? coopButtons(it) : ''}${farm}<div class="item-actions">${up ? `<button class="btn primary" data-upgrade ${(state.nectar ?? 0) < up ? 'disabled' : ''}>${def.levels ? 'Agrandir' : state.eco2 && isLadder(it.kind) ? 'Faire grandir' : 'Améliorer'} (${fmtInt(up)})${state.eco2 && isLadder(it.kind) && nx?.gain ? `<small>+${fmtInt(nx.gain * KM_VALUE_H)} par km marché</small>` : ''}</button>` : ''}${it.kind === 'cabane' ? '<button class="btn ghost" data-style>Couleur</button><button class="btn ghost" data-farmer-swap>' + (state.gardener === 'fermiere' ? 'Un fermier' : 'Une fermière') + '</button><button class="btn ghost" data-pet-swap>' + (state.pet === 'chien' ? 'Un chat' : state.pet === 'chat' ? 'Sans animal' : 'Un chien') + '</button>' : ''}${it.kind === 'banc' ? '<button class="btn primary" data-sit>S’asseoir</button>' : ''}${def.turn ? '<button class="btn ghost" data-turn>Tourner</button>' : ''}<button class="btn ghost" data-move>Déplacer</button><button class="btn ghost" data-store>Ranger (+${fmtInt((it.paid ?? def.cost) + (it.spent ?? 0))})</button></div>`;
+		${it.kind === 'poulailler' ? coopButtons(it) : ''}${farm}<div class="item-actions">${up ? `<button class="btn primary" data-upgrade ${(state.nectar ?? 0) < up ? 'disabled' : ''}>${def.levels ? 'Agrandir' : state.eco2 && isLadder(it.kind) ? 'Faire grandir' : 'Améliorer'} (${fmtInt(up)})${state.eco2 && isLadder(it.kind) && nx?.gain ? `<small>+${fmtInt(nx.gain * KM_VALUE_H)} nectar par km</small>` : ''}</button>` : ''}${it.kind === 'cabane' ? '<button class="btn ghost" data-style>Couleur</button><button class="btn ghost" data-farmer-swap>' + (state.gardener === 'fermiere' ? 'Un fermier' : 'Une fermière') + '</button><button class="btn ghost" data-pet-swap>' + (state.pet === 'chien' ? 'Un chat' : state.pet === 'chat' ? 'Sans animal' : 'Un chien') + '</button>' : ''}${it.kind === 'banc' ? '<button class="btn primary" data-sit>S’asseoir</button>' : ''}${def.turn ? '<button class="btn ghost" data-turn>Tourner</button>' : ''}<button class="btn ghost" data-move>Déplacer</button><button class="btn ghost" data-store>Ranger (+${fmtInt((it.paid ?? def.cost) + (it.spent ?? 0))})</button></div>`;
 	card.classList.remove('link');
 	card.classList.add('actions');
 	card.onclick = e => {
 		if (e.target.closest('[data-market]')) { card.hidden = true; openMarket(); return; }
-		const sh = e.target.closest('[data-share]');
-		if (sh) {
-			state.honeyShare = Math.max(0, Math.min(0.6, Math.round(((state.honeyShare ?? 0.3) + Number(sh.dataset.share) * 0.1) * 10) / 10));
-			persist(true);
-			tapItem(hit, card);
-			return;
-		}
 		if (e.target.closest('[data-spread]')) {
 			if (!garden.items.some(x => x.kind === 'potager')) { toast('Pose d’abord un carré de potager, près de la cabane', '#9A7448'); return; }
 			it.km0 = state.totals.distance / 1000;
@@ -3033,7 +3026,7 @@ function habStats(it, nx) {
 		: pct < NEAR_MAX * 100 ? `Plus il y a de plantes dans son cercle, plus il produit (jusqu’à ${NEAR_MAX * 100} %).${nx?.ok ? ' Le faire grandir élargit son cercle.' : ''}`
 		: nx && !nx.ok ? `Niveau ${nx.level} dès ${nx.km} km parcourus.` : !nx ? 'Il est au plus haut.' : '';
 	const pot = it.kind === 'ruche' ? Math.floor(((state.honeyAcc ?? 0) % 1) * 100) : -1;
-	return `<div class="hab-stats">${cells.map(([v, l]) => `<span><b>${v}</b>${l}</span>`).join('')}</div>${pot >= 0 ? `<div class="hab-pot"><span>Prochain pot de miel</span><i style="--p:${pot}%"></i><b>${pot} %</b></div>` : ''}${tip ? `<small class="item-tip">${tip}</small>` : ''}`;
+	return `<div class="hab-stats">${cells.map(([v, l]) => `<span><b>${v}</b>${l}</span>`).join('')}</div>${pot >= 0 ? `<div class="hab-pot"><span>Prochain pot de miel</span><i style="--p:${pot}%"></i><b>${pot} %</b></div><small class="hab-pot-note">Ta ruche fait du miel au lieu de nectar : troque tes pots au panier, ${GOODS.miel.price} nectar le pot.</small>` : ''}${tip ? `<small class="item-tip">${tip}</small>` : ''}`;
 }
 /** Qui vit autour de chaque habitat, et ce qu'il y fait : c'est ce que montre son cercle doré. */
 const HAB_LIFE = {

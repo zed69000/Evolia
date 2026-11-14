@@ -3,6 +3,10 @@
 Chaque version, la plus récente en haut. Le site (evolia.sebastienalzamora.workers.dev) est toujours à jour ;
 le Play Store (tests internes) reçoit les versions indiquées « Play ».
 
+## 0.8.6 — 14 novembre 2026
+- **Plus de réglage « Miel récolté »** sur la ruche : il ne servait à rien (« le reste nourrit la colonie » n'avait aucun effet), et le monter doublait le miel sans contrepartie. Toute la production de la ruche devient du miel, au prix d'avant (30 %). La fiche le dit : « Ta ruche fait du miel au lieu de nectar : troque tes pots au panier, 60 nectar le pot. »
+- « Faire grandir » dit « +313 nectar par km » au lieu de « +313 par km marché », qu'on pouvait lire comme des kilomètres.
+
 ## 0.8.5 — 14 novembre 2026
 **Quand la position manque, le jeu te le redemande.**
 - Si la position n'est pas autorisée, a été refusée, ou ne trouve plus de signal depuis une minute, une fenêtre « Evolia ne voit pas tes pas » (ou « Ton téléphone ne trouve plus ta position ») s'ouvre avec un seul bouton : « Activer le suivi » ou « Relancer la position ». Elle revient à l'ouverture, au retour dans l'appli et toutes les 5 minutes tant que ça dure, jamais par-dessus une autre fenêtre.
