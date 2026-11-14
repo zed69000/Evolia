@@ -1172,3 +1172,23 @@ body:has(.panel.open) #debug { display: none; }
 .tk { flex: none; display: grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; font: 800 14px 'Nunito', sans-serif; font-style: normal; color: #FDF7E7; }
 .tk.ok { background: #5F933E; } .tk.wait { background: #E3A33A; } .tk.no { background: #C0442F; }
 .hab-pot-note { display: block; margin: -2px 0 6px; color: var(--doux); font-size: 12.5px; line-height: 1.35; }
+
+/* ─── Portrait obligatoire sur téléphone et tablette ───
+   Le navigateur ne peut pas bloquer la rotation : sur un écran tactile tourné en paysage, un cache couvre le jeu et
+   demande de redresser l'écran. Les ordinateurs (souris) gardent leur fenêtre en largeur. */
+#rotate { display: none; }
+@media (orientation: landscape) and (pointer: coarse) and (hover: none) {
+	#rotate {
+		display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 22px;
+		position: fixed; inset: 0; z-index: 100000; background: #FDF7E7; color: #2E4A22;
+		font-size: 20px; font-weight: 600; line-height: 1.4; text-align: center; padding: 20px;
+	}
+	#rotate p { margin: 0; }
+	.rotate-phone {
+		width: 46px; height: 78px; border: 4px solid #2E4A22; border-radius: 10px; box-sizing: border-box;
+		animation: rotate-hint 2.4s ease-in-out infinite;
+	}
+	#app { visibility: hidden; }
+}
+@keyframes rotate-hint { 0%, 25% { transform: rotate(-90deg); } 55%, 100% { transform: rotate(0deg); } }
+@media (prefers-reduced-motion: reduce) { .rotate-phone { animation: none; } }

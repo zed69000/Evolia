@@ -357,6 +357,13 @@ function readReward() {
  */
 // Le dernier toucher (le centre du bouton touché, ou le point touché dans le jardin) : une récompense qui suit un
 // toucher part toujours de là, même quand l'appel ne dit pas d'où.
+// Portrait : là où le navigateur le permet (appli installée sur Android), on bloque la rotation ; ailleurs, le cache
+// « Tourne ton téléphone » (style.css) prend le relais.
+try { screen.orientation?.lock?.('portrait')?.catch?.(() => {}); } catch { /* pas permis ici */ }
+
+// Au toucher, une bête dont on n'a pas encore lu la fiche passe avant celle déjà lue qui la cache.
+garden.isNew = id => !!SPECIES_BY_ID[id] && !state.speciesSeen?.[id] && !state.speciesStart?.[id];
+
 let lastTap = null;
 document.addEventListener('pointerdown', e => {
 	const b = e.target.closest?.('button, .btn, [data-sell], .chip, .toast, a');

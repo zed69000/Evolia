@@ -5363,14 +5363,18 @@ export class Garden {
 
 	/** Animal le plus proche d'un point du monde (pour le toucher du doigt). */
 	critterAt(wx, wy) {
-		let best = null, bestD = 16 / Math.min(1, this.cam.z);
+		// Plusieurs bêtes sous le doigt : celle dont on n'a pas encore lu la fiche passe avant (`isNew`, donné par
+		// main.js) ; à égalité, la plus proche.
+		let best = null, bestD = 16 / Math.min(1, this.cam.z), bestNew = false;
 		for (const b of this.insects) {
 			const pts = b.behavior === 'trail' ? (b.pos ?? []) : [[b.x, b.y]];
 			// Les oiseaux et les gros animaux se touchent plus facilement : leur corps dépasse leur point d'ancrage.
 			const big = (CRITTER_SIZE[b.kind] ?? 1) >= 1.4 ? 1.6 : 1;
+			const isNew = !!this.isNew?.(b.sp);
 			for (const [x, y] of pts) {
 				const d = Math.hypot(x - wx, (y - 6 * big) - wy) / big;
-				if (d < bestD) { bestD = d; best = b; }
+				if (d >= 16 / Math.min(1, this.cam.z)) continue;
+				if ((isNew && !bestNew) || (isNew === bestNew && d < bestD)) { bestD = d; best = b; bestNew = isNew; }
 			}
 		}
 		return best;
