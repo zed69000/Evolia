@@ -12,7 +12,8 @@
     "@capacitor/core": "^8.5.3",
     "@capacitor/local-notifications": "^8.3.1",
     "@capgo/capacitor-health": "^8.11.12",
-    "@capgo/capacitor-pedometer": "^8.0.51"
+    "@capgo/capacitor-pedometer": "^8.0.51",
+    "play-cloud-save": "file:native/play-cloud-save"
   },
   "devDependencies": {
     "@capacitor/cli": "^8.5.3"
