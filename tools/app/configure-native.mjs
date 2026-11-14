@@ -8,6 +8,7 @@
 //   - permissions : position (météo et distance des balades), reconnaissance d'activité (podomètre),
 //     et une seule permission Santé, la lecture des pas. Le module Santé en déclare une cinquantaine :
 //     on retire les autres, sinon Google Play demande de justifier chacune.
+//   - micro facultatif (la dictée du rapport de bug ne doit écarter aucun appareil sans micro).
 //   - écran portrait, couleur papier au démarrage, icône du jeu, politique de confidentialité pour Health Connect.
 // La signature se fait ensuite dans la chaîne commune (game-pipeline), avec la clé d'envoi du jeu.
 import { cpSync, existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -47,6 +48,9 @@ edit("android/app/src/main/AndroidManifest.xml", s => {
 	for (const p of healthDeclared) if (!HEALTH_KEEP.has(p) && !s.includes(`"${p}"`)) add += `    <uses-permission android:name="${p}" tools:node="remove" />\n`;
 	// Les rappels n'ont pas besoin d'être à la minute près : pas d'alarme exacte (Google Play la fait justifier).
 	if (!s.includes('"android.permission.SCHEDULE_EXACT_ALARM"')) add += '    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" tools:node="remove" />\n';
+	// Le module de dictée (rapport de bug) demande le micro : Google Play en déduit que l'appli exige un micro
+	// et l'interdit aux tablettes qui n'en ont pas. La dictée est un bonus : le micro reste facultatif.
+	if (!s.includes('"android.hardware.microphone"')) add += '    <uses-feature android:name="android.hardware.microphone" android:required="false" />\n';
 	if (add) s = s.replace(/(<manifest[^>]*>\n)/, `$1${add}`);
 	if (!s.includes("android:screenOrientation")) s = s.replace('android:name=".MainActivity"', 'android:name=".MainActivity"\n            android:screenOrientation="portrait"');
 	if (!s.includes('android:screenOrientation="portrait"') || !s.includes('READ_HEART_RATE" tools:node="remove"')) throw new Error("AndroidManifest.xml inattendu");
