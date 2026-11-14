@@ -8,6 +8,15 @@
 //   - une musique générative très calme : notes et accords tirés au hasard dans une gamme pentatonique,
 //     avec de longs silences ; elle ne boucle jamais, donc ne se répète jamais.
 // Tout reste bas et lent : c'est un paysage sonore, pas une musique de jeu.
+//
+// Une seule chaîne de sortie, par où passe tout (nature, cris, cloche, musique, échos) :
+//   bus nature + bus musique → mix commun → passe-haut 100 Hz (le haut-parleur du téléphone distord sur les graves)
+//   → compresseur doux (cohésion) → limiteur (−3 dB, ratio 20, 2 ms) → gain de sortie 0,9 → haut-parleur.
+// Le compresseur de Chrome remonte tout seul le niveau (gain de compensation) : sans le limiteur derrière, les
+// attaques passaient au-dessus de 0 dB et le son saturait (Galaxy A54).
+// Chaque son ponctuel est placé : à gauche ou à droite selon où est sa source à l'écran (au plus ±0,7), plus sourd
+// et plus réverbéré quand on regarde de loin ; la cloche et l'interface là où l'événement a lieu ou là où le doigt
+// a touché (±0,3).
 
 const NOTES = [523.25, 587.33, 659.25, 783.99, 880, 1046.5]; // do ré mi sol la do : pentatonique, jamais de fausse note
 
@@ -20,7 +29,40 @@ export class Soundscape {
 		this.lastFlash = 0;
 		this.buf = {}; // les vrais cris, une fois chargés : nom → variantes
 		this.lastVar = {};
-		this.voices = 0;
+		this.active = []; // les voix en cours : { end } (temps de l'audio), pour la limite de voix
+		this.lastAt = {}; // dernier départ de chaque son : jamais deux fois le même à moins de 50 ms
+		// Là où le doigt a touché en dernier : les sons d'interface partent de là.
+		if (typeof document !== 'undefined') document.addEventListener('pointerdown', e => { this.tapX = e.clientX / (window.innerWidth || 1); this.tapAt = performance.now(); }, { passive: true, capture: true });
+	}
+
+	/** Nombre de voix qui sonnent encore (cris, bruitages ; la musique a sa propre mesure). */
+	get voices() {
+		const now = this.ctx?.currentTime ?? 0;
+		this.active = this.active.filter(v => v.end > now);
+		return this.active.length;
+	}
+
+	/**
+	 * Faux s'il y a déjà `cap` voix (6 pour l'ambiance, 8 pour les sons d'événement, prioritaires) ou si le même son
+	 * vient de partir (< 50 ms : deux copies en phase, c'est +6 dB d'un coup). Sinon, note le départ.
+	 */
+	free(key, cap = MAX_VOICES) {
+		const now = this.ctx.currentTime;
+		if (this.voices >= cap || now - (this.lastAt[key] ?? -1) < 0.05) return false;
+		this.lastAt[key] = now;
+		return true;
+	}
+
+	/** Position horizontale à l'écran (0 = bord gauche, 1 = bord droit) d'un point du monde. */
+	screenX(wx) {
+		const v = this.garden.view?.();
+		return v && v.w ? Math.max(0, Math.min(1, (wx - v.x0) / v.w)) : 0.5;
+	}
+
+	/** Panoramique d'un son d'interface : là où l'événement a lieu (`at`, de 0 à 1), sinon là où le doigt vient de toucher, en discret (±0,3). */
+	uiPan(at) {
+		const x = at ?? (performance.now() - (this.tapAt ?? -1e9) < 2500 ? this.tapX : 0.5);
+		return Math.max(-0.3, Math.min(0.3, ((x ?? 0.5) * 2 - 1) * 0.3));
 	}
 
 	get settings() { return (this.state.sound ??= { on: true, vol: 0.7 }); }
@@ -69,10 +111,11 @@ export class Soundscape {
 		if (this.anyOn) this.unlock();
 		if (!this.ctx) return;
 		const t = this.ctx.currentTime;
-		this.master.gain.setTargetAtTime(this.settings.on ? this.settings.vol * 1.3 : 0, t, 0.3);
+		// Le curseur du joueur ne dépasse jamais 1 : rien ne multiplie le niveau au-delà.
+		this.nature.gain.setTargetAtTime(this.settings.on ? unit(this.settings.vol) : 0, t, 0.3);
 		// Pendant une sortie suivie en direct, la musique se tait (sauf si on la veut aussi), la nature reste.
 		const music = this.musicSettings.on && (!this.walking || this.musicSettings.walk || this.mood === 'joy');
-		this.musicBus.gain.setTargetAtTime(music ? this.musicSettings.vol * 0.7 : 0, t, 0.8);
+		this.musicBus.gain.setTargetAtTime(music ? unit(this.musicSettings.vol) * MUSIC_LEVEL : 0, t, 0.8);
 		if (!this.anyOn) this.ctx.suspend();
 	}
 
@@ -91,18 +134,32 @@ export class Soundscape {
 	resume() { if (this.anyOn && this.ctx) this.ctx.resume(); }
 
 	build() {
-		const ctx = this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+		// « playback » : plus de marge pour le processeur, donc pas de son qui hache quand le jardin est chargé.
+		const AC = window.AudioContext || window.webkitAudioContext;
+		let ctx;
+		try { ctx = new AC({ latencyHint: 'playback' }); } catch { ctx = new AC(); }
+		this.ctx = ctx;
+		// La chaîne de sortie, unique (voir en tête du fichier).
+		this.mix = ctx.createGain();
+		this.mix.gain.value = MIX_LEVEL;
+		const hp = ctx.createBiquadFilter();
+		hp.type = 'highpass'; hp.frequency.value = 100; hp.Q.value = 0.7;
 		const comp = ctx.createDynamicsCompressor();
-		comp.threshold.value = -20;
-		comp.ratio.value = 3;
-		comp.connect(ctx.destination);
-		this.master = ctx.createGain();
-		this.master.gain.value = this.settings.on ? this.settings.vol * 1.3 : 0;
-		this.master.connect(comp);
-		// La musique a son propre volume et son propre écho, plus long et plus doux.
+		comp.threshold.value = -20; comp.knee.value = 30; comp.ratio.value = 3; comp.attack.value = 0.01; comp.release.value = 0.25;
+		const lim = ctx.createDynamicsCompressor();
+		lim.threshold.value = -3; lim.knee.value = 0; lim.ratio.value = 20; lim.attack.value = 0.002; lim.release.value = 0.1;
+		const out = ctx.createGain();
+		out.gain.value = 0.9;
+		this.mix.connect(hp).connect(comp).connect(lim).connect(out).connect(ctx.destination);
+		this.limiter = lim; // pour mesurer la sortie dans une version de test
+		// Le bus de la nature (fonds, cris, bruitages, cloche), réglé par le curseur « sons ».
+		this.nature = ctx.createGain();
+		this.nature.gain.value = this.settings.on ? unit(this.settings.vol) : 0;
+		this.nature.connect(this.mix);
+		// La musique a son propre volume et son propre écho, plus long et plus doux, et passe par le même mix.
 		this.musicBus = ctx.createGain();
-		this.musicBus.gain.value = this.musicSettings.on ? this.musicSettings.vol * 0.7 : 0;
-		this.musicBus.connect(comp);
+		this.musicBus.gain.value = this.musicSettings.on ? unit(this.musicSettings.vol) * MUSIC_LEVEL : 0;
+		this.musicBus.connect(this.mix);
 		this.musicVerb = ctx.createConvolver();
 		this.musicVerb.buffer = this.impulse(4.5);
 		const mwet = ctx.createGain();
@@ -116,7 +173,7 @@ export class Soundscape {
 		this.verb.buffer = this.impulse(2.2);
 		const wet = ctx.createGain();
 		wet.gain.value = 0.35;
-		this.verb.connect(wet).connect(this.master);
+		this.verb.connect(wet).connect(this.nature);
 
 		const len = ctx.sampleRate * 3;
 		this.noise = ctx.createBuffer(1, len, ctx.sampleRate);
@@ -124,6 +181,7 @@ export class Soundscape {
 		let b = 0;
 		for (let i = 0; i < len; i++) { const w = Math.random() * 2 - 1; b = 0.97 * b + 0.03 * w; d[i] = w * 0.5 + b * 3; }
 
+		// Chaque fond est fait de deux sources, l'une à gauche, l'autre à droite (pas une boucle au centre).
 		this.rain = this.bed({ type: 'highpass', freq: 900, q: 0.3 }, 0, { type: 'lowpass', freq: 7000 });
 		this.rainBody = this.bed({ type: 'lowpass', freq: 500, q: 0.4 }, 0);
 		this.sea = this.bed({ type: 'lowpass', freq: 520, q: 0.5 }, 0, null, 0.11);
@@ -152,57 +210,96 @@ export class Soundscape {
 	 */
 	sample(name, pan, level, rate = 1, opt = {}) {
 		const list = this.buf[name];
-		if (!list?.length || this.voices >= MAX_VOICES) return false;
+		// `opt.cap` : 8 voix pour les sons d'événement (prioritaires), 6 pour l'ambiance ; `opt.dist` : 0 (près) à 1 (loin).
+		if (!list?.length || !this.free(name, opt.cap)) return false;
 		let i = Math.floor(Math.random() * list.length);
 		if (list.length > 1 && i === this.lastVar[name]) i = (i + 1) % list.length;
 		this.lastVar[name] = i;
 		const ctx = this.ctx, src = ctx.createBufferSource(), t = ctx.currentTime + 0.03;
 		src.buffer = list[i];
 		src.playbackRate.value = rate * (0.95 + Math.random() * 0.1);
-		const out = this.voice(pan, level), vol = Tuning.num('son.niveau_cris', SAMPLE_LEVEL) * (SAMPLE_GAIN[name] ?? 1) * (opt.vol ?? 1) * level * 10 ** ((Math.random() - 0.5) * 0.25);
+		const out = this.voice(pan, level, opt.dist ?? 0), vol = Tuning.num('son.niveau_cris', SAMPLE_LEVEL) * (SAMPLE_GAIN[name] ?? 1) * (opt.vol ?? 1) * level * 10 ** ((Math.random() - 0.5) * 0.25);
 		const dur = list[i].duration / src.playbackRate.value;
 		if (opt.swell) {
 			// Un insecte qui passe : le son monte, puis s'éloigne d'un côté à l'autre.
 			out.g.gain.setValueAtTime(0, t);
 			out.g.gain.linearRampToValueAtTime(vol, t + dur * 0.45);
 			out.g.gain.linearRampToValueAtTime(0, t + dur);
-			out.p.pan.setValueAtTime(pan - 0.3, t);
-			out.p.pan.linearRampToValueAtTime(pan + 0.3, t + dur);
+			this.glide(out.p, pan - 0.3, pan + 0.3, t, dur);
 		} else out.g.gain.value = vol;
 		src.connect(out.g);
-		this.voices++;
-		src.onended = () => { this.voices = Math.max(0, this.voices - 1); out.p.disconnect(); };
+		out.busy.end = t + dur;
+		src.onended = () => out.p.disconnect();
 		src.start(t);
 		return true;
 	}
 
-	/** Un bruit filtré qui tourne en boucle ; `swell` : houle lente du volume (vagues, clapotis), en Hz. */
+	/**
+	 * Un bruit filtré qui tourne en boucle ; `swell` : houle lente du volume (vagues, clapotis), en Hz.
+	 * Deux sources décalées, une à gauche et une à droite, chacune avec sa houle : le fond s'ouvre au lieu de
+	 * sortir d'un seul point au milieu.
+	 */
 	bed(f1, gain, f2 = null, swell = 0) {
 		const ctx = this.ctx;
-		const src = ctx.createBufferSource();
-		src.buffer = this.noise;
-		src.loop = true;
-		src.playbackRate.value = 0.8 + Math.random() * 0.4;
-		const filt = ctx.createBiquadFilter();
-		filt.type = f1.type; filt.frequency.value = f1.freq; filt.Q.value = f1.q;
-		let node = src.connect(filt);
-		if (f2) { const g2 = ctx.createBiquadFilter(); g2.type = f2.type; g2.frequency.value = f2.freq; node = node.connect(g2); }
 		const g = ctx.createGain();
 		g.gain.value = gain;
-		node.connect(g);
-		let out = g;
-		if (swell) {
-			const sw = ctx.createGain();
-			sw.gain.value = 0.6;
-			const lfo = ctx.createOscillator(), depth = ctx.createGain();
-			lfo.frequency.value = swell; depth.gain.value = 0.4;
-			lfo.connect(depth).connect(sw.gain);
-			lfo.start();
-			out = g.connect(sw);
+		g.connect(this.nature);
+		for (const side of [-0.55, 0.55]) {
+			const src = ctx.createBufferSource();
+			src.buffer = this.noise;
+			src.loop = true;
+			src.playbackRate.value = 0.8 + Math.random() * 0.4;
+			const filt = ctx.createBiquadFilter();
+			filt.type = f1.type; filt.frequency.value = f1.freq; filt.Q.value = f1.q;
+			let node = src.connect(filt);
+			if (f2) { const g2 = ctx.createBiquadFilter(); g2.type = f2.type; g2.frequency.value = f2.freq; node = node.connect(g2); }
+			// Deux sources non corrélées s'additionnent en puissance (+3 dB) : chacune à 0,7 garde le niveau d'avant.
+			const half = ctx.createGain();
+			half.gain.value = swell ? 0.6 * 0.7 : 0.7;
+			node.connect(half);
+			if (swell) {
+				const lfo = ctx.createOscillator(), depth = ctx.createGain();
+				lfo.frequency.value = swell * (0.85 + Math.random() * 0.3); depth.gain.value = 0.4 * 0.7;
+				lfo.connect(depth).connect(half.gain);
+				lfo.start();
+			}
+			half.connect(this.panner(side)).connect(g);
+			src.start(0, Math.random() * 2.5);
 		}
-		out.connect(this.master);
-		src.start();
-		return { gain: g, filt };
+		return { gain: g };
+	}
+
+	/**
+	 * Un panoramique (−0,7 à +0,7) : StereoPanner, ou, sur les vieux Safari qui ne l'ont pas, un PannerNode
+	 * « equalpower » posé sur un demi-cercle devant l'auditeur, sans atténuation avec la distance.
+	 */
+	panner(pan = 0) {
+		const ctx = this.ctx;
+		if (ctx.createStereoPanner) {
+			const p = ctx.createStereoPanner();
+			p.pan.value = clampPan(pan);
+			return p;
+		}
+		const p = ctx.createPanner();
+		p.panningModel = 'equalpower';
+		p.distanceModel = 'linear';
+		p.rolloffFactor = 0;
+		const a = clampPan(pan) * Math.PI / 2;
+		p.setPosition(Math.sin(a), 0, -Math.cos(a));
+		return p;
+	}
+
+	/** Déplace un son en douceur de `from` vers `to`, à partir de `t`, en à peu près `dur` secondes (jamais d'un coup). */
+	glide(p, from, to, t, dur) {
+		const tc = Math.max(0.03, dur / 3);
+		if (p.pan) {
+			p.pan.setValueAtTime(clampPan(from), t);
+			p.pan.setTargetAtTime(clampPan(to), t, tc);
+		} else if (p.positionX) {
+			const a0 = clampPan(from) * Math.PI / 2, a1 = clampPan(to) * Math.PI / 2;
+			p.positionX.setValueAtTime(Math.sin(a0), t); p.positionX.setTargetAtTime(Math.sin(a1), t, tc);
+			p.positionZ.setValueAtTime(-Math.cos(a0), t); p.positionZ.setTargetAtTime(-Math.cos(a1), t, tc);
+		}
 	}
 
 	impulse(sec) {
@@ -228,9 +325,11 @@ export class Soundscape {
 		// Pas de vent ni de bruissement : un souffle, même par rafales, finit par sonner comme un bruit de fond.
 		const now = ctx.currentTime;
 		this.music(now, night);
+		// Le passe-haut de la sortie retire le grave sous 100 Hz (le téléphone le distordait) : le corps de la pluie
+		// et le ressac sont un peu remontés pour garder leur présence.
 		this.set(this.rain, rain * 0.12);
-		this.set(this.rainBody, rain * 0.08);
-		this.set(this.sea, biome === 'littoral' ? 0.16 : 0);
+		this.set(this.rainBody, rain * RAIN_BODY);
+		this.set(this.sea, biome === 'littoral' ? SEA_LEVEL : 0);
 
 		// Orage : le tonnerre suit l'éclair, avec un peu de retard (il est loin).
 		if (g.flash > 0.9 && performance.now() - this.lastFlash > 3000) {
@@ -256,7 +355,7 @@ export class Soundscape {
 			if (close.length && Math.random() < 0.3) {
 				const b = close[Math.floor(Math.random() * close.length)];
 				this.nextBuzz = now + 8 + Math.random() * 10;
-				this.flyby(Math.max(-0.7, Math.min(0.7, ((b.x - v.x0) / v.w) * 2 - 1)), BUZZ[b.kind]);
+				this.flyby(((b.x - v.x0) / v.w * 2 - 1) * 0.7, BUZZ[b.kind]);
 			}
 		}
 		// Un animal visible, au hasard, chante s'il en a envie.
@@ -268,26 +367,39 @@ export class Soundscape {
 		const listening = now < (this.listenUntil ?? 0);
 		if (Math.random() > call.chance * (0.45 + 0.55 * near) * (listening ? 2 : 1)) return;
 		this.next[key] = now + call.every * (0.7 + Math.random() * 0.6) * (listening ? 0.5 : 1);
-		const pan = Math.max(-0.8, Math.min(0.8, ((b.x - v.x0) / v.w) * 2 - 1));
+		// Placée là où elle est à l'écran (bord gauche −0,7, bord droit +0,7) ; vue de loin (dézoomé), plus faible,
+		// plus sourde et plus réverbérée.
+		const pan = (Math.max(0, Math.min(1, (b.x - v.x0) / v.w)) * 2 - 1) * 0.7, dist = 1 - near;
 		const s = sampleFor(b);
 		// Un vrai cri dès qu'il est chargé (s'il y a déjà trop de voix, la bête se tait cette fois).
-		if (s && this.buf[s.name]) { this.sample(s.name, pan, 0.4 + 0.6 * near, s.rate); return; }
-		this[call.voice](pan, call, 0.4 + 0.6 * near);
+		if (s && this.buf[s.name]) { this.sample(s.name, pan, 0.4 + 0.6 * near, s.rate, { dist }); return; }
+		if (!this.free(key)) return;
+		this[call.voice](pan, call, 0.4 + 0.6 * near, dist);
 	}
 
-	/** Une voix courte : oscillateur, enveloppe douce, panoramique, un peu d'écho. */
-	voice(pan, level) {
-		const ctx = this.ctx;
+	/**
+	 * Une voix courte : oscillateur, enveloppe douce, panoramique, un peu d'écho. `dist` (0 près, 1 loin) : le
+	 * passe-bas descend de 12 kHz à 2 kHz et l'envoi vers l'écho augmente (le volume, lui, est déjà dans `level`).
+	 * Chaque voix compte pour la limite de voix jusqu'à la fin de sa dernière note.
+	 */
+	voice(pan, level, dist = 0) {
+		const ctx = this.ctx, d = Math.max(0, Math.min(1, dist));
 		const g = ctx.createGain();
-		const p = ctx.createStereoPanner();
-		p.pan.value = pan;
-		g.connect(p);
-		p.connect(this.master);
-		p.connect(this.verb);
-		return { g, p, level };
+		const lp = ctx.createBiquadFilter();
+		lp.type = 'lowpass'; lp.frequency.value = 12000 * Math.pow(2000 / 12000, d);
+		const p = this.panner(pan);
+		const send = ctx.createGain();
+		send.gain.value = 0.7 + 0.6 * d;
+		g.connect(lp).connect(p);
+		p.connect(this.nature);
+		p.connect(send).connect(this.verb);
+		const busy = { end: ctx.currentTime + 0.3 };
+		this.active.push(busy);
+		return { g, p, level, busy };
 	}
 
 	note(out, t, f0, f1, dur, vol, type = 'sine') {
+		out.busy.end = Math.max(out.busy.end, t + dur + 0.05);
 		const ctx = this.ctx, o = ctx.createOscillator(), e = ctx.createGain();
 		o.type = type;
 		o.frequency.setValueAtTime(f0, t);
@@ -303,8 +415,8 @@ export class Soundscape {
 	// ─── Les cris ──────────────────────────────────────────────────
 
 	/** Merle : phrase flûtée, quelques notes graves qui montent et descendent. */
-	blackbird(pan, c, lvl) {
-		const out = this.voice(pan, lvl), t = this.ctx.currentTime + 0.05;
+	blackbird(pan, c, lvl, d = 0) {
+		const out = this.voice(pan, lvl, d), t = this.ctx.currentTime + 0.05;
 		let f = 1700 + Math.random() * 500, at = t;
 		for (let i = 0, n = 4 + Math.floor(Math.random() * 4); i < n; i++) {
 			const nf = Math.max(1300, Math.min(2900, f * (0.8 + Math.random() * 0.5)));
@@ -315,8 +427,8 @@ export class Soundscape {
 	}
 
 	/** Mésange : « ti-tu ti-tu ti-tu ». */
-	tit(pan, c, lvl) {
-		const out = this.voice(pan, lvl), t = this.ctx.currentTime + 0.05;
+	tit(pan, c, lvl, d = 0) {
+		const out = this.voice(pan, lvl, d), t = this.ctx.currentTime + 0.05;
 		for (let i = 0; i < 3 + Math.floor(Math.random() * 2); i++) {
 			this.note(out, t + i * 0.26, 5200, 5000, 0.08, 0.035);
 			this.note(out, t + i * 0.26 + 0.11, 3700, 3500, 0.1, 0.035);
@@ -324,14 +436,14 @@ export class Soundscape {
 	}
 
 	/** Petits cris aigus et brefs (martin-pêcheur, gravelot). */
-	peep(pan, c, lvl) {
-		const out = this.voice(pan, lvl), t = this.ctx.currentTime + 0.05;
+	peep(pan, c, lvl, d = 0) {
+		const out = this.voice(pan, lvl, d), t = this.ctx.currentTime + 0.05;
 		for (let i = 0; i < c.n; i++) this.note(out, t + i * c.gap, c.f0, c.f1, c.dur, 0.03);
 	}
 
 	/** Cri rauque (geai, casse-noix) : un bruit court et nasal. */
-	harsh(pan, c, lvl) {
-		const out = this.voice(pan, lvl), t = this.ctx.currentTime + 0.05;
+	harsh(pan, c, lvl, d = 0) {
+		const out = this.voice(pan, lvl, d), t = this.ctx.currentTime + 0.05;
 		for (let i = 0; i < c.n; i++) {
 			this.note(out, t + i * 0.32, c.f, c.f * 0.8, 0.22, 0.012, 'sawtooth');
 			this.note(out, t + i * 0.32, c.f * 2.01, c.f * 1.6, 0.2, 0.006, 'sawtooth');
@@ -339,27 +451,27 @@ export class Soundscape {
 	}
 
 	/** Pic : un tambourinage rapide qui ralentit, sur le tronc. */
-	drum(pan, c, lvl) {
-		const out = this.voice(pan, lvl), t = this.ctx.currentTime + 0.05;
+	drum(pan, c, lvl, d = 0) {
+		const out = this.voice(pan, lvl, d), t = this.ctx.currentTime + 0.05;
 		for (let i = 0; i < 16; i++) this.note(out, t + i * (0.045 + i * 0.002), 900, 300, 0.035, 0.05, 'triangle');
 	}
 
 	/** Chouette hulotte : « hou… hou-hou-hou ». */
-	owl(pan, c, lvl) {
-		const out = this.voice(pan, lvl), t = this.ctx.currentTime + 0.05;
+	owl(pan, c, lvl, d = 0) {
+		const out = this.voice(pan, lvl, d), t = this.ctx.currentTime + 0.05;
 		this.note(out, t, 420, 400, 0.55, 0.05);
 		for (let i = 0; i < 3; i++) this.note(out, t + 1.3 + i * 0.28, 410, 380, 0.22, 0.04);
 	}
 
 	/** Canard : deux ou trois « coin » nasillards. */
-	duck(pan, c, lvl) {
-		const out = this.voice(pan, lvl), t = this.ctx.currentTime + 0.05;
+	duck(pan, c, lvl, d = 0) {
+		const out = this.voice(pan, lvl, d), t = this.ctx.currentTime + 0.05;
 		for (let i = 0; i < 2 + Math.floor(Math.random() * 2); i++) this.note(out, t + i * 0.24, 360, 280, 0.16, 0.012, 'sawtooth');
 	}
 
 	/** Goéland, aigle : un long cri qui glisse vers le bas. */
-	cry(pan, c, lvl) {
-		const out = this.voice(pan, lvl), t = this.ctx.currentTime + 0.05;
+	cry(pan, c, lvl, d = 0) {
+		const out = this.voice(pan, lvl, d), t = this.ctx.currentTime + 0.05;
 		for (let i = 0; i < c.n; i++) {
 			this.note(out, t + i * c.gap, c.f0, c.f1, c.dur, 0.03, 'triangle');
 			this.note(out, t + i * c.gap, c.f0 * 2, c.f1 * 2, c.dur, 0.008);
@@ -367,34 +479,34 @@ export class Soundscape {
 	}
 
 	/** Grenouille : un coassement grave en trémolo. */
-	frog(pan, c, lvl) {
-		const out = this.voice(pan, lvl), t = this.ctx.currentTime + 0.05;
+	frog(pan, c, lvl, d = 0) {
+		const out = this.voice(pan, lvl, d), t = this.ctx.currentTime + 0.05;
 		for (let k = 0; k < 2 + Math.floor(Math.random() * 3); k++) {
 			for (let i = 0; i < 7; i++) this.note(out, t + k * 0.5 + i * 0.035, 330, 260, 0.03, 0.03, 'triangle');
 		}
 	}
 
 	/** Marmotte : un sifflet d'alerte, aigu et net. */
-	whistle(pan, c, lvl) {
-		const out = this.voice(pan, lvl), t = this.ctx.currentTime + 0.05;
+	whistle(pan, c, lvl, d = 0) {
+		const out = this.voice(pan, lvl, d), t = this.ctx.currentTime + 0.05;
 		this.note(out, t, 2600, 2900, 0.3, 0.035);
 	}
 
 	/** Sauterelle : une stridulation sèche, en petits paquets. */
-	chirr(pan, c, lvl) {
-		const out = this.voice(pan, lvl), t = this.ctx.currentTime + 0.05;
+	chirr(pan, c, lvl, d = 0) {
+		const out = this.voice(pan, lvl, d), t = this.ctx.currentTime + 0.05;
 		for (let k = 0; k < 3; k++) for (let i = 0; i < 10; i++) this.note(out, t + k * 0.45 + i * 0.022, 7000, 6500, 0.012, 0.012, 'square');
 	}
 
 	/** Héron : un croassement grave, rare. */
-	croak(pan, c, lvl) {
-		const out = this.voice(pan, lvl), t = this.ctx.currentTime + 0.05;
+	croak(pan, c, lvl, d = 0) {
+		const out = this.voice(pan, lvl, d), t = this.ctx.currentTime + 0.05;
 		this.note(out, t, 220, 160, 0.4, 0.014, 'sawtooth');
 	}
 
 	/** Un chant d'oiseau générique, propre à chaque espèce : hauteur, nombre de notes et rythme tirés de son nom. */
-	warble(pan, c, lvl) {
-		const out = this.voice(pan, lvl), t = this.ctx.currentTime + 0.05;
+	warble(pan, c, lvl, d = 0) {
+		const out = this.voice(pan, lvl, d), t = this.ctx.currentTime + 0.05;
 		let f = c.f, at = t;
 		for (let i = 0; i < c.n; i++) {
 			const nf = f * (c.up ? 1.08 : 0.94) * (0.92 + Math.random() * 0.16);
@@ -405,33 +517,33 @@ export class Soundscape {
 	}
 
 	/** Poule : quelques « cot » secs. */
-	cluck(pan, c, lvl) {
-		const out = this.voice(pan, lvl), t = this.ctx.currentTime + 0.05;
+	cluck(pan, c, lvl, d = 0) {
+		const out = this.voice(pan, lvl, d), t = this.ctx.currentTime + 0.05;
 		for (let i = 0; i < 2 + Math.floor(Math.random() * 3); i++) this.note(out, t + i * 0.2, 520, 380, 0.09, 0.02, 'sawtooth');
 	}
 
 	/** Coq : « co-co-ri-coooo ». */
-	crow(pan, c, lvl) {
-		const out = this.voice(pan, lvl), t = this.ctx.currentTime + 0.05;
+	crow(pan, c, lvl, d = 0) {
+		const out = this.voice(pan, lvl, d), t = this.ctx.currentTime + 0.05;
 		[[620, 600, 0.12], [680, 660, 0.12], [760, 740, 0.14], [880, 640, 0.7]].reduce((at, [a, b, d]) => { this.note(out, at, a, b, d, 0.03, 'sawtooth'); return at + d + 0.04; }, t);
 	}
 
 	/** Chien : un ou deux aboiements. */
-	bark(pan, c, lvl) {
-		const out = this.voice(pan, lvl), t = this.ctx.currentTime + 0.05;
+	bark(pan, c, lvl, d = 0) {
+		const out = this.voice(pan, lvl, d), t = this.ctx.currentTime + 0.05;
 		for (let i = 0; i < 1 + Math.floor(Math.random() * 2); i++) { this.note(out, t + i * 0.3, 420, 250, 0.13, 0.04, 'sawtooth'); this.note(out, t + i * 0.3, 840, 500, 0.1, 0.01); }
 	}
 
 	/** Chat : un miaulement qui monte puis retombe. */
-	meow(pan, c, lvl) {
-		const out = this.voice(pan, lvl), t = this.ctx.currentTime + 0.05;
+	meow(pan, c, lvl, d = 0) {
+		const out = this.voice(pan, lvl, d), t = this.ctx.currentTime + 0.05;
 		this.note(out, t, 600, 900, 0.25, 0.025, 'triangle');
 		this.note(out, t + 0.25, 900, 550, 0.35, 0.025, 'triangle');
 	}
 
 	/** Sanglier : un grognement grave. */
-	grunt(pan, c, lvl) {
-		const out = this.voice(pan, lvl), t = this.ctx.currentTime + 0.05;
+	grunt(pan, c, lvl, d = 0) {
+		const out = this.voice(pan, lvl, d), t = this.ctx.currentTime + 0.05;
 		for (let i = 0; i < 2; i++) this.note(out, t + i * 0.28, 120, 90, 0.2, 0.03, 'sawtooth');
 	}
 
@@ -439,8 +551,10 @@ export class Soundscape {
 	distant() {
 		// De préférence un vrai chanteur, très bas et noyé dans l'écho.
 		const sing = SONGBIRDS[Math.floor(Math.random() * SONGBIRDS.length)];
-		if (this.sample(sing, Math.random() * 1.4 - 0.7, 0.35, 0.9 + Math.random() * 0.3, { vol: 0.35 })) return;
-		const out = this.voice(Math.random() * 1.4 - 0.7, 0.35), t = this.ctx.currentTime + 0.05;
+		// Loin : n'importe où entre les deux bords, sourd et réverbéré.
+		if (this.sample(sing, Math.random() * 1.4 - 0.7, 0.35, 0.9 + Math.random() * 0.3, { vol: 0.35, dist: 0.85 })) return;
+		if (!this.free('distant')) return;
+		const out = this.voice(Math.random() * 1.4 - 0.7, 0.35, 0.85), t = this.ctx.currentTime + 0.05;
 		const f = 2400 + Math.random() * 2000, kind = Math.random();
 		if (kind < 0.4) {
 			// Quelques notes qui sautillent.
@@ -461,20 +575,22 @@ export class Soundscape {
 			const now = this.ctx.currentTime;
 			if (now < (this.nextCricket ?? 0)) return;
 			this.nextCricket = now + 3 + Math.random() * 5;
-			if (this.sample('grillon', Math.random() * 1.6 - 0.8, 0.5, 0.9 + Math.random() * 0.2, { vol: 0.3 })) return;
+			if (this.sample('grillon', Math.random() * 1.4 - 0.7, 0.5, 0.9 + Math.random() * 0.2, { vol: 0.3, dist: 0.6 })) return;
 		}
-		const out = this.voice(Math.random() * 1.6 - 0.8, 0.5), t = this.ctx.currentTime + 0.05;
+		if (!this.free('cricket')) return;
+		const out = this.voice(Math.random() * 1.4 - 0.7, 0.5, 0.6), t = this.ctx.currentTime + 0.05;
 		const f = 4200 + Math.random() * 800;
 		for (let i = 0; i < 3; i++) this.note(out, t + i * 0.045, f, f, 0.03, 0.018);
 	}
 
 	/** Un insecte qui passe : un bourdonnement doux qui monte, change de hauteur en passant, et s'éloigne. */
-	flyby(pan, kind) {
+	flyby(pan, kind, cap = MAX_VOICES) {
 		// Le vrai bourdon ; plus aigu pour les petites mouches.
-		if (this.sample('bourdon', pan, 1, kind === 1 ? 1 : 1.7, { swell: true, vol: kind === 1 ? 0.6 : 0.35 })) return;
+		if (this.sample('bourdon', pan, 1, kind === 1 ? 1 : 1.7, { swell: true, vol: kind === 1 ? 0.6 : 0.35, cap })) return;
+		if (!this.free('flyby', cap)) return;
 		const ctx = this.ctx, t = ctx.currentTime + 0.05, dur = 1.1 + Math.random() * 0.8;
 		const base = kind === 1 ? 165 + Math.random() * 40 : 260 + Math.random() * 60;
-		const o = ctx.createOscillator(), f = ctx.createBiquadFilter(), g = ctx.createGain(), p = ctx.createStereoPanner();
+		const o = ctx.createOscillator(), f = ctx.createBiquadFilter(), g = ctx.createGain(), out = this.voice(pan, 1, 0.1);
 		o.type = 'triangle';
 		o.frequency.setValueAtTime(base * 1.06, t);
 		o.frequency.linearRampToValueAtTime(base * 0.94, t + dur);
@@ -485,23 +601,30 @@ export class Soundscape {
 		g.gain.setValueAtTime(0, t);
 		g.gain.linearRampToValueAtTime(0.025 * (kind === 1 ? 1 : 0.6), t + dur * 0.45);
 		g.gain.linearRampToValueAtTime(0, t + dur);
-		p.pan.setValueAtTime(pan - 0.3, t);
-		p.pan.linearRampToValueAtTime(pan + 0.3, t + dur);
-		o.connect(f).connect(g).connect(p).connect(this.master);
+		// Il passe d'un côté à l'autre, en douceur.
+		this.glide(out.p, pan - 0.3, pan + 0.3, t, dur);
+		out.busy.end = t + dur + 0.05;
+		o.connect(f).connect(g).connect(out.g);
 		o.start(t); lfo.start(t);
 		o.stop(t + dur + 0.05); lfo.stop(t + dur + 0.05);
 	}
 
+	/**
+	 * Le tonnerre, loin, d'un côté du ciel ou de l'autre. Le grave sous 100 Hz est coupé à la sortie (le haut-parleur
+	 * du téléphone le distordait) : le grondement monte donc jusqu'à 300 Hz pour rester présent.
+	 */
 	thunder() {
-		if (!this.ctx || this.ctx.state !== 'running') return;
+		if (!this.ctx || this.ctx.state !== 'running' || !this.free('thunder', UI_VOICES)) return;
 		const ctx = this.ctx, t = ctx.currentTime;
 		const src = ctx.createBufferSource(), f = ctx.createBiquadFilter(), g = ctx.createGain();
+		const out = this.voice((Math.random() * 2 - 1) * 0.6, 1, 0.8);
 		src.buffer = this.noise;
-		f.type = 'lowpass'; f.frequency.value = 160;
+		f.type = 'lowpass'; f.frequency.value = 300;
 		g.gain.setValueAtTime(0, t);
-		g.gain.linearRampToValueAtTime(0.5, t + 0.15);
+		g.gain.linearRampToValueAtTime(THUNDER_LEVEL, t + 0.15);
 		g.gain.exponentialRampToValueAtTime(0.001, t + 4.5);
-		src.connect(f).connect(g).connect(this.master);
+		out.busy.end = t + 4.6;
+		src.connect(f).connect(g).connect(out.g);
 		src.start(t, Math.random() * 1.5);
 		src.stop(t + 4.6);
 	}
@@ -641,8 +764,7 @@ export class Soundscape {
 	/** Une note de musique : douce, longue, un peu d'écho. */
 	bell(f, vel) {
 		const ctx = this.ctx, t = ctx.currentTime + 0.05, dur = 3.5 + Math.random() * 2;
-		const pan = ctx.createStereoPanner(), lp = ctx.createBiquadFilter();
-		pan.pan.value = (Math.random() - 0.5) * 0.8;
+		const pan = this.panner((Math.random() - 0.5) * 0.8), lp = ctx.createBiquadFilter();
 		lp.type = 'lowpass'; lp.frequency.value = 2400;
 		lp.connect(pan);
 		pan.connect(this.musicBus);
@@ -686,20 +808,23 @@ export class Soundscape {
 		}
 	}
 
-	/** Cloche douce pour un bon moment : `size` 1 (une plante a poussé) à 3 (nouveau lieu). */
+	// Les sons d'événement acceptent tous une position facultative `at` : la place horizontale à l'écran de ce qui
+	// les déclenche (0 = bord gauche, 1 = bord droit ; `screenX(x)` pour un point du jardin). Sans elle, ils partent
+	// de là où le doigt vient de toucher, sinon du milieu. Toujours discrets sur les côtés (±0,3).
+
 	/** Une goutte qui tombe dans la bourse : une note claire, de plus en plus aiguë à mesure que la cagnotte monte (k : 0 → 1). */
-	drip(k = 0) {
-		if (!this.ctx || this.ctx.state !== 'running') return;
-		const out = this.voice((Math.random() - 0.5) * 0.4, 1), t = this.ctx.currentTime + 0.01;
+	drip(k = 0, at) {
+		if (!this.live || !this.free('drip', UI_VOICES)) return;
+		const out = this.voice(jitter(this.uiPan(at), 0.08), 1), t = this.ctx.currentTime + 0.01;
 		const f = NOTES[Math.min(NOTES.length - 1, Math.floor(k * NOTES.length))] * 2;
 		this.note(out, t, f, f * 1.01, 0.35, 0.018);
 		this.note(out, t, f * 2.76, f * 2.76, 0.12, 0.004);
 	}
 
 	/** Un coup de marteau sur du bois : un « toc » sec et court, un peu différent à chaque fois. */
-	knock(k = 0) {
-		if (!this.ctx || this.ctx.state !== 'running') return;
-		const out = this.voice((Math.random() - 0.5) * 0.5, 1), t = this.ctx.currentTime + 0.01, f = 420 + k * 40 + Math.random() * 30;
+	knock(k = 0, at) {
+		if (!this.live || !this.free('knock', UI_VOICES)) return;
+		const out = this.voice(jitter(this.uiPan(at), 0.08), 1), t = this.ctx.currentTime + 0.01, f = 420 + k * 40 + Math.random() * 30;
 		this.note(out, t, f, f * 0.6, 0.09, 0.05, 'triangle');
 		this.note(out, t, f * 3.1, f * 2.2, 0.035, 0.008, 'square');
 	}
@@ -710,36 +835,36 @@ export class Soundscape {
 	/** L'oiseau qui passe : un vrai chant s'il est chargé, sinon un petit sifflement. */
 	birdCall(pan = 0) {
 		if (!this.live) return;
-		if (this.sample('rougegorge', pan, 1, 1, { vol: 0.7 }) || this.sample('merle', pan, 1, 1, { vol: 0.6 })) return;
-		this.peep(pan, {}, 1);
+		if (this.sample('rougegorge', pan, 1, 1, { vol: 0.7, cap: UI_VOICES }) || this.sample('merle', pan, 1, 1, { vol: 0.6, cap: UI_VOICES })) return;
+		if (this.free('birdCall', UI_VOICES)) this.peep(pan, {}, 1);
 	}
 
 	/** La graine qui tombe : un sifflement très doux qui descend. */
-	seedFall() {
-		if (!this.live) return;
-		const out = this.voice(0, 1), t = this.ctx.currentTime + 0.02;
+	seedFall(at) {
+		if (!this.live || !this.free('seedFall', UI_VOICES)) return;
+		const out = this.voice(this.uiPan(at ?? 0.5), 1), t = this.ctx.currentTime + 0.02;
 		this.note(out, t, 1500, 620, 0.85, 0.012);
 		this.note(out, t, 3000, 1240, 0.5, 0.003);
 	}
 
 	/** La graine touche la terre : un petit « pof » sourd (bruit filtré, très court). */
-	seedLand() {
-		if (!this.live) return;
+	seedLand(at) {
+		if (!this.live || !this.free('seedLand', UI_VOICES)) return;
 		const ctx = this.ctx, t = ctx.currentTime + 0.01, n = Math.floor(ctx.sampleRate * 0.12);
 		const buf = ctx.createBuffer(1, n, ctx.sampleRate), d = buf.getChannelData(0);
 		for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / n) ** 3;
 		const src = ctx.createBufferSource(), f = ctx.createBiquadFilter(), g = ctx.createGain();
+		const out = this.voice(this.uiPan(at ?? 0.5), 1);
 		src.buffer = buf; f.type = 'lowpass'; f.frequency.value = 520; g.gain.value = 0.5;
-		src.connect(f).connect(g).connect(this.voice(0, 1).g);
+		src.connect(f).connect(g).connect(out.g);
 		src.start(t);
-		const out = this.voice(0, 1);
 		this.note(out, t, 190, 120, 0.14, 0.03, 'sine');
 	}
 
 	/** La plante grandit : une petite note qui monte avec elle (k : 0 → 1), comme une pousse qui se déplie. */
-	sprout(k = 0) {
-		if (!this.live) return;
-		const out = this.voice((Math.random() - 0.5) * 0.3, 1), t = this.ctx.currentTime + 0.01;
+	sprout(k = 0, at) {
+		if (!this.live || !this.free('sprout', UI_VOICES)) return;
+		const out = this.voice(jitter(this.uiPan(at ?? 0.5), 0.1), 1), t = this.ctx.currentTime + 0.01;
 		const f = NOTES[Math.min(NOTES.length - 1, 2 + Math.floor(k * (NOTES.length - 3)))];
 		this.note(out, t, f * 0.98, f * 1.02, 0.6, 0.016, 'sine');
 		this.note(out, t + 0.06, f * 2, f * 2.03, 0.35, 0.005, 'sine');
@@ -748,12 +873,13 @@ export class Soundscape {
 	/** Une abeille tout près : le vrai bourdonnement, qui passe d'un côté à l'autre. */
 	beeBuzz(pan = 0) {
 		if (!this.live) return;
-		if (!this.sample('bourdon', pan, 1, 1.15, { swell: true, vol: 0.75 })) this.flyby(pan, 1);
+		if (!this.sample('bourdon', pan, 1, 1.15, { swell: true, vol: 0.75, cap: UI_VOICES })) this.flyby(pan, 1, UI_VOICES);
 	}
 
-	chime(size = 1) {
-		if (!this.ctx || this.ctx.state !== 'running') return;
-		const out = this.voice(0, 1), t = this.ctx.currentTime + 0.02;
+	/** Cloche douce pour un bon moment : `size` 1 (une plante a poussé) à 3 (nouveau lieu), là où ça se passe (`at`). */
+	chime(size = 1, at) {
+		if (!this.live || !this.free('chime', UI_VOICES)) return;
+		const out = this.voice(this.uiPan(at), 1), t = this.ctx.currentTime + 0.02;
 		const start = Math.floor(Math.random() * 3);
 		for (let i = 0; i < size; i++) {
 			const f = NOTES[Math.min(NOTES.length - 1, start + i * 2)];
@@ -762,6 +888,13 @@ export class Soundscape {
 		}
 	}
 }
+
+/** Un panoramique ne va jamais au-delà de ±0,7 : un son ne disparaît pas d'un côté (téléphone à un seul haut-parleur). */
+const clampPan = p => Math.max(-0.7, Math.min(0.7, p || 0));
+/** Un peu de hasard autour d'une position, sans sortir de ±0,3 (sons d'interface). */
+const jitter = (p, w) => Math.max(-0.3, Math.min(0.3, p + (Math.random() - 0.5) * w));
+/** Un réglage de volume reste entre 0 et 1. */
+const unit = v => Math.max(0, Math.min(1, Number(v) || 0));
 
 // Insectes qui bourdonnent : 1 pour abeilles et bourdons (plus grave), moins pour les petites mouches.
 const BUZZ = { bee: 1, hoverfly: 0.4, beefly: 0.5 };
@@ -790,7 +923,19 @@ const SAMPLES = { merle: 3, rougegorge: 3, fauvette: 1, rossignol: 1, hirondelle
 // Fichiers ramenés à -16 LUFS ; quelques cris très brefs restent plus bas, on les remonte un peu.
 const SAMPLE_GAIN = { canard: 1.6, poule: 1.35 };
 const SAMPLE_LEVEL = 0.12; // un cri proche, à côté des notes fabriquées et de la musique
-const MAX_VOICES = 6;
+const MAX_VOICES = 6; // voix d'ambiance (cris, insectes, oiseaux lointains) en même temps, au plus
+const UI_VOICES = 8; // les sons d'événement (cloche, gouttes, introduction, tonnerre) passent jusqu'à 8
+// Niveaux de la chaîne de sortie. Avant : nature × curseur × 1,3 et musique × curseur × 0,7, sans limiteur.
+// Le mix commun compense la baisse (plus de × 1,3, passe-haut) ; la musique garde le même rapport à la nature.
+// Mesuré hors ligne (Chrome) : cris et cloche environ 2,3 dB plus bas qu'avant, musique 2 dB, fonds 0,7 dB ; une
+// rafale de 8 attaques au volume maximal, qui montait avant à +4 dB (écrêtée), plafonne maintenant à −0,6 dB.
+// Les sons sont fabriqués très bas à la source : le mix reste donc plus haut que les 0,6 habituels, sans dépasser 1.
+const MIX_LEVEL = 0.9;
+const MUSIC_LEVEL = 0.5;
+// Fonds : corps de la pluie et ressac un peu remontés (le passe-haut leur retire le grave sous 100 Hz).
+const RAIN_BODY = 0.1;
+const SEA_LEVEL = 0.2;
+const THUNDER_LEVEL = 0.5;
 const SONGBIRDS = ['rougegorge', 'fauvette', 'rossignol', 'merle'];
 
 // Quel enregistrement pour quelle espèce, et à quelle hauteur (les cousins proches empruntent la voix d'un autre,

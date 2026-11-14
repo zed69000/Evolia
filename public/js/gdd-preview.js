@@ -750,7 +750,7 @@ export function startPreview(gameApi) {
 	buildLegend();
 	buildGarden();
 	const voice = api.sound.voice.bind(api.sound);
-	api.sound.voice = (pan, level) => (voiceOut = voice(pan, level));
+	api.sound.voice = (...args) => (voiceOut = voice(...args));
 	Tuning.onChange(refreshLive);
 	loop(scene);
 }

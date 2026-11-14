@@ -1614,7 +1614,7 @@ export class Garden {
 			while (b.taps < BUILD_TAPS.length && age >= BUILD_TAPS[b.taps]) {
 				const side = (Math.random() - 0.5) * b.w * 0.7;
 				this.dust(b.it.x + side, b.it.y, 10, 5);
-				this.onBuildTap?.(b.taps);
+				this.onBuildTap?.(b.taps, b.it);
 				b.taps++;
 			}
 			if (!b.done && age >= BUILD_TIME) {

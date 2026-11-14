@@ -174,8 +174,9 @@ const places = new PlacesMap($('#map'), state, showBiome);
 // Avec un collecteur, quelques gouttes restent visibles sur les fleurs : on voit que la récolte attend, et en toucher une vide tout.
 garden.dewAmount = () => groundOf(state);
 // Le chantier d'un objet posé : un « toc » à chaque coup de marteau, une petite cloche à la fin.
-garden.onBuildTap = k => sound.knock(k);
-garden.onBuildDone = () => sound.chime(2);
+// Les sons partent de l'endroit du chantier, à gauche ou à droite de l'écran.
+garden.onBuildTap = (k, it) => sound.knock(k, it ? sound.screenX(it.x) : undefined);
+garden.onBuildDone = it => sound.chime(2, it ? sound.screenX(it.x) : undefined);
 // Chaque collecteur a sa réserve, remplie par les fleurs qui l'entourent.
 garden.jarStock = it => ({ v: stockOf(state, it), cap: jarCapOf(it) });
 
@@ -423,7 +424,7 @@ function jackpot(v, x, y) {
 		if (purseAnim && performance.now() < purseAnim.t0 + purseAnim.dur) return requestAnimationFrame(step);
 		purseAnim = null;
 		$('#hud-steps').classList.remove('jackpot');
-		if (big) { sound.chime(3); garden.burst(x, y - 30, 30, '#F4C23E'); }
+		if (big) { sound.chime(3, sound.screenX(x)); garden.burst(x, y - 30, 30, '#F4C23E'); }
 		renderHud();
 	};
 	requestAnimationFrame(step);
@@ -2427,9 +2428,15 @@ garden.nectarTarget = () => {
 	const r = el.getBoundingClientRect();
 	return [r.left - c.left + 6, r.top - c.top + r.height / 2];
 };
+/** Place horizontale de la bourse à l'écran (0 = bord gauche, 1 = bord droit), pour y placer le son des gouttes. */
+const purseX = () => {
+	const r = $('#hud-steps .nectar')?.getBoundingClientRect();
+	return r ? (r.left + r.width / 2) / (window.innerWidth || 1) : undefined;
+};
 garden.onNectar = n => {
 	// Chaque goutte qui arrive tinte, un peu plus haut à mesure que la cagnotte monte.
-	if (purseAnim) { purseAnim.got += n; sound.drip(Math.min(1, purseAnim.got / purseAnim.drops)); }
+	// La goutte tinte là où est la bourse, en haut de l'écran.
+	if (purseAnim) { purseAnim.got += n; sound.drip(Math.min(1, purseAnim.got / purseAnim.drops), purseX()); }
 	const el = $('#hud-steps .nectar');
 	if (!el) return;
 	el.classList.remove('bump');
