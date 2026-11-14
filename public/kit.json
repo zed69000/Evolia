@@ -1,13 +1,14 @@
 {
   "id": "evolia",
   "android": "com.zed69000.evolia",
-  "kit": "3",
+  "kit": "4",
   "tools": [
     "bugreport",
     "update",
     "errors"
   ],
   "embed": [
+    "splash",
     "tuning"
   ]
 }

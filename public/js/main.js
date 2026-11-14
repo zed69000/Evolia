@@ -2233,12 +2233,12 @@ function coach(step = 0) {
 
 // ─── Démarrage ────────────────────────────────────────────────
 
-// Le logo pendant 1 s, puis un fondu doux vers le jardin.
+// L'ouverture du studio d'abord (kit, outil splash), puis le logo pendant 1 s et un fondu doux vers le jardin.
 const splash = $('#splash');
-setTimeout(() => {
+(window.GameSplash ? window.GameSplash.done : Promise.resolve()).then(() => setTimeout(() => {
 	splash.classList.add('out');
 	setTimeout(() => splash.remove(), 1300);
-}, 1000);
+}, 1000));
 
 // Glisser dans le jardin efface l'interface pour le voir en entier ; relâcher la fait revenir.
 // Le petit œil garde l'interface effacée tant qu'on ne le touche pas de nouveau : on explore le jardin seul.
