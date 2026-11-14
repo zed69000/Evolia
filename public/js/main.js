@@ -355,8 +355,18 @@ function readReward() {
  * l'écran) et rejoint la bourse, dont le compteur monte avec elles. Si une page est ouverte, la volée part à sa
  * fermeture, pour qu'on la voie arriver. Le nectar est déjà compté : ce n'est que le spectacle.
  */
+// Le dernier toucher (le centre du bouton touché, ou le point touché dans le jardin) : une récompense qui suit un
+// toucher part toujours de là, même quand l'appel ne dit pas d'où.
+let lastTap = null;
+document.addEventListener('pointerdown', e => {
+	const b = e.target.closest?.('button, .btn, [data-sell], .chip, .toast, a');
+	const r = b?.getBoundingClientRect();
+	lastTap = { x: r ? r.left + r.width / 2 : e.clientX, y: r ? r.top + r.height / 2 : e.clientY, t: performance.now() };
+}, true);
+
 function rewardFly(amount, from = null) {
 	if (!(amount >= 1)) return;
+	if (!from && lastTap && performance.now() - lastTap.t < 2500) from = { x: lastTap.x, y: lastTap.y };
 	const go = () => {
 		const app = $('#app'), box = app.getBoundingClientRect(), to = $('#hud-steps').getBoundingClientRect();
 		if (!to.width) return;
@@ -524,12 +534,16 @@ function openMarket() {
 		const keys = b.dataset.sell === 'all' ? goods.map(([k]) => k) : [b.dataset.sell];
 		let gain = 0;
 		for (const k of keys) { gain += (basket()[k] ?? 0) * GOODS[k].price; basket()[k] = 0; }
+		if (!gain) return;
 		state.nectar = (state.nectar ?? 0) + gain;
 		persist(true);
+		// Le nectar part du bouton touché et vole jusqu'à la bourse, qui compte avec lui.
+		const r = b.getBoundingClientRect(), from = { x: r.left + r.width / 2, y: r.top + r.height / 2 };
 		renderHud();
 		sound.chime(2);
-		toast(`Troc : +${fmtInt(gain)} nectar`, '#E3A33A');
 		openMarket();
+		rewardFly(gain, from);
+		toast(`Troc : +${fmtInt(gain)} nectar`, '#E3A33A');
 	});
 }
 
@@ -1507,6 +1521,7 @@ function winQuest(sp) {
 	state.nectar = (state.nectar ?? 0) + questReward();
 	persist();
 	renderHud();
+	rewardFly(questReward());
 	showModal(`<h2>Bravo !</h2><p>Tu as trouvé : <b>${sp.name}</b></p><div class="bravo-thumb" id="bravo-thumb"></div>
 		<p>${sp.role}</p><div class="chips"><span class="chip gold">+${questReward()} nectar</span></div>
 		<button class="btn primary" data-close>Continuer</button><button class="btn ghost wide" data-close data-open-sp="${sp.id}">Voir sa fiche</button>`);
@@ -2963,10 +2978,12 @@ function tapItem(hit, card) {
 		if (e.target.closest('[data-store]')) {
 			card.hidden = true;
 			// Un collecteur rangé : ce qu'il gardait revient tout de suite à la bourse.
-			if (it.kind === 'collecteur') state.nectar = (state.nectar ?? 0) + emptyJar(state, it);
+			const jar = it.kind === 'collecteur' ? emptyJar(state, it) : 0;
 			garden.items.splice(garden.items.indexOf(it), 1);
 			const back = (it.paid ?? def.cost) + (it.spent ?? 0);
-			state.nectar = (state.nectar ?? 0) + back;
+			state.nectar = (state.nectar ?? 0) + back + jar;
+			// Le nectar rendu s'envole de l'endroit où était l'objet jusqu'à la bourse.
+			{ const r = garden.canvas.getBoundingClientRect(), v = garden.view(), k = r.width / v.w; rewardFly(back + jar, { x: r.left + (it.x - v.x0) * k, y: r.top + (it.y - 30 - v.y0) * k }); }
 			garden.nextPopulate = 0;
 			toast(`${def.name} rangé${/^Une /.test(def.name) ? 'e' : /^Des /.test(def.name) ? 's' : ''} : +${fmtInt(back)} nectar`, '#9A7448');
 			renderHud();

@@ -3,6 +3,14 @@
 Chaque version, la plus récente en haut. Le site (evolia.sebastienalzamora.workers.dev) est toujours à jour ;
 le Play Store (tests internes) reçoit les versions indiquées « Play ».
 
+## 0.8.8 — 14 novembre 2026
+**Le nectar gagné vole jusqu'à ta bourse, partout.** Trois gains arrivaient sans rien montrer :
+- **le troc** : les gouttes partent du bouton « Troquer » touché et rejoignent la bourse, dont le compteur monte avec elles ;
+- **une quête réussie** (« Trouve… ») : la récompense s'envole vers la bourse ;
+- **un objet rangé** : le nectar rendu part de l'endroit où était l'objet.
+
+Et partout ailleurs, **le nectar part toujours de ce que tu as touché** : le bouton (cadeau, défi, fiche, quiz…) ou l'endroit du jardin (la bête trouvée).
+
 ## 0.8.7 — 14 novembre 2026
 **Le petit bonhomme bouge avec toi.** L'icône d'activité, en haut à gauche, s'anime image par image selon ce que tu fais :
 - **au repos**, il somnole (la tête qui tombe un peu) et des « z » s'envolent ;
