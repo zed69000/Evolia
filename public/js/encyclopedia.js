@@ -1,6 +1,6 @@
 // Encyclopédie de la biodiversité, lieu par lieu : les espèces découvertes, leur rôle et comment les aider.
 
-import { SPECIES, PLACES, PLACE_BY_ID, placeOpen } from './species.js';
+import { SPECIES, PLACES, PLACE_BY_ID, placeOpen, groupOf } from './species.js';
 import { PLANT_TYPES, DECOR, DECOR_PAINTERS, paintPlant, plantArt } from './plants.js';
 import { drawCritter } from './critters.js';
 
@@ -9,10 +9,6 @@ const CRITTER_SCALE = { hoverfly: 1.8, beefly: 1.6, ants: 2.6, firebug: 2, snail
 const CRITTER_SHIFT = { heron: 4, marmot: -2, owl: 1 };
 const cache = new Map();
 
-// Les petites bêtes (insectes, araignées, escargots, vers…) ; le reste des animaux a une colonne vertébrale.
-const BUGS = new Set(['bee', 'butterfly', 'moth', 'dragonfly', 'hoverfly', 'beefly', 'ant', 'ants', 'firebug', 'ladybug', 'beetle', 'grasshopper', 'spider', 'snail', 'worm', 'firefly', 'crab']);
-/** Sous-catégorie d'une espèce dans la page : plantes (et milieux), insectes et petites bêtes, ou animaux. */
-const groupOf = s => (s.kind !== 'animal' ? 'plantes' : BUGS.has(s.critter.kind) ? 'insectes' : 'animaux');
 const GROUPS = [['plantes', 'Plantes'], ['insectes', 'Insectes et petites bêtes'], ['animaux', 'Animaux']];
 const GROUP_SHORT = { tout: 'Tout', plantes: 'Plantes', insectes: 'Insectes', animaux: 'Animaux' };
 

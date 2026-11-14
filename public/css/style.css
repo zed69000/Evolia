@@ -1098,6 +1098,13 @@ body:has(.panel.open) #debug { display: none; }
 .quiz-c.right { border-color: #5F933E; background: rgba(95,147,62,.16); color: #2F5A1E; }
 .quiz-c.wrong { border-color: #C0442F; background: rgba(192,68,47,.12); color: #8A2A1A; }
 .quiz-res { font-size: 14px; }
+.quiz-photo { display: block; width: 100%; max-height: 180px; object-fit: cover; border-radius: 14px; margin: 4px 0 2px; }
+.quiz-sp { display: flex; align-items: center; gap: 10px; margin: 4px 0 2px; }
+.quiz-sp img { width: 56px; height: 56px; object-fit: cover; border-radius: 12px; flex: none; }
+.quiz-sp b { font-family: 'Nunito', sans-serif; font-size: 16px; }
+.quiz-quote { display: block; margin-top: 8px; font-weight: 400; font-style: italic; }
+.quiz-lvl { display: inline-block; vertical-align: middle; margin-left: 6px; padding: 2px 8px; border-radius: 10px; font: 700 12px 'Nunito', sans-serif; color: #FDF7E7; }
+.quiz-lvl.l0 { background: #5F933E; } .quiz-lvl.l1 { background: #E3A33A; } .quiz-lvl.l2 { background: #C0602F; }
 
 /* Les révélations (nouvelle parcelle, nouvelle espèce) : un titre qui surgit sur des rayons de lumière. */
 .reveal { position: absolute; inset: 0; z-index: 1500; display: flex; align-items: center; justify-content: center; pointer-events: auto; animation: reveal-in .45s ease-out; }

@@ -15,7 +15,7 @@ import { Soundscape } from './audio.js';
 import { ITEMS, ITEM_ORDER, itemHelp, itemCost, fitsPlace, CATS, MAX_LEVEL, LEVEL_NAME, LEVEL_KM, canLevel, levelCost, CABIN_STYLES, seedBirds, birdHelp } from './deco.js';
 import { VERSION } from './version.js';
 import { startIntro, INTRO_NECTAR, FLOWER, FLOWER_SEED } from './intro.js';
-import { makeQuiz, quizReady, streakMult, noteAnswer, QUIZ_MIN_PLANTS, QUIZ_MIN_ANIMALS, quizBank } from './quiz.js';
+import { makeQuiz, quizReady, streakMult, noteAnswer, QUIZ_MIN_PLANTS, QUIZ_MIN_ANIMALS, quizBank, QUIZ_LEVEL } from './quiz.js';
 import { FETES, fetesAt, feteYear, feteDay } from './fetes.js';
 import { LADDER, isLadder, ladderPrice, ladderLock, nextUpgrade, unitProd, prodPerHour, produce, KM_HOURS, KM_VALUE_H, UPG_AT, REST, plantCover, ownedOf, PER_PARCEL, LEVEL_PROD, LEVEL_KM2, levelPrice, levelsOf, MOMENTS, NEAR_USE, NEAR_R, NEAR_NEED, rangeOf, nearMult, NEAR_MAX, SYN_PER, SYN_MAX, guildEffect, nearOf, itemProd, GUILD_BONUS } from './habitats.js';
 import { exportCode, importCode, backupAge } from './backup.js';
@@ -234,7 +234,7 @@ function offerQuiz(force = false) {
 	if (!qs) { if (force) toast(`Le quiz porte sur les fiches lues avant aujourd’hui : il en faut ${QUIZ_MIN_PLANTS} de plantes et ${QUIZ_MIN_ANIMALS} d’animaux`, '#9A7448'); return; }
 	const base = quizBase(), streak = state.quizStreak ?? 0;
 	showModal(`<h2>Le quiz des fiches</h2>
-		<p>Trois questions sur les espèces que tu connais. Bonne réponse : <b>${fmtInt(base)} nectar</b>, plus encore si tu enchaînes (jusqu’à × 2). Tu peux feuilleter ton livre des espèces.</p>
+		<p>Trois questions sur les espèces dont tu as lu la fiche, de la plus facile à la plus dure. Bonne réponse : <b>${fmtInt(base)} nectar</b>, plus encore si tu enchaînes (jusqu’à × 2). Tu peux feuilleter ton livre des espèces.</p>
 		${streak ? `<p class="item-tip">Ta série en cours : ${streak} bonne${streak > 1 ? 's' : ''} réponse${streak > 1 ? 's' : ''} (× ${fmtNum(streakMult(streak))}).</p>` : ''}
 		<button class="btn primary" id="quiz-go">Jouer</button>
 		<button class="btn ghost wide" id="quiz-later">Plus tard (il t’attend jusqu’à minuit)</button>`);
@@ -246,7 +246,11 @@ function offerQuiz(force = false) {
 /** Une question du quiz ; puis la suivante, puis le bilan. */
 function runQuiz(qs, i, score) {
 	const q = qs[i];
-	showModal(`<h2>Question ${i + 1} sur ${qs.length}</h2>
+	// La photo de l'espèce (une question « Qui est-ce ? ») ou l'espèce dont on parle, avec son nom.
+	const pic = q.photo ? `<img class="quiz-photo" src="species/${q.photo}.webp" alt="">`
+		: q.show ? `<div class="quiz-sp"><img src="species/${q.show.id}.webp" alt=""><b>${q.show.name}</b></div>` : '';
+	showModal(`<h2>Question ${i + 1} sur ${qs.length} <span class="quiz-lvl l${q.level ?? 1}">${QUIZ_LEVEL[q.level ?? 1]}</span></h2>
+		${pic}
 		<p class="quiz-q">${q.q}</p>
 		<div class="quiz-choices">${q.choices.map((c, k) => `<button class="btn ghost wide quiz-c" data-k="${k}">${c}</button>`).join('')}</div>
 		<p class="quiz-res" hidden></p>
@@ -292,6 +296,7 @@ function endQuiz(qs, score) {
 	const qz = (state.quiz ??= {});
 	qz.n = (qz.n ?? 0) + 1;
 	qz.at = Date.now();
+	qz.total = (qz.total ?? 0) + 1;
 	renderQuizChip();
 	let bonus = 0;
 	if (score.right === qs.length) { bonus = Math.round(quizBase() / 2); state.nectar = (state.nectar ?? 0) + bonus; score.gain += bonus; }
@@ -1361,7 +1366,7 @@ for (const ev of ['click', 'dblclick', 'contextmenu']) document.addEventListener
 }, { capture: true, passive: false });
 garden.holdTaps = () => !!guideOn && !guideOn.steps[guideOn.i]?.garden;
 // En test : lancer un guide d'achat à la main (evoliaGuide.buy('mangeoire')).
-if (DEV) window.evoliaGuide = { buy: k => { const g = buyGuide(k); if (g) startGuide({ ...g, title: 'Test' }); return !!g; } };
+if (DEV) window.evoliaGuide = { buy: k => { const g = buyGuide(k); if (g) startGuide({ ...g, title: 'Test' }); return !!g; }, quiz: () => offerQuiz(true) };
 
 // ─── L'interface se dévoile au fil du jeu ───
 // Au départ : le jardin, la bourse, les espèces et les options. Le reste arrive quand il devient utile, avec un petit

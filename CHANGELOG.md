@@ -3,6 +3,12 @@
 Chaque version, la plus récente en haut. Le site (evolia.sebastienalzamora.workers.dev) est toujours à jour ;
 le Play Store (tests internes) reçoit les versions indiquées « Play ».
 
+## 0.8.3 — 14 novembre 2026
+**Le quiz des fiches, plus clair et du plus facile au plus dur.**
+- Chaque quiz commence par une question **Facile** : « Qui est sur cette photo ? », avec la vraie photo de l'espèce et des réponses qu'on distingue d'un coup d'œil (une fleur, un oiseau, un papillon). Puis une **Moyenne**, puis une **Plus dure**. Les deux premiers quiz restent doux.
+- Chaque question montre l'espèce dont elle parle (sa photo et son nom) et se lit d'une traite : « Que fait cette espèce dans la nature ? », « Comment peux-tu aider cette espèce ? ». Fini les « À quoi sert : Hêtre ? ».
+- Les réponses sont des phrases entières, jamais coupées par « … », et les mauvaises réponses ne peuvent plus être presque aussi justes que la bonne.
+
 ## 0.8.2 — 14 novembre 2026
 **Les bulles d'aide disent vrai, et guident jusqu'au bout.**
 - Une bulle qui propose une action (poser un massif, améliorer un habitat, le faire grandir, poser un potager, une mangeoire) n'apparaît que si c'est possible **maintenant** : assez de nectar, débloqué, de la place. Elle utilise le même calcul que le bouton, et le revérifie à chaque étape.

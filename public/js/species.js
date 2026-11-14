@@ -1626,6 +1626,11 @@ export const SPECIES = [
 		'Elles sont faites de lattes de châtaignier liées par du fil de fer.'),
 ];
 
+// Les petites bêtes (insectes, araignées, escargots, vers…) ; le reste des animaux a une colonne vertébrale.
+const BUGS = new Set(['bee', 'butterfly', 'moth', 'dragonfly', 'hoverfly', 'beefly', 'ant', 'ants', 'firebug', 'ladybug', 'beetle', 'grasshopper', 'spider', 'snail', 'worm', 'firefly', 'crab']);
+/** Sous-catégorie d'une espèce (livre, quiz) : plantes (et milieux), insectes et petites bêtes, ou animaux. */
+export const groupOf = s => (s.kind !== 'animal' ? 'plantes' : BUGS.has(s.critter.kind) ? 'insectes' : 'animaux');
+
 export const SPECIES_BY_ID = Object.fromEntries(SPECIES.map(s => [s.id, s]));
 
 // Silhouettes propres à chaque arbre et arbuste : nombre de bouquets de feuillage et largeur de la couronne,
