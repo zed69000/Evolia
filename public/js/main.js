@@ -3899,11 +3899,18 @@ if (state.intro) {
 	$('#app').classList.toggle('no-blur', !canBlur || !!state.eco30);
 	logo.innerHTML = '<img src="assets/logo-detoure.png" srcset="assets/logo-detoure.png 1x, assets/logo-detoure@2x.webp 2x" alt="Evolia"><p>À chacun de tes pas, la nature s’éveille.</p>';
 	$('#app').append(logo);
-	setTimeout(() => { splash.classList.add('out'); logo.classList.add('in'); sound.fanfare?.(); }, 300);
-	setTimeout(() => splash.remove(), 1600);
+	// juste après l'écran d'ouverture (passé au doigt ou fini seul) : une courte pause où l'accueil est visible mais n'accepte aucun clic.
+	// Le joueur qui martèle l'écran pour passer l'ouverture ne part pas par mégarde dans un menu ; ses taps sont avalés (1,5 s au plus).
+	function spGuard(){var g=document.createElement("div");g.id="spGuard";g.style.cssText="position:fixed;inset:0;z-index:2147483000;touch-action:none";document.body.appendChild(g);var t0=performance.now(),tm=setTimeout(function(){g.remove()},600);g.addEventListener("pointerdown",function(){clearTimeout(tm);tm=setTimeout(function(){g.remove()},Math.max(0,Math.min(450,1500-(performance.now()-t0))))});}
+	const bootT = [], endBoot = () => { logo.remove(); $('#app').classList.remove('booting'); document.removeEventListener('pointerdown', skipBoot, true); spGuard(); };
+	// Un tap pendant le logo le passe tout de suite : on arrive au jardin sans attendre.
+	const skipBoot = e => { e.stopPropagation(); e.preventDefault(); bootT.forEach(clearTimeout); splash.remove(); endBoot(); };
+	document.addEventListener('pointerdown', skipBoot, true);
+	bootT.push(setTimeout(() => { splash.classList.add('out'); logo.classList.add('in'); sound.fanfare?.(); }, 300));
+	bootT.push(setTimeout(() => splash.remove(), 1600));
 	// Le jardin est déjà flou sous le papier ; à la sortie, le flou s'en va avec le logo.
-	setTimeout(() => { logo.classList.remove('in'); logo.classList.add('off'); }, 3400);
-	setTimeout(() => { logo.remove(); $('#app').classList.remove('booting'); }, 4900);
+	bootT.push(setTimeout(() => { logo.classList.remove('in'); logo.classList.add('off'); }, 3400));
+	bootT.push(setTimeout(endBoot, 4900));
 }
 
 // Glisser dans le jardin efface l'interface pour le voir en entier ; relâcher la fait revenir.
